@@ -107,7 +107,7 @@ for subsesid=1:length(subsesopt)
         myLFDir = fullfile(DataDir{DataDir2Use(midx)},MiceOpt{midx},thisdatenow,'ephys');
         lfpD = dir(fullfile([myLFDir],[thisdate '_' MiceOpt{midx} '*'], '**\*.ap.*bin')); % ap file from spikeGLX specifically
         if isempty(lfpD)
-            lfpD = dir(fullfile([myLFDir],[MiceOpt{midx} '*'], '**\*.ap.*bin')); % ap file from spikeGLX specifically
+            lfpD = dir(fullfile([myLFDir],['*' MiceOpt{midx} '*'], '**\*.ap.*bin')); % ap file from spikeGLX specifically
         end
     end
 
