@@ -33,7 +33,7 @@ binsz = 0.01; % Binsize in time for the cross-correlation fingerprint. We recomm
 RedoExtraction = 0; % Raw waveform and parameter extraction
 Scores2Include = {'WavformSimilarity','LocationCombined','waveformdurationDiff','spatialdecayDiff','PeakTimeDiff'};%}
 MakeOwnNaiveBayes = 1; % if 0, use standard matlab version, which assumes normal distributions
-ApplyExistingBayesModel = 1; %If 1, look if a Bayes model already exists for this mouse and applies that
+ApplyExistingBayesModel = 0; %If 1, look if a Bayes model already exists for this mouse and applies that
 
 %% Extract all clusters
 AllClusterIDs = clusinfo.cluster_id;
@@ -65,7 +65,7 @@ spatialdecay = nan(nclus,2); % how fast does the unit decay across space, first 
 %Calculate how many channels are likely to be included
 fakechannel = [channelpos(1,1) nanmean(channelpos(:,2))];
 ChanIdx = find(cell2mat(arrayfun(@(Y) norm(fakechannel-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<TakeChannelRadius); %Averaging over 10 channels helps with drift
-MultiDimMatrix = nan(spikeWidth,length(ChanIdx),nclus,2); % number time points (max), number of channels (max?), per cluster and cross-validated
+% MultiDimMatrix = nan(spikeWidth,length(ChanIdx),nclus,2); % number time points (max), number of channels (max?), per cluster and cross-validated
 
 % Take geographically close channels (within 50 microns!), not just index!
 timercounter = tic;
@@ -86,7 +86,6 @@ for uid = 1:nclus
     if isempty(rawdatapath)
         rawdatapath = dir(fullfile(pathparts{1:end-1}));
     end
-
 
     fprintf(1,'\b\b\b\b%3.0f%%',uid/nclus*100)
     if exist(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(AllClusterIDs(Good_Idx(uid))) '_RawSpikes.mat'])) && ~RedoExtraction
@@ -162,19 +161,22 @@ for uid = 1:nclus
         weight = (TakeChannelRadius-Distance2MaxProj)./TakeChannelRadius;
         ProjectedWaveform(:,uid,cv) = nansum(nanmean(spikeMap(:,ChanIdx,wavidx),3).*repmat(weight,1,size(spikeMap,1))',2)./sum(weight);
 
-        % How long is the waveform
+        % Find significant timepoints
         wvdurtmp = find(abs(ProjectedWaveform(:,uid,cv))>abs(nanmean(ProjectedWaveform(1:20,uid,cv)))+2.5*nanstd(ProjectedWaveform(1:20,uid,cv))); % More than 2. std from baseline
-        wvdurtmp(find(logical([0; diff(wvdurtmp)>5]),1,'last'):end) = []; %Remove samples that are far away from other samples; noise
-        waveformduration(uid,cv) = length(wvdurtmp);
 
         % Peak Time
         [~,PeakTime(uid,cv)] = nanmax(abs(ProjectedWaveform(wvdurtmp(1):wvdurtmp(end),uid,cv)));
-        PeakTime(uid,cv) = PeakTime(uid,cv)+wvdurtmp(1);
+        PeakTime(uid,cv) = PeakTime(uid,cv)+wvdurtmp(1)-1;
+        Peakval = ProjectedWaveform(PeakTime(uid,cv),uid,cv);
+
+        % Full width half maximum
+        wvdurtmp = find(sign(Peakval)*ProjectedWaveform(:,uid,cv)>0.5*sign(Peakval)*Peakval);
+        waveformduration(uid,cv) = length(wvdurtmp);
         % Mean Location per individual time point:
         ProjectedLocationPerTP(:,uid,wvdurtmp,cv) = cell2mat(arrayfun(@(tp) sum(repmat(abs(nanmean(spikeMap(tp,ChanIdx,wavidx),3)),size(Locs,2),1).*Locs',2)./sum(repmat(abs(nanmean(spikeMap(tp,ChanIdx,wavidx),3)),size(Locs,2),1),2),wvdurtmp','Uni',0));
 
         % Save spikes for these channels
-        MultiDimMatrix(wvdurtmp,1:length(ChanIdx),uid,cv) = nanmean(spikeMap(wvdurtmp,ChanIdx,wavidx),3);
+        %         MultiDimMatrix(wvdurtmp,1:length(ChanIdx),uid,cv) = nanmean(spikeMap(wvdurtmp,ChanIdx,wavidx),3);
 
     end
     if ~exist(fullfile(rawdatapath(1).folder,'RawWaveforms'))
@@ -194,15 +196,17 @@ disp('Computing Metric similarity between pairs of units...')
 timercounter = tic;
 PeakTimeDiff = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) abs(PeakTime(uid,1)-PeakTime(uid2,2)),1:nclus,'Uni',0)),1:nclus,'Uni',0);
 PeakTimeDiff = cat(1,PeakTimeDiff{:});
-PeakTimeDiff = 1-((PeakTimeDiff-nanmin(PeakTimeDiff(:)))./(nanmax(PeakTimeDiff(:))-nanmin(PeakTimeDiff(:))));
-
+PeakTimeDiff = 1-((PeakTimeDiff-nanmin(PeakTimeDiff(:)))./(quantile(PeakTimeDiff(:),0.99)-nanmin(PeakTimeDiff(:))));
+PeakTimeDiff(PeakTimeDiff<0)=0;
 waveformdurationDiff = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) abs(waveformduration(uid,1)-waveformduration(uid2,2)),1:nclus,'Uni',0)),1:nclus,'Uni',0);
 waveformdurationDiff = cat(1,waveformdurationDiff{:});
-waveformdurationDiff = 1-((waveformdurationDiff-nanmin(waveformdurationDiff(:)))./(nanmax(waveformdurationDiff(:))-nanmin(waveformdurationDiff(:))));
+waveformdurationDiff = 1-((waveformdurationDiff-nanmin(waveformdurationDiff(:)))./(quantile(waveformdurationDiff(:),0.99)-nanmin(waveformdurationDiff(:))));
+waveformdurationDiff(waveformdurationDiff<0)=0;
 
 spatialdecayDiff = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) abs(spatialdecay(uid,1)-spatialdecay(uid2,2)),1:nclus,'Uni',0)),1:nclus,'Uni',0);
 spatialdecayDiff = cat(1,spatialdecayDiff{:});
-spatialdecayDiff = 1-((spatialdecayDiff-nanmin(spatialdecayDiff(:)))./(nanmax(spatialdecayDiff(:))-nanmin(spatialdecayDiff(:))));
+spatialdecayDiff = 1-((spatialdecayDiff-nanmin(spatialdecayDiff(:)))./(quantile(spatialdecayDiff(:),0.99)-nanmin(spatialdecayDiff(:))));
+spatialdecayDiff(spatialdecayDiff<0)=0;
 
 disp(['Calculating other metrics took ' num2str(round(toc(timercounter))) ' seconds for ' num2str(nclus) ' units'])
 
@@ -342,7 +346,7 @@ while flag<2
     colorbar
     makepretty
 
-    subplot(2,3,6)
+    subplot(2,3,5)
     h=imagesc((MSELoc+LocalMinError)/2);
     title('Mean and local error')
     xlabel('Unit Y')
@@ -374,7 +378,7 @@ while flag<2
     for sid = 1:length(Scores2Include)
         eval(['tmp = ' Scores2Include{sid} ';'])
         subplot(round(sqrt(length(Scores2Include))),ceil(sqrt(length(Scores2Include))),sid)
-        h=imagesc(tmp,[0 1]);
+        h=imagesc(tmp,[quantile(tmp(:),0.1) 1]);
         title(Scores2Include{sid})
         xlabel('Unit Y')
         ylabel('Unit Z')
@@ -390,8 +394,6 @@ while flag<2
     figure;
     if length(Scores2Include)>1
         for scid=1:length(Scores2Include)
-
-
             ScoresTmp = Scores2Include;
             ScoresTmp(scid)=[];
 
@@ -403,7 +405,6 @@ while flag<2
 
             TotalScoreAcrossDays = TotalScore;
             TotalScoreAcrossDays(X==Y)=nan;
-
 
             subplot(2,length(Scores2Include)+1,scid)
             h=imagesc(triu(TotalScore,1),[0 base+1]);
@@ -418,7 +419,7 @@ while flag<2
             makepretty
 
             % Thresholds
-            ThrsOpt = quantile(diag(TotalScore),0.1); %Can be lenient, will select bst ones later
+            ThrsOpt = quantile(diag(TotalScore),0.15); %Select best ones only later
             subplot(2,length(Scores2Include)+1,scid+(length(Scores2Include)+1))
 
             imagesc(triu(TotalScore>ThrsOpt,1))
@@ -454,7 +455,7 @@ while flag<2
     makepretty
 
     % Make initial threshold --> to be optimized
-    ThrsOpt = quantile(diag(TotalScore),0.05); %Can be lenient, will select bst ones later
+    ThrsOpt = quantile(diag(TotalScore),0.5); %Can be lenient, will select bst ones later
     subplot(2,length(Scores2Include)+1,2*(length(Scores2Include)+1))
     imagesc(triu(TotalScore>ThrsOpt,1))
     hold on
@@ -848,6 +849,29 @@ while flag<2 && runid<maxrun
             Tbl = array2table(reshape(Predictors,[],size(Predictors,3)),'VariableNames',Scores2Include); %All parameters
             [label, posterior, cost] = predict(Mdl,Tbl);
 
+            %% Evaluate Model:
+            figure('name','NaiveBayesEstimates')
+            for parid=1:size(Predictors,3)
+
+                subplot(size(Predictors,3),1,parid)
+                mu = BestMdl.DistributionParameters{1,parid}(1);
+                sigma = BestMdl.DistributionParameters{1,parid}(2);
+                x = (-5 * sigma:0.01:5*sigma)+mu;
+                plot(x,normpdf(x,mu,sigma),'b-')
+                hold on
+                mu = BestMdl.DistributionParameters{2,parid}(1);
+                sigma = BestMdl.DistributionParameters{2,parid}(2);
+                x = (-5 * sigma:0.01:5*sigma)+mu;
+                plot(x,normpdf(x,mu,sigma),'r-')
+                title(Scores2Include{parid})
+
+                makepretty
+                xlim([0 1])
+
+
+            end
+
+
         end
     end
 
@@ -991,11 +1015,17 @@ while flag<2 && runid<maxrun
 end
 
 %% Extract final pairs:
+disp('Extracting final pairs of units...')
 Tbl = array2table(reshape(Predictors,[],size(Predictors,3)),'VariableNames',Scores2Include); %All parameters
-[label, posterior, cost] = predict(BestMdl,Tbl);
+if isfield(BestMdl,'Parameterkernels')
+    [label, posterior] = ApplyNaiveBayes(Tbl,BestMdl.Parameterkernels);
+else
+    [label, posterior, cost] = predict(BestMdl,Tbl);
+end
 MatchProbability = reshape(posterior(:,2),size(Predictors,1),size(Predictors,2));
-label = reshape(label,nclus,nclus);
-% label = MatchProbability>0.95; % We want to be very confident
+% label = reshape(label,nclus,nclus);
+ProbThreshold = quantile(diag(MatchProbability),0.1);
+label = MatchProbability>ProbThreshold; % We want to be very confident
 [r, c] = find(triu(label,1)==1 & triu(~SameSesMat,1)); %Find matches
 Pairs = cat(2,r,c);
 Pairs = sortrows(Pairs);
@@ -1012,7 +1042,7 @@ title('Identified matches')
 makepretty
 %%
 figure;
-takethisprob = [0.5 0.75 0.90 0.95];
+takethisprob = [0.5 0.75 0.95 0.99];
 for pid = 1:4
     subplot(2,2,pid)
     h = imagesc(MatchProbability>takethisprob(pid));
@@ -1222,7 +1252,7 @@ hold on
 line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
 line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
 colormap(flipud(gray))
-title('Rankscore <= 2')
+title('Rankscore == 1')
 makepretty
 
 subplot(1,3,2)
@@ -1235,12 +1265,12 @@ title('Match label == 1')
 makepretty
 
 subplot(1,3,3)
-imagesc(label==1 & RankScoreAll<=2)
+imagesc(label==1 & RankScoreAll==1)
 hold on
 line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
 line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
 colormap(flipud(gray))
-title('Rank<=2 and Match label == 1')
+title('Rank==1 and Match label == 1')
 makepretty
 
 

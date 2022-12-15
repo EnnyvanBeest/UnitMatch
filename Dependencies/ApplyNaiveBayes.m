@@ -33,7 +33,7 @@ label = false(size(probability,1),1);
 label(probability(:,2)>0.5) = 1;
 
 if nargin>2
-    Performance = sum(originallabel==label)./length(label);
+    Performance = [sum(originallabel==1&label==1)./sum(originallabel) sum(originallabel==0&label==0)./sum(originallabel==0)];
 else
     Performance = nan;
 end
