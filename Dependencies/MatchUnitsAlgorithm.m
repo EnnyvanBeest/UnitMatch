@@ -31,7 +31,7 @@ TakeChannelRadius = 50; %in micron around max channel
 TakeChannelRadiusWaveform = 25; %Slightly more selective; to calculate average waveform shape
 binsz = 0.01; % Binsize in time for the cross-correlation fingerprint. We recommend ~2-10ms time windows
 RedoExtraction = 0; % Raw waveform and parameter extraction
-Scores2Include = {'WavformSimilarity','LocationCombined','waveformdurationDiff','spatialdecayDiff','PeakTimeDiff'};%}
+Scores2Include = {'WavformSimilarity','LocationCombined','waveformdurationDiff'};%}
 MakeOwnNaiveBayes = 1; % if 0, use standard matlab version, which assumes normal distributions
 ApplyExistingBayesModel = 0; %If 1, look if a Bayes model already exists for this mouse and applies that
 
@@ -391,11 +391,13 @@ while flag<2
     end
 
     %% Calculate total score
+    priorMatch = 1-(nclus+nclus/2)./(nclus*nclus);
+    leaveoutmatches = false(nclus,nclus,length(Scores2Include)); %Used later
     figure;
     if length(Scores2Include)>1
         for scid=1:length(Scores2Include)
-            ScoresTmp = Scores2Include;
-            ScoresTmp(scid)=[];
+            ScoresTmp = Scores2Include(scid);
+            %             ScoresTmp(scid)=[];
 
             TotalScore = zeros(nclus,nclus);
             for scid2=1:length(ScoresTmp)
@@ -408,7 +410,7 @@ while flag<2
 
             subplot(2,length(Scores2Include)+1,scid)
             h=imagesc(triu(TotalScore,1),[0 base+1]);
-            title(['without ' Scores2Include{scid}])
+            title([Scores2Include{scid}])
             xlabel('Unit Y')
             ylabel('Unit Z')
             hold on
@@ -419,9 +421,9 @@ while flag<2
             makepretty
 
             % Thresholds
-            ThrsOpt = quantile(diag(TotalScore),0.4); %Select best ones only later
+            ThrsOpt = quantile(TotalScore(:),priorMatch); %Select best ones only later
             subplot(2,length(Scores2Include)+1,scid+(length(Scores2Include)+1))
-
+            leaveoutmatches(:,:,scid)=TotalScore>ThrsOpt;
             imagesc(triu(TotalScore>ThrsOpt,1))
             hold on
             title(['Thresholding at ' num2str(ThrsOpt)])
@@ -455,7 +457,7 @@ while flag<2
     makepretty
 
     % Make initial threshold --> to be optimized
-    ThrsOpt = quantile(diag(TotalScore),0.4); %Can be lenient, will select bst ones later
+    ThrsOpt = quantile(TotalScore(:),priorMatch); %Select best ones only later
     subplot(2,length(Scores2Include)+1,2*(length(Scores2Include)+1))
     imagesc(triu(TotalScore>ThrsOpt,1))
     hold on
@@ -479,33 +481,6 @@ while flag<2
     Pairs = sortrows(Pairs);
     Pairs=unique(Pairs,'rows');
     Pairs(Pairs(:,1)==Pairs(:,2),:)=[];
-
-    %For chronic
-    PairsPyKS = [];
-    % for uid = 1:nclus
-    %     pairstmp = find(AllClusterIDs(Good_Idx)==AllClusterIDs(Good_Idx(uid)))';
-    %     if length(pairstmp)>1
-    %         PairsPyKS = cat(1,PairsPyKS,pairstmp);
-    %     end
-    % end
-    % PairsPyKS=unique(PairsPyKS,'rows');
-    %
-    % [Int,A,B] = intersect(Pairs,PairsPyKS,'rows');
-    % PercDetected = size(Int,1)./size(PairsPyKS,1).*100;
-    % disp(['Detected ' num2str(PercDetected) '% of PyKS matched units'])
-    %
-    % PercOver = (size(Pairs,1)-size(Int,1))./size(PairsPyKS,1)*100;
-    % disp(['Detected ' num2str(PercOver) '% more units than just PyKS matched units'])
-
-    % % interesting: Not detected
-    % NotB = 1:size(PairsPyKS,1);
-    % NotB(B) = [];
-    % OnlyDetectedByPyKS = PairsPyKS(NotB,:);
-    %
-    % % Too much detected
-    % NotA = 1:size(Pairs,1);
-    % NotA(A) = [];
-    % NotdetectedByPyKS = Pairs(NotA,:);
 
     %% Functional score for optimization: compute Fingerprint for the matched units - based on Célian Bimbard's noise-correlation finger print method but applied to across session correlations
     % Not every recording day will have the same units. Therefore we will
@@ -670,113 +645,37 @@ while flag<2
 
 end
 %% Prepare naive bayes - inspect probability distributions
-figure('name','Parameter Scores');
-stepsize = 0.01;
-Edges = [0:stepsize:1];
-for scid=1:length(Scores2Include)
-    eval(['ScoresTmp = ' Scores2Include{scid} ';'])
-    ScoresTmp(tril(true(size(ScoresTmp))))=nan;
-    subplot(length(Scores2Include),2,(scid-1)*2+1)
-    histogram(ScoresTmp(~CandidatePairs),Edges)
-    if scid==1
-        title('Candidate non-Matches')
-    end
-    ylabel(Scores2Include{scid})
-    makepretty
-    
-    subplot(length(Scores2Include),2,scid*2)
-    histogram(ScoresTmp(CandidatePairs),Edges)
-    if scid==1
-        title('Candidate Matches')
-    end
-    makepretty
-end
+% Prepare a set INCLUDING the cross-validated self-scores, otherwise the probability
+% distributions are just weird
+CandidatePairs = TotalScore>ThrsOpt & RankScoreAll==1;
+CandidatePairs(tril(true(size(CandidatePairs)),-1))=0;
+[uid,uid2] = find(CandidatePairs);
+Pairs = cat(2,uid,uid2);
+Pairs = sortrows(Pairs);
+Pairs=unique(Pairs,'rows');
 
-%
-figure('name','Projected Location Distance to [0 0]')
-Dist2Tip = sqrt(nansum(ProjectedLocation.^2,1));
-% Dist2TipMatrix = nan(size(CandidatePairs));
+% for the naive bayes classifier to properly learn, we also need some examples of non-matches that score high on one but not the other parameters
+leaveoutmatches(:,:,4) = label==1&RankScoreAll>nanmedian(RankScoreAll(:));
+leaveoutmatches(repmat(TotalScore>ThrsOpt & RankScoreAll==1,[1,1,size(leaveoutmatches,3)]))=0; %Take out actual matches
+leaveoutmatches = any(leaveoutmatches,3);
+leaveoutmatches(tril(true(size(leaveoutmatches))))=0;
+[uid,uid2] = find(leaveoutmatches);
+NoPairs = cat(2,uid,uid2);
+NoPairs = sortrows(NoPairs);
+NoPairs = unique(NoPairs,'rows');
 
-Dist2TipMatrix = arrayfun(@(Y) cell2mat(arrayfun(@(X) cat(1,Dist2Tip(X),Dist2Tip(Y)),1:nclus,'Uni',0)),1:nclus,'Uni',0);
-Dist2TipMatrix = cat(3,Dist2TipMatrix{:});
-Dist2TipMatrix = reshape(Dist2TipMatrix,2,[]);
-subplot(1,2,1)
-[N,C] = hist3(Dist2TipMatrix(:,~CandidatePairs(:))');
-imagesc(C{1},C{2},N)
-colormap(flipud(gray))
-xlabel('Unit 1')
-ylabel('Unit 2')
-zlabel('Counts')
-title('Candidate Non-matches')
-makepretty
+% Put together for making the naive bayes model
+Pairs = cat(1,Pairs,NoPairs);
 
-subplot(1,2,2)
-[N,C] = hist3(Dist2TipMatrix(:,CandidatePairs(:))');
-imagesc(C{1},C{2},N)
-colormap(flipud(gray))
-xlabel('Unit 1')
-ylabel('Unit 2')
-zlabel('Counts')
-title('Candidate Matches')
-makepretty
-
-
-% Waveform duration
-figure('name','WaveDur')
-waveformdurationMat = arrayfun(@(Y) cell2mat(arrayfun(@(X) cat(1,waveformduration(X),waveformduration(Y)),1:nclus,'UniformOutput',0)),1:nclus,'UniformOutput',0);
-waveformdurationMat = cat(3,waveformdurationMat{:});
-subplot(1,2,1)
-[N,C] = hist3(waveformdurationMat(:,~CandidatePairs(:))');
-imagesc(C{1},C{2},N)
-colormap(flipud(gray))
-xlabel('Unit 1')
-ylabel('Unit 2')
-zlabel('Counts')
-title('Candidate Non-matches')
-makepretty
-
-subplot(1,2,2)
-[N,C] = hist3(waveformdurationMat(:,CandidatePairs(:))');
-imagesc(C{1},C{2},N)
-xlabel('Unit 1')
-ylabel('Unit 2')
-zlabel('Counts')
-title('Candidate Matches')
-makepretty
-
-
-% SpatialDecaySlope
-figure('name','Spatial Decay Slope')
-SpatDecMat = arrayfun(@(Y) cell2mat(arrayfun(@(X) cat(1,spatialdecay(X),spatialdecay(Y)),1:nclus,'UniformOutput',0)),1:nclus,'UniformOutput',0);
-SpatDecMat = cat(3,SpatDecMat{:});
-subplot(1,2,1)
-[N,C] = hist3(SpatDecMat(:,~CandidatePairs(:))');
-imagesc(C{1},C{2},N)
-colormap(flipud(gray))
-xlabel('Unit 1')
-ylabel('Unit 2')
-zlabel('Counts')
-title('Candidate Non-matches')
-makepretty
-
-subplot(1,2,2)
-[N,C] = hist3(SpatDecMat(:,CandidatePairs(:))');
-imagesc(C{1},C{2},N)
-colormap(flipud(gray))
-
-xlabel('Unit 1')
-ylabel('Unit 2')
-zlabel('Counts')
-title('Candidate Matches')
-makepretty
 %% Naive bayes classifier
 % Usually this means there's no variance in the match distribution
 % (which in a way is great). Create some small variance
 flag = 0;
 npairs = 0;
 MinLoss=1;
+MaxPerf = [0 0];
 npairslatest = 0;
-maxrun = 1; % Probably we don't want to keep optimizing, as this can be a bit circular (?)
+maxrun = 1; % Probably we don't want to keep optimizing?, as this can be a bit circular (?)
 runid=0;
 BestMdl = [];
 while flag<2 && runid<maxrun
@@ -788,7 +687,7 @@ while flag<2 && runid<maxrun
         Tbl = array2table(reshape(Predictors,[],size(Predictors,3)),'VariableNames',Scores2Include); %All parameters
 
         if isfield(BestMdl,'Parameterkernels')
-            [label, posterior] = ApplyNaiveBayes(Tbl,BestMdl.Parameterkernels);
+            [label, posterior] = ApplyNaiveBayes(Tbl,BestMdl.Parameterkernels,[0 1]);
         else
             [label, posterior, cost] = predict(BestMdl,Tbl);
         end
@@ -799,13 +698,14 @@ while flag<2 && runid<maxrun
         if MakeOwnNaiveBayes
             % Work in progress
             [Parameterkernels,Performance] = CreateNaiveBayes(Tbl,label);
-            if Performance>0.9
+            if any(Performance'<MaxPerf)
                 flag = flag+1;
+            else 
+                BestMdl.Parameterkernels = Parameterkernels;
             end
             % Apply naive bays classifier
             Tbl = array2table(reshape(Predictors,[],size(Predictors,3)),'VariableNames',Scores2Include); %All parameters
-            [label, posterior] = ApplyNaiveBayes(Tbl,Parameterkernels);
-            BestMdl.Parameterkernels = Parameterkernels;
+            [label, posterior] = ApplyNaiveBayes(Tbl,Parameterkernels,[0 1]);
 
         else % This uses matlab package. Warning: normal distributions assumed?
             try
@@ -873,7 +773,10 @@ while flag<2 && runid<maxrun
 
 
         end
+        
+
     end
+    drawnow
 
     label = reshape(label,size(Predictors,1),size(Predictors,2));
     [r, c] = find(triu(label,1)==1 & triu(~SameSesMat,1)); %Find matches
@@ -1008,17 +911,54 @@ while flag<2 && runid<maxrun
     makepretty
     drawnow
 
-    % Total score larger than threshold
+    % New Pairs for new round
     CandidatePairs = label==1 & RankScoreAll==1;
-    CandidatePairs(tril(true(size(CandidatePairs))))=0;
+    CandidatePairs(tril(true(size(CandidatePairs)),-1))=0;
+    [uid,uid2] = find(CandidatePairs);
+    Pairs = cat(2,uid,uid2);
+    Pairs = sortrows(Pairs);
+    Pairs=unique(Pairs,'rows');
 
+    % for the naive bayes classifier to properly learn, we also need some examples of non-matches that score high on one but not the other parameters
+    leaveoutmatches = label==1&RankScoreAll>nanmedian(RankScoreAll(:));
+    leaveoutmatches(tril(true(size(leaveoutmatches)),-1))=0;
+    [uid,uid2] = find(leaveoutmatches);
+    NoPairs = cat(2,uid,uid2);
+    NoPairs = sortrows(NoPairs);
+    NoPairs = unique(NoPairs,'rows');
+
+    % Put together for making the naive bayes model
+    Pairs = cat(1,Pairs,NoPairs);
 end
 
+%% If this was stitched pykilosort, we know what pykilosort thought about the matches
+PyKSLabel = [];
+PairsPyKS = [];
+if RunPyKSChronic
+    for uid = 1:nclus
+        pairstmp = find(AllClusterIDs(Good_Idx)==AllClusterIDs(Good_Idx(uid)))';
+        if length(pairstmp)>1
+            PairsPyKS = cat(1,PairsPyKS,pairstmp);
+        end
+    end
+
+    PyKSLabel = false(nclus,nclus);
+    for pid = 1:size(PairsPyKS,1)
+        PyKSLabel(PairsPyKS(pid,1),PairsPyKS(pid,2)) = true;
+    end
+    PairsPyKS=unique(PairsPyKS,'rows');
+
+end
 %% Extract final pairs:
 disp('Extracting final pairs of units...')
 Tbl = array2table(reshape(Predictors,[],size(Predictors,3)),'VariableNames',Scores2Include); %All parameters
 if isfield(BestMdl,'Parameterkernels')
-    [label, posterior] = ApplyNaiveBayes(Tbl,BestMdl.Parameterkernels);
+    if RunPyKSChronic
+        [label, posterior,performance] = ApplyNaiveBayes(Tbl,BestMdl.Parameterkernels,PyKSLabel(:));
+        disp(['Correctly labelled ' num2str(round(performance(2)*1000)/10) '% of PyKS Matches and ' num2str(round(performance(1)*1000)/10) '% of PyKS non matches']) 
+    else
+        [label, posterior] = ApplyNaiveBayes(Tbl,BestMdl.Parameterkernels,[0 1]);
+    end
 else
     [label, posterior, cost] = predict(BestMdl,Tbl);
 end
@@ -1040,6 +980,26 @@ line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
 line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
 title('Identified matches')
 makepretty
+
+if RunPyKSChronic
+
+    [Int,A,B] = intersect(Pairs,PairsPyKS,'rows');
+    PercDetected = size(Int,1)./size(PairsPyKS,1).*100;
+    disp(['Detected ' num2str(PercDetected) '% of PyKS matched units'])
+    
+    PercOver = (size(Pairs,1)-size(Int,1))./size(PairsPyKS,1)*100;
+    disp(['Detected ' num2str(PercOver) '% more units than just PyKS matched units'])
+
+    % interesting: Not detected
+    NotB = 1:size(PairsPyKS,1);
+    NotB(B) = [];
+    OnlyDetectedByPyKS = PairsPyKS(NotB,:);
+    
+    % Too much detected
+    NotA = 1:size(Pairs,1);
+    NotA(A) = [];
+    NotdetectedByPyKS = Pairs(NotA,:);
+end
 %%
 figure;
 takethisprob = [0.5 0.75 0.95 0.99];

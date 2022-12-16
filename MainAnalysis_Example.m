@@ -17,7 +17,7 @@ ProbeType(ismember(MiceOpt,{'AL032'}))={'2_4S'};
 RecordingType = repmat({'Acute'},1,length(MiceOpt));
 RecordingType(ismember(MiceOpt,{'AL032','EB014'}))={'Chronic'}; %EB014',
 
-RunPyKSChronic = 0
+RunPyKSChronic = 1
 CopyToTmpFirst = 0
 DecompressLocal = 1; %if 1, uncompress data first if it's currently compressed
 RedoQM = 1; %if 1, redo quality matrix if it already exists
