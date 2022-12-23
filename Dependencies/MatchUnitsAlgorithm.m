@@ -10,31 +10,32 @@
 % - Prob: Probability of all units to be the same as every other unit
 
 % Matching occurs on:
-% - Wavform Similarity
-% - Location differences
-% - Spatial decay differences
-% - Waveform duration differences
-% - peak time differences
+% - Wavform Similarity: Correlation and errors
+% - Projected location difference (Centroid): distance and direction
+% - Amplitude differences
+% - Spatial decay (decrease in signal over space)
 
-% Testing the match:
+% fine tuning the initial training set for matching:
 % - cross-correlation finger prints --> units that are the same are likely
-% to correlate in a similar way with other units
+% to correlate in a similar way with other units (@Célian Bimbard, 2022)
 
 % Contributions: 
-% Enny van Beest (Dec 2022)
+% Enny van Beest (2022)
 
-
-%% Parameters
+%% Parameters - tested on these values, but feel free to try others
+Scores2Include = {'AmplitudeSim','WavformSim','WVCorr','LocAngleSim','spatialdecaySim','LocDistSim'}; %
+IncludeSpatialInitially = 1; % if 1 we include spatial distance from the start, if 0 only from the naive Bayes part
 sampleamount = 500; % Nr. waveforms to include
 spikeWidth = 83; % in sample space (time)
-TakeChannelRadius = 50; %in micron around max channel
-TakeChannelRadiusWaveform = 25; %Slightly more selective; to calculate average waveform shape
-binsz = 0.01; % Binsize in time for the cross-correlation fingerprint. We recommend ~2-10ms time windows
+TakeChannelRadius = 75; %in micron around max channel
+maxdist = 200; % Maximum distance at which units are considered as potential matches
+binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
 RedoExtraction = 0; % Raw waveform and parameter extraction
-Scores2Include = {'WavformSimilarity','LocationCombined','waveformdurationDiff'};%}
-MakeOwnNaiveBayes = 1; % if 0, use standard matlab version, which assumes normal distributions
+% Scores2Include = {'WavformSimilarity','LocationCombined','spatialdecayDiff','AmplitudeDiff'};%}
+MakeOwnNaiveBayes = 1; % if 0, use standard matlab version, which assumes normal distributions --> not recommended
 ApplyExistingBayesModel = 0; %If 1, look if a Bayes model already exists for this mouse and applies that
-
+global stepsize
+stepsize = 0.01; % Of probability distribution
 %% Extract all clusters
 AllClusterIDs = clusinfo.cluster_id;
 nses = length(AllQMsPaths);
@@ -61,7 +62,10 @@ ProjectedWaveform = nan(spikeWidth,nclus,2); % Just take waveform on maximal cha
 PeakTime = nan(nclus,2); % Peak time first versus second half
 MaxChannel = nan(nclus,2); % Max channel first versus second half
 waveformduration = nan(nclus,2); % Waveformduration first versus second half
+Amplitude = nan(nclus,2); % Maximum (weighted) amplitude, first versus second half
+
 spatialdecay = nan(nclus,2); % how fast does the unit decay across space, first versus second half
+WaveIdx = nan(nclus,spikeWidth,2);
 %Calculate how many channels are likely to be included
 fakechannel = [channelpos(1,1) nanmean(channelpos(:,2))];
 ChanIdx = find(cell2mat(arrayfun(@(Y) norm(fakechannel-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<TakeChannelRadius); %Averaging over 10 channels helps with drift
@@ -121,7 +125,7 @@ for uid = 1:nclus
             thisSpikeIdx = int32(spikeIndicestmp(iSpike));
             if thisSpikeIdx > halfWidth && (thisSpikeIdx + halfWidth) * dataTypeNBytes < spikeFile.bytes % check that it's not out of bounds
                 tmp = smoothdata(double(memMapData(1:nChannels,thisSpikeIdx-halfWidth:thisSpikeIdx+halfWidth)),2,'gaussian',5);
-                tmp = (tmp - mean(tmp(:,1:10),2))';
+                tmp = (tmp - mean(tmp(:,1:20),2))';
                 tmp(:,end+1:nChannels) = nan(size(tmp,1),nChannels-size(tmp,2));
                 % Subtract first 10 samples to level spikes
                 spikeMap(:,:,iSpike) = tmp;
@@ -152,7 +156,7 @@ for uid = 1:nclus
         %     % how close they are to the projected location (closer = better)
         Distance2MaxChan = sqrt(nansum(abs(Locs-channelpos(MaxChannel(uid,cv),:)).^2,2));
         % Difference in amplitude from maximum amplitude
-        spdctmp = nanmax(abs(nanmean(spikeMap(:,MaxChannel(uid,cv),wavidx),3)),[],1)-nanmax(abs(nanmean(spikeMap(:,ChanIdx,wavidx),3)),[],1);
+        spdctmp = (nanmax(abs(nanmean(spikeMap(:,MaxChannel(uid,cv),wavidx),3)),[],1)-nanmax(abs(nanmean(spikeMap(:,ChanIdx,wavidx),3)),[],1))./nanmax(abs(nanmean(spikeMap(:,MaxChannel(uid,cv),wavidx),3)),[],1);
         % Spatial decay (average oer micron)
         spatialdecay(uid,cv) = nanmean(spdctmp./Distance2MaxChan');
 
@@ -168,13 +172,14 @@ for uid = 1:nclus
         [~,PeakTime(uid,cv)] = nanmax(abs(ProjectedWaveform(wvdurtmp(1):wvdurtmp(end),uid,cv)));
         PeakTime(uid,cv) = PeakTime(uid,cv)+wvdurtmp(1)-1;
         Peakval = ProjectedWaveform(PeakTime(uid,cv),uid,cv);
+        Amplitude(uid,cv) = Peakval;
 
         % Full width half maximum
         wvdurtmp = find(sign(Peakval)*ProjectedWaveform(:,uid,cv)>0.5*sign(Peakval)*Peakval);
         waveformduration(uid,cv) = length(wvdurtmp);
         % Mean Location per individual time point:
         ProjectedLocationPerTP(:,uid,wvdurtmp,cv) = cell2mat(arrayfun(@(tp) sum(repmat(abs(nanmean(spikeMap(tp,ChanIdx,wavidx),3)),size(Locs,2),1).*Locs',2)./sum(repmat(abs(nanmean(spikeMap(tp,ChanIdx,wavidx),3)),size(Locs,2),1),2),wvdurtmp','Uni',0));
-
+        WaveIdx(uid,1:size(wvdurtmp),cv) = wvdurtmp;
         % Save spikes for these channels
         %         MultiDimMatrix(wvdurtmp,1:length(ChanIdx),uid,cv) = nanmean(spikeMap(wvdurtmp,ChanIdx,wavidx),3);
 
@@ -184,8 +189,10 @@ for uid = 1:nclus
     end
     save(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(AllClusterIDs(Good_Idx(uid))) '_RawSpikes.mat']),'spikeMap')
 end
+
 fprintf('\n')
 disp(['Extracting raw waveforms and parameters took ' num2str(round(toc(timercounter)./60)) ' minutes for ' num2str(nclus) ' units'])
+
 
 %% Metrics
 % PeakTime = nan(nclus,2); % Peak time first versus second half
@@ -194,42 +201,53 @@ disp(['Extracting raw waveforms and parameters took ' num2str(round(toc(timercou
 % spatialdecay = nan(nclus,2); % how fast does the unit decay across space, first versus second half
 disp('Computing Metric similarity between pairs of units...')
 timercounter = tic;
-PeakTimeDiff = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) abs(PeakTime(uid,1)-PeakTime(uid2,2)),1:nclus,'Uni',0)),1:nclus,'Uni',0);
-PeakTimeDiff = cat(1,PeakTimeDiff{:});
-PeakTimeDiff = 1-((PeakTimeDiff-nanmin(PeakTimeDiff(:)))./(quantile(PeakTimeDiff(:),0.99)-nanmin(PeakTimeDiff(:))));
-PeakTimeDiff(PeakTimeDiff<0)=0;
-waveformdurationDiff = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) abs(waveformduration(uid,1)-waveformduration(uid2,2)),1:nclus,'Uni',0)),1:nclus,'Uni',0);
-waveformdurationDiff = cat(1,waveformdurationDiff{:});
-waveformdurationDiff = 1-((waveformdurationDiff-nanmin(waveformdurationDiff(:)))./(quantile(waveformdurationDiff(:),0.99)-nanmin(waveformdurationDiff(:))));
-waveformdurationDiff(waveformdurationDiff<0)=0;
+PeakTimeSim = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) abs(PeakTime(uid,1)-PeakTime(uid2,2)),1:nclus,'Uni',0)),1:nclus,'Uni',0);
+%Normalize between 0 and 1 (values that make sense after testing, without having outliers influence this)
+PeakTimeSim =1-cat(1,PeakTimeSim{:})./10;
+PeakTimeSim(PeakTimeSim<0)=0;
 
-spatialdecayDiff = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) abs(spatialdecay(uid,1)-spatialdecay(uid2,2)),1:nclus,'Uni',0)),1:nclus,'Uni',0);
-spatialdecayDiff = cat(1,spatialdecayDiff{:});
-spatialdecayDiff = 1-((spatialdecayDiff-nanmin(spatialdecayDiff(:)))./(quantile(spatialdecayDiff(:),0.99)-nanmin(spatialdecayDiff(:))));
-spatialdecayDiff(spatialdecayDiff<0)=0;
+waveformTimePointSim = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) sum(ismember(WaveIdx(uid,:,1),WaveIdx(uid2,:,2)))./sum(~isnan(WaveIdx(uid,:,1))),1:nclus,'Uni',0)),1:nclus,'Uni',0);
+waveformTimePointSim = cat(1,waveformTimePointSim{:});
+
+spatialdecaySim = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) abs(spatialdecay(uid,1)-spatialdecay(uid2,2)),1:nclus,'Uni',0)),1:nclus,'Uni',0);
+spatialdecaySim = cat(1,spatialdecaySim{:});
+% Make (more) normal
+spatialdecaySim = sqrt(spatialdecaySim);
+spatialdecaySim = 1-((spatialdecaySim-nanmin(spatialdecaySim(:)))./(quantile(spatialdecaySim(:),0.99)-nanmin(spatialdecaySim(:))));
+spatialdecaySim(spatialdecaySim<0)=0;
+
+% Ampitude difference
+AmplitudeSim = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) abs(Amplitude(uid,1)-Amplitude(uid2,2)),1:nclus,'Uni',0)),1:nclus,'Uni',0);
+AmplitudeSim = cat(1,AmplitudeSim{:});
+% Make (more) normal
+AmplitudeSim = sqrt(AmplitudeSim);
+AmplitudeSim = 1-((AmplitudeSim-nanmin(AmplitudeSim(:)))./(quantile(AmplitudeSim(:),.99)-nanmin(AmplitudeSim(:))));
+AmplitudeSim(AmplitudeSim<0)=0;
 
 disp(['Calculating other metrics took ' num2str(round(toc(timercounter))) ' seconds for ' num2str(nclus) ' units'])
-
 
 %% Waveform similarity
 disp('Computing waveform similarity between pairs of units...')
 timercounter = tic;
-RawWVMSE = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) nanmean((ProjectedWaveform(:,uid,1)-ProjectedWaveform(:,uid2,2)).^2)./nanmean(nanmean(cat(2,ProjectedWaveform(:,uid,1),ProjectedWaveform(:,uid2,2)),2).^2),1:nclus,'Uni',0)),1:nclus,'Uni',0);
+% Normalize between 0 and 1
+ProjectedWaveformNorm = ProjectedWaveform(35:70,:,:);
+ProjectedWaveformNorm = (ProjectedWaveformNorm-nanmin(ProjectedWaveformNorm,[],1))./(nanmax(ProjectedWaveformNorm,[],1)-nanmin(ProjectedWaveformNorm,[],1));
+RawWVMSE = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) nanmean((ProjectedWaveformNorm(:,uid,1)-ProjectedWaveformNorm(:,uid2,2)).^2),1:nclus,'Uni',0)),1:nclus,'Uni',0);
 RawWVMSE = cat(1,RawWVMSE{:});
-WVCorr = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) corr(ProjectedWaveform(:,uid,1),ProjectedWaveform(:,uid2,2)),1:nclus,'Uni',0)),1:nclus,'Uni',0);
+WVCorr = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) corr(ProjectedWaveform(35:70,uid,1),ProjectedWaveform(35:70,uid2,2)),1:nclus,'Uni',0)),1:nclus,'Uni',0);
 WVCorr = cat(1,WVCorr{:});
 
 % Make WVCorr a normal distribution
 WVCorr = erfinv(WVCorr);
 WVCorr = (WVCorr-nanmin(WVCorr(:)))./(nanmax(WVCorr(:))-nanmin(WVCorr(:)));
 
-% Normalize distribution
-RawWVMSElog = log10(RawWVMSE);
-WavformSimilarity = (RawWVMSElog-nanmin(RawWVMSElog(:)))./(nanmax(RawWVMSElog(:))-nanmin(RawWVMSElog(:)));
-WavformSimilarity = 1-WavformSimilarity;
+% sort of Normalize distribution
+RawWVMSENorm = sqrt(RawWVMSE);
+WavformSim = (RawWVMSENorm-nanmin(RawWVMSENorm(:)))./(quantile(RawWVMSENorm(:),0.99)-nanmin(RawWVMSENorm(:)));
+WavformSim = 1-WavformSim;
+WavformSim(WavformSim<0) = 0;
 
 disp(['Calculating waveform similarity took ' num2str(round(toc(timercounter))) ' seconds for ' num2str(nclus) ' units'])
-
 figure('name','Waveform similarity measures')
 subplot(1,3,1)
 h=imagesc(WVCorr);
@@ -244,7 +262,7 @@ colorbar
 makepretty
 
 subplot(1,3,2)
-h=imagesc(WavformSimilarity);
+h=imagesc(WavformSim);
 title('Waveform mean squared errors')
 xlabel('Unit Y')
 ylabel('Unit Z')
@@ -256,7 +274,7 @@ colorbar
 makepretty
 
 subplot(1,3,3)
-h=imagesc((WVCorr+WavformSimilarity)/2);
+h=imagesc((WVCorr+WavformSim)/2);
 title('Average Waveform scores')
 xlabel('Unit Y')
 ylabel('Unit Z')
@@ -266,6 +284,7 @@ line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
 colormap(flipud(gray))
 colorbar
 makepretty
+
 %% Location differences between pairs of units:
 flag=0;
 while flag<2
@@ -284,25 +303,39 @@ while flag<2
     timercounter = tic;
     LocDist = arrayfun(@(X) cell2mat(arrayfun(@(Y) pdist(cat(2,ProjectedLocation(:,X,1),ProjectedLocation(:,Y,2))'),1:nclus,'Uni',0)),1:nclus,'Uni',0);
     LocDist = cat(1,LocDist{:}); % Normal difference
+    
+    disp('Computing location distances between pairs of units, per individual time point of the waveform...')
     % Difference in distance at different time points
     LocDistSign = arrayfun(@(uid) arrayfun(@(uid2)  cell2mat(arrayfun(@(X) pdist(cat(2,squeeze(ProjectedLocationPerTP(:,uid,X,1)),squeeze(ProjectedLocationPerTP(:,uid2,X,2)))'),1:spikeWidth,'Uni',0)),1:nclus,'Uni',0),1:nclus,'Uni',0);
     LocDistSign = cat(1,LocDistSign{:});
-    % Average error
-    MSELoc = cell2mat(cellfun(@(X) nanmean(abs(X)),LocDistSign,'Uni',0));
-    % Minimal error
-    LocalMinError = cell2mat(cellfun(@(X) nanmin(X),LocDistSign,'Uni',0));
+    LocDistSim = cellfun(@(X) nanmean(X),LocDistSign);
 
+    disp('Computing location angle (direction) differences between pairs of units, per individual time point of the waveform...')
+    % Difference in angle between two time points
+    LocAngle = arrayfun(@(uid) cell2mat(arrayfun(@(tp) atan(abs(squeeze(ProjectedLocationPerTP(1,uid,tp,:)-ProjectedLocationPerTP(1,uid,tp-1,:)))./abs(squeeze(ProjectedLocationPerTP(2,uid,tp,:)-ProjectedLocationPerTP(2,uid,tp-1,:)))),2:spikeWidth,'Uni',0)),1:nclus,'Uni',0);
+    LocAngleSim = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) circ_mean(abs(LocAngle{uid}(1,~isnan(LocAngle{uid}(1,:)) & ~isnan(LocAngle{uid2}(2,:)))' - LocAngle{uid2}(2,~isnan(LocAngle{uid}(1,:)) & ~isnan(LocAngle{uid2}(2,:)))')),1:nclus,'Uni',0)),1:nclus,'Uni',0);
+    LocAngleSim = cat(1,LocAngleSim{:});
+
+    % Variance in error, corrected by average error. This captures whether
+    % the trajectory is consistenly separate 
+    MSELoc = cell2mat(cellfun(@(X) nanvar(X)./nanmean(X)+nanmean(X),LocDistSign,'Uni',0));
+   
     % Normalize each of them from 0 to 1, 1 being the 'best'
-    LocDist = 1-((LocDist-nanmin(LocDist(:)))./(nanmax(LocDist(:))-nanmin(LocDist(:))));
+    % If distance > maxdist micron it will never be the same unit:
+    LocDistSim = 1-((LocDistSim-nanmin(LocDistSim(:)))./(maxdist-nanmin(LocDistSim(:)))); %Average difference
+    LocDistSim(LocDistSim<0)=0;
+    LocDist = 1-((LocDist-nanmin(LocDist(:)))./(maxdist-nanmin(LocDist(:))));
+    LocDist(LocDist<0)=0;
     MSELoc = 1-((MSELoc-nanmin(MSELoc(:)))./(nanmax(MSELoc(:))-nanmin(MSELoc(:))));
-    LocalMinError = 1-((LocalMinError-nanmin(LocalMinError(:)))./(nanmax(LocalMinError(:))-nanmin(LocalMinError(:))));
+    LocAngleSim = 1-((LocAngleSim-nanmin(LocAngleSim(:)))./(nanmax(LocAngleSim(:))-nanmin(LocAngleSim(:))));
 
+    %
     figure('name','Distance Measures')
-    subplot(2,3,1)
+    subplot(4,2,1)
     h=imagesc(LocDist);
     title('LocationDistance')
-    xlabel('Unit Y')
-    ylabel('Unit Z')
+    xlabel('Unit_i')
+    ylabel('Unit_j')
     hold on
     line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
     line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
@@ -310,78 +343,71 @@ while flag<2
     colorbar
     makepretty
 
-    subplot(2,3,2)
+    subplot(4,2,2)
+    h=histogram(LocDist(:));
+    xlabel('Score')
+    makepretty
+    
+    subplot(4,2,3)
+    h=imagesc(LocDistSim);
+    title('LocationDistanceAveraged')
+    xlabel('Unit_i')
+    ylabel('Unit_j')
+    hold on
+    line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
+    line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
+    colormap(flipud(gray))
+    colorbar
+    makepretty
+    subplot(4,2,4)
+    h=histogram(LocDistSim(:));
+    xlabel('Score')
+    makepretty
+
+    subplot(4,2,5)
     h=imagesc(MSELoc);
     title('average trajectory error')
-    xlabel('Unit Y')
-    ylabel('Unit Z')
+    xlabel('Unit_i')
+    ylabel('Unit_j')
     hold on
     line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
     line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
     colormap(flipud(gray))
     colorbar
     makepretty
+    subplot(4,2,6)
+    h=histogram(MSELoc(:));
+    xlabel('Score')
+    makepretty
 
-    subplot(2,3,3)
-    h=imagesc(LocalMinError);
-    title('minimal trajectory error')
-    xlabel('Unit Y')
-    ylabel('Unit Z')
+    subplot(4,2,7)
+    h=imagesc(LocAngleSim);
+    title('circular mean Angle difference')
+    xlabel('Unit_i')
+    ylabel('Unit_j')
     hold on
     line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
     line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
     colormap(flipud(gray))
     colorbar
     makepretty
-
-    subplot(2,3,4)
-    h=imagesc((LocDist+MSELoc)/2);
-    title('LocationDistance and mean error')
-    xlabel('Unit Y')
-    ylabel('Unit Z')
-    hold on
-    line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
-    line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
-    colormap(flipud(gray))
-    colorbar
+    subplot(4,2,8)
+    h=histogram(LocAngleSim(:));
+    xlabel('Score')
     makepretty
-
-    subplot(2,3,5)
-    h=imagesc((MSELoc+LocalMinError)/2);
-    title('Mean and local error')
-    xlabel('Unit Y')
-    ylabel('Unit Z')
-    hold on
-    line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
-    line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
-    colormap(flipud(gray))
-    colorbar
-    makepretty
-
-    subplot(2,3,6)
-    h=imagesc((LocDist+LocalMinError)/2);
-    title('LocationDistance and local error')
-    xlabel('Unit Y')
-    ylabel('Unit Z')
-    hold on
-    line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
-    line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
-    colormap(flipud(gray))
-    colorbar
-    makepretty
-
-    LocationCombined = (LocDist+LocalMinError+MSELoc)/3;
+    LocDistSim(isnan(LocDistSim))=0;
+    LocationCombined = nanmean(cat(3,LocDistSim,LocAngleSim),3);
     disp(['Extracting projected location took ' num2str(round(toc(timercounter)./60)) ' minutes for ' num2str(nclus) ' units'])
 
-    %% Part 1 --> Sum Total scores components - Have a high threshold to have the 'real matches'
+    %% These are the parameters to include:
     figure('name','Total Score components');
     for sid = 1:length(Scores2Include)
         eval(['tmp = ' Scores2Include{sid} ';'])
         subplot(round(sqrt(length(Scores2Include))),ceil(sqrt(length(Scores2Include))),sid)
         h=imagesc(tmp,[quantile(tmp(:),0.1) 1]);
         title(Scores2Include{sid})
-        xlabel('Unit Y')
-        ylabel('Unit Z')
+        xlabel('Unit_i')
+        ylabel('Unit_j')
         hold on
         line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
         line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
@@ -391,7 +417,7 @@ while flag<2
     end
 
     %% Calculate total score
-    priorMatch = 1-(nclus+nclus/2)./(nclus*nclus);
+    priorMatch = 1-(nclus+nclus)./(nclus*nclus);
     leaveoutmatches = false(nclus,nclus,length(Scores2Include)); %Used later
     figure;
     if length(Scores2Include)>1
@@ -408,11 +434,11 @@ while flag<2
             TotalScoreAcrossDays = TotalScore;
             TotalScoreAcrossDays(X==Y)=nan;
 
-            subplot(2,length(Scores2Include)+1,scid)
+            subplot(2,length(Scores2Include),scid)
             h=imagesc(triu(TotalScore,1),[0 base+1]);
             title([Scores2Include{scid}])
-            xlabel('Unit Y')
-            ylabel('Unit Z')
+            xlabel('Unit_i')
+            ylabel('Unit_j')
             hold on
             line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
             line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
@@ -422,13 +448,16 @@ while flag<2
 
             % Thresholds
             ThrsOpt = quantile(TotalScore(:),priorMatch); %Select best ones only later
-            subplot(2,length(Scores2Include)+1,scid+(length(Scores2Include)+1))
+            if ThrsOpt == max(TotalScore(:))
+                ThrsOpt = ThrsOpt-0.1;
+            end
+            subplot(2,length(Scores2Include),scid+(length(Scores2Include)))
             leaveoutmatches(:,:,scid)=TotalScore>ThrsOpt;
             imagesc(triu(TotalScore>ThrsOpt,1))
             hold on
             title(['Thresholding at ' num2str(ThrsOpt)])
-            xlabel('Unit Y')
-            ylabel('Unit Z')
+            xlabel('Unit_i')
+            ylabel('Unit_j')
             hold on
             line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
             line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
@@ -441,14 +470,19 @@ while flag<2
     TotalScore = zeros(nclus,nclus);
     Predictors = zeros(nclus,nclus,0);
     for scid2=1:length(Scores2Include)
-        eval(['TotalScore=TotalScore+' Scores2Include{scid2} ';'])
         Predictors = cat(3,Predictors,eval(Scores2Include{scid2}));
+
+        if ~IncludeSpatialInitially & strcmp(Scores2Include{scid2},'LocDistSim')
+            continue
+        end
+        eval(['TotalScore=TotalScore+' Scores2Include{scid2} ';'])
     end
-    subplot(2,length(Scores2Include)+1,length(Scores2Include)+1)
-    h=imagesc(triu(TotalScore,1),[0 length(Scores2Include)]);
+    figure('name','TotalScore')
+    subplot(2,1,1)
+    h=imagesc(TotalScore,[0 length(Scores2Include)]);
     title(['Total Score'])
-    xlabel('Unit Y')
-    ylabel('Unit Z')
+    xlabel('Unit_i')
+    ylabel('Unit_j')
     hold on
     line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
     line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
@@ -458,12 +492,12 @@ while flag<2
 
     % Make initial threshold --> to be optimized
     ThrsOpt = quantile(TotalScore(:),priorMatch); %Select best ones only later
-    subplot(2,length(Scores2Include)+1,2*(length(Scores2Include)+1))
-    imagesc(triu(TotalScore>ThrsOpt,1))
+    subplot(2,1,2)
+    imagesc(TotalScore>ThrsOpt)
     hold on
     title(['Thresholding at ' num2str(ThrsOpt)])
-    xlabel('Unit Y')
-    ylabel('Unit Z')
+    xlabel('Unit_i')
+    ylabel('Unit_j')
     hold on
     line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
     line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
@@ -609,7 +643,7 @@ while flag<2
     end
 
     figure;
-    scatter(TotalScore(:),FingerprintR(:),14,RankScoreAll(:),'filled')
+    h=scatter(TotalScore(:),FingerprintR(:),14,RankScoreAll(:),'filled','AlphaData',0.1);
     colormap(cat(1,[0 0 0],winter))
     xlabel('TotalScore')
     ylabel('Cross-correlation fingerprint')
@@ -647,25 +681,14 @@ end
 %% Prepare naive bayes - inspect probability distributions
 % Prepare a set INCLUDING the cross-validated self-scores, otherwise the probability
 % distributions are just weird
-CandidatePairs = TotalScore>ThrsOpt & RankScoreAll==1;
-CandidatePairs(tril(true(size(CandidatePairs)),-1))=0;
+priorMatch = 1-(nclus+nclus)./(nclus*nclus); %Now use a slightly more lenient prior
+ThrsOpt = quantile(TotalScore(:),priorMatch);
+CandidatePairs = TotalScore>ThrsOpt & RankScoreAll==1; 
+% CandidatePairs(tril(true(size(CandidatePairs)),-1))=0;
 [uid,uid2] = find(CandidatePairs);
 Pairs = cat(2,uid,uid2);
 Pairs = sortrows(Pairs);
 Pairs=unique(Pairs,'rows');
-
-% for the naive bayes classifier to properly learn, we also need some examples of non-matches that score high on one but not the other parameters
-leaveoutmatches(:,:,4) = label==1&RankScoreAll>nanmedian(RankScoreAll(:));
-leaveoutmatches(repmat(TotalScore>ThrsOpt & RankScoreAll==1,[1,1,size(leaveoutmatches,3)]))=0; %Take out actual matches
-leaveoutmatches = any(leaveoutmatches,3);
-leaveoutmatches(tril(true(size(leaveoutmatches))))=0;
-[uid,uid2] = find(leaveoutmatches);
-NoPairs = cat(2,uid,uid2);
-NoPairs = sortrows(NoPairs);
-NoPairs = unique(NoPairs,'rows');
-
-% Put together for making the naive bayes model
-Pairs = cat(1,Pairs,NoPairs);
 
 %% Naive bayes classifier
 % Usually this means there's no variance in the match distribution
@@ -677,6 +700,9 @@ MaxPerf = [0 0];
 npairslatest = 0;
 maxrun = 1; % Probably we don't want to keep optimizing?, as this can be a bit circular (?)
 runid=0;
+% Priors = [0.5 0.5];
+
+Priors = [1-(nclus+nclus)./(nclus*nclus) (nclus+nclus)./(nclus*nclus)];
 BestMdl = [];
 while flag<2 && runid<maxrun
     flag = 0;
@@ -687,17 +713,18 @@ while flag<2 && runid<maxrun
         Tbl = array2table(reshape(Predictors,[],size(Predictors,3)),'VariableNames',Scores2Include); %All parameters
 
         if isfield(BestMdl,'Parameterkernels')
-            [label, posterior] = ApplyNaiveBayes(Tbl,BestMdl.Parameterkernels,[0 1]);
+            [label, posterior] = ApplyNaiveBayes(Tbl,BestMdl.Parameterkernels,[0 1],Priors);
         else
             [label, posterior, cost] = predict(BestMdl,Tbl);
         end
     else
-        Tbl = array2table(reshape(Predictors(Pairs(:,1),Pairs(:,2),:),[],size(Predictors(Pairs(:,1),Pairs(:,2),:),3)),'VariableNames',Scores2Include); %All parameters
+        tmp= reshape(Predictors(Pairs(:,1),Pairs(:,2),:),[],length(Scores2Include));
+        Tbl = array2table(reshape(tmp,[],size(tmp,2)),'VariableNames',Scores2Include); %All parameters
         % Use Rank as 'correct' label
-        label = reshape(CandidatePairs(Pairs(:,1),Pairs(:,2)),[],1);
+        label = reshape(CandidatePairs(Pairs(:,1),Pairs(:,2)),1,[])';
         if MakeOwnNaiveBayes
             % Work in progress
-            [Parameterkernels,Performance] = CreateNaiveBayes(Tbl,label);
+            [Parameterkernels,Performance] = CreateNaiveBayes(Tbl,label,Priors);
             if any(Performance'<MaxPerf)
                 flag = flag+1;
             else 
@@ -705,7 +732,7 @@ while flag<2 && runid<maxrun
             end
             % Apply naive bays classifier
             Tbl = array2table(reshape(Predictors,[],size(Predictors,3)),'VariableNames',Scores2Include); %All parameters
-            [label, posterior] = ApplyNaiveBayes(Tbl,Parameterkernels,[0 1]);
+            [label, posterior] = ApplyNaiveBayes(Tbl,Parameterkernels,[0 1],Priors);
 
         else % This uses matlab package. Warning: normal distributions assumed?
             try
@@ -786,7 +813,7 @@ while flag<2 && runid<maxrun
     Pairs=unique(Pairs,'rows');
     Pairs(Pairs(:,1)==Pairs(:,2),:)=[];
     MatchProbability = reshape(posterior(:,2),size(Predictors,1),size(Predictors,2));
-    figure; imagesc(label)
+%     figure; imagesc(label)
 
     % Functional score for optimization: compute Fingerprint for the matched units - based on Célian Bimbard's noise-correlation finger print method but applied to across session correlations
     % Not every recording day will have the same units. Therefore we will
@@ -945,28 +972,54 @@ if RunPyKSChronic
     PyKSLabel = false(nclus,nclus);
     for pid = 1:size(PairsPyKS,1)
         PyKSLabel(PairsPyKS(pid,1),PairsPyKS(pid,2)) = true;
+        PyKSLabel(PairsPyKS(pid,2),PairsPyKS(pid,1)) = true;
     end
+    PyKSLabel(logical(eye(size(PyKSLabel)))) = true;
     PairsPyKS=unique(PairsPyKS,'rows');
 
+    figure('name','Parameter Scores');   
+    Edges = [0:stepsize:1];
+    ScoreVector = Edges(1)+stepsize/2:stepsize:Edges(end)-stepsize/2;
+
+    for scid=1:length(Scores2Include)
+        eval(['ScoresTmp = ' Scores2Include{scid} ';'])
+        ScoresTmp(tril(true(size(ScoresTmp))))=nan;
+        subplot(ceil(sqrt(length(Scores2Include))),round(sqrt(length(Scores2Include))),scid)
+        hc = histcounts(ScoresTmp(~PyKSLabel),Edges)./sum(~PyKSLabel(:));
+        plot(ScoreVector,hc,'b-')
+        hold on
+
+        hc = histcounts(ScoresTmp(PyKSLabel),Edges)./sum(PyKSLabel(:));
+        plot(ScoreVector,hc,'r-')
+
+
+        title(Scores2Include{scid})
+        makepretty
+    end
+    legend('Non-matches','Matches')
 end
 %% Extract final pairs:
 disp('Extracting final pairs of units...')
 Tbl = array2table(reshape(Predictors,[],size(Predictors,3)),'VariableNames',Scores2Include); %All parameters
 if isfield(BestMdl,'Parameterkernels')
     if RunPyKSChronic
-        [label, posterior,performance] = ApplyNaiveBayes(Tbl,BestMdl.Parameterkernels,PyKSLabel(:));
+        [label, posterior,performance] = ApplyNaiveBayes(Tbl,BestMdl.Parameterkernels,PyKSLabel(:),Priors);
+        disp(['Correctly labelled ' num2str(round(performance(2)*1000)/10) '% of PyKS Matches and ' num2str(round(performance(1)*1000)/10) '% of PyKS non matches']) 
+
+        disp('Results if training would be done with PyKs stitched')
+        [ParameterkernelsPyKS,Performance] = CreateNaiveBayes(Tbl,PyKSLabel(:),Priors);
+        [Fakelabel, Fakeposterior,performance] = ApplyNaiveBayes(Tbl,ParameterkernelsPyKS,PyKSLabel(:),Priors);
         disp(['Correctly labelled ' num2str(round(performance(2)*1000)/10) '% of PyKS Matches and ' num2str(round(performance(1)*1000)/10) '% of PyKS non matches']) 
     else
-        [label, posterior] = ApplyNaiveBayes(Tbl,BestMdl.Parameterkernels,[0 1]);
+        [label, posterior] = ApplyNaiveBayes(Tbl,BestMdl.Parameterkernels,[0 1],Priors);
     end
 else
     [label, posterior, cost] = predict(BestMdl,Tbl);
 end
 MatchProbability = reshape(posterior(:,2),size(Predictors,1),size(Predictors,2));
-label = reshape(label,nclus,nclus);
-ProbThreshold = quantile(diag(MatchProbability),0.1);
-% label = MatchProbability>ProbThreshold; % We want to be very confident
-[r, c] = find(triu(label,1)==1 & triu(~SameSesMat,1)); %Find matches
+label = (MatchProbability>0.95) | (MatchProbability>0.01 & RankScoreAll==1); 
+% label = reshape(label,nclus,nclus);
+[r, c] = find(triu(label,1)==1 & triu(~SameSesMat,1)); %Find matches across 2 days
 Pairs = cat(2,r,c);
 Pairs = sortrows(Pairs);
 Pairs=unique(Pairs,'rows');
@@ -981,26 +1034,7 @@ line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
 title('Identified matches')
 makepretty
 
-if RunPyKSChronic
-
-    [Int,A,B] = intersect(Pairs,PairsPyKS,'rows');
-    PercDetected = size(Int,1)./size(PairsPyKS,1).*100;
-    disp(['Detected ' num2str(PercDetected) '% of PyKS matched units'])
-    
-    PercOver = (size(Pairs,1)-size(Int,1))./size(PairsPyKS,1)*100;
-    disp(['Detected ' num2str(PercOver) '% more units than just PyKS matched units'])
-
-    % interesting: Not detected
-    NotB = 1:size(PairsPyKS,1);
-    NotB(B) = [];
-    OnlyDetectedByPyKS = PairsPyKS(NotB,:);
-    
-    % Too much detected
-    NotA = 1:size(Pairs,1);
-    NotA(A) = [];
-    NotdetectedByPyKS = Pairs(NotA,:);
-end
-%%
+%% Check different probabilities, what does the match graph look like?
 figure;
 takethisprob = [0.5 0.75 0.95 0.99];
 for pid = 1:4
@@ -1050,8 +1084,8 @@ subplot(1,2,1)
 imagesc(N)
 colormap(flipud(gray))
 makepretty
-xlabel('Unit 1')
-ylabel('Unit 2')
+xlabel('Unit_i')
+ylabel('Unit_j')
 zlabel('Counts')
 title('Identified Non-matches')
 
@@ -1060,8 +1094,8 @@ subplot(1,2,2)
 imagesc(N)
 colormap(flipud(gray))
 makepretty
-xlabel('Unit 1')
-ylabel('Unit 2')
+xlabel('Unit_i')
+ylabel('Unit_j')
 zlabel('Counts')
 title('Identified Matches')
 
@@ -1074,7 +1108,7 @@ subplot(1,2,1)
 imagesc(N)
 colormap(flipud(gray))
 makepretty
-xlabel('Unit 1')
+xlabel('Unit_i')
 ylabel('Unit 2')
 zlabel('Counts')
 title('Identified Non-matches')
@@ -1084,8 +1118,8 @@ subplot(1,2,2)
 imagesc(N)
 colormap(flipud(gray))
 makepretty
-xlabel('Unit 1')
-ylabel('Unit 2')
+xlabel('Unit_i')
+ylabel('Unit_j')
 zlabel('Counts')
 title('Identified Matches')
 
@@ -1098,8 +1132,8 @@ subplot(1,2,1)
 imagesc(N)
 colormap(flipud(gray))
 makepretty
-xlabel('Unit 1')
-ylabel('Unit 2')
+xlabel('Unit_i')
+ylabel('Unit_j')
 zlabel('Counts')
 title('Identified Non-matches')
 
@@ -1108,11 +1142,11 @@ subplot(1,2,2)
 imagesc(N)
 colormap(flipud(gray))
 makepretty
-xlabel('Unit 1')
-ylabel('Unit 2')
+xlabel('Unit_i')
+ylabel('Unit_j')
 zlabel('Counts')
 title('Identified Matches')
-%%
+%% Fingerprint correlations
 disp('Recalculate activity correlations')
 
 % Use a bunch of units with high total scores as reference population
@@ -1216,12 +1250,12 @@ title('Rankscore == 1')
 makepretty
 
 subplot(1,3,2)
-imagesc(label==1)
+imagesc(MatchProbability>0.5)
 hold on
 line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
 line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
 colormap(flipud(gray))
-title('Match label == 1')
+title('Match Probability>0.5')
 makepretty
 
 subplot(1,3,3)
@@ -1255,6 +1289,58 @@ Pairs = sortrows(Pairs);
 Pairs=unique(Pairs,'rows');
 Pairs(Pairs(:,1)==Pairs(:,2),:)=[];
 
+if RunPyKSChronic
+
+    [Int,A,B] = intersect(Pairs,PairsPyKS,'rows');
+    PercDetected = size(Int,1)./size(PairsPyKS,1).*100;
+    disp(['Detected ' num2str(PercDetected) '% of PyKS matched units'])
+
+    PercOver = (size(Pairs,1)-size(Int,1))./size(PairsPyKS,1)*100;
+    disp(['Detected ' num2str(PercOver) '% more units than just PyKS matched units'])
+
+    % interesting: Not detected
+    NotB = 1:size(PairsPyKS,1);
+    NotB(B) = [];
+    OnlyDetectedByPyKS = PairsPyKS(NotB,:);
+
+    % Figure out what hasn't been detected:
+    % Extract individual parameter scores for these specific 'pairs'
+    TmpSc = cell2mat(arrayfun(@(X) squeeze(Predictors(OnlyDetectedByPyKS(X,1),OnlyDetectedByPyKS(X,1),:)),1:size(OnlyDetectedByPyKS,1),'Uni',0));
+
+    % p(X|Match)
+    [~,minidx] = arrayfun(@(X) min(abs(X-ScoreVector)),TmpSc,'Uni',0); % Find index for observation in score vector
+    minidx=cell2mat(minidx);
+    % Only interested in matches:
+    MatchLkh = cell2mat(arrayfun(@(Y) Parameterkernels(minidx(Y,:),Y,2),1:size(minidx,1),'Uni',0));
+
+    figure;
+    subplot(2,2,1)
+    imagesc(TmpSc')
+    colormap(flipud(gray))
+    title('Scores')
+
+    subplot(2,2,2)
+    imagesc(MatchLkh)
+    colormap(flipud(gray))
+    title('likelihood_Match')
+
+    TmpMP = cell2mat(arrayfun(@(X) squeeze(MatchProbability(OnlyDetectedByPyKS(X,1),OnlyDetectedByPyKS(X,2))),1:size(OnlyDetectedByPyKS,1),'Uni',0));
+
+    figure('name','OnlyDetecedPyKS'); 
+    for scid=1:length(Scores2Include)
+        subplot(ceil(sqrt(length(Scores2Include))),round(sqrt(length(Scores2Include))),scid)
+        histogram(TmpSc(scid,:),Edges)
+        title(Scores2Include{scid})
+    end
+
+    % Too much detected
+    NotA = 1:size(Pairs,1);
+    NotA(A) = [];
+    NotdetectedByPyKS = Pairs(NotA,:);
+  
+end
+
+
 %% TotalScore Pair versus no pair
 SelfScore = MatchProbability(logical(eye(size(MatchProbability))));
 scorematches = nan(size(Pairs,1),1); %First being TotalScore, second being TemplateMatch
@@ -1285,7 +1371,7 @@ ylabel('Nr Pairs')
 legend('Self Score','Matches','Threshold','Location','best')
 makepretty
 
-save(fullfile(SaveDir,MiceOpt{midx},'MatchingScores.mat'),'BestMdl','SessionSwitch','GoodRecSesID','AllClusterIDs','Good_Idx','WavformSimilarity','WVCorr','LocationCombined','waveformdurationDiff','PeakTimeDiff','spatialdecayDiff','TotalScore','label','MatchProbability')
+save(fullfile(SaveDir,MiceOpt{midx},'MatchingScores.mat'),'BestMdl','SessionSwitch','GoodRecSesID','AllClusterIDs','Good_Idx','WavformSim','WVCorr','LocationCombined','waveformTimePointSim','PeakTimeSim','spatialdecaySim','TotalScore','label','MatchProbability')
 save(fullfile(SaveDir,MiceOpt{midx},'UnitMatchModel.mat'),'BestMdl')
 %% ISI violations (for over splits matching)
 ISIViolationsScore = nan(1,size(Pairs,1));
@@ -1362,13 +1448,18 @@ for pairid=1:size(Pairs,1)
     subplot(3,3,[2])
 
     hold on
-    h(1) = plot(squeeze(ProjectedLocationPerTP(1,uid,:)),squeeze(ProjectedLocationPerTP(2,uid,:)),'b-');
-    scatter(squeeze(ProjectedLocationPerTP(1,uid,:)),squeeze(ProjectedLocationPerTP(2,uid,:)),30,1:spikeWidth,'filled')
-    colormap(flipud(gray))
+    takesamples = WaveIdx(uid,:,:);
+    takesamples = unique(takesamples(~isnan(takesamples)));
+    h(1) = plot(squeeze(ProjectedLocationPerTP(1,uid,takesamples)),squeeze(ProjectedLocationPerTP(2,uid,takesamples)),'b-');
+    scatter(squeeze(ProjectedLocationPerTP(1,uid,takesamples)),squeeze(ProjectedLocationPerTP(2,uid,takesamples)),30,takesamples,'filled')
+    colormap(hot)
 
-    h(2) = plot(squeeze(ProjectedLocationPerTP(1,uid2,:)),squeeze(ProjectedLocationPerTP(2,uid2,:)),'r-');
-    scatter(squeeze(ProjectedLocationPerTP(1,uid2,:)),squeeze(ProjectedLocationPerTP(2,uid2,:)),30,1:spikeWidth,'filled')
-    colormap(flipud(gray))
+    takesamples = WaveIdx(uid2,:,:);
+    takesamples = unique(takesamples(~isnan(takesamples)));
+  
+    h(2) = plot(squeeze(ProjectedLocationPerTP(1,uid2,takesamples)),squeeze(ProjectedLocationPerTP(2,uid2,takesamples)),'r-');
+    scatter(squeeze(ProjectedLocationPerTP(1,uid2,takesamples)),squeeze(ProjectedLocationPerTP(2,uid2,takesamples)),30,takesamples,'filled')
+    colormap(hot)
     xlabel('Xpos (um)')
     ylabel('Ypos (um)')
     ydif = diff(get(gca,'ylim'));
@@ -1379,7 +1470,7 @@ for pairid=1:size(Pairs,1)
     hc= colorbar;
     hc.Label.String = 'timesample';
     makepretty
-    title(['Location score: ' num2str(round(LocationCombined(uid,uid2)*100)./100)])
+    title(['Distance: ' num2str(round(LocDistSim(uid,uid2)*100)./100) ', angle: ' num2str(round(LocAngleSim(uid,uid2)*100)./100)])
 
     subplot(3,3,5)
     plot(channelpos(:,1),channelpos(:,2),'k.')
@@ -1400,8 +1491,8 @@ for pairid=1:size(Pairs,1)
     h(3)=plot(nanmean(SM2(:,1:2:end),2),'r-');
     h(4)=plot(nanmean(SM2(:,2:2:end),2),'r--');
     makepretty
-    title(['Waveform Similarity=' num2str(round(WavformSimilarity(uid,uid2)*100)./100) ', dur=' num2str(round(waveformdurationDiff(uid,uid2)*100)./100) ', peak=' ...
-        num2str(round(PeakTimeDiff(uid,uid2)*100)./100) ', decay='  num2str(round(spatialdecayDiff(uid,uid2)*100)./100)])
+    title(['Waveform Similarity=' num2str(round(WavformSim(uid,uid2)*100)./100) ', WVCorr=' num2str(round(WVCorr(uid,uid2)*100)./100) ', Ampl=' ...
+        num2str(round(AmplitudeSim(uid,uid2)*100)./100) ', decay='  num2str(round(spatialdecaySim(uid,uid2)*100)./100)])
 
 
     % Scatter spikes of each unit
@@ -1493,10 +1584,28 @@ for pairid=1:size(Pairs,1)
     subplot(3,3,9)
 
     plot(SessionCorrelations(uid,:),'b-'); hold on; plot(SessionCorrelations(uid2,:),'r-')
+    hold off  
     xlabel('Unit')
     ylabel('Cross-correlation')
     title(['Fingerprint r=' num2str(round(FingerprintR(uid,uid2)*100)/100) ', rank=' num2str(RankScoreAll(uid,uid2))])
+    ylims = get(gca,'ylim');
+    set(gca,'ylim',[ylims(1) ylims(2)*1.2])
+    PosMain = get(gca,'Position');   
     makepretty
+
+    axes('Position',[PosMain(1)+(PosMain(3)*0.8) PosMain(2)+(PosMain(4)*0.8) PosMain(3)*0.2 PosMain(4)*0.2])
+    box on
+    tmp1 = FingerprintR(uid,:);
+    tmp1(uid2)=nan;
+    tmp2 = FingerprintR(:,uid2);
+    tmp2(uid)=nan;
+    tmp = cat(2,tmp1,tmp2');    
+    histogram(tmp,'EdgeColor','none','FaceColor',[0.5 0.5 0.5])
+    hold on
+    line([FingerprintR(uid,uid2) FingerprintR(uid,uid2)],get(gca,'ylim'),'color',[1 0 0])
+    xlabel('Finger print r')
+    makepretty    
+
 
     disp(['UniqueID ' num2str(AllClusterIDs(Good_Idx(uid))) ' vs ' num2str(AllClusterIDs(Good_Idx(uid2)))])
     disp(['Peakchan ' num2str(MaxChannel(uid)) ' versus ' num2str(MaxChannel(uid2))])

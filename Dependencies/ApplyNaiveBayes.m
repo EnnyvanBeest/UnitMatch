@@ -1,9 +1,10 @@
-function [label,probability, Performance]=ApplyNaiveBayes(Tbl,Parameterkernels,label)
+function [label,probability, Performance]=ApplyNaiveBayes(Tbl,Parameterkernels,label,Prior)
 % Input:
 % Tbl: table with all parameters (columns), rows for observations
 % Parameterkernels: Probability distribution for every parameter, for every
 % condition
 % label: either label per observation OR the options for classes. 
+% Prior: if empty, use 0.5 0.5
 
 % Output:
 % label given Naive Bayes rule
@@ -13,7 +14,7 @@ function [label,probability, Performance]=ApplyNaiveBayes(Tbl,Parameterkernels,l
 % Calculate posterior probability given Paremeterkernels (=probability
 % distributions)
 %% User input. Better not changed unless you do it everywhere
-stepsize = 0.01;
+global stepsize
 
 %% Initialize
 Edges = [0:stepsize:1];
@@ -34,11 +35,9 @@ end
 
 %% Bayes Theorem
 %% p(Ck) Prior
-Prior = nan(1,length(Cond));
-for Ck = 1:length(Cond)
-    Prior(Ck) = sum(label==Cond(Ck))/length(label);
+if nargin<4 || ~exist('Prior')
+    Prior = [0.5 0.5]; %equal assumptions instead
 end
-
 %% p(X|Ck) Likelihood
 % Find index for every observation in scorevector to assign correct
 % probability
