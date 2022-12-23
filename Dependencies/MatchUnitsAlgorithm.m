@@ -1,4 +1,4 @@
-%function  [UniqueID, Prob] = MatchUnitsAlgorithm(clusinfo,AllRawPaths)
+%function  [UniqueID, Prob, Rank] = MatchUnitsAlgorithm(clusinfo,AllRawPaths)
 %% Match units on neurophysiological evidence
 % Input:
 % - clusinfo (this is phy output, see also prepareinfo/spikes toolbox)
@@ -36,6 +36,7 @@ MakeOwnNaiveBayes = 1; % if 0, use standard matlab version, which assumes normal
 ApplyExistingBayesModel = 0; %If 1, look if a Bayes model already exists for this mouse and applies that
 global stepsize
 stepsize = 0.01; % Of probability distribution
+MakePlotsOfPairs = 1; % Plots all pairs for inspection
 %% Extract all clusters
 AllClusterIDs = clusinfo.cluster_id;
 nses = length(AllQMsPaths);
@@ -1305,7 +1306,7 @@ if RunPyKSChronic
 
     % Figure out what hasn't been detected:
     % Extract individual parameter scores for these specific 'pairs'
-    TmpSc = cell2mat(arrayfun(@(X) squeeze(Predictors(OnlyDetectedByPyKS(X,1),OnlyDetectedByPyKS(X,1),:)),1:size(OnlyDetectedByPyKS,1),'Uni',0));
+    TmpSc = cell2mat(arrayfun(@(X) squeeze(Predictors(OnlyDetectedByPyKS(X,1),OnlyDetectedByPyKS(X,2),:)),1:size(OnlyDetectedByPyKS,1),'Uni',0));
 
     % p(X|Match)
     [~,minidx] = arrayfun(@(X) min(abs(X-ScoreVector)),TmpSc,'Uni',0); % Find index for observation in score vector
@@ -1390,233 +1391,237 @@ fprintf('\n')
 disp(['Removing ' num2str(sum(ISIViolationsScore>0.05)) ' matched oversplits, as merging them will violate ISI >5% of the time'])
 Pairs(ISIViolationsScore>0.05,:)=[];
 
+
 %% Average in 3rd dimension (halfs of a session)
 ProjectedWaveform = nanmean(ProjectedWaveform,3); %Average over first and second half of session
 ProjectedLocation = nanmean(ProjectedLocation,3);
 ProjectedLocationPerTP = nanmean(ProjectedLocationPerTP,4);
+
 %% Figures
-% Pairs = Pairs(any(ismember(Pairs,[8,68,47,106]),2),:);
-AllClusterIDs(Good_Idx(Pairs))
-for pairid=1:size(Pairs,1)
-    uid = Pairs(pairid,1);
-    uid2 = Pairs(pairid,2);
+if MakePlotsOfPairs
+    % Pairs = Pairs(any(ismember(Pairs,[8,68,47,106]),2),:);
+    AllClusterIDs(Good_Idx(Pairs))
+    for pairid=1:size(Pairs,1)
+        uid = Pairs(pairid,1);
+        uid2 = Pairs(pairid,2);
 
-    pathparts = strsplit(AllRawPaths{GoodRecSesID(uid)},'\');
-    rawdatapath = dir(fullfile('\\',pathparts{1:end-1}));
-    if isempty(rawdatapath)
-        rawdatapath = dir(fullfile(pathparts{1:end-1}));
-    end
-
-    % Load raw data
-    SM1=load(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(num2str(AllClusterIDs(Good_Idx(uid)))) '_RawSpikes.mat']));
-    SM1 = SM1.spikeMap; %Average across these channels
-
-    pathparts = strsplit(AllRawPaths{GoodRecSesID(uid2)},'\');
-    rawdatapath = dir(fullfile('\\',pathparts{1:end-1}));
-    if isempty(rawdatapath)
-        rawdatapath = dir(fullfile(pathparts{1:end-1}));
-    end
-
-    SM2=load(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(num2str(AllClusterIDs(Good_Idx(uid2)))) '_RawSpikes.mat']));
-    SM2 = SM2.spikeMap; %Average across these channels
-
-    tmpfig = figure;
-    subplot(3,3,[1,4])
-    ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChannel(uid,cv),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<TakeChannelRadius); %Averaging over 10 channels helps with drift
-    Locs = channelpos(ChanIdx,:);
-    for id = 1:length(Locs)
-        plot(Locs(id,1)*5+[1:size(SM1,1)],Locs(id,2)*10+nanmean(SM1(:,ChanIdx(id),:),3),'b-','LineWidth',1)
-        hold on
-    end
-    plot(ProjectedLocation(1,uid)*5+[1:size(SM1,1)],ProjectedLocation(2,uid)*10+ProjectedWaveform(:,uid),'b--','LineWidth',2)
-
-    ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChannel(uid2,cv),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<TakeChannelRadius); %Averaging over 10 channels helps with drift
-    Locs = channelpos(ChanIdx,:);
-    for id = 1:length(Locs)
-        plot(Locs(id,1)*5+[1:size(SM2,1)],Locs(id,2)*10+nanmean(SM2(:,ChanIdx(id),:),3),'r-','LineWidth',1)
-        hold on
-    end
-    plot(ProjectedLocation(1,uid2)*5+[1:size(SM1,1)],ProjectedLocation(2,uid2)*10+ProjectedWaveform(:,uid2),'r--','LineWidth',2)
-
-    makepretty
-    set(gca,'xticklabel',arrayfun(@(X) num2str(X./5),cellfun(@(X) str2num(X),get(gca,'xticklabel')),'UniformOutput',0))
-    set(gca,'yticklabel',arrayfun(@(X) num2str(X./10),cellfun(@(X) str2num(X),get(gca,'yticklabel')),'UniformOutput',0))
-    xlabel('Xpos (um)')
-    ylabel('Ypos (um)')
-    title(['unit' num2str(AllClusterIDs(Good_Idx(uid))) ' versus unit' num2str(AllClusterIDs(Good_Idx(uid2))) ', ' 'RecordingDay ' num2str(GoodRecSesID(uid)) ' versus ' num2str(GoodRecSesID(uid2)) ', Probability=' num2str(round(MatchProbability(uid,uid2).*100)) '%'])
-
-    subplot(3,3,[2])
-
-    hold on
-    takesamples = WaveIdx(uid,:,:);
-    takesamples = unique(takesamples(~isnan(takesamples)));
-    h(1) = plot(squeeze(ProjectedLocationPerTP(1,uid,takesamples)),squeeze(ProjectedLocationPerTP(2,uid,takesamples)),'b-');
-    scatter(squeeze(ProjectedLocationPerTP(1,uid,takesamples)),squeeze(ProjectedLocationPerTP(2,uid,takesamples)),30,takesamples,'filled')
-    colormap(hot)
-
-    takesamples = WaveIdx(uid2,:,:);
-    takesamples = unique(takesamples(~isnan(takesamples)));
-  
-    h(2) = plot(squeeze(ProjectedLocationPerTP(1,uid2,takesamples)),squeeze(ProjectedLocationPerTP(2,uid2,takesamples)),'r-');
-    scatter(squeeze(ProjectedLocationPerTP(1,uid2,takesamples)),squeeze(ProjectedLocationPerTP(2,uid2,takesamples)),30,takesamples,'filled')
-    colormap(hot)
-    xlabel('Xpos (um)')
-    ylabel('Ypos (um)')
-    ydif = diff(get(gca,'ylim'));
-    xdif = diff(get(gca,'xlim'));
-    stretch = (ydif-xdif)./2;
-    set(gca,'xlim',[min(get(gca,'xlim')) - stretch, max(get(gca,'xlim')) + stretch])
-    %     legend([h(1),h(2)],{['Unit ' num2str(uid)],['Unit ' num2str(uid2)]})
-    hc= colorbar;
-    hc.Label.String = 'timesample';
-    makepretty
-    title(['Distance: ' num2str(round(LocDistSim(uid,uid2)*100)./100) ', angle: ' num2str(round(LocAngleSim(uid,uid2)*100)./100)])
-
-    subplot(3,3,5)
-    plot(channelpos(:,1),channelpos(:,2),'k.')
-    hold on
-    h(1)=plot(channelpos(MaxChannel(uid),1),channelpos(MaxChannel(uid),2),'b.','MarkerSize',15);
-    h(2) = plot(channelpos(MaxChannel(uid2),1),channelpos(MaxChannel(uid2),2),'r.','MarkerSize',15);
-    xlabel('X position')
-    ylabel('um from tip')
-    makepretty
-    title(['Chan ' num2str(MaxChannel(uid)) ' versus ' num2str(MaxChannel(uid2))])
-
-    subplot(3,3,3)
-    hold on
-    SM1 = squeeze(nanmean(SM1(:,MaxChannel(uid),:),2));
-    SM2 = squeeze(nanmean(SM2(:,MaxChannel(uid2),:),2));
-    h(1)=plot(nanmean(SM1(:,1:2:end),2),'b-');
-    h(2)=plot(nanmean(SM1(:,2:2:end),2),'b--');
-    h(3)=plot(nanmean(SM2(:,1:2:end),2),'r-');
-    h(4)=plot(nanmean(SM2(:,2:2:end),2),'r--');
-    makepretty
-    title(['Waveform Similarity=' num2str(round(WavformSim(uid,uid2)*100)./100) ', WVCorr=' num2str(round(WVCorr(uid,uid2)*100)./100) ', Ampl=' ...
-        num2str(round(AmplitudeSim(uid,uid2)*100)./100) ', decay='  num2str(round(spatialdecaySim(uid,uid2)*100)./100)])
-
-
-    % Scatter spikes of each unit
-    subplot(3,3,6)
-    idx1=find(sp.spikeTemplates == AllClusterIDs(Good_Idx(uid)) & sp.RecSes == GoodRecSesID(uid));
-    scatter(sp.st(idx1)./60,sp.spikeAmps(idx1),4,[0 0 1],'filled')
-    hold on
-    idx2=find(sp.spikeTemplates == AllClusterIDs(Good_Idx(uid2)) &  sp.RecSes == GoodRecSesID(uid2));
-    scatter(sp.st(idx2)./60,-sp.spikeAmps(idx2),4,[1 0 0],'filled')
-    xlabel('Time (min)')
-    ylabel('Abs(Amplitude)')
-    title(['Amplitude distribution'])
-    xlims = get(gca,'xlim');
-    ylims = max(abs(get(gca,'ylim')));
-    % Other axis
-    [h1,edges,binsz]=histcounts(sp.spikeAmps(idx1));
-    %Normalize between 0 and 1
-    h1 = ((h1-nanmin(h1))./(nanmax(h1)-nanmin(h1)))*10+xlims(2)+10;
-    plot(h1,edges(1:end-1),'b-');
-    [h2,edges,binsz]=histcounts(sp.spikeAmps(idx2));
-    %Normalize between 0 and 1
-    h2 = ((h2-nanmin(h2))./(nanmax(h2)-nanmin(h2)))*10+xlims(2)+10;
-    plot(h2,-edges(1:end-1),'r-');
-    ylabel('Amplitude')
-    ylim([-ylims ylims])
-
-    makepretty
-
-
-    % compute ACG
-    [ccg, ~] = CCGBz([double(sp.st(idx1)); double(sp.st(idx1))], [ones(size(sp.st(idx1), 1), 1); ...
-        ones(size(sp.st(idx1), 1), 1) * 2], 'binSize', param.ACGbinSize, 'duration', param.ACGduration, 'norm', 'rate'); %function
-    ACG = ccg(:, 1, 1);
-    [ccg, ~] = CCGBz([double(sp.st(idx2)); double(sp.st(idx2))], [ones(size(sp.st(idx2), 1), 1); ...
-        ones(size(sp.st(idx2), 1), 1) * 2], 'binSize', param.ACGbinSize, 'duration', param.ACGduration, 'norm', 'rate'); %function
-    ACG2 = ccg(:, 1, 1);
-    [ccg, ~] = CCGBz([double(sp.st([idx1;idx2])); double(sp.st([idx1;idx2]))], [ones(size(sp.st([idx1;idx2]), 1), 1); ...
-        ones(size(sp.st([idx1;idx2]), 1), 1) * 2], 'binSize', param.ACGbinSize, 'duration', param.ACGduration, 'norm', 'rate'); %function
-
-    subplot(3,3,7); plot(ACG,'b');
-    hold on
-    plot(ACG2,'r')
-    title(['AutoCorrelogram'])
-    makepretty
-    subplot(3,3,8)
-
-    if exist('NatImgCorr','var')
-        if GoodRecSesID(uid)==1 % Recording day 1
-            tmp1 = squeeze(D0(OriginalClusID(Good_Idx(uid))+1,:,:));
-        else % Recordingday 2
-            tmp1 = squeeze(D1(OriginalClusID(Good_Idx(uid))+1,:,:));
-        end
-        if GoodRecSesID(uid2)==1 % Recording day 1
-            tmp2 = squeeze(D0(OriginalClusID(Good_Idx(uid2))+1,:,:));
-        else % Recordingday 2
-            tmp2 = squeeze(D1(OriginalClusID(Good_Idx(uid2))+1,:,:));
+        pathparts = strsplit(AllRawPaths{GoodRecSesID(uid)},'\');
+        rawdatapath = dir(fullfile('\\',pathparts{1:end-1}));
+        if isempty(rawdatapath)
+            rawdatapath = dir(fullfile(pathparts{1:end-1}));
         end
 
-        plot(nanmean(tmp1,1),'b-');
+        % Load raw data
+        SM1=load(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(num2str(AllClusterIDs(Good_Idx(uid)))) '_RawSpikes.mat']));
+        SM1 = SM1.spikeMap; %Average across these channels
+
+        pathparts = strsplit(AllRawPaths{GoodRecSesID(uid2)},'\');
+        rawdatapath = dir(fullfile('\\',pathparts{1:end-1}));
+        if isempty(rawdatapath)
+            rawdatapath = dir(fullfile(pathparts{1:end-1}));
+        end
+
+        SM2=load(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(num2str(AllClusterIDs(Good_Idx(uid2)))) '_RawSpikes.mat']));
+        SM2 = SM2.spikeMap; %Average across these channels
+
+        tmpfig = figure;
+        subplot(3,3,[1,4])
+        ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChannel(uid,cv),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<TakeChannelRadius); %Averaging over 10 channels helps with drift
+        Locs = channelpos(ChanIdx,:);
+        for id = 1:length(Locs)
+            plot(Locs(id,1)*5+[1:size(SM1,1)],Locs(id,2)*10+nanmean(SM1(:,ChanIdx(id),:),3),'b-','LineWidth',1)
+            hold on
+        end
+        plot(ProjectedLocation(1,uid)*5+[1:size(SM1,1)],ProjectedLocation(2,uid)*10+ProjectedWaveform(:,uid),'b--','LineWidth',2)
+
+        ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChannel(uid2,cv),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<TakeChannelRadius); %Averaging over 10 channels helps with drift
+        Locs = channelpos(ChanIdx,:);
+        for id = 1:length(Locs)
+            plot(Locs(id,1)*5+[1:size(SM2,1)],Locs(id,2)*10+nanmean(SM2(:,ChanIdx(id),:),3),'r-','LineWidth',1)
+            hold on
+        end
+        plot(ProjectedLocation(1,uid2)*5+[1:size(SM1,1)],ProjectedLocation(2,uid2)*10+ProjectedWaveform(:,uid2),'r--','LineWidth',2)
+
+        makepretty
+        set(gca,'xticklabel',arrayfun(@(X) num2str(X./5),cellfun(@(X) str2num(X),get(gca,'xticklabel')),'UniformOutput',0))
+        set(gca,'yticklabel',arrayfun(@(X) num2str(X./10),cellfun(@(X) str2num(X),get(gca,'yticklabel')),'UniformOutput',0))
+        xlabel('Xpos (um)')
+        ylabel('Ypos (um)')
+        title(['unit' num2str(AllClusterIDs(Good_Idx(uid))) ' versus unit' num2str(AllClusterIDs(Good_Idx(uid2))) ', ' 'RecordingDay ' num2str(GoodRecSesID(uid)) ' versus ' num2str(GoodRecSesID(uid2)) ', Probability=' num2str(round(MatchProbability(uid,uid2).*100)) '%'])
+
+        subplot(3,3,[2])
+
         hold on
-        plot(nanmean(tmp2,1),'r-');
-        xlabel('Stimulus')
-        ylabel('NrSpks')
+        takesamples = WaveIdx(uid,:,:);
+        takesamples = unique(takesamples(~isnan(takesamples)));
+        h(1) = plot(squeeze(ProjectedLocationPerTP(1,uid,takesamples)),squeeze(ProjectedLocationPerTP(2,uid,takesamples)),'b-');
+        scatter(squeeze(ProjectedLocationPerTP(1,uid,takesamples)),squeeze(ProjectedLocationPerTP(2,uid,takesamples)),30,takesamples,'filled')
+        colormap(hot)
+
+        takesamples = WaveIdx(uid2,:,:);
+        takesamples = unique(takesamples(~isnan(takesamples)));
+
+        h(2) = plot(squeeze(ProjectedLocationPerTP(1,uid2,takesamples)),squeeze(ProjectedLocationPerTP(2,uid2,takesamples)),'r-');
+        scatter(squeeze(ProjectedLocationPerTP(1,uid2,takesamples)),squeeze(ProjectedLocationPerTP(2,uid2,takesamples)),30,takesamples,'filled')
+        colormap(hot)
+        xlabel('Xpos (um)')
+        ylabel('Ypos (um)')
+        ydif = diff(get(gca,'ylim'));
+        xdif = diff(get(gca,'xlim'));
+        stretch = (ydif-xdif)./2;
+        set(gca,'xlim',[min(get(gca,'xlim')) - stretch, max(get(gca,'xlim')) + stretch])
+        %     legend([h(1),h(2)],{['Unit ' num2str(uid)],['Unit ' num2str(uid2)]})
+        hc= colorbar;
+        hc.Label.String = 'timesample';
+        makepretty
+        title(['Distance: ' num2str(round(LocDistSim(uid,uid2)*100)./100) ', angle: ' num2str(round(LocAngleSim(uid,uid2)*100)./100)])
+
+        subplot(3,3,5)
+        plot(channelpos(:,1),channelpos(:,2),'k.')
+        hold on
+        h(1)=plot(channelpos(MaxChannel(uid),1),channelpos(MaxChannel(uid),2),'b.','MarkerSize',15);
+        h(2) = plot(channelpos(MaxChannel(uid2),1),channelpos(MaxChannel(uid2),2),'r.','MarkerSize',15);
+        xlabel('X position')
+        ylabel('um from tip')
+        makepretty
+        title(['Chan ' num2str(MaxChannel(uid)) ' versus ' num2str(MaxChannel(uid2))])
+
+        subplot(3,3,3)
+        hold on
+        SM1 = squeeze(nanmean(SM1(:,MaxChannel(uid),:),2));
+        SM2 = squeeze(nanmean(SM2(:,MaxChannel(uid2),:),2));
+        h(1)=plot(nanmean(SM1(:,1:2:end),2),'b-');
+        h(2)=plot(nanmean(SM1(:,2:2:end),2),'b--');
+        h(3)=plot(nanmean(SM2(:,1:2:end),2),'r-');
+        h(4)=plot(nanmean(SM2(:,2:2:end),2),'r--');
+        makepretty
+        title(['Waveform Similarity=' num2str(round(WavformSim(uid,uid2)*100)./100) ', WVCorr=' num2str(round(WVCorr(uid,uid2)*100)./100) ', Ampl=' ...
+            num2str(round(AmplitudeSim(uid,uid2)*100)./100) ', decay='  num2str(round(spatialdecaySim(uid,uid2)*100)./100)])
+
+
+        % Scatter spikes of each unit
+        subplot(3,3,6)
+        idx1=find(sp.spikeTemplates == AllClusterIDs(Good_Idx(uid)) & sp.RecSes == GoodRecSesID(uid));
+        scatter(sp.st(idx1)./60,sp.spikeAmps(idx1),4,[0 0 1],'filled')
+        hold on
+        idx2=find(sp.spikeTemplates == AllClusterIDs(Good_Idx(uid2)) &  sp.RecSes == GoodRecSesID(uid2));
+        scatter(sp.st(idx2)./60,-sp.spikeAmps(idx2),4,[1 0 0],'filled')
+        xlabel('Time (min)')
+        ylabel('Abs(Amplitude)')
+        title(['Amplitude distribution'])
+        xlims = get(gca,'xlim');
+        ylims = max(abs(get(gca,'ylim')));
+        % Other axis
+        [h1,edges,binsz]=histcounts(sp.spikeAmps(idx1));
+        %Normalize between 0 and 1
+        h1 = ((h1-nanmin(h1))./(nanmax(h1)-nanmin(h1)))*10+xlims(2)+10;
+        plot(h1,edges(1:end-1),'b-');
+        [h2,edges,binsz]=histcounts(sp.spikeAmps(idx2));
+        %Normalize between 0 and 1
+        h2 = ((h2-nanmin(h2))./(nanmax(h2)-nanmin(h2)))*10+xlims(2)+10;
+        plot(h2,-edges(1:end-1),'r-');
+        ylabel('Amplitude')
+        ylim([-ylims ylims])
+
         makepretty
 
 
-        if AllClusterIDs(Good_Idx(uid))  == AllClusterIDs(Good_Idx(uid2))
-            if ismember(Good_Idx(uid),Good_ClusUnTracked)
-                title(['Visual: Untracked, r=' num2str(round(NatImgCorr(pairid,pairid)*100)/100)])
-            elseif ismember(Good_Idx(uid),Good_ClusTracked)
-                title(['Visual: Tracked, r=' num2str(round(NatImgCorr(pairid,pairid)*100)/100)])
+        % compute ACG
+        [ccg, ~] = CCGBz([double(sp.st(idx1)); double(sp.st(idx1))], [ones(size(sp.st(idx1), 1), 1); ...
+            ones(size(sp.st(idx1), 1), 1) * 2], 'binSize', param.ACGbinSize, 'duration', param.ACGduration, 'norm', 'rate'); %function
+        ACG = ccg(:, 1, 1);
+        [ccg, ~] = CCGBz([double(sp.st(idx2)); double(sp.st(idx2))], [ones(size(sp.st(idx2), 1), 1); ...
+            ones(size(sp.st(idx2), 1), 1) * 2], 'binSize', param.ACGbinSize, 'duration', param.ACGduration, 'norm', 'rate'); %function
+        ACG2 = ccg(:, 1, 1);
+        [ccg, ~] = CCGBz([double(sp.st([idx1;idx2])); double(sp.st([idx1;idx2]))], [ones(size(sp.st([idx1;idx2]), 1), 1); ...
+            ones(size(sp.st([idx1;idx2]), 1), 1) * 2], 'binSize', param.ACGbinSize, 'duration', param.ACGduration, 'norm', 'rate'); %function
+
+        subplot(3,3,7); plot(ACG,'b');
+        hold on
+        plot(ACG2,'r')
+        title(['AutoCorrelogram'])
+        makepretty
+        subplot(3,3,8)
+
+        if exist('NatImgCorr','var')
+            if GoodRecSesID(uid)==1 % Recording day 1
+                tmp1 = squeeze(D0(OriginalClusID(Good_Idx(uid))+1,:,:));
+            else % Recordingday 2
+                tmp1 = squeeze(D1(OriginalClusID(Good_Idx(uid))+1,:,:));
+            end
+            if GoodRecSesID(uid2)==1 % Recording day 1
+                tmp2 = squeeze(D0(OriginalClusID(Good_Idx(uid2))+1,:,:));
+            else % Recordingday 2
+                tmp2 = squeeze(D1(OriginalClusID(Good_Idx(uid2))+1,:,:));
+            end
+
+            plot(nanmean(tmp1,1),'b-');
+            hold on
+            plot(nanmean(tmp2,1),'r-');
+            xlabel('Stimulus')
+            ylabel('NrSpks')
+            makepretty
+
+
+            if AllClusterIDs(Good_Idx(uid))  == AllClusterIDs(Good_Idx(uid2))
+                if ismember(Good_Idx(uid),Good_ClusUnTracked)
+                    title(['Visual: Untracked, r=' num2str(round(NatImgCorr(pairid,pairid)*100)/100)])
+                elseif ismember(Good_Idx(uid),Good_ClusTracked)
+                    title(['Visual: Tracked, r=' num2str(round(NatImgCorr(pairid,pairid)*100)/100)])
+                else
+                    title(['Visual: Unknown, r=' num2str(round(NatImgCorr(pairid,pairid)*100)/100)])
+                end
             else
                 title(['Visual: Unknown, r=' num2str(round(NatImgCorr(pairid,pairid)*100)/100)])
             end
         else
-            title(['Visual: Unknown, r=' num2str(round(NatImgCorr(pairid,pairid)*100)/100)])
+            isitot = diff(sort([sp.st(idx1); sp.st(idx2)]));
+            histogram(isitot,'FaceColor',[0 0 0])
+            hold on
+            line([1.5/1000 1.5/1000],get(gca,'ylim'),'color',[1 0 0],'LineStyle','--')
+            title([num2str(round(sum(isitot*1000<1.5)./length(isitot)*1000)/10) '% ISI violations']); %The higher the worse (subtract this percentage from the Total score)
+            xlabel('ISI (ms)')
+            ylabel('Nr. Spikes')
+            makepretty
         end
-    else
-        isitot = diff(sort([sp.st(idx1); sp.st(idx2)]));
-        histogram(isitot,'FaceColor',[0 0 0])
-        hold on
-        line([1.5/1000 1.5/1000],get(gca,'ylim'),'color',[1 0 0],'LineStyle','--')
-        title([num2str(round(sum(isitot*1000<1.5)./length(isitot)*1000)/10) '% ISI violations']); %The higher the worse (subtract this percentage from the Total score)
-        xlabel('ISI (ms)')
-        ylabel('Nr. Spikes')
+
+        subplot(3,3,9)
+
+        plot(SessionCorrelations(uid,:),'b-'); hold on; plot(SessionCorrelations(uid2,:),'r-')
+        hold off
+        xlabel('Unit')
+        ylabel('Cross-correlation')
+        title(['Fingerprint r=' num2str(round(FingerprintR(uid,uid2)*100)/100) ', rank=' num2str(RankScoreAll(uid,uid2))])
+        ylims = get(gca,'ylim');
+        set(gca,'ylim',[ylims(1) ylims(2)*1.2])
+        PosMain = get(gca,'Position');
         makepretty
+
+        axes('Position',[PosMain(1)+(PosMain(3)*0.8) PosMain(2)+(PosMain(4)*0.8) PosMain(3)*0.2 PosMain(4)*0.2])
+        box on
+        tmp1 = FingerprintR(uid,:);
+        tmp1(uid2)=nan;
+        tmp2 = FingerprintR(:,uid2);
+        tmp2(uid)=nan;
+        tmp = cat(2,tmp1,tmp2');
+        histogram(tmp,'EdgeColor','none','FaceColor',[0.5 0.5 0.5])
+        hold on
+        line([FingerprintR(uid,uid2) FingerprintR(uid,uid2)],get(gca,'ylim'),'color',[1 0 0])
+        xlabel('Finger print r')
+        makepretty
+
+
+        disp(['UniqueID ' num2str(AllClusterIDs(Good_Idx(uid))) ' vs ' num2str(AllClusterIDs(Good_Idx(uid2)))])
+        disp(['Peakchan ' num2str(MaxChannel(uid)) ' versus ' num2str(MaxChannel(uid2))])
+        disp(['RecordingDay ' num2str(GoodRecSesID(uid)) ' versus ' num2str(GoodRecSesID(uid2))])
+
+        drawnow
+        set(gcf,'units','normalized','outerposition',[0 0 1 1])
+        saveas(gcf,fullfile(SaveDir,MiceOpt{midx},[num2str(round(MatchProbability(uid,uid2).*100)) 'ClusID' num2str(AllClusterIDs(Good_Idx(uid))) 'vs' num2str(AllClusterIDs(Good_Idx(uid2))) '.fig']))
+        saveas(gcf,fullfile(SaveDir,MiceOpt{midx},[num2str(round(MatchProbability(uid,uid2).*100)) 'ClusID' num2str(AllClusterIDs(Good_Idx(uid))) 'vs' num2str(AllClusterIDs(Good_Idx(uid2))) '.bmp']))
+
+        close(tmpfig)
     end
-
-    subplot(3,3,9)
-
-    plot(SessionCorrelations(uid,:),'b-'); hold on; plot(SessionCorrelations(uid2,:),'r-')
-    hold off  
-    xlabel('Unit')
-    ylabel('Cross-correlation')
-    title(['Fingerprint r=' num2str(round(FingerprintR(uid,uid2)*100)/100) ', rank=' num2str(RankScoreAll(uid,uid2))])
-    ylims = get(gca,'ylim');
-    set(gca,'ylim',[ylims(1) ylims(2)*1.2])
-    PosMain = get(gca,'Position');   
-    makepretty
-
-    axes('Position',[PosMain(1)+(PosMain(3)*0.8) PosMain(2)+(PosMain(4)*0.8) PosMain(3)*0.2 PosMain(4)*0.2])
-    box on
-    tmp1 = FingerprintR(uid,:);
-    tmp1(uid2)=nan;
-    tmp2 = FingerprintR(:,uid2);
-    tmp2(uid)=nan;
-    tmp = cat(2,tmp1,tmp2');    
-    histogram(tmp,'EdgeColor','none','FaceColor',[0.5 0.5 0.5])
-    hold on
-    line([FingerprintR(uid,uid2) FingerprintR(uid,uid2)],get(gca,'ylim'),'color',[1 0 0])
-    xlabel('Finger print r')
-    makepretty    
-
-
-    disp(['UniqueID ' num2str(AllClusterIDs(Good_Idx(uid))) ' vs ' num2str(AllClusterIDs(Good_Idx(uid2)))])
-    disp(['Peakchan ' num2str(MaxChannel(uid)) ' versus ' num2str(MaxChannel(uid2))])
-    disp(['RecordingDay ' num2str(GoodRecSesID(uid)) ' versus ' num2str(GoodRecSesID(uid2))])
-
-    drawnow
-    set(gcf,'units','normalized','outerposition',[0 0 1 1])
-    saveas(gcf,fullfile(SaveDir,MiceOpt{midx},[num2str(round(MatchProbability(uid,uid2).*100)) 'ClusID' num2str(AllClusterIDs(Good_Idx(uid))) 'vs' num2str(AllClusterIDs(Good_Idx(uid2))) '.fig']))
-    saveas(gcf,fullfile(SaveDir,MiceOpt{midx},[num2str(round(MatchProbability(uid,uid2).*100)) 'ClusID' num2str(AllClusterIDs(Good_Idx(uid))) 'vs' num2str(AllClusterIDs(Good_Idx(uid2))) '.bmp']))
-
-    close(tmpfig)
 end
 %% Unused bits and pieces
 if 0

@@ -1,4 +1,4 @@
-%function  [UniqueID, Prob] = MatchUnitsAlgorithm(clusinfo,AllRawPaths)
+%function  [UniqueID, Prob, Rank] = MatchUnitsAlgorithm(clusinfo,AllRawPaths)
 %% Match units on neurophysiological evidence
 % Input:
 % - clusinfo (this is phy output, see also prepareinfo/spikes toolbox)
@@ -22,19 +22,21 @@
 % Contributions: 
 % Enny van Beest (2022)
 
-%% Parameters - tested on these values, but feel free to try others 
-Scores2Include = {'spatialdecaySim','AmplitudeSim','WavformSim','WVCorr','LocAngleSim','LocDistSim'}; %
-IncludeSpatialInitially = 0; % if 1 we include spatial distance from the start, if 0 only from the naive Bayes part
+%% Parameters - tested on these values, but feel free to try others
+Scores2Include = {'AmplitudeSim','WavformSim','WVCorr','LocAngleSim','spatialdecaySim','LocDistSim'}; %
+IncludeSpatialInitially = 1; % if 1 we include spatial distance from the start, if 0 only from the naive Bayes part
 sampleamount = 500; % Nr. waveforms to include
 spikeWidth = 83; % in sample space (time)
-TakeChannelRadius = 50; %in micron around max channel
-maxdist = 200; % Maximum distance at which units are considered as potential matches 
+TakeChannelRadius = 75; %in micron around max channel
+maxdist = 200; % Maximum distance at which units are considered as potential matches
 binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
 RedoExtraction = 0; % Raw waveform and parameter extraction
 % Scores2Include = {'WavformSimilarity','LocationCombined','spatialdecayDiff','AmplitudeDiff'};%}
 MakeOwnNaiveBayes = 1; % if 0, use standard matlab version, which assumes normal distributions --> not recommended
 ApplyExistingBayesModel = 0; %If 1, look if a Bayes model already exists for this mouse and applies that
-
+global stepsize
+stepsize = 0.01; % Of probability distribution
+MakePlotsOfPairs = 1; % Plots all pairs for inspection
 %% Extract all clusters
 AllClusterIDs = clusinfo.cluster_id;
 nses = length(AllQMsPaths);
@@ -682,7 +684,7 @@ end
 % distributions are just weird
 priorMatch = 1-(nclus+nclus)./(nclus*nclus); %Now use a slightly more lenient prior
 ThrsOpt = quantile(TotalScore(:),priorMatch);
-CandidatePairs = TotalScore>ThrsOpt & RankScoreAll==1;
+CandidatePairs = TotalScore>ThrsOpt & RankScoreAll==1; 
 % CandidatePairs(tril(true(size(CandidatePairs)),-1))=0;
 [uid,uid2] = find(CandidatePairs);
 Pairs = cat(2,uid,uid2);
@@ -976,8 +978,7 @@ if RunPyKSChronic
     PyKSLabel(logical(eye(size(PyKSLabel)))) = true;
     PairsPyKS=unique(PairsPyKS,'rows');
 
-    figure('name','Parameter Scores');
-    stepsize = 0.01;
+    figure('name','Parameter Scores');   
     Edges = [0:stepsize:1];
     ScoreVector = Edges(1)+stepsize/2:stepsize:Edges(end)-stepsize/2;
 
@@ -1006,6 +1007,7 @@ if isfield(BestMdl,'Parameterkernels')
         [label, posterior,performance] = ApplyNaiveBayes(Tbl,BestMdl.Parameterkernels,PyKSLabel(:),Priors);
         disp(['Correctly labelled ' num2str(round(performance(2)*1000)/10) '% of PyKS Matches and ' num2str(round(performance(1)*1000)/10) '% of PyKS non matches']) 
 
+        disp('Results if training would be done with PyKs stitched')
         [ParameterkernelsPyKS,Performance] = CreateNaiveBayes(Tbl,PyKSLabel(:),Priors);
         [Fakelabel, Fakeposterior,performance] = ApplyNaiveBayes(Tbl,ParameterkernelsPyKS,PyKSLabel(:),Priors);
         disp(['Correctly labelled ' num2str(round(performance(2)*1000)/10) '% of PyKS Matches and ' num2str(round(performance(1)*1000)/10) '% of PyKS non matches']) 
@@ -1016,7 +1018,8 @@ else
     [label, posterior, cost] = predict(BestMdl,Tbl);
 end
 MatchProbability = reshape(posterior(:,2),size(Predictors,1),size(Predictors,2));
-label = reshape(label,nclus,nclus);
+label = (MatchProbability>0.95) | (MatchProbability>0.01 & RankScoreAll==1); 
+% label = reshape(label,nclus,nclus);
 [r, c] = find(triu(label,1)==1 & triu(~SameSesMat,1)); %Find matches across 2 days
 Pairs = cat(2,r,c);
 Pairs = sortrows(Pairs);
@@ -1248,12 +1251,12 @@ title('Rankscore == 1')
 makepretty
 
 subplot(1,3,2)
-imagesc(label==1)
+imagesc(MatchProbability>0.5)
 hold on
 line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
 line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
 colormap(flipud(gray))
-title('Match label == 1')
+title('Match Probability>0.5')
 makepretty
 
 subplot(1,3,3)
@@ -1309,8 +1312,7 @@ if RunPyKSChronic
     [~,minidx] = arrayfun(@(X) min(abs(X-ScoreVector)),TmpSc,'Uni',0); % Find index for observation in score vector
     minidx=cell2mat(minidx);
     % Only interested in matches:
-    MatchLkh = Parameterkernels(:,:,2);
-    MatchLkh = MatchLkh(minidx');
+    MatchLkh = cell2mat(arrayfun(@(Y) Parameterkernels(minidx(Y,:),Y,2),1:size(minidx,1),'Uni',0));
 
     figure;
     subplot(2,2,1)
@@ -1325,15 +1327,17 @@ if RunPyKSChronic
 
     TmpMP = cell2mat(arrayfun(@(X) squeeze(MatchProbability(OnlyDetectedByPyKS(X,1),OnlyDetectedByPyKS(X,2))),1:size(OnlyDetectedByPyKS,1),'Uni',0));
 
-
+    figure('name','OnlyDetecedPyKS'); 
+    for scid=1:length(Scores2Include)
+        subplot(ceil(sqrt(length(Scores2Include))),round(sqrt(length(Scores2Include))),scid)
+        histogram(TmpSc(scid,:),Edges)
+        title(Scores2Include{scid})
+    end
 
     % Too much detected
     NotA = 1:size(Pairs,1);
     NotA(A) = [];
     NotdetectedByPyKS = Pairs(NotA,:);
-
-
-
   
 end
 
@@ -1392,9 +1396,11 @@ ProjectedWaveform = nanmean(ProjectedWaveform,3); %Average over first and second
 ProjectedLocation = nanmean(ProjectedLocation,3);
 ProjectedLocationPerTP = nanmean(ProjectedLocationPerTP,4);
 %% Figures
+if MakePlotsOfPairs
 % Pairs = Pairs(any(ismember(Pairs,[8,68,47,106]),2),:);
 AllClusterIDs(Good_Idx(Pairs))
 for pairid=1:size(Pairs,1)
+    
     uid = Pairs(pairid,1);
     uid2 = Pairs(pairid,2);
 
@@ -1467,7 +1473,7 @@ for pairid=1:size(Pairs,1)
     hc= colorbar;
     hc.Label.String = 'timesample';
     makepretty
-    title(['Location score: ' num2str(round(LocationCombined(uid,uid2)*100)./100)])
+    title(['Distance: ' num2str(round(LocDistSim(uid,uid2)*100)./100) ', angle: ' num2str(round(LocAngleSim(uid,uid2)*100)./100)])
 
     subplot(3,3,5)
     plot(channelpos(:,1),channelpos(:,2),'k.')
@@ -1488,7 +1494,7 @@ for pairid=1:size(Pairs,1)
     h(3)=plot(nanmean(SM2(:,1:2:end),2),'r-');
     h(4)=plot(nanmean(SM2(:,2:2:end),2),'r--');
     makepretty
-    title(['Waveform Similarity=' num2str(round(WavformSim(uid,uid2)*100)./100) ', dur=' num2str(round(waveformTimePointSim(uid,uid2)*100)./100) ', Ampl=' ...
+    title(['Waveform Similarity=' num2str(round(WavformSim(uid,uid2)*100)./100) ', WVCorr=' num2str(round(WVCorr(uid,uid2)*100)./100) ', Ampl=' ...
         num2str(round(AmplitudeSim(uid,uid2)*100)./100) ', decay='  num2str(round(spatialdecaySim(uid,uid2)*100)./100)])
 
 
