@@ -1,13 +1,16 @@
-%function  [UniqueID, Prob, Rank] = MatchUnitsAlgorithm(clusinfo,AllRawPaths)
+function  [UniqueID, MatchTable] = UnitMatch(clusinfo,AllRawPaths,param,sp)
 %% Match units on neurophysiological evidence
 % Input:
 % - clusinfo (this is phy output, see also prepareinfo/spikes toolbox)
 % - AllRawPaths: cell struct with paths for individual recording sessions
+% - param: parameters for ephys extraction
+% - sp: kilosort output struct
 
 % Output:
-% - UniqueID (Units with large overlap in QMs are likely the same unit, and
-% will share a UniqueID)
-% - Prob: Probability of all units to be the same as every other unit
+% - UniqueID (Units that are found to be a match are given the same
+% UniqueID. This UniqueID can be used for further analysis
+% - MatchTable: Probability, rank score and cross-correlation correlation
+% (Fingerprint correlation) of all possible unit pairs
 
 % Matching occurs on:
 % - Wavform Similarity: Correlation and errors
@@ -39,18 +42,20 @@ stepsize = 0.01; % Of probability distribution
 MakePlotsOfPairs = 1; % Plots all pairs for inspection
 %% Extract all clusters
 AllClusterIDs = clusinfo.cluster_id;
-nses = length(AllQMsPaths);
+nses = length(AllRawPaths);
 OriginalClusID = AllClusterIDs;
 UniqueID = 1:length(AllClusterIDs); % Initial assumption: All clusters are unique
 Good_Idx = find(clusinfo.Good_ID); %Only care about good units at this point
 GoodRecSesID = clusinfo.RecSesID(Good_Idx);
 SessionSwitch = find(GoodRecSesID==2,1,'first');
 % Define day stucture
+recsesAll = clusinfo.RecSesID;
 [X,Y]=meshgrid(recsesAll(Good_Idx));
 nclus = length(Good_Idx);
 SameSesMat = arrayfun(@(X) cell2mat(arrayfun(@(Y) GoodRecSesID(X)==GoodRecSesID(Y),1:nclus,'Uni',0)),1:nclus,'Uni',0);
 SameSesMat = cat(1,SameSesMat{:});
-
+channelpos = param.channelpos;
+RunPyKSChronic = param.RunPyKSChronic;
 %% Load raw waveforms and extract waveform parameters
 halfWidth = floor(spikeWidth / 2);
 dataTypeNBytes = numel(typecast(cast(0, 'uint16'), 'uint8'));
@@ -1018,7 +1023,7 @@ else
     [label, posterior, cost] = predict(BestMdl,Tbl);
 end
 MatchProbability = reshape(posterior(:,2),size(Predictors,1),size(Predictors,2));
-label = (MatchProbability>0.95) | (MatchProbability>0.01 & RankScoreAll==1); 
+label = (MatchProbability>=0.99) | (MatchProbability>0.01 & RankScoreAll==1); 
 % label = reshape(label,nclus,nclus);
 [r, c] = find(triu(label,1)==1 & triu(~SameSesMat,1)); %Find matches across 2 days
 Pairs = cat(2,r,c);
@@ -1050,103 +1055,7 @@ for pid = 1:4
     line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
     title(['p>' num2str(takethisprob(pid))])
 end
-%% inspect probability distributions
-figure('name','Parameter Scores');
-Edges = [0:0.01:1];
-for scid=1:length(Scores2Include)
-    eval(['ScoresTmp = ' Scores2Include{scid} ';'])
-    ScoresTmp(tril(true(size(ScoresTmp))))=nan;
-    subplot(length(Scores2Include),2,(scid-1)*2+1)
-    histogram(ScoresTmp(~label),Edges)
-    if scid==1
-        title('Identified non-Matches')
-    end
-    ylabel(Scores2Include{scid})
-    makepretty
 
-    subplot(length(Scores2Include),2,scid*2)
-    histogram(ScoresTmp(label),Edges)
-    if scid==1
-        title('Identified Matches')
-    end
-    makepretty
-end
-
-%
-figure('name','Projected Location Distance to [0 0]')
-Dist2Tip = sqrt(nansum(ProjectedLocation.^2,1));
-% Dist2TipMatrix = nan(size(CandidatePairs));
-
-Dist2TipMatrix = arrayfun(@(Y) cell2mat(arrayfun(@(X) cat(1,Dist2Tip(X),Dist2Tip(Y)),1:nclus,'Uni',0)),1:nclus,'Uni',0);
-Dist2TipMatrix = cat(3,Dist2TipMatrix{:});
-Dist2TipMatrix = reshape(Dist2TipMatrix,2,[]);
-subplot(1,2,1)
-[N,C] = hist3(Dist2TipMatrix(:,~label(:))');
-imagesc(N)
-colormap(flipud(gray))
-makepretty
-xlabel('Unit_i')
-ylabel('Unit_j')
-zlabel('Counts')
-title('Identified Non-matches')
-
-subplot(1,2,2)
-[N,C] = hist3(Dist2TipMatrix(:,label(:))');
-imagesc(N)
-colormap(flipud(gray))
-makepretty
-xlabel('Unit_i')
-ylabel('Unit_j')
-zlabel('Counts')
-title('Identified Matches')
-
-% Waveform duration
-figure('name','WaveDur')
-waveformdurationMat = arrayfun(@(Y) cell2mat(arrayfun(@(X) cat(1,waveformduration(X),waveformduration(Y)),1:nclus,'UniformOutput',0)),1:nclus,'UniformOutput',0);
-waveformdurationMat = cat(3,waveformdurationMat{:});
-subplot(1,2,1)
-[N,C] = hist3(waveformdurationMat(:,~label(:))');
-imagesc(N)
-colormap(flipud(gray))
-makepretty
-xlabel('Unit_i')
-ylabel('Unit 2')
-zlabel('Counts')
-title('Identified Non-matches')
-
-subplot(1,2,2)
-[N,C] = hist3(waveformdurationMat(:,label(:))');
-imagesc(N)
-colormap(flipud(gray))
-makepretty
-xlabel('Unit_i')
-ylabel('Unit_j')
-zlabel('Counts')
-title('Identified Matches')
-
-% SpatialDecaySlope
-figure('name','Spatial Decay Slope')
-SpatDecMat = arrayfun(@(Y) cell2mat(arrayfun(@(X) cat(1,spatialdecay(X),spatialdecay(Y)),1:nclus,'UniformOutput',0)),1:nclus,'UniformOutput',0);
-SpatDecMat = cat(3,SpatDecMat{:});
-subplot(1,2,1)
-[N,C] = hist3(SpatDecMat(:,~label(:))');
-imagesc(N)
-colormap(flipud(gray))
-makepretty
-xlabel('Unit_i')
-ylabel('Unit_j')
-zlabel('Counts')
-title('Identified Non-matches')
-
-subplot(1,2,2)
-[N,C] = hist3(SpatDecMat(:,label(:))');
-imagesc(N)
-colormap(flipud(gray))
-makepretty
-xlabel('Unit_i')
-ylabel('Unit_j')
-zlabel('Counts')
-title('Identified Matches')
 %% Fingerprint correlations
 disp('Recalculate activity correlations')
 
@@ -1260,12 +1169,12 @@ title('Match Probability>0.5')
 makepretty
 
 subplot(1,3,3)
-imagesc(label==1 & RankScoreAll==1)
+imagesc(MatchProbability>=0.99 | (MatchProbability>=0.01 & RankScoreAll==1))
 hold on
 line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
 line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
 colormap(flipud(gray))
-title('Rank==1 and Match label == 1')
+title('final matches')
 makepretty
 
 
@@ -1284,7 +1193,8 @@ ylabel('Cross-correlation fingerprint')
 makepretty
 
 %% Extract final pairs:
-[r, c] = find(triu(label,1)==1); %Find matches
+label = MatchProbability>=0.99 | (MatchProbability>=0.01 & RankScoreAll==1);
+[r, c] = find(triu(label,1)); %Find matches
 Pairs = cat(2,r,c);
 Pairs = sortrows(Pairs);
 Pairs=unique(Pairs,'rows');
@@ -1374,6 +1284,103 @@ makepretty
 
 save(fullfile(SaveDir,MiceOpt{midx},'MatchingScores.mat'),'BestMdl','SessionSwitch','GoodRecSesID','AllClusterIDs','Good_Idx','WavformSim','WVCorr','LocationCombined','waveformTimePointSim','PeakTimeSim','spatialdecaySim','TotalScore','label','MatchProbability')
 save(fullfile(SaveDir,MiceOpt{midx},'UnitMatchModel.mat'),'BestMdl')
+%% inspect probability distributions
+figure('name','Parameter Scores');
+Edges = [0:0.01:1];
+for scid=1:length(Scores2Include)
+    eval(['ScoresTmp = ' Scores2Include{scid} ';'])
+    ScoresTmp(tril(true(size(ScoresTmp))))=nan;
+    subplot(length(Scores2Include),2,(scid-1)*2+1)
+    histogram(ScoresTmp(~label),Edges)
+    if scid==1
+        title('Identified non-Matches')
+    end
+    ylabel(Scores2Include{scid})
+    makepretty
+
+    subplot(length(Scores2Include),2,scid*2)
+    histogram(ScoresTmp(label),Edges)
+    if scid==1
+        title('Identified Matches')
+    end
+    makepretty
+end
+
+%
+figure('name','Projected Location Distance to [0 0]')
+Dist2Tip = sqrt(nansum(ProjectedLocation.^2,1));
+% Dist2TipMatrix = nan(size(CandidatePairs));
+
+Dist2TipMatrix = arrayfun(@(Y) cell2mat(arrayfun(@(X) cat(1,Dist2Tip(X),Dist2Tip(Y)),1:nclus,'Uni',0)),1:nclus,'Uni',0);
+Dist2TipMatrix = cat(3,Dist2TipMatrix{:});
+Dist2TipMatrix = reshape(Dist2TipMatrix,2,[]);
+subplot(1,2,1)
+[N,C] = hist3(Dist2TipMatrix(:,~label(:))');
+imagesc(N)
+colormap(flipud(gray))
+makepretty
+xlabel('Unit_i')
+ylabel('Unit_j')
+zlabel('Counts')
+title('Identified Non-matches')
+
+subplot(1,2,2)
+[N,C] = hist3(Dist2TipMatrix(:,label(:))');
+imagesc(N)
+colormap(flipud(gray))
+makepretty
+xlabel('Unit_i')
+ylabel('Unit_j')
+zlabel('Counts')
+title('Identified Matches')
+
+% Waveform duration
+figure('name','WaveDur')
+waveformdurationMat = arrayfun(@(Y) cell2mat(arrayfun(@(X) cat(1,waveformduration(X),waveformduration(Y)),1:nclus,'UniformOutput',0)),1:nclus,'UniformOutput',0);
+waveformdurationMat = cat(3,waveformdurationMat{:});
+subplot(1,2,1)
+[N,C] = hist3(waveformdurationMat(:,~label(:))');
+imagesc(N)
+colormap(flipud(gray))
+makepretty
+xlabel('Unit_i')
+ylabel('Unit 2')
+zlabel('Counts')
+title('Identified Non-matches')
+
+subplot(1,2,2)
+[N,C] = hist3(waveformdurationMat(:,label(:))');
+imagesc(N)
+colormap(flipud(gray))
+makepretty
+xlabel('Unit_i')
+ylabel('Unit_j')
+zlabel('Counts')
+title('Identified Matches')
+
+% SpatialDecaySlope
+figure('name','Spatial Decay Slope')
+SpatDecMat = arrayfun(@(Y) cell2mat(arrayfun(@(X) cat(1,spatialdecay(X),spatialdecay(Y)),1:nclus,'UniformOutput',0)),1:nclus,'UniformOutput',0);
+SpatDecMat = cat(3,SpatDecMat{:});
+subplot(1,2,1)
+[N,C] = hist3(SpatDecMat(:,~label(:))');
+imagesc(N)
+colormap(flipud(gray))
+makepretty
+xlabel('Unit_i')
+ylabel('Unit_j')
+zlabel('Counts')
+title('Identified Non-matches')
+
+subplot(1,2,2)
+[N,C] = hist3(SpatDecMat(:,label(:))');
+imagesc(N)
+colormap(flipud(gray))
+makepretty
+xlabel('Unit_i')
+ylabel('Unit_j')
+zlabel('Counts')
+title('Identified Matches')
 %% ISI violations (for over splits matching)
 ISIViolationsScore = nan(1,size(Pairs,1));
 fprintf(1,'Computing functional properties similarity. Progress: %3d%%',0)
@@ -1396,6 +1403,14 @@ Pairs(ISIViolationsScore>0.05,:)=[];
 ProjectedWaveform = nanmean(ProjectedWaveform,3); %Average over first and second half of session
 ProjectedLocation = nanmean(ProjectedLocation,3);
 ProjectedLocationPerTP = nanmean(ProjectedLocationPerTP,4);
+
+%% Assign same Unique ID
+[PairID1,PairID2]=meshgrid(AllClusterIDs(Good_Idx));
+[recses1,recses2] = meshgrid(recsesAll(Good_Idx));
+MatchTable = table(PairID1(:),PairID2(:),recses1(:),recses2(:),MatchProbability(:),RankScoreAll(:),FingerprintR(:),'VariableNames',{'ID1','ID2','RecSes1','RecSes2','MatchProb','RankScore','FingerprintCor'})
+for id = 1:size(Pairs,1)
+    UniqueID(Pairs(id,2)) = UniqueID(Pairs(id,1));
+end
 
 %% Figures
 if MakePlotsOfPairs
@@ -1753,6 +1768,7 @@ EstTimeshift = nan(nclus,nclus);
 EstDrift = nan(nclus,nclus,2);
 
 % Create grid-space in time and space domain
+MultiDimMatrix = [];
 [SpaceMat,TimeMat] = meshgrid(cat(2,-[size(MultiDimMatrix,2)-1:-1:0],1:size(MultiDimMatrix,2)-1),cat(2,-[spikeWidth-1:-1:0],[1:spikeWidth-1]));
 for uid = 1:nclus
     parfor uid2 = 1:nclus

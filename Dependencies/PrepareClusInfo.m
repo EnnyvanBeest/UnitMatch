@@ -442,9 +442,10 @@ sp.sample_rate = sp.sample_rate(1);
 clear spnew
 
 %% Match different units?
- if 1%MatchUnitsAcrossDays
-     MatchUnitsAlgorithm
-%     [UniqueID, Prob] = MatchUnitsAlgorithm(clusinfo,AllQMsPaths)
+ if MatchUnitsAcrossDays
+     param.channelpos = channelpos;
+     param.RunPyKSChronic = RunPyKSChronic;
+     [UniqueID, MatchTable] = UnitMatch(clusinfo,AllRawPaths,param,sp);
 
  end
  %% Remove temporary files

@@ -4,7 +4,7 @@ function [Parameterkernels, Performance] = CreateNaiveBayes(Tbl,label,Prior)
 %% better not to change these, unless you change them everywhere
 ncross = 5;
 Scores2Include = Tbl.Properties.VariableNames;
-SmoothProbability = 5; % smoothing, since we need to make sure none of the scores have a probability of 0
+SmoothProbability = 10; % smoothing, since we need to make sure none of the scores have a probability of 0
 SmoothSpatialFactor = 50; % Apply another smoothing factor for spatial decay and space
 if nargin<3
     Prior = [0.5 0.5];
@@ -35,7 +35,7 @@ for scid=1:length(Scores2Include)
 
     % Save out probability distribution
     for Ck = 1:length(Cond)
-        Parameterkernels(:,scid,Ck) = smooth(histcounts(ScoresTmp(label==Cond(Ck)),Edges),Smoothtmp)./(sum(label==Cond(Ck)));
+        Parameterkernels(:,scid,Ck) = smooth(histcounts(ScoresTmp(label==Cond(Ck)),Edges)+1,Smoothtmp)./(sum(label==Cond(Ck))+1);
         plot(ScoreVector,Parameterkernels(:,scid,Ck));
     end
 
@@ -70,7 +70,7 @@ for cv = 1:ncross
         % Save out probability distribution
         for Ck = 1:length(Cond)
             % Always add 1 count!!
-            ParameterkernelsCV(:,scid,Ck) = smooth(histcounts(ScoresTmp(label(trainidx)==Cond(Ck)),Edges),Smoothtmp)./(sum(label(trainidx)==Cond(Ck)));
+            ParameterkernelsCV(:,scid,Ck) = smooth(histcounts(ScoresTmp(label(trainidx)==Cond(Ck)),Edges)+1,Smoothtmp)./(sum(label(trainidx)==Cond(Ck))+1);
         end
     end
     % Apply
