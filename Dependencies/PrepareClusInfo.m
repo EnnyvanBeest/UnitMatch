@@ -445,8 +445,8 @@ clear spnew
  if MatchUnitsAcrossDays
      param.channelpos = channelpos;
      param.RunPyKSChronic = RunPyKSChronic;
+     param.SaveDir = SaveDir;
      [UniqueID, MatchTable] = UnitMatch(clusinfo,AllRawPaths,param,sp);
-
  end
  %% Remove temporary files
  if DecompressLocal && DecompressionFlag

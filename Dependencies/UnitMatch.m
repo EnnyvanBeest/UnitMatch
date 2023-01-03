@@ -56,6 +56,7 @@ SameSesMat = arrayfun(@(X) cell2mat(arrayfun(@(Y) GoodRecSesID(X)==GoodRecSesID(
 SameSesMat = cat(1,SameSesMat{:});
 channelpos = param.channelpos;
 RunPyKSChronic = param.RunPyKSChronic;
+SaveDir = param.SaveDir;
 %% Load raw waveforms and extract waveform parameters
 halfWidth = floor(spikeWidth / 2);
 dataTypeNBytes = numel(typecast(cast(0, 'uint16'), 'uint8'));
