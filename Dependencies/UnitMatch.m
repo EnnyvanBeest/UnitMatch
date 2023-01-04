@@ -1,4 +1,4 @@
-function  [UniqueID, MatchTable] = UnitMatch(clusinfo,AllRawPaths,param,sp)
+function  [UniqueID, MatchTable] = UnitMatch(clusinfo,param,sp)
 %% Match units on neurophysiological evidence
 % Input:
 % - clusinfo (this is phy output, see also prepareinfo/spikes toolbox)
@@ -33,13 +33,18 @@ spikeWidth = 83; % in sample space (time)
 TakeChannelRadius = 75; %in micron around max channel
 maxdist = 200; % Maximum distance at which units are considered as potential matches
 binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
-RedoExtraction = 0; % Raw waveform and parameter extraction
+RedoExtraction = 1; % Raw waveform and parameter extraction
 % Scores2Include = {'WavformSimilarity','LocationCombined','spatialdecayDiff','AmplitudeDiff'};%}
 MakeOwnNaiveBayes = 1; % if 0, use standard matlab version, which assumes normal distributions --> not recommended
 ApplyExistingBayesModel = 0; %If 1, look if a Bayes model already exists for this mouse and applies that
 global stepsize
 stepsize = 0.01; % Of probability distribution
 MakePlotsOfPairs = 1; % Plots all pairs for inspection
+channelpos = param.channelpos;
+RunPyKSChronic = param.RunPyKSChronic;
+SaveDir = param.SaveDir;
+AllRawPaths = param.AllRawPaths;
+AllDecompPaths = param.AllDecompPaths;
 %% Extract all clusters
 AllClusterIDs = clusinfo.cluster_id;
 nses = length(AllRawPaths);
@@ -54,9 +59,7 @@ recsesAll = clusinfo.RecSesID;
 nclus = length(Good_Idx);
 SameSesMat = arrayfun(@(X) cell2mat(arrayfun(@(Y) GoodRecSesID(X)==GoodRecSesID(Y),1:nclus,'Uni',0)),1:nclus,'Uni',0);
 SameSesMat = cat(1,SameSesMat{:});
-channelpos = param.channelpos;
-RunPyKSChronic = param.RunPyKSChronic;
-SaveDir = param.SaveDir;
+
 %% Load raw waveforms and extract waveform parameters
 halfWidth = floor(spikeWidth / 2);
 dataTypeNBytes = numel(typecast(cast(0, 'uint16'), 'uint8'));

@@ -446,7 +446,9 @@ clear spnew
      param.channelpos = channelpos;
      param.RunPyKSChronic = RunPyKSChronic;
      param.SaveDir = fullfile(SaveDir,MiceOpt{midx});
-     [UniqueID, MatchTable] = UnitMatch(clusinfo,AllRawPaths,param,sp);
+     param.AllRawPaths = AllRawPaths;
+     param.AllDecompPaths = AllDecompPaths;
+     [UniqueID, MatchTable] = UnitMatch(clusinfo,param,sp);
  end
  %% Remove temporary files
  if DecompressLocal && DecompressionFlag

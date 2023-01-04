@@ -4,8 +4,8 @@ function [Parameterkernels, Performance] = CreateNaiveBayes(Tbl,label,Prior)
 %% better not to change these, unless you change them everywhere
 ncross = 5;
 Scores2Include = Tbl.Properties.VariableNames;
-SmoothProbability = 10; % smoothing, since we need to make sure none of the scores have a probability of 0
-SmoothSpatialFactor = 50; % Apply another smoothing factor for spatial decay and space
+SmoothProbability = 5; % smoothing, since we need to make sure none of the scores have a probability of 0
+SmoothSpatialFactor = 5; % Apply another smoothing factor for spatial decay and space
 if nargin<3
     Prior = [0.5 0.5];
 end
