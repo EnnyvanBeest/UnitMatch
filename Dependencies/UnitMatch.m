@@ -714,8 +714,8 @@ BestMdl = [];
 while flag<2 && runid<maxrun
     flag = 0;
     runid=runid+1
-    if ApplyExistingBayesModel && exist(fullfile(SaveDir,MiceOpt{midx},'UnitMatchModel.mat'))
-        load(fullfile(SaveDir,MiceOpt{midx},'UnitMatchModel.mat'),'BestMdl')
+    if ApplyExistingBayesModel && exist(fullfile(SaveDir,'UnitMatchModel.mat'))
+        load(fullfile(SaveDir,'UnitMatchModel.mat'),'BestMdl')
         % Apply naive bays classifier
         Tbl = array2table(reshape(Predictors,[],size(Predictors,3)),'VariableNames',Scores2Include); %All parameters
 
@@ -1283,8 +1283,8 @@ ylabel('Nr Pairs')
 legend('Self Score','Matches','Threshold','Location','best')
 makepretty
 
-save(fullfile(SaveDir,MiceOpt{midx},'MatchingScores.mat'),'BestMdl','SessionSwitch','GoodRecSesID','AllClusterIDs','Good_Idx','WavformSim','WVCorr','LocationCombined','waveformTimePointSim','PeakTimeSim','spatialdecaySim','TotalScore','label','MatchProbability')
-save(fullfile(SaveDir,MiceOpt{midx},'UnitMatchModel.mat'),'BestMdl')
+save(fullfile(SaveDir,'MatchingScores.mat'),'BestMdl','SessionSwitch','GoodRecSesID','AllClusterIDs','Good_Idx','WavformSim','WVCorr','LocationCombined','waveformTimePointSim','PeakTimeSim','spatialdecaySim','TotalScore','label','MatchProbability')
+save(fullfile(SaveDir,'UnitMatchModel.mat'),'BestMdl')
 %% inspect probability distributions
 figure('name','Parameter Scores');
 Edges = [0:0.01:1];
@@ -1633,8 +1633,8 @@ if MakePlotsOfPairs
 
         drawnow
         set(gcf,'units','normalized','outerposition',[0 0 1 1])
-        saveas(gcf,fullfile(SaveDir,MiceOpt{midx},[num2str(round(MatchProbability(uid,uid2).*100)) 'ClusID' num2str(AllClusterIDs(Good_Idx(uid))) 'vs' num2str(AllClusterIDs(Good_Idx(uid2))) '.fig']))
-        saveas(gcf,fullfile(SaveDir,MiceOpt{midx},[num2str(round(MatchProbability(uid,uid2).*100)) 'ClusID' num2str(AllClusterIDs(Good_Idx(uid))) 'vs' num2str(AllClusterIDs(Good_Idx(uid2))) '.bmp']))
+        saveas(gcf,fullfile(SaveDir,[num2str(round(MatchProbability(uid,uid2).*100)) 'ClusID' num2str(AllClusterIDs(Good_Idx(uid))) 'vs' num2str(AllClusterIDs(Good_Idx(uid2))) '.fig']))
+        saveas(gcf,fullfile(SaveDir,[num2str(round(MatchProbability(uid,uid2).*100)) 'ClusID' num2str(AllClusterIDs(Good_Idx(uid))) 'vs' num2str(AllClusterIDs(Good_Idx(uid2))) '.bmp']))
 
         close(tmpfig)
     end

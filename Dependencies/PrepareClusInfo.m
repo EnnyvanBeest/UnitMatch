@@ -445,7 +445,7 @@ clear spnew
  if MatchUnitsAcrossDays
      param.channelpos = channelpos;
      param.RunPyKSChronic = RunPyKSChronic;
-     param.SaveDir = SaveDir;
+     param.SaveDir = fullfile(SaveDir,MiceOpt{midx});
      [UniqueID, MatchTable] = UnitMatch(clusinfo,AllRawPaths,param,sp);
  end
  %% Remove temporary files
