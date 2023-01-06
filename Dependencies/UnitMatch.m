@@ -203,7 +203,6 @@ end
 fprintf('\n')
 disp(['Extracting raw waveforms and parameters took ' num2str(round(toc(timercounter)./60)) ' minutes for ' num2str(nclus) ' units'])
 
-
 %% Metrics
 % PeakTime = nan(nclus,2); % Peak time first versus second half
 % MaxChannel = nan(nclus,2); % Max channel first versus second half
@@ -589,7 +588,6 @@ while flag<2
     % Correlate 'fingerprints'
     FingerprintR = arrayfun(@(X) cell2mat(arrayfun(@(Y) corr(SessionCorrelations(X,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))',SessionCorrelations(Y,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))'),1:nclus,'UniformOutput',0)),1:nclus,'UniformOutput',0);
     FingerprintR = cat(1,FingerprintR{:});
-
 
     subplot(1,3,3)
     imagesc(FingerprintR)
@@ -1419,7 +1417,7 @@ end
 %% Figures
 if MakePlotsOfPairs
     % Pairs = Pairs(any(ismember(Pairs,[8,68,47,106]),2),:);
-    AllClusterIDs(Good_Idx(Pairs))
+%     AllClusterIDs(Good_Idx(Pairs))
     for pairid=1:size(Pairs,1)
         uid = Pairs(pairid,1);
         uid2 = Pairs(pairid,2);
@@ -1628,11 +1626,10 @@ if MakePlotsOfPairs
         line([FingerprintR(uid,uid2) FingerprintR(uid,uid2)],get(gca,'ylim'),'color',[1 0 0])
         xlabel('Finger print r')
         makepretty
-
-
-        disp(['UniqueID ' num2str(AllClusterIDs(Good_Idx(uid))) ' vs ' num2str(AllClusterIDs(Good_Idx(uid2)))])
-        disp(['Peakchan ' num2str(MaxChannel(uid)) ' versus ' num2str(MaxChannel(uid2))])
-        disp(['RecordingDay ' num2str(GoodRecSesID(uid)) ' versus ' num2str(GoodRecSesID(uid2))])
+% 
+%         disp(['UniqueID ' num2str(AllClusterIDs(Good_Idx(uid))) ' vs ' num2str(AllClusterIDs(Good_Idx(uid2)))])
+%         disp(['Peakchan ' num2str(MaxChannel(uid)) ' versus ' num2str(MaxChannel(uid2))])
+%         disp(['RecordingDay ' num2str(GoodRecSesID(uid)) ' versus ' num2str(GoodRecSesID(uid2))])
 
         drawnow
         set(gcf,'units','normalized','outerposition',[0 0 1 1])

@@ -35,7 +35,16 @@ for scid=1:length(Scores2Include)
 
     % Save out probability distribution
     for Ck = 1:length(Cond)
-        Parameterkernels(:,scid,Ck) = smooth(histcounts(ScoresTmp(label==Cond(Ck)),Edges)+1,Smoothtmp)./(sum(label==Cond(Ck))+1);
+        Parameterkernels(:,scid,Ck) = smooth(histcounts(ScoresTmp(label==Cond(Ck)),Edges),Smoothtmp)./(sum(label==Cond(Ck)));
+        % for Ck=1, build down to maximum value, for Ck=2, build up to
+        % maximum value
+        [maxval,maxid] = nanmax(Parameterkernels(:,scid,Ck));
+        if Ck==1
+            Parameterkernels(1:maxid,scid,Ck)=maxval;
+        else
+            Parameterkernels(maxid:end,scid,Ck)=maxval;
+        end
+        %Sum should still be 1
         plot(ScoreVector,Parameterkernels(:,scid,Ck));
     end
 
@@ -70,7 +79,15 @@ for cv = 1:ncross
         % Save out probability distribution
         for Ck = 1:length(Cond)
             % Always add 1 count!!
-            ParameterkernelsCV(:,scid,Ck) = smooth(histcounts(ScoresTmp(label(trainidx)==Cond(Ck)),Edges)+1,Smoothtmp)./(sum(label(trainidx)==Cond(Ck))+1);
+            ParameterkernelsCV(:,scid,Ck) = smooth(histcounts(ScoresTmp(label(trainidx)==Cond(Ck)),Edges),Smoothtmp)./(sum(label(trainidx)==Cond(Ck)));
+            % for Ck=1, build down to maximum value, for Ck=2, build up to
+            % maximum value
+            [maxval,maxid] = nanmax(ParameterkernelsCV(:,scid,Ck));
+            if Ck==1
+                ParameterkernelsCV(1:maxid,scid,Ck)=maxval;
+            else
+                ParameterkernelsCV(maxid:end,scid,Ck)=maxval;
+            end
         end
     end
     % Apply
