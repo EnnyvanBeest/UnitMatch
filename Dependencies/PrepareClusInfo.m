@@ -47,8 +47,6 @@ else
     UseParamsKS = 0;
 end
 %% Initialize everything
-AllQMsPaths = cell(1,0);
-AllRawPaths = cell(1,0);
 AllUniqueTemplates = [];
 recsesAll = [];
 sp = cell(1,0);
@@ -138,6 +136,9 @@ for subsesid=1:length(KiloSortPaths)
         rawD = rawD(strfind(rawD,'r"')+2:end);
         rawD = rawD(1:strfind(rawD,'"')-1);
         rawD = dir(rawD);
+
+        % Save for later
+        RawDataPaths(subsesid) = rawD;
 
         if isempty(rawD)
             disp('Bug...?')
@@ -319,9 +320,6 @@ for subsesid=1:length(KiloSortPaths)
             end
             unitTypeAcrossRec{id} = unitType;
             uniqueTemplates{id} = unique(sp{countid}.spikeTemplates(idx));
-            AllQMsPaths{countid}{id} = fullfile(savePath, 'qMetric.mat');
-            AllRawPaths{countid}{id} = ephysap_path;
-            AllDecompPaths{countid}{id} = ephysap_tmp;
 
             if InspectionFlag
                 bc_getRawMemMap;
@@ -414,13 +412,7 @@ clusinfo.cluster_id = AllUniqueTemplates;
 clusinfo.group = Label;
 clusinfo.Good_ID = Good_ID;
 clusinfo.Noise_ID = NoiseUnit;
-AllQMsPaths = [AllQMsPaths{:}];
-AllRawPaths = [AllRawPaths{:}];
-if exist('AllDecompPaths') && ~isempty(AllDecompPaths)
-    AllDecompPaths = [AllDecompPaths{:}];
-else
-    AllDecompPaths=[];
-end
+
 sp = spnew;
 sp.sample_rate = sp.sample_rate(1);
 clear spnew
@@ -430,33 +422,29 @@ if Params.UnitMatch
     UMparam.channelpos = channelpos;
     UMparam.RunPyKSChronic = Params.RunPyKSChronic;
     UMparam.SaveDir = fullfile(Params.SaveDir);
-    UMparam.AllRawPaths = AllRawPaths;
-    UMparam.AllDecompPaths = AllDecompPaths;
-
     % Need to decompress if decompression wasn't done yet
-    for id = 1:length(rawD)
+    for id = 1:length(RawDataPaths)
         ephysap_tmp = [];
-        ephysap_path = fullfile(rawD(id).folder,rawD(id).name);        
+        ephysap_path = fullfile(RawDataPaths(id).folder,RawDataPaths(id).name);        
         UnitMatchExist = dir(fullfile(UMparam.SaveDir,['UnitMatch.mat']));
         if (isempty(UnitMatchExist) || Params.RedoUnitMatch) && ~DecompressionFlag
             % First check if we want to use python for compressed data. If not, uncompress data first
-            if any(strfind(rawD(id).name,'cbin')) && Params.DecompressLocal
-                if ~exist(fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')))
+            if any(strfind(RawDataPaths(id).name,'cbin')) && Params.DecompressLocal
+                if ~exist(fullfile(Params.tmpdatafolder,strrep(RawDataPaths(id).name,'cbin','bin')))
                     disp('This is compressed data and we do not want to use Python integration... uncompress temporarily')
                     % Decompression
-                    success = pyrunfile("MTSDecomp_From_Matlab.py","success",datapath = strrep(fullfile(rawD(id).folder,rawD(id).name),'\','/'),...
-                        JsonPath =  strrep(fullfile(rawD(id).folder,strrep(rawD(id).name,'cbin','ch')),'\','/'), savepath = strrep(fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')),'\','/'))
+                    success = pyrunfile("MTSDecomp_From_Matlab.py","success",datapath = strrep(fullfile(RawDataPaths(id).folder,RawDataPaths(id).name),'\','/'),...
+                        JsonPath =  strrep(fullfile(RawDataPaths(id).folder,strrep(RawDataPaths(id).name,'cbin','ch')),'\','/'), savepath = strrep(fullfile(Params.tmpdatafolder,strrep(RawDataPaths(id).name,'cbin','bin')),'\','/'))
                     % Also copy metafile
-                    copyfile(strrep(fullfile(rawD(id).folder,rawD(id).name),'cbin','meta'),strrep(fullfile(Params.tmpdatafolder,rawD(id).name),'cbin','meta'))
+                    copyfile(strrep(fullfile(RawDataPaths(id).folder,RawDataPaths(id).name),'cbin','meta'),strrep(fullfile(Params.tmpdatafolder,RawDataPaths(id).name),'cbin','meta'))
                 end
-                ephysap_tmp = fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin'));
+                ephysap_tmp = fullfile(Params.tmpdatafolder,strrep(RawDataPaths(id).name,'cbin','bin'));
                 DecompressionFlag = 1;                
             end
         end
     end
-
-
-    
+    UMparam.AllRawPaths = RawDataPaths;
+    UMparam.AllDecompPaths = arrayfun(@(X) fullfile(Params.tmpdatafolder,strrep(RawDataPaths(X).name,'cbin','bin')),1:length(RawDataPaths),'Uni',0);
     [UniqueID, MatchTable] = UnitMatch(clusinfo,UMparam,sp);
     clusinfo.UniqueID = UniqueID;
     clusinfo.MatchTable = MatchTable;

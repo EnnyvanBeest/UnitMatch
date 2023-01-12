@@ -1,4 +1,4 @@
-% function  [UniqueID, MatchTable] = UnitMatch(clusinfo,param,sp)
+function  [UniqueID, MatchTable] = UnitMatch(clusinfo,param,sp)
 %% Match units on neurophysiological evidence
 % Input:
 % - clusinfo (this is phy output, see also prepareinfo/spikes toolbox)
@@ -47,6 +47,7 @@ RunPyKSChronic = param.RunPyKSChronic;
 SaveDir = param.SaveDir;
 % AllRawPaths = param.AllRawPaths;
 AllDecompPaths = param.AllDecompPaths;
+param.nChannels = length(param.channelpos)+1; %First assume there's a sync channel as well.
 %% Extract all cluster info 
 AllClusterIDs = clusinfo.cluster_id;
 nses = length(AllDecompPaths);
@@ -69,7 +70,6 @@ SessionSwitch = [SessionSwitch nclus+1];
 %% Load raw waveforms and extract waveform parameters
 halfWidth = floor(spikeWidth / 2);
 dataTypeNBytes = numel(typecast(cast(0, 'uint16'), 'uint8'));
-nChannels = param.nChannels;
 
 % Initialize
 ProjectedLocation = nan(2,nclus,2);
