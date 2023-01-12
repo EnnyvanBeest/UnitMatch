@@ -1,5 +1,3 @@
-
-
 function spikeStruct = loadKSdir(ksDir, varargin)
 
 if ~isempty(varargin)

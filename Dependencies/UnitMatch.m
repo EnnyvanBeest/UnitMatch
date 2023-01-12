@@ -43,7 +43,7 @@ global stepsize
 stepsize = 0.01; % Of probability distribution
 MakePlotsOfPairs = 1; % Plots all pairs for inspection
 channelpos = param.channelpos;
-RunPyKSChronic = param.RunPyKSChronic;
+RunPyKSChronicStitched = param.RunPyKSChronicStitched;
 SaveDir = param.SaveDir;
 % AllRawPaths = param.AllRawPaths;
 AllDecompPaths = param.AllDecompPaths;
@@ -985,7 +985,7 @@ end
 %% If this was stitched pykilosort, we know what pykilosort thought about the matches
 PyKSLabel = [];
 PairsPyKS = [];
-if RunPyKSChronic
+if RunPyKSChronicStitched
     for uid = 1:nclus
         pairstmp = find(AllClusterIDs(Good_Idx)==AllClusterIDs(Good_Idx(uid)))';
         if length(pairstmp)>1
@@ -1026,7 +1026,7 @@ end
 disp('Extracting final pairs of units...')
 Tbl = array2table(reshape(Predictors,[],size(Predictors,3)),'VariableNames',Scores2Include); %All parameters
 if isfield(BestMdl,'Parameterkernels')
-    if RunPyKSChronic
+    if RunPyKSChronicStitched
         [label, posterior,performance] = ApplyNaiveBayes(Tbl,BestMdl.Parameterkernels,PyKSLabel(:),Priors);
         disp(['Correctly labelled ' num2str(round(performance(2)*1000)/10) '% of PyKS Matches and ' num2str(round(performance(1)*1000)/10) '% of PyKS non matches'])
 
@@ -1217,7 +1217,7 @@ Pairs = sortrows(Pairs);
 Pairs=unique(Pairs,'rows');
 Pairs(Pairs(:,1)==Pairs(:,2),:)=[];
 
-if RunPyKSChronic
+if RunPyKSChronicStitched
 
     [Int,A,B] = intersect(Pairs,PairsPyKS,'rows');
     PercDetected = size(Int,1)./size(PairsPyKS,1).*100;

@@ -47,9 +47,15 @@ if isempty(spikeFile)
     spikeFile = dir(fullfile(tmpFolder, '/*.dat')); %openEphys format
 end
 if size(spikeFile,1) > 1
+    try
+        spikeFile = dir(fullfile(tmpFolder, '.bin'));
+    catch
+        spikeFile = dir(fullfile(tmpFolder, '.cbin'));
+    end
+end
+if size(spikeFile,1) > 1
     spikeFile = dir(fullfile(tmpFolder, '*tcat*.ap.*bin'));
 end
-
 if iscell(rawFolder)
     rawFolder = fileparts(rawFolder{1});
 elseif sum(rawFolder(end-2:end) == '/..') == 3

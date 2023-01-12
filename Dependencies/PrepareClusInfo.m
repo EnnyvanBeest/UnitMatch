@@ -1,15 +1,13 @@
-% replace subsesopt and make it be 1) kilosort folders and 2) Optional: raw
-% folders, otherwise read from params.py
 function [clusinfo,sp] = PrepareClusInfo(KiloSortPaths,Params,RawDataPaths)
 % Prepares cluster information for subsequent analysis
-% Input:
+%% Inputs:
 % KiloSortPaths = List of directories pointing at kilosort output (same format as what you get when
 % calling 'dir') for all sessions you want to analyze as one session (e.g.
 % chronic recordings with same IMRO table: give a list with all sessions)
 
 % Params: with: 
-% Params.LoadPCs=1;
-% Params.RunPyKSChronic = 1
+% Params.loadPCs=1;
+% Params.RunPyKSChronicStitched = 1
 % Params.DecompressLocal = 1; %if 1, uncompress data first if it's currently compressed
 % Params.RedoQM = 0; %if 1, redo quality matrix if it already exists
 % Params.RunQualityMetrics = 1; % If 1, Run the quality matrix
@@ -19,9 +17,15 @@ function [clusinfo,sp] = PrepareClusInfo(KiloSortPaths,Params,RawDataPaths)
 % Params.SaveDir% Directory to save QM and UnitMatch results
 % Params.tmpdatafolder %Directory to temporarily decompress data --> must
 % be large enough!
+
 % RawDataPaths = list of same directories pointing at the raw ephys data
 % directory. If this input is missing, this code will try to find the raw
 % ephys data in the params.py file, first line (dat_path).
+
+%% Output
+% Clusinfo: Struct with cluster information. Read in from (Py)KS but
+% optionally Quality and Matches (oversplits/matches across recordings) are identified
+% Sp: Struct with spike information for all recordings
 
 %% Check inputs
 if ~isstruct(KiloSortPaths) || ~isfield(KiloSortPaths(1),'name') || ~isfield(KiloSortPaths(1),'folder')
@@ -29,8 +33,8 @@ if ~isstruct(KiloSortPaths) || ~isfield(KiloSortPaths(1),'name') || ~isfield(Kil
 end
 if nargin<2
     disp('No params given. Use default - although this is not advised...')
-    Params.LoadPCs=1;
-    Params.RunPyKSChronic = 1;
+    Params.loadPCs=1;
+    Params.RunPyKSChronicStitched = 1;
     Params.DecompressLocal = 1; %if 1, uncompress data first if it's currently compressed
     Params.RedoQM = 0; %if 1, redo quality matrix if it already exists
     Params.RunQualityMetrics = 1; % If 1, Run the quality matrix
@@ -40,6 +44,10 @@ if nargin<2
     Params.SaveDir = KiloSortPaths(1)% Directory to save QM and UnitMatch results
     Params.tmpdatafolder = KiloSortPaths(1)%
 end
+if Params.RunQualityMetrics
+    Params.loadPCs=1; %If you want to run QM you need this
+end
+
 if nargin<3
     disp('Finding raw ephys data using the params.py file from (py)kilosort output')
     UseParamsKS = 1;
@@ -149,9 +157,9 @@ for subsesid=1:length(KiloSortPaths)
     end   
     channelpostmpconv = ChannelIMROConversion(rawD(1).folder,1); % For conversion when not automatically done
     %% Load Cluster Info
-    myClusFile = dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'cluster_info.tsv'));
+    myClusFile = dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'cluster_info.tsv')); % If you did phy (manual curation) we will find this one... We can trust you, right?
     if isempty(myClusFile)
-        disp('This data is not curated with phy!!')
+        disp('This data is not curated with phy! Hopefully you''re using automated quality metrics to find good units!')
         curratedflag=0;
         myClusFile = dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'cluster_group.tsv'));
         clusinfo = tdfread(fullfile(myClusFile(1).folder,myClusFile(1).name));
@@ -192,13 +200,13 @@ for subsesid=1:length(KiloSortPaths)
         channel = cat(1,channel,channeltmp);
 
     else
+        disp('You did manual curation. You champion. If you have not enough time, maybe consider some automated algorithm...')
         CurationDone = 1;
         save(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'CuratedResults.mat'),'CurationDone')
         clusinfo = tdfread(fullfile(myClusFile(1).folder,myClusFile(1).name));
         % Convert sp data to correct cluster according to phy (clu and
         % template are not necessarily the same after phy)
         [clusinfo,sp{countid}] = ConvertTemplatesAfterPhy(clusinfo,sp{countid});
-
 
         curratedflag=1;
         if isfield(clusinfo,'id')
@@ -291,7 +299,7 @@ for subsesid=1:length(KiloSortPaths)
                     end
                     ephysap_tmp = fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin'));
                     DecompressionFlag = 1;
-                    if InspectQualityMatrix
+                    if Params.InspectQualityMatrix
                         InspectionFlag=1;
                     end
                 end
@@ -420,7 +428,7 @@ clear spnew
 %% Match different units?
 if Params.UnitMatch
     UMparam.channelpos = channelpos;
-    UMparam.RunPyKSChronic = Params.RunPyKSChronic;
+    UMparam.RunPyKSChronicStitched = Params.RunPyKSChronicStitched;
     UMparam.SaveDir = fullfile(Params.SaveDir);
     % Need to decompress if decompression wasn't done yet
     for id = 1:length(RawDataPaths)
