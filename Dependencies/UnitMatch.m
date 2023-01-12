@@ -2,7 +2,8 @@ function  [UniqueID, MatchTable] = UnitMatch(clusinfo,param,sp)
 %% Match units on neurophysiological evidence
 % Input:
 % - clusinfo (this is phy output, see also prepareinfo/spikes toolbox)
-% - AllRawPaths: cell struct with paths for individual recording sessions
+% - AllDecompPaths: cell struct with paths for individual recording
+% sessions (Decompressed)
 % - param: parameters for ephys extraction
 % - sp: kilosort output struct
 
@@ -22,7 +23,7 @@ function  [UniqueID, MatchTable] = UnitMatch(clusinfo,param,sp)
 % - cross-correlation finger prints --> units that are the same are likely
 % to correlate in a similar way with other units (@Célian Bimbard, 2022)
 
-% Contributions: 
+% Contributions:
 % Enny van Beest (2022)
 
 %% Parameters - tested on these values, but feel free to try others
@@ -33,32 +34,37 @@ spikeWidth = 83; % in sample space (time)
 TakeChannelRadius = 75; %in micron around max channel
 maxdist = 200; % Maximum distance at which units are considered as potential matches
 binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
-RedoExtraction = 1; % Raw waveform and parameter extraction
+RedoExtraction = 0; % Raw waveform and parameter extraction
+RemoveRawWavForms = 1; %Remove raw waveforms again to save server space
 % Scores2Include = {'WavformSimilarity','LocationCombined','spatialdecayDiff','AmplitudeDiff'};%}
 MakeOwnNaiveBayes = 1; % if 0, use standard matlab version, which assumes normal distributions --> not recommended
-ApplyExistingBayesModel = 0; %If 1, look if a Bayes model already exists for this mouse and applies that
+ApplyExistingBayesModel = 1; %If 1, look if a Bayes model already exists for this mouse and applies that
 global stepsize
 stepsize = 0.01; % Of probability distribution
 MakePlotsOfPairs = 1; % Plots all pairs for inspection
 channelpos = param.channelpos;
 RunPyKSChronic = param.RunPyKSChronic;
 SaveDir = param.SaveDir;
-AllRawPaths = param.AllRawPaths;
+% AllRawPaths = param.AllRawPaths;
 AllDecompPaths = param.AllDecompPaths;
-%% Extract all clusters
+%% Extract all cluster info 
 AllClusterIDs = clusinfo.cluster_id;
-nses = length(AllRawPaths);
-OriginalClusID = AllClusterIDs;
+nses = length(AllDecompPaths);
+OriginalClusID = AllClusterIDs; % Original cluster ID assigned by KS
 UniqueID = 1:length(AllClusterIDs); % Initial assumption: All clusters are unique
 Good_Idx = find(clusinfo.Good_ID); %Only care about good units at this point
 GoodRecSesID = clusinfo.RecSesID(Good_Idx);
-SessionSwitch = find(GoodRecSesID==2,1,'first');
+
 % Define day stucture
 recsesAll = clusinfo.RecSesID;
+recsesGood = recsesAll(Good_Idx);
 [X,Y]=meshgrid(recsesAll(Good_Idx));
 nclus = length(Good_Idx);
+ndays = length(unique(recsesAll));
 SameSesMat = arrayfun(@(X) cell2mat(arrayfun(@(Y) GoodRecSesID(X)==GoodRecSesID(Y),1:nclus,'Uni',0)),1:nclus,'Uni',0);
 SameSesMat = cat(1,SameSesMat{:});
+SessionSwitch = cell2mat(arrayfun(@(X) find(GoodRecSesID==X,1,'first'),1:ndays,'Uni',0));
+SessionSwitch = [SessionSwitch nclus+1];
 
 %% Load raw waveforms and extract waveform parameters
 halfWidth = floor(spikeWidth / 2);
@@ -84,29 +90,30 @@ ChanIdx = find(cell2mat(arrayfun(@(Y) norm(fakechannel-channelpos(Y,:)),1:size(c
 % Take geographically close channels (within 50 microns!), not just index!
 timercounter = tic;
 fprintf(1,'Extracting raw waveforms. Progress: %3d%%',0)
-pathparts = strsplit(AllRawPaths{GoodRecSesID(1)},'\');
+pathparts = strsplit(AllDecompPaths{GoodRecSesID(1)},'\');
 rawdatapath = dir(fullfile('\\',pathparts{1:end-1}));
 if isempty(rawdatapath)
     rawdatapath = dir(fullfile(pathparts{1:end-1}));
 end
-if exist(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(AllClusterIDs(Good_Idx(1))) '_RawSpikes.mat'])) && RedoExtraction
+if exist(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(1))) '_RawSpikes.mat'])) && RedoExtraction
     delete(fullfile(rawdatapath(1).folder,'RawWaveforms','*'))
 end
 
 Currentlyloaded = 0;
 for uid = 1:nclus
-    pathparts = strsplit(AllRawPaths{GoodRecSesID(uid)},'\');
+    pathparts = strsplit(AllDecompPaths{GoodRecSesID(uid)},'\');
     rawdatapath = dir(fullfile('\\',pathparts{1:end-1}));
     if isempty(rawdatapath)
         rawdatapath = dir(fullfile(pathparts{1:end-1}));
     end
 
     fprintf(1,'\b\b\b\b%3.0f%%',uid/nclus*100)
-    if exist(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(AllClusterIDs(Good_Idx(uid))) '_RawSpikes.mat'])) && ~RedoExtraction
-        load(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(AllClusterIDs(Good_Idx(uid))) '_RawSpikes.mat']))
+    if exist(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat'])) && ~RedoExtraction
+        load(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']))
     else
         if ~(GoodRecSesID(uid) == Currentlyloaded) % Only load new memmap if not already loaded
             % Map the data
+            clear memMapData
             spikeFile = dir(AllDecompPaths{GoodRecSesID(uid)});
             try %hacky way of figuring out if sync channel present or not
                 n_samples = spikeFile.bytes / (param.nChannels * dataTypeNBytes);
@@ -133,7 +140,7 @@ for uid = 1:nclus
         spikeMap = nan(spikeWidth,nChannels,sampleamount);
         for iSpike = 1:length(spikeIndicestmp)
             thisSpikeIdx = int32(spikeIndicestmp(iSpike));
-            if thisSpikeIdx > halfWidth && (thisSpikeIdx + halfWidth) * dataTypeNBytes < spikeFile.bytes % check that it's not out of bounds
+            if thisSpikeIdx > halfWidth && (thisSpikeIdx + halfWidth) < size(memMapData,2) % check that it's not out of bounds
                 tmp = smoothdata(double(memMapData(1:nChannels,thisSpikeIdx-halfWidth:thisSpikeIdx+halfWidth)),2,'gaussian',5);
                 tmp = (tmp - mean(tmp(:,1:20),2))';
                 tmp(:,end+1:nChannels) = nan(size(tmp,1),nChannels-size(tmp,2));
@@ -152,7 +159,7 @@ for uid = 1:nclus
             wavidx = floor(nwavs/2+1:nwavs);
         end
         % Find maximum channels:
-        [~,MaxChannel(uid,cv)] = nanmax(nanmax(abs(nanmean(spikeMap(:,:,wavidx),3)),[],1));
+        [~,MaxChannel(uid,cv)] = nanmax(nanmax(abs(nanmean(spikeMap(35:70,:,wavidx),3)),[],1));
 
         % Extract channel positions that are relevant and extract mean location
         ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChannel(uid,cv),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<TakeChannelRadius); %Averaging over 10 channels helps with drift
@@ -197,7 +204,7 @@ for uid = 1:nclus
     if ~exist(fullfile(rawdatapath(1).folder,'RawWaveforms'))
         mkdir(fullfile(rawdatapath(1).folder,'RawWaveforms'))
     end
-    save(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(AllClusterIDs(Good_Idx(uid))) '_RawSpikes.mat']),'spikeMap')
+    save(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']),'spikeMap')
 end
 
 fprintf('\n')
@@ -264,8 +271,8 @@ title('Waveform correlations')
 xlabel('Unit Y')
 ylabel('Unit Z')
 hold on
-line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
-line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
+arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
 colormap(flipud(gray))
 colorbar
 makepretty
@@ -276,8 +283,8 @@ title('Waveform mean squared errors')
 xlabel('Unit Y')
 ylabel('Unit Z')
 hold on
-line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
-line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
+arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
 colormap(flipud(gray))
 colorbar
 makepretty
@@ -288,8 +295,8 @@ title('Average Waveform scores')
 xlabel('Unit Y')
 ylabel('Unit Z')
 hold on
-line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
-line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
+arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
 colormap(flipud(gray))
 colorbar
 makepretty
@@ -301,7 +308,7 @@ while flag<2
     scatter(channelpos(:,1),channelpos(:,2),10,[0 0 0],'filled')
     hold on
     scatter(nanmean(ProjectedLocation(1,:,:),3),nanmean(ProjectedLocation(2,:,:),3),10,GoodRecSesID)
-    colormap redblue
+    colormap hsv
     makepretty
     xlabel('XPos (um)')
     ylabel('YPos (um)')
@@ -312,7 +319,7 @@ while flag<2
     timercounter = tic;
     LocDist = arrayfun(@(X) cell2mat(arrayfun(@(Y) pdist(cat(2,ProjectedLocation(:,X,1),ProjectedLocation(:,Y,2))'),1:nclus,'Uni',0)),1:nclus,'Uni',0);
     LocDist = cat(1,LocDist{:}); % Normal difference
-    
+
     disp('Computing location distances between pairs of units, per individual time point of the waveform...')
     % Difference in distance at different time points
     LocDistSign = arrayfun(@(uid) arrayfun(@(uid2)  cell2mat(arrayfun(@(X) pdist(cat(2,squeeze(ProjectedLocationPerTP(:,uid,X,1)),squeeze(ProjectedLocationPerTP(:,uid2,X,2)))'),1:spikeWidth,'Uni',0)),1:nclus,'Uni',0),1:nclus,'Uni',0);
@@ -326,9 +333,9 @@ while flag<2
     LocAngleSim = cat(1,LocAngleSim{:});
 
     % Variance in error, corrected by average error. This captures whether
-    % the trajectory is consistenly separate 
+    % the trajectory is consistenly separate
     MSELoc = cell2mat(cellfun(@(X) nanvar(X)./nanmean(X)+nanmean(X),LocDistSign,'Uni',0));
-   
+
     % Normalize each of them from 0 to 1, 1 being the 'best'
     % If distance > maxdist micron it will never be the same unit:
     LocDistSim = 1-((LocDistSim-nanmin(LocDistSim(:)))./(maxdist-nanmin(LocDistSim(:)))); %Average difference
@@ -346,8 +353,8 @@ while flag<2
     xlabel('Unit_i')
     ylabel('Unit_j')
     hold on
-    line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
-    line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
+    arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+    arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
     colormap(flipud(gray))
     colorbar
     makepretty
@@ -356,15 +363,15 @@ while flag<2
     h=histogram(LocDist(:));
     xlabel('Score')
     makepretty
-    
+
     subplot(4,2,3)
     h=imagesc(LocDistSim);
     title('LocationDistanceAveraged')
     xlabel('Unit_i')
     ylabel('Unit_j')
     hold on
-    line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
-    line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
+    arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+    arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
     colormap(flipud(gray))
     colorbar
     makepretty
@@ -379,8 +386,8 @@ while flag<2
     xlabel('Unit_i')
     ylabel('Unit_j')
     hold on
-    line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
-    line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
+    arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+    arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
     colormap(flipud(gray))
     colorbar
     makepretty
@@ -395,8 +402,8 @@ while flag<2
     xlabel('Unit_i')
     ylabel('Unit_j')
     hold on
-    line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
-    line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
+    arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+    arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
     colormap(flipud(gray))
     colorbar
     makepretty
@@ -418,15 +425,15 @@ while flag<2
         xlabel('Unit_i')
         ylabel('Unit_j')
         hold on
-        line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
-        line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
+        arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+        arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
         colormap(flipud(gray))
         colorbar
         makepretty
     end
 
     %% Calculate total score
-    priorMatch = 1-(nclus+nclus)./(nclus*nclus);
+    priorMatch = 1-(nclus*ndays)./(nclus*nclus);
     leaveoutmatches = false(nclus,nclus,length(Scores2Include)); %Used later
     figure;
     if length(Scores2Include)>1
@@ -449,8 +456,8 @@ while flag<2
             xlabel('Unit_i')
             ylabel('Unit_j')
             hold on
-            line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
-            line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
+            arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+            arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
             colormap(flipud(gray))
             colorbar
             makepretty
@@ -468,8 +475,8 @@ while flag<2
             xlabel('Unit_i')
             ylabel('Unit_j')
             hold on
-            line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
-            line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
+            arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+            arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
             colormap(flipud(gray))
             colorbar
             %     axis square
@@ -493,8 +500,8 @@ while flag<2
     xlabel('Unit_i')
     ylabel('Unit_j')
     hold on
-    line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
-    line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
+    arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+    arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
     colormap(flipud(gray))
     colorbar
     makepretty
@@ -508,8 +515,8 @@ while flag<2
     xlabel('Unit_i')
     ylabel('Unit_j')
     hold on
-    line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
-    line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
+    arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+    arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
     colormap(flipud(gray))
     colorbar
     % axis square
@@ -518,7 +525,7 @@ while flag<2
     % first factor authentication: score above threshold
     ThrsScore = ThrsOpt;
     % Take into account:
-    label = triu(TotalScore>ThrsOpt,1) & triu(~SameSesMat,1);
+    label = triu(TotalScore>ThrsOpt,1);
     [uid,uid2] = find(label);
     Pairs = cat(2,uid,uid2);
     Pairs = sortrows(Pairs);
@@ -528,7 +535,7 @@ while flag<2
     %% Functional score for optimization: compute Fingerprint for the matched units - based on Célian Bimbard's noise-correlation finger print method but applied to across session correlations
     % Not every recording day will have the same units. Therefore we will
     % correlate each unit's activity with average activity across different
-    % depths    
+    % depths
     timevec = floor(min(sp.st)):binsz:ceil(max(sp.st));
     edges = floor(min(sp.st))-binsz/2:binsz:ceil(max(sp.st))+binsz/2;
     disp('Calculate activity correlations')
@@ -544,56 +551,59 @@ while flag<2
     [val,id1,id2]=unique(Pairs(:,2),'stable');
     Pairs = Pairs(id1,:);
 
-    % Correlation on first day
-    srMatches = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == AllClusterIDs(Good_Idx(X)) & sp.RecSes == GoodRecSesID(X)),edges),Pairs(:,1),'UniformOutput',0);
-    srMatches = cat(1,srMatches{:});
-    srAll = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == AllClusterIDs(Good_Idx(X)) & sp.RecSes == GoodRecSesID(X)),edges),1:SessionSwitch-1,'UniformOutput',0);
-    srAll = cat(1,srAll{:});
-    SessionCorrelation_Pair1 = corr(srMatches(:,1:size(srMatches,2)./2)',srAll(:,1:size(srMatches,2)./2)');
-    for pid = 1:size(Pairs,1)
-        SessionCorrelation_Pair1(pid,Pairs(pid,1)) = nan;
+    Unit2Take = AllClusterIDs(Good_Idx(unique(Pairs(:))));
+    figure('name','Cross-correlation per recording')
+    for did = 1:ndays
+        % Correlation on first day
+        Unit2TakeIdx = recsesAll(Good_Idx(unique(Pairs(:))))==did;
+        srMatches = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == X & sp.RecSes == did),edges),Unit2Take(Unit2TakeIdx),'UniformOutput',0);
+        srMatches = cat(1,srMatches{:});
+        srAll = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == AllClusterIDs(Good_Idx(X)) & sp.RecSes == did),edges),1:nclus,'UniformOutput',0);
+        srAll = cat(1,srAll{:});
+        SessionCorrelation_Pair1 = corr(srMatches(:,1:size(srMatches,2)./2)',srAll(:,1:size(srMatches,2)./2)');
+
+        subplot(1,ndays,did)
+        imagesc(SessionCorrelation_Pair1')
+        colormap(flipud(gray))
+        xlabel('Candidate Units to be matched')
+        ylabel('All units')
+        title(['Recording ' num2str(did)])
+        makepretty
+
+        % Add all together
+        if did == 1
+            SessionCorrelations = SessionCorrelation_Pair1';
+        else
+            SessionCorrelations = cat(2,SessionCorrelations,SessionCorrelation_Pair1');
+        end
     end
-
-
-    figure('name','Cross-correlation Fingerprints')
-    subplot(1,3,1)
-    imagesc(SessionCorrelation_Pair1')
-    colormap(flipud(gray))
-    xlabel('Candidate Units to be matched')
-    ylabel('All units')
-    title('Day 1')
-    makepretty
-
-    % Correlation on first day
-    srMatches = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == AllClusterIDs(Good_Idx(X)) & sp.RecSes == GoodRecSesID(X)),edges),Pairs(:,2),'UniformOutput',0);
-    srMatches = cat(1,srMatches{:});
-    srAll = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == AllClusterIDs(Good_Idx(X)) & sp.RecSes == GoodRecSesID(X)),edges),SessionSwitch:nclus,'UniformOutput',0);
-    srAll = cat(1,srAll{:});
-    SessionCorrelation_Pair2 = corr(srMatches(:,size(srMatches,2)./2+1:end)',srAll(:,size(srMatches,2)./2+1:end)');
-    for pid = 1:size(Pairs,1)
-        SessionCorrelation_Pair2(pid,Pairs(pid,2)-SessionSwitch+1) = nan;
-    end
-
-    subplot(1,3,2)
-    imagesc(SessionCorrelation_Pair2')
-    colormap(flipud(gray))
-    xlabel('Candidate Units to be matched')
-    ylabel('All units')
-    title('Day 2')
-    makepretty
-
-    % Add both together
-    SessionCorrelations = cat(2,SessionCorrelation_Pair1,SessionCorrelation_Pair2)';
-
+    rmidx = find(sum(isnan(SessionCorrelations),2)==size(SessionCorrelations,2));
+    SessionCorrelations(rmidx,:)=[];
+    nclustmp = nclus-length(rmidx);
+    notrmdixvec = 1:nclus;
+    notrmdixvec(rmidx)=[];
     % Correlate 'fingerprints'
-    FingerprintR = arrayfun(@(X) cell2mat(arrayfun(@(Y) corr(SessionCorrelations(X,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))',SessionCorrelations(Y,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))'),1:nclus,'UniformOutput',0)),1:nclus,'UniformOutput',0);
+    FingerprintR = arrayfun(@(X) cell2mat(arrayfun(@(Y) corr(SessionCorrelations(X,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))',SessionCorrelations(Y,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))'),1:nclustmp,'UniformOutput',0)),1:nclustmp,'UniformOutput',0);
     FingerprintR = cat(1,FingerprintR{:});
 
-    subplot(1,3,3)
+    % If one value was only nans; put it back in and replace original
+    % FingerprintR
+    if any(rmidx)
+        Fingerprinttmp = nan(nclus,nclus);
+        Fingerprinttmp(1:rmidx-1,1:rmidx-1)=FingerprintR(1:rmidx-1,1:rmidx-1);
+        Fingerprinttmp(rmidx,:)=nan;
+        Fingerprinttmp(:,rmidx)=nan;
+        Fingerprinttmp(rmidx+1:end,notrmdixvec)=FingerprintR(rmidx:end,:);
+        Fingerprinttmp(notrmdixvec,rmidx+1:end)=FingerprintR(:,rmidx:end);
+        FingerprintR = Fingerprinttmp;
+        clear Fingerprinttmp
+    end
+
+    figure('name','Cross-correlation fingerprint')
     imagesc(FingerprintR)
     hold on
-    line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
-    line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
+    arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+    arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
     clim([0.5 1])
     colormap(flipud(gray))
     xlabel('All units across both days')
@@ -605,17 +615,17 @@ while flag<2
     SigMask = zeros(nclus,nclus);
     RankScoreAll = nan(size(SigMask));
     for pid=1:nclus
-        for pid2 = 1:nclus
-            if pid2<SessionSwitch
-                tmp1 = FingerprintR(pid,1:SessionSwitch-1);
-                addthis=0;
-            else
-                tmp1 = FingerprintR(pid,SessionSwitch:end);
-                addthis = SessionSwitch-1;
-            end
+        for pid2 = 1:nclus            
+            tmp1 = FingerprintR(pid,SessionSwitch(recsesGood(pid2)):SessionSwitch(recsesGood(pid2)+1)-1);
+            addthis=SessionSwitch(recsesGood(pid2))-1;
+          
             [val,ranktmp] = sort(tmp1,'descend');
 
-            tmp1(pid2-addthis)=[];
+            try
+                tmp1(pid2-addthis)=[];
+            catch ME
+                keyboard
+            end
 
             if FingerprintR(pid,pid2)>nanmean(tmp1)+2*nanstd(tmp1)
                 SigMask(pid,pid2)=1;
@@ -664,24 +674,28 @@ while flag<2
     figure('name','Potential Matches')
     imagesc(CandidatePairs)
     colormap(flipud(gray))
-    xlim([SessionSwitch nclus])
-    ylim([1 SessionSwitch-1])
+    %     xlim([SessionSwitch nclus])
+    %     ylim([1 SessionSwitch-1])
     xlabel('Units day 1')
     ylabel('Units day 2')
     title('Potential Matches')
     makepretty
 
     %% Calculate median drift on this population (between days)
-    drift = nanmedian(cell2mat(arrayfun(@(uid) (nanmean(ProjectedLocation(:,Pairs(uid,1),:),3)-nanmean(ProjectedLocation(:,Pairs(uid,2),:),3)),1:size(Pairs,1),'Uni',0)),2);
-    disp(['Median drift calculated: X=' num2str(drift(1)) ', Y=' num2str(drift(2))])
-    if flag
-        break
+    if ndays>1
+        for did = 1:ndays-1
+            idx = find(Pairs(:,1)>=SessionSwitch(did)&Pairs(:,1)<SessionSwitch(did+1) & Pairs(:,2)>=SessionSwitch(did+1)&Pairs(:,2)<SessionSwitch(did+2));
+            drift = nanmedian(cell2mat(arrayfun(@(uid) (nanmean(ProjectedLocation(:,Pairs(idx,1),:),3)-nanmean(ProjectedLocation(:,Pairs(idx,2),:),3)),1:size(Pairs,1),'Uni',0)),2);
+            disp(['Median drift recording ' num2str(did) ' calculated: X=' num2str(drift(1)) ', Y=' num2str(drift(2))])
+            if flag
+                break
+            end
+            ProjectedLocation(1,GoodRecSesID==did+1,:)=ProjectedLocation(1,GoodRecSesID==did+1,:)+drift(1);
+            ProjectedLocation(2,GoodRecSesID==did+1,:)=ProjectedLocation(2,GoodRecSesID==did+1,:)+drift(2);
+            ProjectedLocationPerTP(1,GoodRecSesID==did+1,:,:) = ProjectedLocationPerTP(1,GoodRecSesID==did+1,:,:) + drift(1);
+            ProjectedLocationPerTP(2,GoodRecSesID==did+1,:,:) = ProjectedLocationPerTP(2,GoodRecSesID==did+1,:,:) + drift(2);
+        end
     end
-    ProjectedLocation(1,GoodRecSesID==2,:)=ProjectedLocation(1,GoodRecSesID==2,:)+drift(1);
-    ProjectedLocation(2,GoodRecSesID==2,:)=ProjectedLocation(2,GoodRecSesID==2,:)+drift(2);
-    ProjectedLocationPerTP(1,GoodRecSesID==2,:,:) = ProjectedLocationPerTP(1,GoodRecSesID==2,:,:) + drift(1);
-    ProjectedLocationPerTP(2,GoodRecSesID==2,:,:) = ProjectedLocationPerTP(2,GoodRecSesID==2,:,:) + drift(2);
-
     flag = flag+1;
     close all
 
@@ -689,9 +703,9 @@ end
 %% Prepare naive bayes - inspect probability distributions
 % Prepare a set INCLUDING the cross-validated self-scores, otherwise the probability
 % distributions are just weird
-priorMatch = 1-(nclus+nclus)./(nclus*nclus); %Now use a slightly more lenient prior
+priorMatch = 1-(nclus*ndays)./(nclus*nclus); %Now use a slightly more lenient prior
 ThrsOpt = quantile(TotalScore(:),priorMatch);
-CandidatePairs = TotalScore>ThrsOpt & RankScoreAll==1; 
+CandidatePairs = TotalScore>ThrsOpt & RankScoreAll==1;
 % CandidatePairs(tril(true(size(CandidatePairs)),-1))=0;
 [uid,uid2] = find(CandidatePairs);
 Pairs = cat(2,uid,uid2);
@@ -735,7 +749,7 @@ while flag<2 && runid<maxrun
             [Parameterkernels,Performance] = CreateNaiveBayes(Tbl,label,Priors);
             if any(Performance'<MaxPerf)
                 flag = flag+1;
-            else 
+            else
                 BestMdl.Parameterkernels = Parameterkernels;
             end
             % Apply naive bays classifier
@@ -808,20 +822,20 @@ while flag<2 && runid<maxrun
 
 
         end
-        
+
 
     end
     drawnow
 
     label = reshape(label,size(Predictors,1),size(Predictors,2));
-    [r, c] = find(triu(label,1)==1 & triu(~SameSesMat,1)); %Find matches
+    [r, c] = find(triu(label)==1); %Find matches
 
     Pairs = cat(2,r,c);
     Pairs = sortrows(Pairs);
     Pairs=unique(Pairs,'rows');
-    Pairs(Pairs(:,1)==Pairs(:,2),:)=[];
+    %     Pairs(Pairs(:,1)==Pairs(:,2),:)=[];
     MatchProbability = reshape(posterior(:,2),size(Predictors,1),size(Predictors,2));
-%     figure; imagesc(label)
+    %     figure; imagesc(label)
 
     % Functional score for optimization: compute Fingerprint for the matched units - based on Célian Bimbard's noise-correlation finger print method but applied to across session correlations
     % Not every recording day will have the same units. Therefore we will
@@ -850,56 +864,60 @@ while flag<2 && runid<maxrun
         break
     end
 
-    % Correlation on first day
-    srMatches = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == AllClusterIDs(Good_Idx(X)) & sp.RecSes == GoodRecSesID(X)),edges),Pairs(:,1),'UniformOutput',0);
-    srMatches = cat(1,srMatches{:});
-    srAll = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == AllClusterIDs(Good_Idx(X)) & sp.RecSes == GoodRecSesID(X)),edges),1:SessionSwitch-1,'UniformOutput',0);
-    srAll = cat(1,srAll{:});
-    SessionCorrelation_Pair1 = corr(srMatches(:,1:size(srMatches,2)./2)',srAll(:,1:size(srMatches,2)./2)');
-    for pid = 1:size(Pairs,1)
-        SessionCorrelation_Pair1(pid,Pairs(pid,1)) = nan;
+    figure('name','Cross-correlation per recording')
+    Unit2Take = AllClusterIDs(Good_Idx(unique(Pairs(:))));
+    for did = 1:ndays
+        % Correlation on first day
+        Unit2TakeIdx = recsesAll(Good_Idx(unique(Pairs(:))))==did;
+        srMatches = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == X & sp.RecSes == did),edges),Unit2Take(Unit2TakeIdx),'UniformOutput',0);
+        srMatches = cat(1,srMatches{:});
+        srAll = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == AllClusterIDs(Good_Idx(X)) & sp.RecSes == did),edges),1:nclus,'UniformOutput',0);
+        srAll = cat(1,srAll{:});
+        SessionCorrelation_Pair1 = corr(srMatches(:,1:size(srMatches,2)./2)',srAll(:,1:size(srMatches,2)./2)');
+
+        subplot(1,ndays,did)
+        imagesc(SessionCorrelation_Pair1')
+        colormap(flipud(gray))
+        xlabel('Candidate Units to be matched')
+        ylabel('All units')
+        title(['Recording ' num2str(did)])
+        makepretty
+
+        % Add all together
+        if did == 1
+            SessionCorrelations = SessionCorrelation_Pair1';
+        else
+            SessionCorrelations = cat(2,SessionCorrelations,SessionCorrelation_Pair1');
+        end
     end
 
-
-    figure('name','Cross-correlation Fingerprints')
-    subplot(1,3,1)
-    imagesc(SessionCorrelation_Pair1')
-    colormap(flipud(gray))
-    xlabel('Candidate Units to be matched')
-    ylabel('All units')
-    title('Day 1')
-    makepretty
-
-    % Correlation on second day
-    srMatches = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == AllClusterIDs(Good_Idx(X)) & sp.RecSes == GoodRecSesID(X)),edges),Pairs(:,2),'UniformOutput',0);
-    srMatches = cat(1,srMatches{:});
-    srAll = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == AllClusterIDs(Good_Idx(X)) & sp.RecSes == GoodRecSesID(X)),edges),SessionSwitch:nclus,'UniformOutput',0);
-    srAll = cat(1,srAll{:});
-    SessionCorrelation_Pair2 = corr(srMatches(:,size(srMatches,2)./2+1:end)',srAll(:,size(srMatches,2)./2+1:end)');
-    for pid = 1:size(Pairs,1)
-        SessionCorrelation_Pair2(pid,Pairs(pid,2)-SessionSwitch+1) = nan;
-    end
-
-    subplot(1,3,2)
-    imagesc(SessionCorrelation_Pair2')
-    colormap(flipud(gray))
-    xlabel('Candidate Units to be matched')
-    ylabel('All units')
-    title('Day 2')
-    makepretty
-
-    % Add both together
-    SessionCorrelations = cat(2,SessionCorrelation_Pair1,SessionCorrelation_Pair2)';
-
+    rmidx = find(sum(isnan(SessionCorrelations),2)==size(SessionCorrelations,2));
+    SessionCorrelations(rmidx,:)=[];
+    nclustmp = nclus-length(rmidx);
+    notrmdixvec = 1:nclus;
+    notrmdixvec(rmidx)=[];
     % Correlate 'fingerprints'
-    FingerprintR = arrayfun(@(X) cell2mat(arrayfun(@(Y) corr(SessionCorrelations(X,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))',SessionCorrelations(Y,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))'),1:nclus,'UniformOutput',0)),1:nclus,'UniformOutput',0);
+    FingerprintR = arrayfun(@(X) cell2mat(arrayfun(@(Y) corr(SessionCorrelations(X,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))',SessionCorrelations(Y,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))'),1:nclustmp,'UniformOutput',0)),1:nclustmp,'UniformOutput',0);
     FingerprintR = cat(1,FingerprintR{:});
 
-    subplot(1,3,3)
+    % If one value was only nans; put it back in and replace original
+    % FingerprintR
+    if any(rmidx)
+        Fingerprinttmp = nan(nclus,nclus);
+        Fingerprinttmp(1:rmidx-1,1:rmidx-1)=FingerprintR(1:rmidx-1,1:rmidx-1);
+        Fingerprinttmp(rmidx,:)=nan;
+        Fingerprinttmp(:,rmidx)=nan;
+        Fingerprinttmp(rmidx+1:end,notrmdixvec)=FingerprintR(rmidx:end,:);
+        Fingerprinttmp(notrmdixvec,rmidx+1:end)=FingerprintR(:,rmidx:end);
+        FingerprintR = Fingerprinttmp;
+        clear Fingerprinttmp
+    end
+
+    figure('name','FingerprintCorrelation')
     imagesc(FingerprintR)
     hold on
-    line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
-    line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
+    arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+    arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
     clim([0.5 1])
     colormap(flipud(gray))
     xlabel('All units across both days')
@@ -912,13 +930,10 @@ while flag<2 && runid<maxrun
     RankScoreAll = nan(size(SigMask));
     for pid=1:nclus
         for pid2 = 1:nclus
-            if pid2<SessionSwitch
-                tmp1 = FingerprintR(pid,1:SessionSwitch-1);
-                addthis=0;
-            else
-                tmp1 = FingerprintR(pid,SessionSwitch:end);
-                addthis = SessionSwitch-1;
-            end
+            tmp1 = FingerprintR(pid,SessionSwitch(recsesGood(pid2)):SessionSwitch(recsesGood(pid2)+1)-1);
+            addthis=SessionSwitch(recsesGood(pid2))-1;
+
+
             [val,ranktmp] = sort(tmp1,'descend');
 
             tmp1(pid2-addthis)=[];
@@ -985,7 +1000,7 @@ if RunPyKSChronic
     PyKSLabel(logical(eye(size(PyKSLabel)))) = true;
     PairsPyKS=unique(PairsPyKS,'rows');
 
-    figure('name','Parameter Scores');   
+    figure('name','Parameter Scores');
     Edges = [0:stepsize:1];
     ScoreVector = Edges(1)+stepsize/2:stepsize:Edges(end)-stepsize/2;
 
@@ -1012,12 +1027,12 @@ Tbl = array2table(reshape(Predictors,[],size(Predictors,3)),'VariableNames',Scor
 if isfield(BestMdl,'Parameterkernels')
     if RunPyKSChronic
         [label, posterior,performance] = ApplyNaiveBayes(Tbl,BestMdl.Parameterkernels,PyKSLabel(:),Priors);
-        disp(['Correctly labelled ' num2str(round(performance(2)*1000)/10) '% of PyKS Matches and ' num2str(round(performance(1)*1000)/10) '% of PyKS non matches']) 
+        disp(['Correctly labelled ' num2str(round(performance(2)*1000)/10) '% of PyKS Matches and ' num2str(round(performance(1)*1000)/10) '% of PyKS non matches'])
 
         disp('Results if training would be done with PyKs stitched')
         [ParameterkernelsPyKS,Performance] = CreateNaiveBayes(Tbl,PyKSLabel(:),Priors);
         [Fakelabel, Fakeposterior,performance] = ApplyNaiveBayes(Tbl,ParameterkernelsPyKS,PyKSLabel(:),Priors);
-        disp(['Correctly labelled ' num2str(round(performance(2)*1000)/10) '% of PyKS Matches and ' num2str(round(performance(1)*1000)/10) '% of PyKS non matches']) 
+        disp(['Correctly labelled ' num2str(round(performance(2)*1000)/10) '% of PyKS Matches and ' num2str(round(performance(1)*1000)/10) '% of PyKS non matches'])
     else
         [label, posterior] = ApplyNaiveBayes(Tbl,BestMdl.Parameterkernels,[0 1],Priors);
     end
@@ -1025,20 +1040,20 @@ else
     [label, posterior, cost] = predict(BestMdl,Tbl);
 end
 MatchProbability = reshape(posterior(:,2),size(Predictors,1),size(Predictors,2));
-label = (MatchProbability>=0.99) | (MatchProbability>0.01 & RankScoreAll==1); 
+label = (MatchProbability>=0.99) | (MatchProbability>0.01 & RankScoreAll==1);
 % label = reshape(label,nclus,nclus);
-[r, c] = find(triu(label,1)==1 & triu(~SameSesMat,1)); %Find matches across 2 days
+[r, c] = find(triu(label)==1); %Find matches across 2 days
 Pairs = cat(2,r,c);
 Pairs = sortrows(Pairs);
 Pairs=unique(Pairs,'rows');
-Pairs(Pairs(:,1)==Pairs(:,2),:)=[];
+% Pairs(Pairs(:,1)==Pairs(:,2),:)=[];
 figure; imagesc(label)
 colormap(flipud(gray))
 xlabel('Unit_i')
 ylabel('Unit_j')
 hold on
-line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
-line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
+arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
 title('Identified matches')
 makepretty
 
@@ -1053,8 +1068,8 @@ for pid = 1:4
     xlabel('Unit_i')
     ylabel('Unit_j')
     hold on
-    line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
-    line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
+    arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+    arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
     title(['p>' num2str(takethisprob(pid))])
 end
 
@@ -1069,57 +1084,60 @@ Pairs = Pairs(sortid,:);
 Pairs = Pairs(id1,:);
 [val,id1,id2]=unique(Pairs(:,2),'stable');
 Pairs = Pairs(id1,:);
-
-% Correlation on first day
-srMatches = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == AllClusterIDs(Good_Idx(X)) & sp.RecSes == GoodRecSesID(X)),edges),Pairs(:,1),'UniformOutput',0);
-srMatches = cat(1,srMatches{:});
-srAll = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == AllClusterIDs(Good_Idx(X)) & sp.RecSes == GoodRecSesID(X)),edges),1:SessionSwitch-1,'UniformOutput',0);
-srAll = cat(1,srAll{:});
-SessionCorrelation_Pair1 = corr(srMatches(:,1:size(srMatches,2)./2)',srAll(:,1:size(srMatches,2)./2)');
-for pid = 1:size(Pairs,1)
-    SessionCorrelation_Pair1(pid,Pairs(pid,1)) = nan;
-end
-
-
+    
+Unit2Take = AllClusterIDs(Good_Idx(unique(Pairs(:))));
 figure('name','Cross-correlation Fingerprints')
-subplot(1,3,1)
-imagesc(SessionCorrelation_Pair1')
-colormap(flipud(gray))
-xlabel('Candidate Units to be matched')
-ylabel('All units')
-title('Day 1')
-makepretty
+for did = 1:ndays
+    % Correlation on first day
+    Unit2TakeIdx = recsesAll(Good_Idx(unique(Pairs(:))))==did;
+    srMatches = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == X & sp.RecSes == did),edges),Unit2Take(Unit2TakeIdx),'UniformOutput',0);
+    srMatches = cat(1,srMatches{:});
+    srAll = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == AllClusterIDs(Good_Idx(X)) & sp.RecSes == did),edges),1:nclus,'UniformOutput',0);
+    srAll = cat(1,srAll{:});
+    SessionCorrelation_Pair1 = corr(srMatches(:,1:size(srMatches,2)./2)',srAll(:,1:size(srMatches,2)./2)');
 
-% Correlation on first day
-srMatches = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == AllClusterIDs(Good_Idx(X)) & sp.RecSes == GoodRecSesID(X)),edges),Pairs(:,2),'UniformOutput',0);
-srMatches = cat(1,srMatches{:});
-srAll = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == AllClusterIDs(Good_Idx(X)) & sp.RecSes == GoodRecSesID(X)),edges),SessionSwitch:nclus,'UniformOutput',0);
-srAll = cat(1,srAll{:});
-SessionCorrelation_Pair2 = corr(srMatches(:,size(srMatches,2)./2+1:end)',srAll(:,size(srMatches,2)./2+1:end)');
-for pid = 1:size(Pairs,1)
-    SessionCorrelation_Pair2(pid,Pairs(pid,2)-SessionSwitch+1) = nan;
+    subplot(1,ndays+1,did)
+    imagesc(SessionCorrelation_Pair1')
+    colormap(flipud(gray))
+    xlabel('Candidate Units to be matched')
+    ylabel('All units')
+    title(['Recording ' num2str(did)])
+    makepretty
+
+    % Add all together
+    if did == 1
+        SessionCorrelations = SessionCorrelation_Pair1';
+    else
+        SessionCorrelations = cat(2,SessionCorrelations,SessionCorrelation_Pair1');
+    end
 end
-
-subplot(1,3,2)
-imagesc(SessionCorrelation_Pair2')
-colormap(flipud(gray))
-xlabel('Candidate Units to be matched')
-ylabel('All units')
-title('Day 2')
-makepretty
-
-% Add both together
-SessionCorrelations = cat(2,SessionCorrelation_Pair1,SessionCorrelation_Pair2)';
-
+rmidx = find(sum(isnan(SessionCorrelations),2)==size(SessionCorrelations,2));
+SessionCorrelations(rmidx,:)=[];
+nclustmp = nclus-length(rmidx);
+notrmdixvec = 1:nclus;
+notrmdixvec(rmidx)=[];
 % Correlate 'fingerprints'
-FingerprintR = arrayfun(@(X) cell2mat(arrayfun(@(Y) corr(SessionCorrelations(X,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))',SessionCorrelations(Y,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))'),1:nclus,'UniformOutput',0)),1:nclus,'UniformOutput',0);
+FingerprintR = arrayfun(@(X) cell2mat(arrayfun(@(Y) corr(SessionCorrelations(X,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))',SessionCorrelations(Y,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))'),1:nclustmp,'UniformOutput',0)),1:nclustmp,'UniformOutput',0);
 FingerprintR = cat(1,FingerprintR{:});
 
-subplot(1,3,3)
+% If one value was only nans; put it back in and replace original
+% FingerprintR
+if any(rmidx)
+    Fingerprinttmp = nan(nclus,nclus);
+    Fingerprinttmp(1:rmidx-1,1:rmidx-1)=FingerprintR(1:rmidx-1,1:rmidx-1);
+    Fingerprinttmp(rmidx,:)=nan;
+    Fingerprinttmp(:,rmidx)=nan;
+    Fingerprinttmp(rmidx+1:end,notrmdixvec)=FingerprintR(rmidx:end,:);
+    Fingerprinttmp(notrmdixvec,rmidx+1:end)=FingerprintR(:,rmidx:end);
+    FingerprintR = Fingerprinttmp;
+    clear Fingerprinttmp
+end
+
+subplot(1,ndays+1,ndays+1)
 imagesc(FingerprintR)
 hold on
-line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
-line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
+arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
 clim([0.5 1])
 colormap(flipud(gray))
 xlabel('All units across both days')
@@ -1132,13 +1150,9 @@ SigMask = zeros(nclus,nclus);
 RankScoreAll = nan(size(SigMask));
 for pid=1:nclus
     for pid2 = 1:nclus
-        if pid2<SessionSwitch
-            tmp1 = FingerprintR(pid,1:SessionSwitch-1);
-            addthis=0;
-        else
-            tmp1 = FingerprintR(pid,SessionSwitch:end);
-            addthis = SessionSwitch-1;
-        end
+        tmp1 = FingerprintR(pid,SessionSwitch(recsesGood(pid2)):SessionSwitch(recsesGood(pid2)+1)-1);
+        addthis=SessionSwitch(recsesGood(pid2))-1;
+
         [val,ranktmp] = sort(tmp1,'descend');
 
         tmp1(pid2-addthis)=[];
@@ -1155,8 +1169,8 @@ figure;
 subplot(1,3,1)
 imagesc(RankScoreAll==1)
 hold on
-line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
-line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
+arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
 colormap(flipud(gray))
 title('Rankscore == 1')
 makepretty
@@ -1164,8 +1178,8 @@ makepretty
 subplot(1,3,2)
 imagesc(MatchProbability>0.5)
 hold on
-line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
-line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
+arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
 colormap(flipud(gray))
 title('Match Probability>0.5')
 makepretty
@@ -1173,18 +1187,18 @@ makepretty
 subplot(1,3,3)
 imagesc(MatchProbability>=0.99 | (MatchProbability>=0.01 & RankScoreAll==1))
 hold on
-line([SessionSwitch SessionSwitch],get(gca,'ylim'),'color',[1 0 0])
-line(get(gca,'xlim'),[SessionSwitch SessionSwitch],'color',[1 0 0])
+arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
 colormap(flipud(gray))
 title('final matches')
 makepretty
 
 
-tmpf = triu(FingerprintR,1);
-tmpm = triu(MatchProbability,1);
+tmpf = triu(FingerprintR);
+tmpm = triu(MatchProbability);
 tmpm = tmpm(tmpf~=0);
 tmpf = tmpf(tmpf~=0);
-tmpr = triu(RankScoreAll,1);
+tmpr = triu(RankScoreAll);
 tmpr = tmpr(tmpr~=0);
 
 figure;
@@ -1239,7 +1253,7 @@ if RunPyKSChronic
 
     TmpMP = cell2mat(arrayfun(@(X) squeeze(MatchProbability(OnlyDetectedByPyKS(X,1),OnlyDetectedByPyKS(X,2))),1:size(OnlyDetectedByPyKS,1),'Uni',0));
 
-    figure('name','OnlyDetecedPyKS'); 
+    figure('name','OnlyDetecedPyKS');
     for scid=1:length(Scores2Include)
         subplot(ceil(sqrt(length(Scores2Include))),round(sqrt(length(Scores2Include))),scid)
         histogram(TmpSc(scid,:),Edges)
@@ -1250,7 +1264,7 @@ if RunPyKSChronic
     NotA = 1:size(Pairs,1);
     NotA(A) = [];
     NotdetectedByPyKS = Pairs(NotA,:);
-  
+
 end
 
 
@@ -1406,39 +1420,32 @@ ProjectedWaveform = nanmean(ProjectedWaveform,3); %Average over first and second
 ProjectedLocation = nanmean(ProjectedLocation,3);
 ProjectedLocationPerTP = nanmean(ProjectedLocationPerTP,4);
 
-%% Assign same Unique ID
-[PairID1,PairID2]=meshgrid(AllClusterIDs(Good_Idx));
-[recses1,recses2] = meshgrid(recsesAll(Good_Idx));
-MatchTable = table(PairID1(:),PairID2(:),recses1(:),recses2(:),MatchProbability(:),RankScoreAll(:),FingerprintR(:),'VariableNames',{'ID1','ID2','RecSes1','RecSes2','MatchProb','RankScore','FingerprintCor'})
-for id = 1:size(Pairs,1)
-    UniqueID(Pairs(id,2)) = UniqueID(Pairs(id,1));
-end
 
 %% Figures
 if MakePlotsOfPairs
     % Pairs = Pairs(any(ismember(Pairs,[8,68,47,106]),2),:);
-%     AllClusterIDs(Good_Idx(Pairs))
+    %     AllClusterIDs(Good_Idx(Pairs))
     for pairid=1:size(Pairs,1)
         uid = Pairs(pairid,1);
         uid2 = Pairs(pairid,2);
 
-        pathparts = strsplit(AllRawPaths{GoodRecSesID(uid)},'\');
+        pathparts = strsplit(AllDecompPaths{GoodRecSesID(uid)},'\');
         rawdatapath = dir(fullfile('\\',pathparts{1:end-1}));
         if isempty(rawdatapath)
             rawdatapath = dir(fullfile(pathparts{1:end-1}));
         end
 
         % Load raw data
-        SM1=load(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(num2str(AllClusterIDs(Good_Idx(uid)))) '_RawSpikes.mat']));
+        SM1=load(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']));
         SM1 = SM1.spikeMap; %Average across these channels
 
-        pathparts = strsplit(AllRawPaths{GoodRecSesID(uid2)},'\');
+        pathparts = strsplit(AllDecompPaths{GoodRecSesID(uid2)},'\');
         rawdatapath = dir(fullfile('\\',pathparts{1:end-1}));
         if isempty(rawdatapath)
             rawdatapath = dir(fullfile(pathparts{1:end-1}));
         end
 
-        SM2=load(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(num2str(AllClusterIDs(Good_Idx(uid2)))) '_RawSpikes.mat']));
+        SM2=load(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid2))) '_RawSpikes.mat']));
         SM2 = SM2.spikeMap; %Average across these channels
 
         tmpfig = figure;
@@ -1626,10 +1633,10 @@ if MakePlotsOfPairs
         line([FingerprintR(uid,uid2) FingerprintR(uid,uid2)],get(gca,'ylim'),'color',[1 0 0])
         xlabel('Finger print r')
         makepretty
-% 
-%         disp(['UniqueID ' num2str(AllClusterIDs(Good_Idx(uid))) ' vs ' num2str(AllClusterIDs(Good_Idx(uid2)))])
-%         disp(['Peakchan ' num2str(MaxChannel(uid)) ' versus ' num2str(MaxChannel(uid2))])
-%         disp(['RecordingDay ' num2str(GoodRecSesID(uid)) ' versus ' num2str(GoodRecSesID(uid2))])
+        %
+        %         disp(['UniqueID ' num2str(AllClusterIDs(Good_Idx(uid))) ' vs ' num2str(AllClusterIDs(Good_Idx(uid2)))])
+        %         disp(['Peakchan ' num2str(MaxChannel(uid)) ' versus ' num2str(MaxChannel(uid2))])
+        %         disp(['RecordingDay ' num2str(GoodRecSesID(uid)) ' versus ' num2str(GoodRecSesID(uid2))])
 
         drawnow
         set(gcf,'units','normalized','outerposition',[0 0 1 1])
@@ -1638,6 +1645,18 @@ if MakePlotsOfPairs
 
         close(tmpfig)
     end
+end
+
+%% Assign same Unique ID
+[PairID1,PairID2]=meshgrid(AllClusterIDs(Good_Idx));
+[recses1,recses2] = meshgrid(recsesAll(Good_Idx));
+MatchTable = table(PairID1(:),PairID2(:),recses1(:),recses2(:),MatchProbability(:),RankScoreAll(:),FingerprintR(:),'VariableNames',{'ID1','ID2','RecSes1','RecSes2','MatchProb','RankScore','FingerprintCor'})
+for id = 1:size(Pairs,1)
+    UniqueID(Good_Idx(Pairs(id,2))) = UniqueID(Good_Idx(Pairs(id,1)));
+end
+
+if RemoveRawWavForms && exist(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(1))) '_RawSpikes.mat']))
+    delete(fullfile(rawdatapath(1).folder,'RawWaveforms','*')) % Free up space on servers
 end
 %% Unused bits and pieces
 if 0
@@ -1764,37 +1783,37 @@ end
 
 %% Cross-correlation
 if 0
-MaxCorrelation = nan(nclus,nclus);
-EstTimeshift = nan(nclus,nclus);
-EstDrift = nan(nclus,nclus,2);
+    MaxCorrelation = nan(nclus,nclus);
+    EstTimeshift = nan(nclus,nclus);
+    EstDrift = nan(nclus,nclus,2);
 
-% Create grid-space in time and space domain
-MultiDimMatrix = [];
-[SpaceMat,TimeMat] = meshgrid(cat(2,-[size(MultiDimMatrix,2)-1:-1:0],1:size(MultiDimMatrix,2)-1),cat(2,-[spikeWidth-1:-1:0],[1:spikeWidth-1]));
-for uid = 1:nclus
-    parfor uid2 = 1:nclus
-        tmp1 = MultiDimMatrix(:,:,uid,1);
-        tmp2 = MultiDimMatrix(:,:,uid2,2);
-        %Convert nan to 0
-        tmp1(isnan(tmp1))=0;
-        tmp2(isnan(tmp2))=0;
+    % Create grid-space in time and space domain
+    MultiDimMatrix = [];
+    [SpaceMat,TimeMat] = meshgrid(cat(2,-[size(MultiDimMatrix,2)-1:-1:0],1:size(MultiDimMatrix,2)-1),cat(2,-[spikeWidth-1:-1:0],[1:spikeWidth-1]));
+    for uid = 1:nclus
+        parfor uid2 = 1:nclus
+            tmp1 = MultiDimMatrix(:,:,uid,1);
+            tmp2 = MultiDimMatrix(:,:,uid2,2);
+            %Convert nan to 0
+            tmp1(isnan(tmp1))=0;
+            tmp2(isnan(tmp2))=0;
 
-        %         2D cross correlation
-        c = xcorr2(tmp1,tmp2);
+            %         2D cross correlation
+            c = xcorr2(tmp1,tmp2);
 
-        % Find maximum correlation
-        [MaxCorrelation(uid,uid2),indx] = max(c(:)); 
+            % Find maximum correlation
+            [MaxCorrelation(uid,uid2),indx] = max(c(:));
 
-        % Index in time domain
-        EstTimeshift(uid,uid2)=TimeMat(indx); % Time shift index
-        EstDrift(uid,uid2)=SpaceMat(indx);
+            % Index in time domain
+            EstTimeshift(uid,uid2)=TimeMat(indx); % Time shift index
+            EstDrift(uid,uid2)=SpaceMat(indx);
 
-        % Shift tmp2 by those pixels/time points
-        tmp2 = circshift(tmp2,EstTimeshift(uid,uid2),1);
-        tmp2 = circshift(tmp2,EstDrift(uid,uid2),2);
+            % Shift tmp2 by those pixels/time points
+            tmp2 = circshift(tmp2,EstTimeshift(uid,uid2),1);
+            tmp2 = circshift(tmp2,EstDrift(uid,uid2),2);
 
-        MaxCorrelation(uid,uid2) = corr(tmp1(tmp1(:)~=0&tmp2(:)~=0),tmp2(tmp1(:)~=0&tmp2(:)~=0));
+            MaxCorrelation(uid,uid2) = corr(tmp1(tmp1(:)~=0&tmp2(:)~=0),tmp2(tmp1(:)~=0&tmp2(:)~=0));
 
+        end
     end
-end
 end

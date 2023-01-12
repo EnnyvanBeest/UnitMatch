@@ -1,23 +1,4 @@
-% Create saving directory
-thisdate = params.thisdate;
-if ~exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
-    mkdir(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
-end
 
-% Check for multiple subfolders?
-subsesopt = dir(myKsDir);
-subsesopt(~[subsesopt.isdir])=[];
-subsesopt(ismember({subsesopt(:).name},{'..','.phy'}))=[];
-
-if strcmp(RecordingType{midx},'Chronic')
-    if ~RunPyKSChronic %MatchUnitsAcrossDays
-        disp('Unit matching in Matlab')
-        subsesopt(cell2mat(cellfun(@(X) any(strfind(X,'Chronic')),{subsesopt(:).folder},'UniformOutput',0))) = []; %Use separate days and match units via matlab script
-    else
-        disp('Using chronic pyks option')
-        subsesopt = subsesopt(cell2mat(cellfun(@(X) any(strfind(X,'Chronic')),{subsesopt(:).folder},'UniformOutput',0))); %Use chronic output from pyks
-    end
-end
 %% Initialize everything
 AllQMsPaths = cell(1,0);
 AllRawPaths = cell(1,0);
@@ -442,22 +423,24 @@ sp.sample_rate = sp.sample_rate(1);
 clear spnew
 
 %% Match different units?
- if MatchUnitsAcrossDays
-     param.channelpos = channelpos;
-     param.RunPyKSChronic = RunPyKSChronic;
-     param.SaveDir = fullfile(SaveDir,MiceOpt{midx});
-     param.AllRawPaths = AllRawPaths;
-     param.AllDecompPaths = AllDecompPaths;
-     [UniqueID, MatchTable] = UnitMatch(clusinfo,param,sp);
- end
- %% Remove temporary files
- if DecompressLocal && DecompressionFlag
-     clear memMapData
-     clear ap_data
-     try
-     delete(fullfile(tmpdatafolder,strrep(lfpD(id).name,'cbin','bin')))
-     delete(fullfile(tmpdatafolder,strrep(lfpD(id).name,'cbin','meta')))
-     catch ME
-         keyboard
-     end
- end
+if MatchUnitsAcrossDays
+    param.channelpos = channelpos;
+    param.RunPyKSChronic = RunPyKSChronic;
+    param.SaveDir = fullfile(SaveDir,MiceOpt{midx},thisprobe,thisIMRO);
+    param.AllRawPaths = AllRawPaths;
+    param.AllDecompPaths = AllDecompPaths;
+    [UniqueID, MatchTable] = UnitMatch(clusinfo,param,sp);
+end
+%% Remove temporary files
+if DecompressLocal && DecompressionFlag
+    clear memMapData
+    clear ap_data
+    try
+        delete(fullfile(tmpdatafolder,strrep(lfpD(id).name,'cbin','bin')))
+        delete(fullfile(tmpdatafolder,strrep(lfpD(id).name,'cbin','meta')))
+    catch ME
+        keyboard
+    end
+end
+
+

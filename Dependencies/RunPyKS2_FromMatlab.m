@@ -146,9 +146,7 @@ for midx = 1:length(MiceOpt)
                     try
                         copyfile(fullfile(RunFromFolder,['IMRO_' num2str(id)],'output','*'),fullfile(SaveDirTmp))
                     catch
-                        keyboard
-                        movefile(fullfile(RunFromFolder,'output'),fullfile(SaveDirTmp))
-
+                        movefile(fullfile(RunFromFolder,'output','*'),fullfile(SaveDirTmp))
                     end
 
                     % Remove temporary files
