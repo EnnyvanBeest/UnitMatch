@@ -1,4 +1,4 @@
-function  [UniqueID, MatchTable] = UnitMatch(clusinfo,param,sp)
+% function  [UniqueID, MatchTable] = UnitMatch(clusinfo,param,sp)
 %% Match units on neurophysiological evidence
 % Input:
 % - clusinfo (this is phy output, see also prepareinfo/spikes toolbox)
@@ -694,10 +694,11 @@ while flag<2
             ProjectedLocation(2,GoodRecSesID==did+1,:)=ProjectedLocation(2,GoodRecSesID==did+1,:)+drift(2);
             ProjectedLocationPerTP(1,GoodRecSesID==did+1,:,:) = ProjectedLocationPerTP(1,GoodRecSesID==did+1,:,:) + drift(1);
             ProjectedLocationPerTP(2,GoodRecSesID==did+1,:,:) = ProjectedLocationPerTP(2,GoodRecSesID==did+1,:,:) + drift(2);
+            close all
+
         end
     end
     flag = flag+1;
-    close all
 
 end
 %% Prepare naive bayes - inspect probability distributions

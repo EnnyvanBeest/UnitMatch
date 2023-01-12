@@ -1,33 +1,29 @@
 %% User Input
-DataDir = {'H:\MatchingUnits\RawData'};%{'\\znas\Subjects','\\128.40.198.18\Subjects','\\zaru.cortexlab.net\Subjects'}%%'\\znas\Subjects' %' Check DataDir2Use
+DataDir = {'\\zaru.cortexlab.net\Subjects'};%{'\\znas\Subjects','\\128.40.198.18\Subjects','\\zaru.cortexlab.net\Subjects'}%%'\\znas\Subjects' %' Check DataDir2Use
 SaveDir = 'H:\MatchingUnits\Output\'
 tmpdatafolder = 'H:\MatchingUnits\Tmp\'; % temporary folder for acute recordings - preferably SSD
-LocalDir = 'H:\MatchingUnits\KilosortOutput\';% 'E:\Data\KiloSortOutput';%
+ChronicTmpFolder = 'H:\MatchingUnits\Tmp\' %Temporary folder for chronic, needs to be big!
+LocalDir = '\\zaru.cortexlab.net\Subjects\';% 'E:\Data\KiloSortOutput';%
 AllenCCFPath = 'C:\Users\EnnyB\Documents\MATLAB\allenCCF'
 storevideopath=fullfile(tmpdatafolder,'Videos');
 HistoFolder = 'E:\Data\Histology\';
 SaveFiguresTo = 'E:\Data\Figures'
-MiceOpt = {'AL032'};%{'EB014'};%
+MiceOpt = {'CB016'};%{'EB014'};%
 nidq_sync_used = zeros(1,length(MiceOpt));
 nidq_sync_used(ismember(MiceOpt,{'EB001','CB007','CB008'}))=1;
 DataDir2Use = repmat(1,[1,length(MiceOpt)]); %in case you have multiple locations with data
 ProbeType = repmat({'1_3b'},1,length(MiceOpt));
 ProbeType(ismember(MiceOpt,{'AL032'}))={'2_4S'};
 RecordingType = repmat({'Acute'},1,length(MiceOpt));
-RecordingType(ismember(MiceOpt,{'AL032','EB014'}))={'Chronic'}; %EB014',
+RecordingType(ismember(MiceOpt,{'AL032','EB014','CB016'}))={'Chronic'}; %EB014',
 
-PrepareClusInfoparams.LoadPCs=1;
-PrepareClusInfoparams.RunPyKSChronic = 0
-PrepareClusInfoparams.CopyToTmpFirst = 0
-PrepareClusInfoparams.DecompressLocal = 1; %if 1, uncompress data first if it's currently compressed
-PrepareClusInfoparams.RedoQM = 0; %if 1, redo quality matrix if it already exists
-PrepareClusInfoparams.RunQualityMetrics = 0; % If 1, Run the quality matrix
-PrepareClusInfoparams.InspectQualityMatrix =0; % Inspect the quality matrix/data set using the GUI
-PrepareClusInfoparams.UnitMatch = 1; % Matching chronic recording using QM instead of using pyks chronic output
-PrepareClusInfoparams.RedoUnitMatch = 0; % Redo unitmatch
-PrepareClusInfoparams.SaveDir = SaveDir; % Save results here
-PrepareClusInfoparams.tmpdatafolder = tmpdatafolder; % use this as a local directory
-
+RunPyKSChronic = 1
+CopyToTmpFirst = 0
+DecompressLocal = 1; %if 1, uncompress data first if it's currently compressed
+RedoQM = 0; %if 1, redo quality matrix if it already exists
+RunQualityMatrix = 1; % If 1, Run the quality matrix
+InspectQualityMatrix =0; % Inspect the quality matrix/data set using the GUI
+MatchUnitsAcrossDays = 1; % Matching chronic recording using QM instead of using pyks chronic output
 maxsessnr = 2; %max nr. sessions on a day (doesn't need to be accurate)
 MinDist2Include = 85; %Including only trials in which mouse reached at least xcm for some statistics (past all stimuli?)
 pretrialtime = 2; %take up to x seconds prior trial

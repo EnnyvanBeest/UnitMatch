@@ -17,8 +17,6 @@ function [clusinfo,sp] = PrepareClusInfo(KiloSortPaths,Params,RawDataPaths)
 % Params.UnitMatch = 1; % Matching chronic recording using QM instead of using pyks chronic output
 % Params.RedoUnitMatch = 0; % Redo unitmatch
 % Params.SaveDir% Directory to save QM and UnitMatch results
-% Params.tmpdatafolder %Directory to temporarily decompress data --> must
-% be large enough!
 % RawDataPaths = list of same directories pointing at the raw ephys data
 % directory. If this input is missing, this code will try to find the raw
 % ephys data in the params.py file, first line (dat_path).
@@ -28,7 +26,7 @@ if ~isstruct(KiloSortPaths) || ~isfield(KiloSortPaths(1),'name') || ~isfield(Kil
     error('This is not a directory... give correct input please')
 end
 if nargin<2
-    disp('No params given. Use default - although this is not advised...')
+    disp('No params given. Use default')
     Params.LoadPCs=1;
     Params.RunPyKSChronic = 1;
     Params.DecompressLocal = 1; %if 1, uncompress data first if it's currently compressed
@@ -38,7 +36,6 @@ if nargin<2
     Params.UnitMatch = 1; % Matching chronic recording using QM instead of using pyks chronic output
     Params.RedoUnitMatch = 0; % Redo unitmatch
     Params.SaveDir = KiloSortPaths(1)% Directory to save QM and UnitMatch results
-    Params.tmpdatafolder = KiloSortPaths(1)%
 end
 if nargin<3
     disp('Finding raw ephys data using the params.py file from (py)kilosort output')
@@ -280,15 +277,15 @@ for subsesid=1:length(KiloSortPaths)
             if isempty(qMetricsExist) || Params.RedoQM
                 % First check if we want to use python for compressed data. If not, uncompress data first
                 if any(strfind(rawD(id).name,'cbin')) && Params.DecompressLocal
-                    if ~exist(fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')))
+                    if ~exist(fullfile(tmpdatafolder,strrep(rawD(id).name,'cbin','bin')))
                         disp('This is compressed data and we do not want to use Python integration... uncompress temporarily')
                         % Decompression
                         success = pyrunfile("MTSDecomp_From_Matlab.py","success",datapath = strrep(fullfile(rawD(id).folder,rawD(id).name),'\','/'),...
-                            JsonPath =  strrep(fullfile(rawD(id).folder,strrep(rawD(id).name,'cbin','ch')),'\','/'), savepath = strrep(fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')),'\','/'))
+                            JsonPath =  strrep(fullfile(rawD(id).folder,strrep(rawD(id).name,'cbin','ch')),'\','/'), savepath = strrep(fullfile(tmpdatafolder,strrep(rawD(id).name,'cbin','bin')),'\','/'))
                         % Also copy metafile
-                        copyfile(strrep(fullfile(rawD(id).folder,rawD(id).name),'cbin','meta'),strrep(fullfile(Params.tmpdatafolder,rawD(id).name),'cbin','meta'))
+                        copyfile(strrep(fullfile(rawD(id).folder,rawD(id).name),'cbin','meta'),strrep(fullfile(tmpdatafolder,rawD(id).name),'cbin','meta'))
                     end
-                    ephysap_tmp = fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin'));
+                    ephysap_tmp = fullfile(tmpdatafolder,strrep(rawD(id).name,'cbin','bin'));
                     DecompressionFlag = 1;
                     if InspectQualityMatrix
                         InspectionFlag=1;
@@ -309,7 +306,7 @@ for subsesid=1:length(KiloSortPaths)
                     sp{countid}.temps, sp{countid}.tempScalingAmps(idx),sp{countid}.pcFeat(idx,:,:),sp{countid}.pcFeatInd,channelpostmp,[], savePath);
 
             else
-                ephysap_tmp = fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin'));
+                ephysap_tmp = fullfile(tmpdatafolder,strrep(rawD(id).name,'cbin','bin'));
 
                 load(fullfile(savePath, 'qMetric.mat'))
                 bc_qualityParamValues;
@@ -436,21 +433,31 @@ if Params.UnitMatch
     % Need to decompress if decompression wasn't done yet
     for id = 1:length(rawD)
         ephysap_tmp = [];
-        ephysap_path = fullfile(rawD(id).folder,rawD(id).name);        
-        UnitMatchExist = dir(fullfile(UMparam.SaveDir,['UnitMatch.mat']));
-        if (isempty(UnitMatchExist) || Params.RedoUnitMatch) && ~DecompressionFlag
+        ephysap_path = fullfile(rawD(id).folder,rawD(id).name);
+        if length(rawD)>1
+            savePath = fullfile(myClusFile(1).folder,num2str(id));
+        else
+            savePath =myClusFile(1).folder;
+        end
+        qMetricsExist = dir(fullfile(UMparam.SaveDir, ['UnitMatch.mat']));
+        idx = sp{countid}.SessionID==id;
+        InspectionFlag = 0;
+        if isempty(qMetricsExist) || Params.RedoQM
             % First check if we want to use python for compressed data. If not, uncompress data first
             if any(strfind(rawD(id).name,'cbin')) && Params.DecompressLocal
-                if ~exist(fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')))
+                if ~exist(fullfile(tmpdatafolder,strrep(rawD(id).name,'cbin','bin')))
                     disp('This is compressed data and we do not want to use Python integration... uncompress temporarily')
                     % Decompression
                     success = pyrunfile("MTSDecomp_From_Matlab.py","success",datapath = strrep(fullfile(rawD(id).folder,rawD(id).name),'\','/'),...
-                        JsonPath =  strrep(fullfile(rawD(id).folder,strrep(rawD(id).name,'cbin','ch')),'\','/'), savepath = strrep(fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')),'\','/'))
+                        JsonPath =  strrep(fullfile(rawD(id).folder,strrep(rawD(id).name,'cbin','ch')),'\','/'), savepath = strrep(fullfile(tmpdatafolder,strrep(rawD(id).name,'cbin','bin')),'\','/'))
                     % Also copy metafile
-                    copyfile(strrep(fullfile(rawD(id).folder,rawD(id).name),'cbin','meta'),strrep(fullfile(Params.tmpdatafolder,rawD(id).name),'cbin','meta'))
+                    copyfile(strrep(fullfile(rawD(id).folder,rawD(id).name),'cbin','meta'),strrep(fullfile(tmpdatafolder,rawD(id).name),'cbin','meta'))
                 end
-                ephysap_tmp = fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin'));
-                DecompressionFlag = 1;                
+                ephysap_tmp = fullfile(tmpdatafolder,strrep(rawD(id).name,'cbin','bin'));
+                DecompressionFlag = 1;
+                if InspectQualityMatrix
+                    InspectionFlag=1;
+                end
             end
         end
     end
@@ -460,7 +467,6 @@ if Params.UnitMatch
     [UniqueID, MatchTable] = UnitMatch(clusinfo,UMparam,sp);
     clusinfo.UniqueID = UniqueID;
     clusinfo.MatchTable = MatchTable;
-    save(fullfile(UMparam.SaveDir,['UnitMatch.mat']),'UniqueID','MatchTable','UMParam')
 end
 
 %% Remove temporary files
@@ -468,8 +474,8 @@ if Params.DecompressLocal && DecompressionFlag
     clear memMapData
     clear ap_data
     try
-        delete(fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')))
-        delete(fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','meta')))
+        delete(fullfile(tmpdatafolder,strrep(rawD(id).name,'cbin','bin')))
+        delete(fullfile(tmpdatafolder,strrep(rawD(id).name,'cbin','meta')))
     catch ME
         keyboard
     end

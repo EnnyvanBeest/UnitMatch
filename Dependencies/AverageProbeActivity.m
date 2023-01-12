@@ -76,17 +76,16 @@ for midx = length(MiceOpt)
             for IMROID = 1:length(subsesoptGroups)
                 %% Create saving directory
                 clear params
-                params.loadPCs=true;
-                params.thisdate=[];
+                %                 params.thisdate=[];
                 thisIMRO = IMROTableOpt{IMROID};
                 thisdate = params.thisdate;
                 if ~exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,thisIMRO))
                     mkdir(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,thisIMRO))
                 end
-                subsesopt = subsesoptAll(subsesoptGroups{IMROID});
+                PrepareClusInfoparams.SaveDir = fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,thisIMRO);
 
                 %% Get cluster information                
-                PrepareClusInfo
+                [clusinfo,sp] = PrepareClusInfo(subsesoptAll(subsesoptGroups{IMROID}),PrepareClusInfoparams);
                 %% Save out
                 GoodUnits{midx}{probeid}{IMROID} = clusinfo;
 

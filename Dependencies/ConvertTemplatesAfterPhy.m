@@ -22,9 +22,9 @@ for clusid=1:nclus
     elseif length(oriclusid)==1
         temps(clusid,:,:)=sp.temps(oriclusid+1,:,:);
         try
-        pcFeatInd(clusid,:)=sp.pcFeatInd(oriclusid+1,:);
+            pcFeatInd(clusid,:)=sp.pcFeatInd(oriclusid+1,:);
         catch ME
-            disp(ME)
+            
         end
         templateDepths(clusid) = sp.templateDepths(oriclusid+1);
         templateXpos(clusid) = sp.templateXpos(oriclusid+1);
