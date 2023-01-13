@@ -2,7 +2,8 @@ timevec = floor(min(sp.st)):binsz:ceil(max(sp.st));
 edges = floor(min(sp.st))-binsz/2:binsz:ceil(max(sp.st))+binsz/2;
 disp('Calculate activity correlations')
 
-%%
+%% Correlations per session
+if ndays>1
 Unit2Take = AllClusterIDs(Good_Idx);
 fig1 = figure('name','Cross-correlation Fingerprints')
 for did = 1:ndays
@@ -38,12 +39,13 @@ for did = 1:ndays
     Unit2TakeIdxAll = find(recsesAll(Good_Idx) == did);
     srAll = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == X & sp.RecSes == did),edges),Unit2Take(Unit2TakeIdxAll),'UniformOutput',0);
     srAll = cat(1,srAll{:});
-    SessionCorrelation_Pair = corr(srMatches(:,1:size(srMatches,2)./2)',srAll(:,1:size(srMatches,2)./2)');
+    SessionCorrelation_Pair = corr(srMatches(:,1:floor(size(srMatches,2)./2))',srAll(:,floor(size(srAll,2)./2)+1:floor(size(srAll,2)./2)*2)');
 
-    % Remove =1 for the same unit (per def. 1)
-    for id = 1:length(Unit2TakeIdx)
-        SessionCorrelation_Pair(id,find(ismember(Unit2TakeIdxAll,Unit2TakeIdx(id)))) = nan;
-    end
+    %     % Remove =1 for the same unit (per def. 1) - no longer true, use
+    %     first and second half of recording
+    %     for id = 1:length(Unit2TakeIdx)
+    %         SessionCorrelation_Pair(id,find(ismember(Unit2TakeIdxAll,Unit2TakeIdx(id)))) = nan;
+    %     end
 
     % Normalize correlations to compare across recordings
     SessionCorrelation_Pair = (SessionCorrelation_Pair-nanmedian(SessionCorrelation_Pair(:)))./(quantile(SessionCorrelation_Pair(:),0.95)-quantile(SessionCorrelation_Pair(:),0.05));
@@ -61,6 +63,22 @@ for did = 1:ndays
     else
         SessionCorrelations = cat(1,SessionCorrelations,SessionCorrelation_Pair');
     end
+end
+else
+    PairsTmp = Pairs;
+    % All Units on this day
+    Unit2TakeIdxAll = find(recsesAll(Good_Idx) == 1);
+    srAll = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == X & sp.RecSes == 1),edges),Unit2Take(Unit2TakeIdxAll),'UniformOutput',0);
+    srAll = cat(1,srAll{:});
+
+    SessionCorrelations = corr(srAll(:,1:floor(size(srAll,2)./2))',srAll(:,floor(size(srAll,2)./2)+1:floor(size(srAll,2)./2)*2)')';
+    subplot(1,ndays,did)
+    imagesc(SessionCorrelations')
+    colormap(flipud(gray))
+    xlabel('Candidate Units to be matched')
+    ylabel('All units')
+    title(['Recording ' num2str(did)])
+    makepretty
 end
 
 %%

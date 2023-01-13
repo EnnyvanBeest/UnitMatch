@@ -151,8 +151,7 @@ for subsesid=1:length(KiloSortPaths)
         tmpdr = rawD;
         rawD = dir(rawD);
         if isempty(rawD)
-            rawD = dir(strrep(tmpdr,'bin','cbin'));
-        end
+            rawD = dir(strrep())
         
 
         % Save for later
