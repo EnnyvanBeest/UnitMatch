@@ -1,4 +1,4 @@
-% function  [UniqueID, MatchTable] = UnitMatch(clusinfo,param,sp)
+function  [UniqueID, MatchTable] = UnitMatch(clusinfo,param,sp)
 %% Match units on neurophysiological evidence
 % Input:
 % - clusinfo (this is phy output, see also prepareinfo/spikes toolbox)

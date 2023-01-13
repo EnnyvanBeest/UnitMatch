@@ -1,4 +1,4 @@
-% function [clusinfo,sp] = PrepareClusInfo(KiloSortPaths,Params,RawDataPaths)
+function [clusinfo,sp] = PrepareClusInfo(KiloSortPaths,Params,RawDataPaths)
 % Prepares cluster information for subsequent analysis
 %% Inputs:
 % KiloSortPaths = List of directories pointing at kilosort output (same format as what you get when
@@ -435,6 +435,8 @@ if Params.UnitMatch
     UMparam.channelpos = channelpos;
     UMparam.RunPyKSChronicStitched = Params.RunPyKSChronicStitched;
     UMparam.SaveDir = fullfile(Params.SaveDir);
+    UMparam.ACGbinSize = 1.0000e-03;
+    UMparam.ACGduration = 1;
     % Need to decompress if decompression wasn't done yet
     for id = 1:length(RawDataPaths)
         ephysap_tmp = [];
