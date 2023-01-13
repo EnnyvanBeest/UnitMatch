@@ -1,4 +1,4 @@
-function [clusinfo,sp] = PrepareClusInfo(KiloSortPaths,Params,RawDataPaths)
+% function [clusinfo,sp] = PrepareClusInfo(KiloSortPaths,Params,RawDataPaths)
 % Prepares cluster information for subsequent analysis
 %% Inputs:
 % KiloSortPaths = List of directories pointing at kilosort output (same format as what you get when
@@ -31,28 +31,33 @@ function [clusinfo,sp] = PrepareClusInfo(KiloSortPaths,Params,RawDataPaths)
 if ~isstruct(KiloSortPaths) || ~isfield(KiloSortPaths(1),'name') || ~isfield(KiloSortPaths(1),'folder')
     error('This is not a directory... give correct input please')
 end
-if nargin<2
-    disp('No params given. Use default - although this is not advised...')
-    Params.loadPCs=1;
-    Params.RunPyKSChronicStitched = 1;
-    Params.DecompressLocal = 1; %if 1, uncompress data first if it's currently compressed
-    Params.RedoQM = 0; %if 1, redo quality matrix if it already exists
-    Params.RunQualityMetrics = 1; % If 1, Run the quality matrix
-    Params.InspectQualityMatrix =0; % Inspect the quality matrix/data set using the GUI
-    Params.UnitMatch = 1; % Matching chronic recording using QM instead of using pyks chronic output
-    Params.RedoUnitMatch = 0; % Redo unitmatch
-    Params.SaveDir = KiloSortPaths(1)% Directory to save QM and UnitMatch results
-    Params.tmpdatafolder = KiloSortPaths(1)%
-end
-if Params.RunQualityMetrics
-    Params.loadPCs=1; %If you want to run QM you need this
-end
+try
+    if nargin<2
+        disp('No params given. Use default - although this is not advised...')
+        Params.loadPCs=1;
+        Params.RunPyKSChronicStitched = 1;
+        Params.DecompressLocal = 1; %if 1, uncompress data first if it's currently compressed
+        Params.RedoQM = 0; %if 1, redo quality matrix if it already exists
+        Params.RunQualityMetrics = 1; % If 1, Run the quality matrix
+        Params.InspectQualityMatrix =0; % Inspect the quality matrix/data set using the GUI
+        Params.UnitMatch = 1; % Matching chronic recording using QM instead of using pyks chronic output
+        Params.RedoUnitMatch = 0; % Redo unitmatch
+        Params.SaveDir = KiloSortPaths(1)% Directory to save QM and UnitMatch results
+        Params.tmpdatafolder = KiloSortPaths(1)%
+    end
+    if Params.RunQualityMetrics
+        Params.loadPCs=1; %If you want to run QM you need this
+    end
 
-if nargin<3
-    disp('Finding raw ephys data using the params.py file from (py)kilosort output')
+    if nargin<3
+        disp('Finding raw ephys data using the params.py file from (py)kilosort output')
+        UseParamsKS = 1;
+    else
+        UseParamsKS = 0;
+    end
+catch ME
+    disp(ME)
     UseParamsKS = 1;
-else
-    UseParamsKS = 0;
 end
 %% Initialize everything
 AllUniqueTemplates = [];
@@ -80,12 +85,12 @@ for subsesid=1:length(KiloSortPaths)
     if isempty(thissubses)
         thissubses=1;
     end
-%     if isempty(thisdate)
-%         thisdatenow = strsplit(KiloSortPaths(subsesid).folder,'\');
-%         thisdatenow = thisdatenow{end-1};
-%     else
-%         thisdatenow = thisdate;
-%     end
+    %     if isempty(thisdate)
+    %         thisdatenow = strsplit(KiloSortPaths(subsesid).folder,'\');
+    %         thisdatenow = thisdatenow{end-1};
+    %     else
+    %         thisdatenow = thisdate;
+    %     end
     %% Load Spike Data
     sp{countid} = loadKSdir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name),Params); % Load Spikes with PCs
     [sp{countid}.spikeAmps, sp{countid}.spikeDepths, sp{countid}.templateDepths, sp{countid}.templateXpos, sp{countid}.tempAmps, sp{countid}.tempsUnW, sp{countid}.templateDuration, sp{countid}.waveforms] = templatePositionsAmplitudes(sp{countid}.temps, sp{countid}.winv, sp{countid}.ycoords, sp{countid}.xcoords, sp{countid}.spikeTemplates, sp{countid}.tempScalingAmps); %from the spikes toolbox

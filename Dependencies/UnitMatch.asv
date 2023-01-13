@@ -1,4 +1,4 @@
-% function  [UniqueID, MatchTable] = UnitMatch(clusinfo,param,sp)
+function  [UniqueID, MatchTable] = UnitMatch(clusinfo,param,sp)
 %% Match units on neurophysiological evidence
 % Input:
 % - clusinfo (this is phy output, see also prepareinfo/spikes toolbox)
@@ -525,7 +525,7 @@ while flag<2
     % first factor authentication: score above threshold
     ThrsScore = ThrsOpt;
     % Take into account:
-    label = TotalScore>ThrsOpt;
+    label = triu(TotalScore>ThrsOpt,1);
     [uid,uid2] = find(label);
     Pairs = cat(2,uid,uid2);
     Pairs = sortrows(Pairs);
@@ -536,10 +536,129 @@ while flag<2
     % Not every recording day will have the same units. Therefore we will
     % correlate each unit's activity with average activity across different
     % depths
+    timevec = floor(min(sp.st)):binsz:ceil(max(sp.st));
+    edges = floor(min(sp.st))-binsz/2:binsz:ceil(max(sp.st))+binsz/2;
+    disp('Calculate activity correlations')
+
     % Use a bunch of units with high total scores as reference population
+    Pairs = sortrows(Pairs')';
+    % Now sort based on how well they match
     [PairScore,sortid] = sort(cell2mat(arrayfun(@(X) TotalScore(Pairs(X,1),Pairs(X,2)),1:size(Pairs,1),'Uni',0)),'descend');
     Pairs = Pairs(sortid,:);
-    CrossCorrelationFingerPrint
+    % Only use every 'unit' once --> take the highest scoring matches
+    [val,id1,id2]=unique(Pairs(:,1),'stable');
+    Pairs = Pairs(id1,:);
+    [val,id1,id2]=unique(Pairs(:,2),'stable');
+    Pairs = Pairs(id1,:);
+
+    Unit2Take = AllClusterIDs(Good_Idx(unique(Pairs(:))));
+    figure('name','Cross-correlation per recording')
+    for did = 1:ndays
+        % Correlation on first day
+        Unit2TakeIdx = recsesAll(Good_Idx(unique(Pairs(:))))==did;
+        srMatches = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == X & sp.RecSes == did),edges),Unit2Take(Unit2TakeIdx),'UniformOutput',0);
+        srMatches = cat(1,srMatches{:});
+        srAll = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == AllClusterIDs(Good_Idx(X)) & sp.RecSes == did),edges),1:nclus,'UniformOutput',0);
+        srAll = cat(1,srAll{:});
+        SessionCorrelation_Pair1 = corr(srMatches(:,1:size(srMatches,2)./2)',srAll(:,1:size(srMatches,2)./2)');
+
+        subplot(1,ndays,did)
+        imagesc(SessionCorrelation_Pair1')
+        colormap(flipud(gray))
+        xlabel('Candidate Units to be matched')
+        ylabel('All units')
+        title(['Recording ' num2str(did)])
+        makepretty
+
+        % Add all together
+        if did == 1
+            SessionCorrelations = SessionCorrelation_Pair1';
+        else
+            SessionCorrelations = cat(2,SessionCorrelations,SessionCorrelation_Pair1');
+        end
+    end
+    rmidx = find(sum(isnan(SessionCorrelations),2)==size(SessionCorrelations,2));
+    SessionCorrelations(rmidx,:)=[];
+    nclustmp = nclus-length(rmidx);
+    notrmdixvec = 1:nclus;
+    notrmdixvec(rmidx)=[];
+    % Correlate 'fingerprints'
+    FingerprintR = arrayfun(@(X) cell2mat(arrayfun(@(Y) corr(SessionCorrelations(X,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))',SessionCorrelations(Y,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))'),1:nclustmp,'UniformOutput',0)),1:nclustmp,'UniformOutput',0);
+    FingerprintR = cat(1,FingerprintR{:});
+
+    % If one value was only nans; put it back in and replace original
+    % FingerprintR
+    if any(rmidx)
+        Fingerprinttmp = nan(nclus,nclus);
+        Fingerprinttmp(1:rmidx-1,1:rmidx-1)=FingerprintR(1:rmidx-1,1:rmidx-1);
+        Fingerprinttmp(rmidx,:)=nan;
+        Fingerprinttmp(:,rmidx)=nan;
+        Fingerprinttmp(rmidx+1:end,notrmdixvec)=FingerprintR(rmidx:end,:);
+        Fingerprinttmp(notrmdixvec,rmidx+1:end)=FingerprintR(:,rmidx:end);
+        FingerprintR = Fingerprinttmp;
+        clear Fingerprinttmp
+    end
+
+    figure('name','Cross-correlation fingerprint')
+    imagesc(FingerprintR)
+    hold on
+    arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+    arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+    clim([0.5 1])
+    colormap(flipud(gray))
+    xlabel('All units across both days')
+    ylabel('All units across both days')
+    title('Correlation Fingerprint')
+    makepretty
+
+    %
+    SigMask = zeros(nclus,nclus);
+    RankScoreAll = nan(size(SigMask));
+    for pid=1:nclus
+        for pid2 = 1:nclus            
+            tmp1 = FingerprintR(pid,SessionSwitch(recsesGood(pid2)):SessionSwitch(recsesGood(pid2)+1)-1);
+            addthis=SessionSwitch(recsesGood(pid2))-1;
+          
+            [val,ranktmp] = sort(tmp1,'descend');
+
+            try
+                tmp1(pid2-addthis)=[];
+            catch ME
+                keyboard
+            end
+
+            if FingerprintR(pid,pid2)>nanmean(tmp1)+2*nanstd(tmp1)
+                SigMask(pid,pid2)=1;
+            end
+            RankScoreAll(pid,pid2) = find(ranktmp==pid2-addthis);
+
+            if 0%(any(ismember(Pairs(:,1),pid)) & any(ismember(Pairs(:,2),pid2))) || RankScoreAll(pid,pid2)==1
+                tmpfig = figure;
+                subplot(2,1,1); plot(SessionCorrelations(pid,:)); hold on; plot(SessionCorrelations(pid2,:))
+                xlabel('Unit')
+                ylabel('Cross-correlation')
+                legend('Day1','Day2')
+                makepretty
+                title(['r=' num2str(FingerprintR(pid,pid2)) ', rank = ' num2str(RankScoreAll(pid,pid2))])
+
+
+                subplot(2,1,2)
+                tmp1 = FingerprintR(1:end,pid);
+                tmp1(pid)=[];
+                tmp2 = FingerprintR(pid,1:end)';
+                tmp2(pid)=[];
+
+                histogram([tmp1;tmp2]);
+                hold on
+                line([FingerprintR(pid,pid2) FingerprintR(pid,pid2)],get(gca,'ylim'),'color',[1 0 0])
+                makepretty
+
+                pause(1)
+                delete(tmpfig)
+            end
+
+        end
+    end
 
     figure;
     h=scatter(TotalScore(:),FingerprintR(:),14,RankScoreAll(:),'filled','AlphaData',0.1);
@@ -547,11 +666,11 @@ while flag<2
     xlabel('TotalScore')
     ylabel('Cross-correlation fingerprint')
     makepretty
-    
+
     %% three ways to define candidate scores
     % Total score larger than threshold
     CandidatePairs = TotalScore>ThrsOpt & RankScoreAll==1;
-    %     CandidatePairs(tril(true(size(CandidatePairs))))=0;
+%     CandidatePairs(tril(true(size(CandidatePairs))))=0;
     figure('name','Potential Matches')
     imagesc(CandidatePairs)
     colormap(flipud(gray))
@@ -728,7 +847,105 @@ while flag<2 && runid<maxrun
     % Use a bunch of units with high total scores as reference population
     [PairScore,sortid] = sort(cell2mat(arrayfun(@(X) MatchProbability(Pairs(X,1),Pairs(X,2)),1:size(Pairs,1),'Uni',0)),'descend');
     Pairs = Pairs(sortid,:);
-    CrossCorrelationFingerPrint
+    % Only use every 'unit' once
+    [val,id1,id2]=unique(Pairs(:,1),'stable');
+    Pairs = Pairs(id1,:);
+    [val,id1,id2]=unique(Pairs(:,2),'stable');
+    Pairs = Pairs(id1,:);
+    npairs = size(Pairs,1);
+    if npairs==npairslatest
+        flag = flag+1;
+    end
+    npairslatest=npairs;
+
+    disp(['Npairs = ' num2str(npairs)])
+
+    if flag==2
+        disp('This will not get any better... quite while ahead')
+        break
+    end
+
+    figure('name','Cross-correlation per recording')
+    Unit2Take = AllClusterIDs(Good_Idx(unique(Pairs(:))));
+    for did = 1:ndays
+        % Correlation on first day
+        Unit2TakeIdx = recsesAll(Good_Idx(unique(Pairs(:))))==did;
+        srMatches = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == X & sp.RecSes == did),edges),Unit2Take(Unit2TakeIdx),'UniformOutput',0);
+        srMatches = cat(1,srMatches{:});
+        srAll = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == AllClusterIDs(Good_Idx(X)) & sp.RecSes == did),edges),1:nclus,'UniformOutput',0);
+        srAll = cat(1,srAll{:});
+        SessionCorrelation_Pair1 = corr(srMatches(:,1:size(srMatches,2)./2)',srAll(:,1:size(srMatches,2)./2)');
+
+        subplot(1,ndays,did)
+        imagesc(SessionCorrelation_Pair1')
+        colormap(flipud(gray))
+        xlabel('Candidate Units to be matched')
+        ylabel('All units')
+        title(['Recording ' num2str(did)])
+        makepretty
+
+        % Add all together
+        if did == 1
+            SessionCorrelations = SessionCorrelation_Pair1';
+        else
+            SessionCorrelations = cat(2,SessionCorrelations,SessionCorrelation_Pair1');
+        end
+    end
+
+    rmidx = find(sum(isnan(SessionCorrelations),2)==size(SessionCorrelations,2));
+    SessionCorrelations(rmidx,:)=[];
+    nclustmp = nclus-length(rmidx);
+    notrmdixvec = 1:nclus;
+    notrmdixvec(rmidx)=[];
+    % Correlate 'fingerprints'
+    FingerprintR = arrayfun(@(X) cell2mat(arrayfun(@(Y) corr(SessionCorrelations(X,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))',SessionCorrelations(Y,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))'),1:nclustmp,'UniformOutput',0)),1:nclustmp,'UniformOutput',0);
+    FingerprintR = cat(1,FingerprintR{:});
+
+    % If one value was only nans; put it back in and replace original
+    % FingerprintR
+    if any(rmidx)
+        Fingerprinttmp = nan(nclus,nclus);
+        Fingerprinttmp(1:rmidx-1,1:rmidx-1)=FingerprintR(1:rmidx-1,1:rmidx-1);
+        Fingerprinttmp(rmidx,:)=nan;
+        Fingerprinttmp(:,rmidx)=nan;
+        Fingerprinttmp(rmidx+1:end,notrmdixvec)=FingerprintR(rmidx:end,:);
+        Fingerprinttmp(notrmdixvec,rmidx+1:end)=FingerprintR(:,rmidx:end);
+        FingerprintR = Fingerprinttmp;
+        clear Fingerprinttmp
+    end
+
+    figure('name','FingerprintCorrelation')
+    imagesc(FingerprintR)
+    hold on
+    arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+    arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+    clim([0.5 1])
+    colormap(flipud(gray))
+    xlabel('All units across both days')
+    ylabel('All units across both days')
+    title('Correlation Fingerprint')
+    makepretty
+
+    %
+    SigMask = zeros(nclus,nclus);
+    RankScoreAll = nan(size(SigMask));
+    for pid=1:nclus
+        for pid2 = 1:nclus
+            tmp1 = FingerprintR(pid,SessionSwitch(recsesGood(pid2)):SessionSwitch(recsesGood(pid2)+1)-1);
+            addthis=SessionSwitch(recsesGood(pid2))-1;
+
+
+            [val,ranktmp] = sort(tmp1,'descend');
+
+            tmp1(pid2-addthis)=[];
+
+            if FingerprintR(pid,pid2)>nanmean(tmp1)+2*nanstd(tmp1)
+                SigMask(pid,pid2)=1;
+            end
+            RankScoreAll(pid,pid2) = find(ranktmp==pid2-addthis);
+        end
+    end
+    %
 
     tmpf = triu(FingerprintR,1);
     tmpm = triu(MatchProbability,1);
@@ -863,7 +1080,91 @@ disp('Recalculate activity correlations')
 % Use a bunch of units with high total scores as reference population
 [PairScore,sortid] = sort(cell2mat(arrayfun(@(X) MatchProbability(Pairs(X,1),Pairs(X,2)),1:size(Pairs,1),'Uni',0)),'descend');
 Pairs = Pairs(sortid,:);
-CrossCorrelationFingerPrint
+% Only use every 'unit' once
+[val,id1,id2]=unique(Pairs(:,1),'stable');
+Pairs = Pairs(id1,:);
+[val,id1,id2]=unique(Pairs(:,2),'stable');
+Pairs = Pairs(id1,:);
+    
+Unit2Take = AllClusterIDs(Good_Idx(unique(Pairs(:))));
+figure('name','Cross-correlation Fingerprints')
+for did = 1:ndays
+    % Correlation on first day
+    Unit2TakeIdx = recsesAll(Good_Idx(unique(Pairs(:))))==did;
+    srMatches = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == X & sp.RecSes == did),edges),Unit2Take(Unit2TakeIdx),'UniformOutput',0);
+    srMatches = cat(1,srMatches{:});
+    srAll = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == AllClusterIDs(Good_Idx(X)) & sp.RecSes == did),edges),1:nclus,'UniformOutput',0);
+    srAll = cat(1,srAll{:});
+    SessionCorrelation_Pair1 = corr(srMatches(:,1:size(srMatches,2)./2)',srAll(:,1:size(srMatches,2)./2)');
+
+    subplot(1,ndays+1,did)
+    imagesc(SessionCorrelation_Pair1')
+    colormap(flipud(gray))
+    xlabel('Candidate Units to be matched')
+    ylabel('All units')
+    title(['Recording ' num2str(did)])
+    makepretty
+
+    % Add all together
+    if did == 1
+        SessionCorrelations = SessionCorrelation_Pair1';
+    else
+        SessionCorrelations = cat(2,SessionCorrelations,SessionCorrelation_Pair1');
+    end
+end
+rmidx = find(sum(isnan(SessionCorrelations),2)==size(SessionCorrelations,2));
+SessionCorrelations(rmidx,:)=[];
+nclustmp = nclus-length(rmidx);
+notrmdixvec = 1:nclus;
+notrmdixvec(rmidx)=[];
+% Correlate 'fingerprints'
+FingerprintR = arrayfun(@(X) cell2mat(arrayfun(@(Y) corr(SessionCorrelations(X,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))',SessionCorrelations(Y,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))'),1:nclustmp,'UniformOutput',0)),1:nclustmp,'UniformOutput',0);
+FingerprintR = cat(1,FingerprintR{:});
+
+% If one value was only nans; put it back in and replace original
+% FingerprintR
+if any(rmidx)
+    Fingerprinttmp = nan(nclus,nclus);
+    Fingerprinttmp(1:rmidx-1,1:rmidx-1)=FingerprintR(1:rmidx-1,1:rmidx-1);
+    Fingerprinttmp(rmidx,:)=nan;
+    Fingerprinttmp(:,rmidx)=nan;
+    Fingerprinttmp(rmidx+1:end,notrmdixvec)=FingerprintR(rmidx:end,:);
+    Fingerprinttmp(notrmdixvec,rmidx+1:end)=FingerprintR(:,rmidx:end);
+    FingerprintR = Fingerprinttmp;
+    clear Fingerprinttmp
+end
+
+subplot(1,ndays+1,ndays+1)
+imagesc(FingerprintR)
+hold on
+arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+clim([0.5 1])
+colormap(flipud(gray))
+xlabel('All units across both days')
+ylabel('All units across both days')
+title('Correlation Fingerprint')
+makepretty
+
+%
+SigMask = zeros(nclus,nclus);
+RankScoreAll = nan(size(SigMask));
+for pid=1:nclus
+    for pid2 = 1:nclus
+        tmp1 = FingerprintR(pid,SessionSwitch(recsesGood(pid2)):SessionSwitch(recsesGood(pid2)+1)-1);
+        addthis=SessionSwitch(recsesGood(pid2))-1;
+
+        [val,ranktmp] = sort(tmp1,'descend');
+
+        tmp1(pid2-addthis)=[];
+
+        if FingerprintR(pid,pid2)>nanmean(tmp1)+2*nanstd(tmp1)
+            SigMask(pid,pid2)=1;
+        end
+        RankScoreAll(pid,pid2) = find(ranktmp==pid2-addthis);
+    end
+end
+
 %%
 figure;
 subplot(1,3,1)
