@@ -22,9 +22,9 @@ for clusid=1:nclus
     elseif length(oriclusid)==1
         temps(clusid,:,:)=sp.temps(oriclusid+1,:,:);
         try
-        pcFeatInd(clusid,:)=sp.pcFeatInd(oriclusid+1,:);
+            pcFeatInd(clusid,:)=sp.pcFeatInd(oriclusid+1,:);
         catch ME
-            disp(ME)
+            
         end
         templateDepths(clusid) = sp.templateDepths(oriclusid+1);
         templateXpos(clusid) = sp.templateXpos(oriclusid+1);
@@ -48,8 +48,9 @@ sp.tempAmps = tempAmps(takeclus);
 sp.tempsUnW = tempsUnW(takeclus,:,:);
 sp.templateDuration = templateDuration(takeclus);
 sp.waveforms = waveforms(takeclus,:);
-
+if any(emptyclus)
 disp(['Found ' num2str(length(emptyclus)) ' empty clusters, phy error? Removing from clusinfo'])
+end
 
 %% Remove the empty clusters
 fields = fieldnames(clusinfo);

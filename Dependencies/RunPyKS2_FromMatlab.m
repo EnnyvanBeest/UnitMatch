@@ -11,10 +11,10 @@ DateOpt = cellfun(@(X) {X.name},DateOpt,'UniformOutput',0);
 
 maxses = 2; %For debugging we might want to do only maxses nr at a time
 for midx = 1:length(MiceOpt)
-    myKsDir = fullfile(LocalDir,MiceOpt{midx});
+    myKsDir = fullfile(KilosortDir,MiceOpt{midx});
     subksdirs = dir(fullfile(myKsDir,'Probe*')); %This changed because now I suddenly had 2 probes per recording
 
-    if strcmp(RecordingType{midx},'Chronic') && RunPyKSChronic % These are my chronic mice and we want pyks to do the matching, one dataset per mouse
+    if strcmp(RecordingType{midx},'Chronic') && PrepareClusInfoparams.RunPyKSChronicStitched % These are my chronic mice and we want pyks to do the matching, one dataset per mouse
         countid=1;
         % For every date a different dataset
         Dates4Mouse = DateOpt{midx};
@@ -29,7 +29,7 @@ for midx = 1:length(MiceOpt)
             thisdate = Dates4Mouse{didx};
 
             %% Loading data from kilosort/phy easily
-            myKsDir = fullfile(LocalDir,MiceOpt{midx},thisdate);
+            myKsDir = fullfile(KilosortDir,MiceOpt{midx},thisdate);
 
             % Check if there's an ephys folder, if so run pyks2
             tmpephysdir = dir(fullfile(DataDir{DataDir2Use(midx)},MiceOpt{midx},thisdate,'ephys',['*' MiceOpt{midx} '*']));
@@ -80,7 +80,7 @@ for midx = 1:length(MiceOpt)
         for pid = 1:length(ProbeIDOpt)
             for id = 1:length(IMROTableOpt)
                 % Define save path
-                SaveDirTmp = fullfile(LocalDir, MiceOpt{midx},...
+                SaveDirTmp = fullfile(KilosortDir, MiceOpt{midx},...
                     'Chronic',ProbeIDOpt{pid},['IMRO_' num2str(id)]);
 
 
@@ -93,7 +93,7 @@ for midx = 1:length(MiceOpt)
                 if ~exist(SaveDirTmp)
                     mkdir(SaveDirTmp)
                 else
-                    FileList = dir(fullfile(fullfile(LocalDir, MiceOpt{midx},...
+                    FileList = dir(fullfile(fullfile(KilosortDir, MiceOpt{midx},...
                         'Chronic',ProbeIDOpt{pid}),'*','SessionsIncluded.mat'));
                     if ~isempty(FileList)
                         for fid = 1:length(FileList)
@@ -146,9 +146,7 @@ for midx = 1:length(MiceOpt)
                     try
                         copyfile(fullfile(RunFromFolder,['IMRO_' num2str(id)],'output','*'),fullfile(SaveDirTmp))
                     catch
-                        keyboard
-                        movefile(fullfile(RunFromFolder,'output'),fullfile(SaveDirTmp))
-
+                        movefile(fullfile(RunFromFolder,'output','*'),fullfile(SaveDirTmp))
                     end
 
                     % Remove temporary files
@@ -205,7 +203,7 @@ for midx = 1:length(MiceOpt)
             % Within folders, look for 'RF mapping sessions'
             thisdate = Dates4Mouse{didx};
             %% Loading data from kilosort/phy easily
-            myKsDir = fullfile(LocalDir,MiceOpt{midx},thisdate);
+            myKsDir = fullfile(KilosortDir,MiceOpt{midx},thisdate);
 
             % Check if there's an ephys folder, if so run pyks2
             tmpephysdir = dir(fullfile(DataDir{DataDir2Use(midx)},MiceOpt{midx},thisdate,'ephys',['*' MiceOpt{midx} '*']));

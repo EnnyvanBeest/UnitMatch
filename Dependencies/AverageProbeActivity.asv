@@ -14,10 +14,10 @@ PlotLFP = 0;
 plotUnitActivity = 0;
 GoodUnits = cell(1,length(MiceOpt));
 for midx = length(MiceOpt)
-    myKsDir = fullfile(KilosortDir,MiceOpt{midx});
+    myKsDir = fullfile(LocalDir,MiceOpt{midx});
     if strcmp(RecordingType,'Chronic')  % These are my chronic mice, one dataset per mouse
         %% Loading data from kilosort/phy easily
-        myKsDir = fullfile(KilosortDir,MiceOpt{midx});
+        myKsDir = fullfile(LocalDir,MiceOpt{midx});
         subksdirs = dir(fullfile(myKsDir,'Chronic','Probe*')); %This changed because now I suddenly had 2 probes per recording
         if length(subksdirs)<1
             clear subksdirs
@@ -29,14 +29,14 @@ for midx = length(MiceOpt)
         for probeid = 1:length(ProbeOpt)
             %Saving directory
             thisprobe =  ProbeOpt{probeid}
-            myKsDir = fullfile(KilosortDir,MiceOpt{midx},'*',thisprobe);
+            myKsDir = fullfile(LocalDir,MiceOpt{midx},'*',thisprobe);
             % Check for multiple subfolders?
             subsesopt = dir(myKsDir);
             subsesopt(~[subsesopt.isdir])=[];
             subsesopt(ismember({subsesopt(:).name},{'..','.phy'}))=[];
 
             if strcmp(RecordingType{midx},'Chronic')
-                if ~PrepareClusInfoparams.RunPyKSChronicStitched %MatchUnitsAcrossDays
+                if ~RunPyKSChronic %MatchUnitsAcrossDays
                     disp('Unit matching in Matlab')
                     subsesopt(cell2mat(cellfun(@(X) any(strfind(X,'Chronic')),{subsesopt(:).folder},'UniformOutput',0))) = []; %Use separate days and match units via matlab script
                 else
@@ -76,12 +76,13 @@ for midx = length(MiceOpt)
             for IMROID = 1:length(subsesoptGroups)
                 %% Create saving directory
                 clear params
+                %                 params.thisdate=[];
                 thisIMRO = IMROTableOpt{IMROID};
-                thisdate = [];
+                thisdate = params.thisdate;
                 if ~exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,thisIMRO))
                     mkdir(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,thisIMRO))
                 end
-                PrepareClusInfoparams.SaveDir = fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,thisIMRO);
+
 
                 %% Get cluster information                
                 [clusinfo,sp] = PrepareClusInfo(subsesoptAll(subsesoptGroups{IMROID}),PrepareClusInfoparams);
@@ -242,7 +243,7 @@ for midx = length(MiceOpt)
 
             thisdate = Dates4Mouse{didx};
             %% Loading data from kilosort/phy easily
-            myKsDir = fullfile(KilosortDir,MiceOpt{midx},thisdate);
+            myKsDir = fullfile(LocalDir,MiceOpt{midx},thisdate);
             subksdirs = dir(fullfile(myKsDir,'Probe*')); %This changed because now I suddenly had 2 probes per recording
             if length(subksdirs)<1
                 clear subksdirs
@@ -647,8 +648,8 @@ for midx = length(MiceOpt)
         title(['Good Units Across Days/Shank ' MiceOpt{midx}])
         makepretty
 
-        saveas(gcf,fullfile(KilosortDir,MiceOpt{midx},'UnitsAcrossDays.fig'))
-        saveas(gcf,fullfile(KilosortDir,MiceOpt{midx},'UnitsAcrossDays.bmp'))
+        saveas(gcf,fullfile(LocalDir,MiceOpt{midx},'UnitsAcrossDays.fig'))
+        saveas(gcf,fullfile(LocalDir,MiceOpt{midx},'UnitsAcrossDays.bmp'))
 
     end
 end

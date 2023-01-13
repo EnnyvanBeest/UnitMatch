@@ -1,26 +1,66 @@
-% Create saving directory
-thisdate = params.thisdate;
-if ~exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
-    mkdir(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
+function [clusinfo,sp] = PrepareClusInfo(KiloSortPaths,Params,RawDataPaths)
+% Prepares cluster information for subsequent analysis
+%% Inputs:
+% KiloSortPaths = List of directories pointing at kilosort output (same format as what you get when
+% calling 'dir') for all sessions you want to analyze as one session (e.g.
+% chronic recordings with same IMRO table: give a list with all sessions)
+
+% Params: with: 
+% Params.loadPCs=1;
+% Params.RunPyKSChronicStitched = 1
+% Params.DecompressLocal = 1; %if 1, uncompress data first if it's currently compressed
+% Params.RedoQM = 0; %if 1, redo quality matrix if it already exists
+% Params.RunQualityMetrics = 1; % If 1, Run the quality matrix
+% Params.InspectQualityMatrix =0; % Inspect the quality matrix/data set using the GUI
+% Params.UnitMatch = 1; % Matching chronic recording using QM instead of using pyks chronic output
+% Params.RedoUnitMatch = 0; % Redo unitmatch
+% Params.SaveDir% Directory to save QM and UnitMatch results
+% Params.tmpdatafolder %Directory to temporarily decompress data --> must
+% be large enough!
+
+% RawDataPaths = list of same directories pointing at the raw ephys data
+% directory. If this input is missing, this code will try to find the raw
+% ephys data in the params.py file, first line (dat_path).
+
+%% Output
+% Clusinfo: Struct with cluster information. Read in from (Py)KS but
+% optionally Quality and Matches (oversplits/matches across recordings) are identified
+% Sp: Struct with spike information for all recordings
+
+%% Check inputs
+if ~isstruct(KiloSortPaths) || ~isfield(KiloSortPaths(1),'name') || ~isfield(KiloSortPaths(1),'folder')
+    error('This is not a directory... give correct input please')
 end
 
-% Check for multiple subfolders?
-subsesopt = dir(myKsDir);
-subsesopt(~[subsesopt.isdir])=[];
-subsesopt(ismember({subsesopt(:).name},{'.','..','.phy'}))=[];
-
-if strcmp(RecordingType{midx},'Chronic')
-    if ~RunPyKSChronic %MatchUnitsAcrossDays
-        disp('Unit matching in Matlab')
-        subsesopt(cell2mat(cellfun(@(X) any(strfind(X,'Chronic')),{subsesopt(:).folder},'UniformOutput',0))) = []; %Use separate days and match units via matlab script
-    else
-        disp('Using chronic pyks option')
-        subsesopt = subsesopt(cell2mat(cellfun(@(X) any(strfind(X,'Chronic')),{subsesopt(:).folder},'UniformOutput',0))); %Use chronic output from pyks
+try
+    if nargin<2
+        disp('No params given. Use default - although this is not advised...')
+        Params.loadPCs=1;
+        Params.RunPyKSChronicStitched = 1;
+        Params.DecompressLocal = 1; %if 1, uncompress data first if it's currently compressed
+        Params.RedoQM = 0; %if 1, redo quality matrix if it already exists
+        Params.RunQualityMetrics = 1; % If 1, Run the quality matrix
+        Params.InspectQualityMatrix =0; % Inspect the quality matrix/data set using the GUI
+        Params.UnitMatch = 1; % Matching chronic recording using QM instead of using pyks chronic output
+        Params.RedoUnitMatch = 0; % Redo unitmatch
+        Params.SaveDir = KiloSortPaths(1)% Directory to save QM and UnitMatch results
+        Params.tmpdatafolder = KiloSortPaths(1)%
     end
+    if Params.RunQualityMetrics
+        Params.loadPCs=1; %If you want to run QM you need this
+    end
+
+    if nargin<3
+        disp('Finding raw ephys data using the params.py file from (py)kilosort output')
+        UseParamsKS = 1;
+    else
+        UseParamsKS = 0;
+    end
+catch ME
+    disp(ME)
+    UseParamsKS = 1;
 end
 %% Initialize everything
-AllQMsPaths = cell(1,0);
-AllRawPaths = cell(1,0);
 AllUniqueTemplates = [];
 recsesAll = [];
 sp = cell(1,0);
@@ -36,24 +76,24 @@ recses = [];
 countid=1;
 clear AllDecompPaths
 % figure;
-cols = jet(length(subsesopt));
-for subsesid=1:length(subsesopt)
-    if isempty(dir(fullfile(subsesopt(subsesid).folder,subsesopt(subsesid).name,'*.npy')))
+cols = jet(length(KiloSortPaths));
+for subsesid=1:length(KiloSortPaths)
+    if isempty(dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'*.npy')))
         continue
     end
 
-    thissubses = str2num(subsesopt(subsesid).name)
+    thissubses = str2num(KiloSortPaths(subsesid).name)
     if isempty(thissubses)
         thissubses=1;
     end
-    if isempty(thisdate)
-        thisdatenow = strsplit(subsesopt(subsesid).folder,'\');
-        thisdatenow = thisdatenow{end-1};
-    else
-        thisdatenow = thisdate;
-    end
+    %     if isempty(thisdate)
+    %         thisdatenow = strsplit(KiloSortPaths(subsesid).folder,'\');
+    %         thisdatenow = thisdatenow{end-1};
+    %     else
+    %         thisdatenow = thisdate;
+    %     end
     %% Load Spike Data
-    sp{countid} = loadKSdir(fullfile(subsesopt(subsesid).folder,subsesopt(subsesid).name),params); % Load Spikes with PCs
+    sp{countid} = loadKSdir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name),Params); % Load Spikes with PCs
     [sp{countid}.spikeAmps, sp{countid}.spikeDepths, sp{countid}.templateDepths, sp{countid}.templateXpos, sp{countid}.tempAmps, sp{countid}.tempsUnW, sp{countid}.templateDuration, sp{countid}.waveforms] = templatePositionsAmplitudes(sp{countid}.temps, sp{countid}.winv, sp{countid}.ycoords, sp{countid}.xcoords, sp{countid}.spikeTemplates, sp{countid}.tempScalingAmps); %from the spikes toolbox
 
     %% Remove noise; spikes across all channels'
@@ -88,64 +128,47 @@ for subsesid=1:length(subsesopt)
     end
 
     %% Channel data
-    myClusFile = dir(fullfile(subsesopt(subsesid).folder,subsesopt(subsesid).name,'channel_map.npy'));
+    myClusFile = dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'channel_map.npy'));
     channelmaptmp = readNPY(fullfile(myClusFile(1).folder,myClusFile(1).name));
 
-    myClusFile = dir(fullfile(subsesopt(subsesid).folder,subsesopt(subsesid).name,'channel_positions.npy'));
+    myClusFile = dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'channel_positions.npy'));
     channelpostmp = readNPY(fullfile(myClusFile(1).folder,myClusFile(1).name));
     if length(channelmaptmp)<length(channelpostmp)
         channelmaptmp(end+1:length(channelpostmp))=length(channelmaptmp):length(channelpostmp)-1;
     end
 
-    %% Is it correct channelpos though...?
-    if strcmp(thisdatenow,'Chronic')
-        sessionsIncluded = dir(fullfile(subsesopt(subsesid).folder,subsesopt(subsesid).name,'SessionsIncluded.mat'));
-        sessionsIncluded = load(fullfile(sessionsIncluded.folder,sessionsIncluded.name));
-        lfpD = arrayfun(@(X) dir(sessionsIncluded.ThesePaths{X}),1:length(sessionsIncluded.ThesePaths),'UniformOutput',0);
-        lfpD = cat(2,lfpD{:});
+    %% Is it correct channelpos though...? Check using raw data
+    %     if strcmp(thisdatenow,'Chronic') %CALL THIS STITCHED --> Only works when using RunPyKS2_FromMatlab as well from this toolbox
+    %         sessionsIncluded = dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'SessionsIncluded.mat'));
+    %         sessionsIncluded = load(fullfile(sessionsIncluded.folder,sessionsIncluded.name));
+    %         rawD = arrayfun(@(X) dir(sessionsIncluded.ThesePaths{X}),1:length(sessionsIncluded.ThesePaths),'UniformOutput',0);
+    %         rawD = cat(2,rawD{:});
+    %     else
+    if UseParamsKS
+        spikeStruct = loadParamsPy(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'params.py'));
+        rawD = spikeStruct.dat_path;
+        rawD = rawD(strfind(rawD,'r"')+2:end);
+        rawD = rawD(1:strfind(rawD,'"')-1);
+        rawD = dir(rawD);
+
+        % Save for later
+        RawDataPaths(subsesid) = rawD;
+
+        if isempty(rawD)
+            disp('Bug...?')
+            keyboard            
+        end
     else
-        myLFDir = fullfile(DataDir{DataDir2Use(midx)},MiceOpt{midx},thisdatenow,'ephys');
-        lfpD = dir(fullfile([myLFDir],[thisdatenow '_' MiceOpt{midx} '*'], '**\*.ap.*bin')); % ap file from spikeGLX specifically
-        if isempty(lfpD)
-            lfpD = dir(fullfile([myLFDir],['*' MiceOpt{midx} '*'], '**\*.ap.*bin')); % ap file from spikeGLX specifically
-        end
-    end
+        rawD = dir(fullfile(RawDataPaths(subsesid).folder,RawDataPaths(subsesid).name));
+    end   
+    channelpostmpconv = ChannelIMROConversion(rawD(1).folder,1); % For conversion when not automatically done
 
-    if isempty(lfpD)
-        disp('No LFP data found')
-    elseif length(lfpD)>=length(subsesopt)
-        if ~strcmp(thisdatenow,'Chronic')
-            probenr = cellfun(@(X) X(strfind(X,'imec')+4),{lfpD(:).name},'UniformOutput',0);
-            if ~isempty(probenr)
-                tmpprobe = strsplit(thisprobe,'Probe');
-                disp('Take correct probe number data')
-                lfpD = lfpD(( find(ismember(probenr,tmpprobe{2}))));
-            else
-                disp('Just take data from the last recording')
-                lfpD = lfpD((thissubses));
-            end
-
-        end
-    elseif length(lfpD)<length(subsesopt)
-        disp('Should be a different amount of probes?')
-        disp('Just take data from the last recording')
-        lfpD = lfpD((thissubses));
-    else
-        lfpD = lfpD(thissubses);
-    end
-
-    if length(lfpD)>1
-        if ~strcmp(thisdatenow,'Chronic')
-            lfpD = lfpD(find(cellfun(@(X) any(strfind(X,['_' num2str(thissubses) '_'])),{lfpD(:).name})));
-        end
-    end
-    channelpostmpconv = ChannelIMROConversion(lfpD(1).folder,1); % For conversion when not automatically done
     %% Load Cluster Info
-    myClusFile = dir(fullfile(subsesopt(subsesid).folder,subsesopt(subsesid).name,'cluster_info.tsv'));
+    myClusFile = dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'cluster_info.tsv')); % If you did phy (manual curation) we will find this one... We can trust you, right?
     if isempty(myClusFile)
-        disp('This data is not curated with phy!!')
+        disp('This data is not curated with phy! Hopefully you''re using automated quality metrics to find good units!')
         curratedflag=0;
-        myClusFile = dir(fullfile(subsesopt(subsesid).folder,subsesopt(subsesid).name,'cluster_group.tsv'));
+        myClusFile = dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'cluster_group.tsv'));
         clusinfo = tdfread(fullfile(myClusFile(1).folder,myClusFile(1).name));
         % Convert sp data to correct cluster according to phy (clu and
         % template are not necessarily the same after phy)
@@ -154,7 +177,7 @@ for subsesid=1:length(subsesopt)
         clusidtmp = clusinfo.cluster_id;
         cluster_id = cat(1,cluster_id,clusinfo.cluster_id);
         tmpLabel = char(length(clusinfo.cluster_id));
-        KSLabelfile = tdfread(fullfile(subsesopt(subsesid).folder,subsesopt(subsesid).name,'cluster_KSLabel.tsv'));
+        KSLabelfile = tdfread(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'cluster_KSLabel.tsv'));
         tmpLabel(ismember(clusinfo.cluster_id,KSLabelfile.cluster_id)) = KSLabelfile.KSLabel(ismember(KSLabelfile.cluster_id,clusinfo.cluster_id));
         Label = [Label,tmpLabel];
         totSpkNum = histc(sp{countid}.clu,sp{countid}.cids);
@@ -185,13 +208,13 @@ for subsesid=1:length(subsesopt)
         channel = cat(1,channel,channeltmp);
 
     else
+        disp('You did manual curation. You champion. If you have not enough time, maybe consider some automated algorithm...')
         CurationDone = 1;
-        save(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,'CuratedResults.mat'),'CurationDone')
+        save(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'CuratedResults.mat'),'CurationDone')
         clusinfo = tdfread(fullfile(myClusFile(1).folder,myClusFile(1).name));
         % Convert sp data to correct cluster according to phy (clu and
         % template are not necessarily the same after phy)
         [clusinfo,sp{countid}] = ConvertTemplatesAfterPhy(clusinfo,sp{countid});
-
 
         curratedflag=1;
         if isfield(clusinfo,'id')
@@ -255,14 +278,15 @@ for subsesid=1:length(subsesopt)
     %     hold on
     %     drawnow
     DecompressionFlag = 0;
-    if RunQualityMatrix
+    
+    if Params.RunQualityMetrics
         uniqueTemplates = [];
         unitTypeAcrossRec= [];
         %% Quality matrix - Bombcell (https://github.com/Julie-Fabre/bombcell)
-        for id = 1:length(lfpD)
+        for id = 1:length(rawD)
             ephysap_tmp = [];
-            ephysap_path = fullfile(lfpD(id).folder,lfpD(id).name);
-            if length(lfpD)>1
+            ephysap_path = fullfile(rawD(id).folder,rawD(id).name);
+            if length(rawD)>1
                 savePath = fullfile(myClusFile(1).folder,num2str(id));
             else
                 savePath =myClusFile(1).folder;
@@ -270,54 +294,48 @@ for subsesid=1:length(subsesopt)
             qMetricsExist = dir(fullfile(savePath, ['templates._jf_qMetrics.parquet']));
             idx = sp{countid}.SessionID==id;
             InspectionFlag = 0;
-            if isempty(qMetricsExist) || RedoQM
-
-
+            if isempty(qMetricsExist) || Params.RedoQM
                 % First check if we want to use python for compressed data. If not, uncompress data first
-                if any(strfind(lfpD(id).name,'cbin')) && DecompressLocal
-                    if ~exist(fullfile(tmpdatafolder,strrep(lfpD(id).name,'cbin','bin')))
+                if any(strfind(rawD(id).name,'cbin')) && Params.DecompressLocal
+                    if ~exist(fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')))
                         disp('This is compressed data and we do not want to use Python integration... uncompress temporarily')
                         % Decompression
-                        success = pyrunfile("MTSDecomp_From_Matlab.py","success",datapath = strrep(fullfile(lfpD(id).folder,lfpD(id).name),'\','/'),...
-                            JsonPath =  strrep(fullfile(lfpD(id).folder,strrep(lfpD(id).name,'cbin','ch')),'\','/'), savepath = strrep(fullfile(tmpdatafolder,strrep(lfpD(id).name,'cbin','bin')),'\','/'))
+                        success = pyrunfile("MTSDecomp_From_Matlab.py","success",datapath = strrep(fullfile(rawD(id).folder,rawD(id).name),'\','/'),...
+                            JsonPath =  strrep(fullfile(rawD(id).folder,strrep(rawD(id).name,'cbin','ch')),'\','/'), savepath = strrep(fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')),'\','/'))
                         % Also copy metafile
-                        copyfile(strrep(fullfile(lfpD(id).folder,lfpD(id).name),'cbin','meta'),strrep(fullfile(tmpdatafolder,lfpD(id).name),'cbin','meta'))
+                        copyfile(strrep(fullfile(rawD(id).folder,rawD(id).name),'cbin','meta'),strrep(fullfile(Params.tmpdatafolder,rawD(id).name),'cbin','meta'))
                     end
-                    ephysap_tmp = fullfile(tmpdatafolder,strrep(lfpD(id).name,'cbin','bin'));
+                    ephysap_tmp = fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin'));
                     DecompressionFlag = 1;
-                    if InspectQualityMatrix
+                    if Params.InspectQualityMatrix
                         InspectionFlag=1;
                     end
-
                 end
-                clear param
+                clear BCparam
                 bc_qualityParamValues;
                 % To make sure these parameters don't change (Github
                 % pulls?)
-                param.plotThis = 0;
-                param.plotGlobal=1;
-                param.verbose=1; % update user on progress
-                param.reextractRaw=1; %Re extract raw waveforms
-                param.rawWaveformMaxDef = 'firstSTD'
+                BCparam.plotThis = 0;
+                BCparam.plotGlobal=1;
+                BCparam.verbose=1; % update user on progress
+                BCparam.reextractRaw=1; %Re extract raw waveforms
+                BCparam.rawWaveformMaxDef = 'firstSTD'
                 %             idx = ismember(sp{countid}.spikeTemplates,clusidtmp(Good_IDtmp)); %Only include good units
                 %careful; spikeSites zero indexed
-                [qMetric, unitType] = bc_runAllQualityMetrics(param, round(sp{countid}.st(idx).*sp{countid}.sample_rate), sp{countid}.spikeTemplates(idx)+1, ...
+                [qMetric, unitType] = bc_runAllQualityMetrics(BCparam, round(sp{countid}.st(idx).*sp{countid}.sample_rate), sp{countid}.spikeTemplates(idx)+1, ...
                     sp{countid}.temps, sp{countid}.tempScalingAmps(idx),sp{countid}.pcFeat(idx,:,:),sp{countid}.pcFeatInd,channelpostmp,[], savePath);
 
             else
-                ephysap_tmp = fullfile(tmpdatafolder,strrep(lfpD(id).name,'cbin','bin'));
+                ephysap_tmp = fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin'));
 
                 load(fullfile(savePath, 'qMetric.mat'))
                 bc_qualityParamValues;
-                param.plotThis = 0;
-                param.plotGlobal=1;
+                BCparam.plotThis = 0;
+                BCparam.plotGlobal=1;
                 bc_getQualityUnitType;
             end
             unitTypeAcrossRec{id} = unitType;
             uniqueTemplates{id} = unique(sp{countid}.spikeTemplates(idx));
-            AllQMsPaths{countid}{id} = fullfile(savePath, 'qMetric.mat');
-            AllRawPaths{countid}{id} = ephysap_path;
-            AllDecompPaths{countid}{id} = ephysap_tmp;
 
             if InspectionFlag
                 bc_getRawMemMap;
@@ -337,7 +355,7 @@ for subsesid=1:length(subsesopt)
                 plotRaw = 1;
                 probeLocation=[];
                 %% Inspect the results?
-                unitQualityGuiHandle = bc_unitQualityGUI(memMapData,ephysData,qMetric, param, probeLocation, unitType, plotRaw);
+                unitQualityGuiHandle = bc_unitQualityGUI(memMapData,ephysData,qMetric, BCparam, probeLocation, unitType, plotRaw);
                 disp('Not continuing until GUI closed')
                 while isvalid(unitQualityGuiHandle) && InspectQualityMatrix
                     pause(0.01)
@@ -367,11 +385,11 @@ for subsesid=1:length(subsesopt)
     if isempty(addthis)
         addthis=0;
     end
-    if iscell(AllUniqueTemplates)
-        recsesAlltmp = arrayfun(@(X) repmat(addthis+X,1,length(AllUniqueTemplates{X})),[1:length(AllUniqueTemplates)],'UniformOutput',0);
+    if exist('uniqueTemplates','var') && iscell(uniqueTemplates)
+        recsesAlltmp = arrayfun(@(X) repmat(addthis+X,1,length(uniqueTemplates{X})),[1:length(uniqueTemplates)],'UniformOutput',0);
         recsesAll =cat(1,recsesAll(:), cat(2,recsesAlltmp{:})');
     else
-        recsesAll = cat(1,recsesAll(:),repmat(addthis+1,1,length(unique(sp{countid}.spikeTemplates)))');
+        recsesAll = cat(1,recsesAll(:),repmat(addthis+1,1,length(AllUniqueTemplates))');
     end
     Good_ID = [Good_ID,Good_IDtmp]; %Identify good clusters
 
@@ -383,6 +401,8 @@ for subsesid=1:length(subsesopt)
     close all
 
 end
+
+%% Add all spikedata in one spikes struct - can be used for further analysis
 sp = [sp{:}];
 spnew = struct;
 
@@ -395,31 +415,8 @@ for fieldid=1:length(fields)
 
     end
 end
-% Find correct dataset index
-spikeTimes =cat(1,sp(:).st);
-spikeRecSes = cat(1,sp(:).RecSes);
-spikeSites = cat(1,sp(:).spikeTemplates);
-spikeCluster = cat(1,sp(:).clu);
-spikeAmps = cat(1,sp(:).spikeAmps);
-spikeDepths = cat(1,sp(:).spikeDepths);
-spikeShank = nan(length(spikeCluster),1);
-ShankOpt = unique(Shank);
-for shid = 1:length(ShankOpt)
-    spikeShank(ismember(spikeCluster,cluster_id(Shank==ShankOpt(shid)))&ismember(spikeRecSes,recses(Shank==ShankOpt(shid)))) = ShankOpt(shid);
-end
-templateDepths = cat(1,sp(:).templateDepths);
-tempAmps = cat(1,sp(:).tempAmps);
-tempsUnW = cat(1,sp(:).tempsUnW);
-templateDuration = cat(1,sp(:).templateDuration);
-waveforms = cat(1,sp(:).waveforms);
-templateWaveforms = cat(1,sp(:).temps);
-templateAmplitudes = cat(1,sp(:).tempScalingAmps);
-% pcFeatures = cat(1,sp(:).pcFeat);
-% pcFeatureIdx = cat(1,sp(:).pcFeatInd);
-channelPositionsX = cat(1,sp(:).xcoords);
-channelPositionsY = cat(1,sp(:).ycoords);
-channelPositions = cat(2,channelPositionsX,channelPositionsY);
-%  [sp{countid}.spikeAmps, sp{countid}.spikeDepths, sp{countid}.templateDepths, sp{countid}.tempAmps, sp{countid}.tempsUnW, sp{countid}.templateDuration, sp{countid}.waveforms]
+
+%% Add all cluster information in one 'cluster' struct - can be used for further analysis
 ShankOpt = unique(Shank);
 ShankID = nan(size(Shank));
 for shankid = 1:length(ShankOpt)
@@ -435,35 +432,80 @@ clusinfo.cluster_id = AllUniqueTemplates;
 clusinfo.group = Label;
 clusinfo.Good_ID = Good_ID;
 clusinfo.Noise_ID = NoiseUnit;
-AllQMsPaths = [AllQMsPaths{:}];
-AllRawPaths = [AllRawPaths{:}];
-if exist('AllDecompPaths') && ~isempty(AllDecompPaths)
-    AllDecompPaths = [AllDecompPaths{:}];
-else
-    AllDecompPaths=[];
-end
+
 sp = spnew;
 sp.sample_rate = sp.sample_rate(1);
 clear spnew
 
 %% Match different units?
- if MatchUnitsAcrossDays
-     param.channelpos = channelpos;
-     param.RunPyKSChronic = RunPyKSChronic;
-     param.SaveDir = fullfile(SaveDir,MiceOpt{midx});
-     param.AllRawPaths = AllRawPaths;
-     param.AllDecompPaths = AllDecompPaths;
-     param.nChannels = 385;
-     [UniqueID, MatchTable] = UnitMatch(clusinfo,param,sp);
- end
- %% Remove temporary files
- if DecompressLocal && DecompressionFlag
-     clear memMapData
-     clear ap_data
-     try
-     delete(fullfile(tmpdatafolder,strrep(lfpD(id).name,'cbin','bin')))
-     delete(fullfile(tmpdatafolder,strrep(lfpD(id).name,'cbin','meta')))
-     catch ME
-         keyboard
-     end
- end
+if Params.UnitMatch
+    UMparam.channelpos = channelpos;
+    UMparam.RunPyKSChronicStitched = Params.RunPyKSChronicStitched;
+    UMparam.SaveDir = fullfile(Params.SaveDir);
+    UMparam.ACGbinSize = 1.0000e-03;
+    UMparam.ACGduration = 1;
+    % Need to decompress if decompression wasn't done yet
+    for id = 1:length(RawDataPaths)
+        ephysap_tmp = [];
+        ephysap_path = fullfile(RawDataPaths(id).folder,RawDataPaths(id).name);        
+        UnitMatchExist = dir(fullfile(UMparam.SaveDir,['UnitMatch.mat']));
+        if (isempty(UnitMatchExist) || Params.RedoUnitMatch) && ~DecompressionFlag
+            % First check if we want to use python for compressed data. If not, uncompress data first
+            if any(strfind(RawDataPaths(id).name,'cbin')) && Params.DecompressLocal
+                if ~exist(fullfile(Params.tmpdatafolder,strrep(RawDataPaths(id).name,'cbin','bin')))
+                    disp('This is compressed data and we do not want to use Python integration... uncompress temporarily')
+                    % Decompression
+                    success = pyrunfile("MTSDecomp_From_Matlab.py","success",datapath = strrep(fullfile(RawDataPaths(id).folder,RawDataPaths(id).name),'\','/'),...
+                        JsonPath =  strrep(fullfile(RawDataPaths(id).folder,strrep(RawDataPaths(id).name,'cbin','ch')),'\','/'), savepath = strrep(fullfile(Params.tmpdatafolder,strrep(RawDataPaths(id).name,'cbin','bin')),'\','/'))
+                    % Also copy metafile
+                    copyfile(strrep(fullfile(RawDataPaths(id).folder,RawDataPaths(id).name),'cbin','meta'),strrep(fullfile(Params.tmpdatafolder,RawDataPaths(id).name),'cbin','meta'))
+                end
+                ephysap_tmp = fullfile(Params.tmpdatafolder,strrep(RawDataPaths(id).name,'cbin','bin'));
+                DecompressionFlag = 1;                
+            end
+        end
+    end
+    UMparam.AllRawPaths = RawDataPaths;
+    UMparam.AllDecompPaths = arrayfun(@(X) fullfile(Params.tmpdatafolder,strrep(RawDataPaths(X).name,'cbin','bin')),1:length(RawDataPaths),'Uni',0);
+    [UniqueID, MatchTable] = UnitMatch(clusinfo,UMparam,sp);
+    clusinfo.UniqueID = UniqueID;
+    clusinfo.MatchTable = MatchTable;
+    save(fullfile(UMparam.SaveDir,['UnitMatch.mat']),'UniqueID','MatchTable','UMParam')
+end
+
+%% Remove temporary files
+if Params.DecompressLocal && DecompressionFlag
+    clear memMapData
+    clear ap_data
+    try
+        delete(fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')))
+        delete(fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','meta')))
+    catch ME
+        keyboard
+    end
+end
+
+return
+
+% % Find correct dataset index
+% spikeTimes =cat(1,sp(:).st);
+% spikeRecSes = cat(1,sp(:).RecSes);
+% spikeSites = cat(1,sp(:).spikeTemplates);
+% spikeCluster = cat(1,sp(:).clu);
+% spikeAmps = cat(1,sp(:).spikeAmps);
+% spikeDepths = cat(1,sp(:).spikeDepths);
+% spikeShank = nan(length(spikeCluster),1);
+% ShankOpt = unique(Shank);
+% for shid = 1:length(ShankOpt)
+%     spikeShank(ismember(spikeCluster,cluster_id(Shank==ShankOpt(shid)))&ismember(spikeRecSes,recses(Shank==ShankOpt(shid)))) = ShankOpt(shid);
+% end
+% templateDepths = cat(1,sp(:).templateDepths);
+% tempAmps = cat(1,sp(:).tempAmps);
+% tempsUnW = cat(1,sp(:).tempsUnW);
+% templateDuration = cat(1,sp(:).templateDuration);
+% waveforms = cat(1,sp(:).waveforms);
+% templateWaveforms = cat(1,sp(:).temps);
+% templateAmplitudes = cat(1,sp(:).tempScalingAmps);
+% pcFeatures = cat(1,sp(:).pcFeat);
+% pcFeatureIdx = cat(1,sp(:).pcFeatInd);
+
