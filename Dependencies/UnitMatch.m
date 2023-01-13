@@ -33,7 +33,7 @@ spikeWidth = 83; % in sample space (time)
 TakeChannelRadius = 75; %in micron around max channel
 maxdist = 200; % Maximum distance at which units are considered as potential matches
 binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
-RedoExtraction = 1; % Raw waveform and parameter extraction
+RedoExtraction = 0; % Raw waveform and parameter extraction
 % Scores2Include = {'WavformSimilarity','LocationCombined','spatialdecayDiff','AmplitudeDiff'};%}
 MakeOwnNaiveBayes = 1; % if 0, use standard matlab version, which assumes normal distributions --> not recommended
 ApplyExistingBayesModel = 0; %If 1, look if a Bayes model already exists for this mouse and applies that
@@ -141,7 +141,13 @@ for uid = 1:nclus
                 spikeMap(:,:,iSpike) = tmp;
             end
         end
+
+        if ~exist(fullfile(rawdatapath(1).folder,'RawWaveforms'))
+            mkdir(fullfile(rawdatapath(1).folder,'RawWaveforms'))
+        end
+        save(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(AllClusterIDs(Good_Idx(uid))) '_RawSpikes.mat']),'spikeMap')
     end
+    
     % Extract unit parameters -
     nwavs = sum(sum(~isnan(nanmean(spikeMap,2)),1) == spikeWidth); % Actual number of waves
     % Cross-validate: first versus second half of session
@@ -194,10 +200,6 @@ for uid = 1:nclus
         %         MultiDimMatrix(wvdurtmp,1:length(ChanIdx),uid,cv) = nanmean(spikeMap(wvdurtmp,ChanIdx,wavidx),3);
 
     end
-    if ~exist(fullfile(rawdatapath(1).folder,'RawWaveforms'))
-        mkdir(fullfile(rawdatapath(1).folder,'RawWaveforms'))
-    end
-    save(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(AllClusterIDs(Good_Idx(uid))) '_RawSpikes.mat']),'spikeMap')
 end
 
 fprintf('\n')
