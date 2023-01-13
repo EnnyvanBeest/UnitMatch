@@ -7,7 +7,7 @@ end
 % Check for multiple subfolders?
 subsesopt = dir(myKsDir);
 subsesopt(~[subsesopt.isdir])=[];
-subsesopt(ismember({subsesopt(:).name},{'..','.phy'}))=[];
+subsesopt(ismember({subsesopt(:).name},{'.','..','.phy'}))=[];
 
 if strcmp(RecordingType{midx},'Chronic')
     if ~RunPyKSChronic %MatchUnitsAcrossDays
@@ -105,7 +105,7 @@ for subsesid=1:length(subsesopt)
         lfpD = cat(2,lfpD{:});
     else
         myLFDir = fullfile(DataDir{DataDir2Use(midx)},MiceOpt{midx},thisdatenow,'ephys');
-        lfpD = dir(fullfile([myLFDir],[thisdate '_' MiceOpt{midx} '*'], '**\*.ap.*bin')); % ap file from spikeGLX specifically
+        lfpD = dir(fullfile([myLFDir],[thisdatenow '_' MiceOpt{midx} '*'], '**\*.ap.*bin')); % ap file from spikeGLX specifically
         if isempty(lfpD)
             lfpD = dir(fullfile([myLFDir],['*' MiceOpt{midx} '*'], '**\*.ap.*bin')); % ap file from spikeGLX specifically
         end
@@ -157,7 +157,8 @@ for subsesid=1:length(subsesopt)
         KSLabelfile = tdfread(fullfile(subsesopt(subsesid).folder,subsesopt(subsesid).name,'cluster_KSLabel.tsv'));
         tmpLabel(ismember(clusinfo.cluster_id,KSLabelfile.cluster_id)) = KSLabelfile.KSLabel(ismember(KSLabelfile.cluster_id,clusinfo.cluster_id));
         Label = [Label,tmpLabel];
-        Good_IDtmp = ismember(tmpLabel,'g'); %Identify good clusters
+        totSpkNum = histc(sp{countid}.clu,sp{countid}.cids);
+        Good_IDtmp = ismember(tmpLabel,'g') & totSpkNum'>1000; %Identify good clusters
 
         % Find depth and channel
         depthtmp = nan(length(clusinfo.cluster_id),1);
@@ -231,7 +232,7 @@ for subsesid=1:length(subsesopt)
         depth = [depth,depthtmp];
 
         channel = [channel,clusinfo.ch];
-        Good_IDtmp = ismember(cellstr(clusinfo.group),'good')
+        Good_IDtmp = ismember(cellstr(clusinfo.group),'good');
         channeltmp = clusinfo.ch;
     end
     channelpostmp = channelpostmpconv;
@@ -356,17 +357,21 @@ for subsesid=1:length(subsesopt)
     else
         AllUniqueTemplates = cat(1,AllUniqueTemplates,unique(sp{countid}.spikeTemplates));
         NoiseUnit = false(size(Good_IDtmp));
+        for id = 1:length(lfpD)
+            AllRawPaths{countid}{id} = fullfile(lfpD(id).folder,lfpD(id).name);
+            AllDecompPaths{countid}{id} = fullfile(tmpdatafolder,strrep(lfpD(id).name,'cbin','bin'));
+        end
     end
 
     addthis = nanmax(recsesAll);
     if isempty(addthis)
         addthis=0;
     end
-    if iscell(uniqueTemplates)
-        recsesAlltmp = arrayfun(@(X) repmat(addthis+X,1,length(uniqueTemplates{X})),[1:length(uniqueTemplates)],'UniformOutput',0);
+    if iscell(AllUniqueTemplates)
+        recsesAlltmp = arrayfun(@(X) repmat(addthis+X,1,length(AllUniqueTemplates{X})),[1:length(AllUniqueTemplates)],'UniformOutput',0);
         recsesAll =cat(1,recsesAll(:), cat(2,recsesAlltmp{:})');
     else
-        recsesAll = cat(1,recsesAll(:),repmat(addthis+1,1,length(uniqueTemplates))');
+        recsesAll = cat(1,recsesAll(:),repmat(addthis+1,1,length(unique(sp{countid}.spikeTemplates)))');
     end
     Good_ID = [Good_ID,Good_IDtmp]; %Identify good clusters
 
@@ -448,6 +453,7 @@ clear spnew
      param.SaveDir = fullfile(SaveDir,MiceOpt{midx});
      param.AllRawPaths = AllRawPaths;
      param.AllDecompPaths = AllDecompPaths;
+     param.nChannels = 385;
      [UniqueID, MatchTable] = UnitMatch(clusinfo,param,sp);
  end
  %% Remove temporary files
