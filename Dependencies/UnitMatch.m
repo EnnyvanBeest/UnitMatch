@@ -148,7 +148,13 @@ for uid = 1:nclus
                 spikeMap(:,:,iSpike) = tmp;
             end
         end
+
+        if ~exist(fullfile(rawdatapath(1).folder,'RawWaveforms'))
+            mkdir(fullfile(rawdatapath(1).folder,'RawWaveforms'))
+        end
+        save(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(AllClusterIDs(Good_Idx(uid))) '_RawSpikes.mat']),'spikeMap')
     end
+    
     % Extract unit parameters -
     nwavs = sum(sum(~isnan(nanmean(spikeMap,2)),1) == spikeWidth); % Actual number of waves
     % Cross-validate: first versus second half of session
@@ -201,10 +207,6 @@ for uid = 1:nclus
         %         MultiDimMatrix(wvdurtmp,1:length(ChanIdx),uid,cv) = nanmean(spikeMap(wvdurtmp,ChanIdx,wavidx),3);
 
     end
-    if ~exist(fullfile(rawdatapath(1).folder,'RawWaveforms'))
-        mkdir(fullfile(rawdatapath(1).folder,'RawWaveforms'))
-    end
-    save(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']),'spikeMap')
 end
 
 fprintf('\n')

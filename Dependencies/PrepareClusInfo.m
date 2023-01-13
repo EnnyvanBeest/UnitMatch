@@ -31,6 +31,7 @@
 if ~isstruct(KiloSortPaths) || ~isfield(KiloSortPaths(1),'name') || ~isfield(KiloSortPaths(1),'folder')
     error('This is not a directory... give correct input please')
 end
+
 try
     if nargin<2
         disp('No params given. Use default - although this is not advised...')
@@ -166,6 +167,7 @@ for subsesid=1:length(KiloSortPaths)
         rawD = dir(fullfile(RawDataPaths(subsesid).folder,RawDataPaths(subsesid).name));
     end   
     channelpostmpconv = ChannelIMROConversion(rawD(1).folder,1); % For conversion when not automatically done
+
     %% Load Cluster Info
     myClusFile = dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'cluster_info.tsv')); % If you did phy (manual curation) we will find this one... We can trust you, right?
     if isempty(myClusFile)
@@ -183,7 +185,8 @@ for subsesid=1:length(KiloSortPaths)
         KSLabelfile = tdfread(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'cluster_KSLabel.tsv'));
         tmpLabel(ismember(clusinfo.cluster_id,KSLabelfile.cluster_id)) = KSLabelfile.KSLabel(ismember(KSLabelfile.cluster_id,clusinfo.cluster_id));
         Label = [Label,tmpLabel];
-        Good_IDtmp = ismember(tmpLabel,'g'); %Identify good clusters
+        totSpkNum = histc(sp{countid}.clu,sp{countid}.cids);
+        Good_IDtmp = ismember(tmpLabel,'g') & totSpkNum'>1000; %Identify good clusters
 
         % Find depth and channel
         depthtmp = nan(length(clusinfo.cluster_id),1);
@@ -257,7 +260,7 @@ for subsesid=1:length(KiloSortPaths)
         depth = [depth,depthtmp];
 
         channel = [channel,clusinfo.ch];
-        Good_IDtmp = ismember(cellstr(clusinfo.group),'good')
+        Good_IDtmp = ismember(cellstr(clusinfo.group),'good');
         channeltmp = clusinfo.ch;
     end
     channelpostmp = channelpostmpconv;
@@ -377,6 +380,10 @@ for subsesid=1:length(KiloSortPaths)
     else
         AllUniqueTemplates = cat(1,AllUniqueTemplates,unique(sp{countid}.spikeTemplates));
         NoiseUnit = false(size(Good_IDtmp));
+        for id = 1:length(lfpD)
+            AllRawPaths{countid}{id} = fullfile(lfpD(id).folder,lfpD(id).name);
+            AllDecompPaths{countid}{id} = fullfile(tmpdatafolder,strrep(lfpD(id).name,'cbin','bin'));
+        end
     end
 
     addthis = nanmax(recsesAll);
@@ -506,6 +513,4 @@ return
 % templateAmplitudes = cat(1,sp(:).tempScalingAmps);
 % pcFeatures = cat(1,sp(:).pcFeat);
 % pcFeatureIdx = cat(1,sp(:).pcFeatInd);
-
-
 
