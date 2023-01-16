@@ -3,7 +3,7 @@ BCparam = struct;
 BCparam.plotThis = 0;
 BCparam.plotGlobal = 1;
 BCparam.verbose=1; % update user on progress
-BCparam.reextractRaw=0; %Re extract raw waveforms -- should be done e.g. if number of templates change (Phy/Pyks)
+BCparam.reextractRaw=1; %Re extract raw waveforms -- should be done e.g. if number of templates change (Phy/Pyks)
 % refractory period parameters
 BCparam.tauR = 0.0020; %refractory period time (s)
 BCparam.tauC = 0.0001; %censored period time (s)
@@ -22,9 +22,10 @@ BCparam.minWvDuration = 100; %ms
 BCparam.maxWvDuration = 800; %ms
 BCparam.minSpatialDecaySlope = -20;
 BCparam.maxWvBaselineFraction = 0.3;
+BCparam.SpikeWidth=83; 
 % amplitude parameters
 
-BCparam.nRawSpikesToExtract = 100; 
+BCparam.nRawSpikesToExtract = 200; % You need enough waveforms for unitmatch
 BCparam.saveMultipleRaw = 1; % If you wish to save the nRawSpikesToExtract as well
 BCparam.minAmplitude = 20; 
 % recording parametrs

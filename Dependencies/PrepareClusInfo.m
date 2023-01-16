@@ -60,6 +60,19 @@ catch ME
     disp(ME)
     UseParamsKS = 1;
 end
+
+%% Bombcell parameters
+% clear BCparam
+bc_qualityParamValuesForUnitMatch;
+
+%% UnitMatch Parameters
+UMparam.RunPyKSChronicStitched = Params.RunPyKSChronicStitched;
+UMparam.SaveDir = fullfile(Params.SaveDir);
+UMparam.ACGbinSize = BCparam.ACGbinSize;
+UMparam.ACGduration = BCparam.ACGduration;
+UMparam.sampleamount = BCparam.nRawSpikesToExtract; %500; % Nr. waveforms to include
+UMparam.spikeWidth =BCparam.SpikeWidth; %83; % in sample space (time)
+
 %% Initialize everything
 AllUniqueTemplates = [];
 recsesAll = [];
@@ -311,32 +324,29 @@ for subsesid=1:length(KiloSortPaths)
                         copyfile(strrep(fullfile(rawD(id).folder,rawD(id).name),'cbin','meta'),strrep(fullfile(Params.tmpdatafolder,rawD(id).name),'cbin','meta'))
                     end
                     ephysap_tmp = fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin'));
+                    BCparam.rawFolder = [ephysap_path, '/..'];
+                    if exist('ephysap_tmp', 'var')
+                        BCparam.tmpFolder = [ephysap_tmp, '/..'];
+                    end
                     DecompressionFlag = 1;
                     if Params.InspectQualityMatrix
                         InspectionFlag=1;
                     end
                 end
-                clear BCparam
-                bc_qualityParamValues;
-                % To make sure these parameters don't change (Github
-                % pulls?)
-                BCparam.plotThis = 0;
-                BCparam.plotGlobal=1;
-                BCparam.verbose=1; % update user on progress
-                BCparam.reextractRaw=1; %Re extract raw waveforms
-                BCparam.rawWaveformMaxDef = 'firstSTD'
+               
                 %             idx = ismember(sp{countid}.spikeTemplates,clusidtmp(Good_IDtmp)); %Only include good units
                 %careful; spikeSites zero indexed
                 [qMetric, unitType] = bc_runAllQualityMetrics(BCparam, round(sp{countid}.st(idx).*sp{countid}.sample_rate), sp{countid}.spikeTemplates(idx)+1, ...
                     sp{countid}.temps, sp{countid}.tempScalingAmps(idx),sp{countid}.pcFeat(idx,:,:),sp{countid}.pcFeatInd,channelpostmp,[], savePath);
 
+                UMparam.UseBombCelRawWav = 1; % If you run both bombcell and unitmatch, you can reuse bombcell's extracted units
             else
                 ephysap_tmp = fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin'));
-
+                BCparam.rawFolder = [ephysap_path, '/..'];
+                if exist('ephysap_tmp', 'var')
+                    BCparam.tmpFolder = [ephysap_tmp, '/..'];
+                end
                 load(fullfile(savePath, 'qMetric.mat'))
-                bc_qualityParamValues;
-                BCparam.plotThis = 0;
-                BCparam.plotGlobal=1;
                 bc_getQualityUnitType;
             end
             unitTypeAcrossRec{id} = unitType;
@@ -444,11 +454,6 @@ clear spnew
 
 %% Match different units?
 if Params.UnitMatch
-    UMparam.channelpos = channelpos;
-    UMparam.RunPyKSChronicStitched = Params.RunPyKSChronicStitched;
-    UMparam.SaveDir = fullfile(Params.SaveDir);
-    UMparam.ACGbinSize = 1.0000e-03;
-    UMparam.ACGduration = 1;
     % Need to decompress if decompression wasn't done yet
     for id = 1:length(RawDataPaths)
         ephysap_tmp = [];
@@ -470,11 +475,17 @@ if Params.UnitMatch
             end
         end
     end
+    % Remaining parameters
+    UMparam.channelpos = channelpos;
     UMparam.AllRawPaths = RawDataPaths;
     UMparam.AllDecompPaths = arrayfun(@(X) fullfile(Params.tmpdatafolder,strrep(RawDataPaths(X).name,'cbin','bin')),1:length(RawDataPaths),'Uni',0);
+
+    % Run UnitMatch
     [UniqueID, MatchTable] = UnitMatch(clusinfo,UMparam,sp);
     clusinfo.UniqueID = UniqueID;
     clusinfo.MatchTable = MatchTable;
+
+    % Save
     save(fullfile(UMparam.SaveDir,['UnitMatch.mat']),'UniqueID','MatchTable','UMParam')
 end
 

@@ -21,21 +21,23 @@
 
 % fine tuning the initial training set for matching:
 % - cross-correlation finger prints --> units that are the same are likely
-% to correlate in a similar way with other units (@Célian Bimbard, 2022)
+% to correlate in a similar way with other units 
 
 % Contributions:
 % Enny van Beest (2022)
+% Célian Bimbard (2022)
 
 %% Parameters - tested on these values, but feel free to try others
 Scores2Include = {'AmplitudeSim','WavformSim','WVCorr','LocAngleSim','spatialdecaySim','LocDistSim'}; %
 IncludeSpatialInitially = 1; % if 1 we include spatial distance from the start, if 0 only from the naive Bayes part
-sampleamount = 500; % Nr. waveforms to include
-spikeWidth = 83; % in sample space (time)
+sampleamount = param.sampleamount; %500; % Nr. waveforms to include
+spikeWidth = param.spikeWidth; %83; % in sample space (time)
+UseBombCelRawWav = param.UseBombCelRawWav;
 TakeChannelRadius = 75; %in micron around max channel
 maxdist = 200; % Maximum distance at which units are considered as potential matches
 binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
 RedoExtraction = 0; % Raw waveform and parameter extraction
-RemoveRawWavForms = 1; %Remove raw waveforms again to save server space
+RemoveRawWavForms = 1; %Remove raw waveforms again to save server space --> advised!! You can run into problems if you don't!
 % Scores2Include = {'WavformSimilarity','LocationCombined','spatialdecayDiff','AmplitudeDiff'};%}
 MakeOwnNaiveBayes = 1; % if 0, use standard matlab version, which assumes normal distributions --> not recommended
 ApplyExistingBayesModel = 1; %If 1, look if a Bayes model already exists for this mouse and applies that
@@ -47,7 +49,9 @@ RunPyKSChronicStitched = param.RunPyKSChronicStitched;
 SaveDir = param.SaveDir;
 % AllRawPaths = param.AllRawPaths;
 AllDecompPaths = param.AllDecompPaths;
+AllRawPaths = param.AllRawPaths;
 param.nChannels = length(param.channelpos)+1; %First assume there's a sync channel as well.
+
 %% Extract all cluster info 
 AllClusterIDs = clusinfo.cluster_id;
 nses = length(AllDecompPaths);
@@ -101,58 +105,77 @@ end
 
 Currentlyloaded = 0;
 for uid = 1:nclus
-    pathparts = strsplit(AllDecompPaths{GoodRecSesID(uid)},'\');
-    rawdatapath = dir(fullfile('\\',pathparts{1:end-1}));
-    if isempty(rawdatapath)
-        rawdatapath = dir(fullfile(pathparts{1:end-1}));
-    end
-
     fprintf(1,'\b\b\b\b%3.0f%%',uid/nclus*100)
-    if exist(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat'])) && ~RedoExtraction
-        load(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']))
+    if UseBombCelRawWav
+        if exist(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat'])) && ~RedoExtraction
+            load(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']))
+        else
+            if ~(GoodRecSesID(uid) == Currentlyloaded) % Only load new memmap if not already loaded
+                spikeMapAll = readNPY(fullfile(AllRawPaths(GoodRecSesID(uid)).folder, 'templates._jf_Multi_rawWaveforms.npy'));
+                
+                Currentlyloaded = GoodRecSesID(uid);
+                TmpGoodIdx = find(clusinfo.Good_ID(clusinfo.RecSesID==Currentlyloaded));
+            end
+            spikeMap = permute(squeeze(spikeMapAll(TmpGoodIdx(uid-SessionSwitch(Currentlyloaded)+1),:,:,:)),[2,1,3]); % Which one?
+            spikeMap = smoothdata(spikeMap,1,'gaussian',5); %Smooth over waveform
+            spikeMap = (spikeMap-mean(spikeMap(1:20,:,:),1)); % Subtract baseline
+            if ~exist(fullfile(rawdatapath(1).folder,'RawWaveforms'))
+                mkdir(fullfile(rawdatapath(1).folder,'RawWaveforms'))
+            end
+            save(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']),'spikeMap')
+        end
     else
-        if ~(GoodRecSesID(uid) == Currentlyloaded) % Only load new memmap if not already loaded
-            % Map the data
-            clear memMapData
-            spikeFile = dir(AllDecompPaths{GoodRecSesID(uid)});
-            try %hacky way of figuring out if sync channel present or not
-                n_samples = spikeFile.bytes / (param.nChannels * dataTypeNBytes);
-                nChannels = param.nChannels - 1; % Last channel is sync, ignore for now
-                ap_data = memmapfile(AllDecompPaths{GoodRecSesID(uid)}, 'Format', {'int16', [param.nChannels, n_samples], 'data'});
-            catch
-                nChannels = param.nChannels - 1;
-                n_samples = spikeFile.bytes / (nChannels * dataTypeNBytes);
-                ap_data = memmapfile(AllDecompPaths{GoodRecSesID(uid)}, 'Format', {'int16', [nChannels, n_samples], 'data'});
+        pathparts = strsplit(AllDecompPaths{GoodRecSesID(uid)},'\');
+        rawdatapath = dir(fullfile('\\',pathparts{1:end-1}));
+        if isempty(rawdatapath)
+            rawdatapath = dir(fullfile(pathparts{1:end-1}));
+        end
+        if exist(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat'])) && ~RedoExtraction
+            load(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']))
+        else
+            if ~(GoodRecSesID(uid) == Currentlyloaded) % Only load new memmap if not already loaded
+                % Map the data
+                clear memMapData
+                spikeFile = dir(AllDecompPaths{GoodRecSesID(uid)});
+                try %hacky way of figuring out if sync channel present or not
+                    n_samples = spikeFile.bytes / (param.nChannels * dataTypeNBytes);
+                    nChannels = param.nChannels - 1; % Last channel is sync, ignore for now
+                    ap_data = memmapfile(AllDecompPaths{GoodRecSesID(uid)}, 'Format', {'int16', [param.nChannels, n_samples], 'data'});
+                catch
+                    nChannels = param.nChannels - 1;
+                    n_samples = spikeFile.bytes / (nChannels * dataTypeNBytes);
+                    ap_data = memmapfile(AllDecompPaths{GoodRecSesID(uid)}, 'Format', {'int16', [nChannels, n_samples], 'data'});
+                end
+                memMapData = ap_data.Data.data;
+                Currentlyloaded = GoodRecSesID(uid);
             end
-            memMapData = ap_data.Data.data;
-            Currentlyloaded = GoodRecSesID(uid);
-        end
 
-        % Spike samples
-        idx1=(sp.st(sp.spikeTemplates == AllClusterIDs(Good_Idx(uid)) & sp.RecSes == GoodRecSesID(uid)).*round(sp.sample_rate));  % Spike times in samples;
+            % Spike samples
+            idx1=(sp.st(sp.spikeTemplates == AllClusterIDs(Good_Idx(uid)) & sp.RecSes == GoodRecSesID(uid)).*round(sp.sample_rate));  % Spike times in samples;
 
-        %Extract raw waveforms on the fly - % Unit uid
-        try
-            spikeIndicestmp = sort(datasample(idx1,sampleamount,'replace',false));
-        catch ME
-            spikeIndicestmp = idx1;
-        end
-        spikeMap = nan(spikeWidth,nChannels,sampleamount);
-        for iSpike = 1:length(spikeIndicestmp)
-            thisSpikeIdx = int32(spikeIndicestmp(iSpike));
-            if thisSpikeIdx > halfWidth && (thisSpikeIdx + halfWidth) < size(memMapData,2) % check that it's not out of bounds
-                tmp = smoothdata(double(memMapData(1:nChannels,thisSpikeIdx-halfWidth:thisSpikeIdx+halfWidth)),2,'gaussian',5);
-                tmp = (tmp - mean(tmp(:,1:20),2))';
-                tmp(:,end+1:nChannels) = nan(size(tmp,1),nChannels-size(tmp,2));
-                % Subtract first 10 samples to level spikes
-                spikeMap(:,:,iSpike) = tmp;
+            %Extract raw waveforms on the fly - % Unit uid
+            try
+                spikeIndicestmp = sort(datasample(idx1,sampleamount,'replace',false));
+            catch ME
+                spikeIndicestmp = idx1;
             end
-        end
+            spikeMap = nan(spikeWidth,nChannels,sampleamount);
+            for iSpike = 1:length(spikeIndicestmp)
+                thisSpikeIdx = int32(spikeIndicestmp(iSpike));
+                if thisSpikeIdx > halfWidth && (thisSpikeIdx + halfWidth) < size(memMapData,2) % check that it's not out of bounds
+                    tmp = smoothdata(double(memMapData(1:nChannels,thisSpikeIdx-halfWidth:thisSpikeIdx+halfWidth)),2,'gaussian',5);
+                    tmp = (tmp - mean(tmp(:,1:20),2))';
+                    tmp(:,end+1:nChannels) = nan(size(tmp,1),nChannels-size(tmp,2));
+                    % Subtract first 10 samples to level spikes
+                    spikeMap(:,:,iSpike) = tmp;
+                end
+            end
 
-        if ~exist(fullfile(rawdatapath(1).folder,'RawWaveforms'))
-            mkdir(fullfile(rawdatapath(1).folder,'RawWaveforms'))
+            if ~exist(fullfile(rawdatapath(1).folder,'RawWaveforms'))
+                mkdir(fullfile(rawdatapath(1).folder,'RawWaveforms'))
+            end
+            save(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']),'spikeMap')
         end
-        save(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(AllClusterIDs(Good_Idx(uid))) '_RawSpikes.mat']),'spikeMap')
     end
     
     % Extract unit parameters -
@@ -1131,7 +1154,7 @@ if MakePlotsOfPairs
         uid = Pairs(pairid,1);
         uid2 = Pairs(pairid,2);
 
-        pathparts = strsplit(AllDecompPaths{GoodRecSesID(uid)},'\');
+         pathparts = strsplit(AllDecompPaths{GoodRecSesID(uid)},'\');
         rawdatapath = dir(fullfile('\\',pathparts{1:end-1}));
         if isempty(rawdatapath)
             rawdatapath = dir(fullfile(pathparts{1:end-1}));
