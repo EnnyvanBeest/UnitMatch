@@ -33,7 +33,7 @@ end
 nChannels = param.nChannels;
 nSpikesToExtract =  param.nRawSpikesToExtract;
 % uniqueTemplates = unique(spikeTemplates);
-
+maxbatch = 50;
 
 %% check if waveforms already extracted
 % Get binary file name
@@ -88,18 +88,16 @@ d = dir(fullfile(tmpFolder, fname));
 
 
 if ~isempty(rawWaveformFolder) && reExtract == 0
-
     rawWaveformsFull = readNPY(fullfile(rawFolder, 'templates._jf_rawWaveforms.npy'));
     rawWaveformsPeakChan = readNPY(fullfile(rawFolder, 'templates._jf_rawWaveformPeakChannels.npy'));
     if param.saveMultipleRaw
         spikeMap = readNPY(fullfile(rawFolder, 'templates._jf_Multi_rawWaveforms.npy'));
-
     end
 else
 
     %% Intitialize
 
-    spikeWidth = 83;
+    spikeWidth = param.SpikeWidth;
     halfWidth = floor(spikeWidth / 2);
     clustInds = unique(spikeTemplates);
     nClust = numel(clustInds);
@@ -234,15 +232,36 @@ else
         end
         fclose(fid);
 
+        % Save raw spikes
+        if isempty(rawWaveformFolder) || reExtract
+            %save(fullfile(spikeFile.folder, 'rawWaveforms.mat'), 'rawWaveforms', '-v7.3');          
+            if param.saveMultipleRaw
+                writeNPY(spikeMap, fullfile(rawFolder, 'templates._jf_Multi_rawWaveforms.npy'))
+            end
+        end
+
         % Individual spikes are noisy; already gaussian smooth on this -
         % otherwise we're going to end up with max. noise averages
         % level across time
-        spikeMap = smoothdata(spikeMap,3,'gaussian',5);
+        for id = 1:maxbatch:size(spikeMap,4)
+            if id+maxbatch-1>size(spikeMap,4)
+                spikeMap(:,:,:,id:end) = smoothdata(spikeMap(:,:,:,id:end),3,'gaussian',5);
+            else
+                spikeMap(:,:,:,id:id+maxbatch-1) = smoothdata(spikeMap(:,:,:,id:id+maxbatch-1),3,'gaussian',5);
+            end
+        end
+
         % Subtract first 10 samples to level spikes
         spikeMap = permute(spikeMap,[1,2,4,3]);
         spikeMap = permute(spikeMap - mean(spikeMap(:,:,:,1:10),4),[1,2,4,3]);
         % Smooth across channels
-        spikeMap = smoothdata(spikeMap,2,'gaussian',5);
+        for id = 1:maxbatch:size(spikeMap,4)
+            if id+maxbatch-1>size(spikeMap,4)
+                spikeMap(:,:,:,id:end) = smoothdata(spikeMap(:,:,:,id:end),2,'gaussian',5);
+            else
+                spikeMap(:,:,:,id:id+maxbatch-1) = smoothdata(spikeMap(:,:,:,id:id+maxbatch-1),2,'gaussian',5);
+            end
+        end
 
 
         % Now average across 100 spikes
@@ -317,11 +336,7 @@ else
         if isempty(rawWaveformFolder) || reExtract
             %save(fullfile(spikeFile.folder, 'rawWaveforms.mat'), 'rawWaveforms', '-v7.3');
             writeNPY(rawWaveformsFull, fullfile(rawFolder, 'templates._jf_rawWaveforms.npy'))
-            writeNPY(rawWaveformsPeakChan, fullfile(rawFolder, 'templates._jf_rawWaveformPeakChannels.npy'))
-
-            if param.saveMultipleRaw
-                writeNPY(spikeMap, fullfile(rawFolder, 'templates._jf_Multi_rawWaveforms.npy'))
-            end
+            writeNPY(rawWaveformsPeakChan, fullfile(rawFolder, 'templates._jf_rawWaveformPeakChannels.npy'))            
         end
     end
 end

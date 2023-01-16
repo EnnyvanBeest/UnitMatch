@@ -85,6 +85,7 @@ for midx = length(MiceOpt)
 
                 %% Get cluster information                
                 [clusinfo,sp] = PrepareClusInfo(subsesoptAll(subsesoptGroups{IMROID}),PrepareClusInfoparams);
+                
                 %% Save out
                 GoodUnits{midx}{probeid}{IMROID} = clusinfo;
 
