@@ -43,8 +43,8 @@ try
         Params.InspectQualityMatrix =0; % Inspect the quality matrix/data set using the GUI
         Params.UnitMatch = 1; % Matching chronic recording using QM instead of using pyks chronic output
         Params.RedoUnitMatch = 0; % Redo unitmatch
-        Params.SaveDir = KiloSortPaths(1)% Directory to save QM and UnitMatch results
-        Params.tmpdatafolder = KiloSortPaths(1)%
+        Params.SaveDir = KiloSortPaths(1); % Directory to save QM and UnitMatch results
+        Params.tmpdatafolder = KiloSortPaths(1); %
     end
     if Params.RunQualityMetrics
         Params.loadPCs=1; %If you want to run QM you need this
@@ -82,7 +82,7 @@ for subsesid=1:length(KiloSortPaths)
         continue
     end
 
-    thissubses = str2num(KiloSortPaths(subsesid).name)
+    thissubses = str2num(KiloSortPaths(subsesid).name);
     if isempty(thissubses)
         thissubses=1;
     end
@@ -102,11 +102,11 @@ for subsesid=1:length(KiloSortPaths)
     hold on
 
     binsz = 0.001;
-    edges = [min(sp{countid}.st)-binsz/2:binsz:max(sp{countid}.st)+binsz/2];
-    timevec = [min(sp{countid}.st):binsz:max(sp{countid}.st)];
+    edges = min(sp{countid}.st)-binsz/2:binsz:max(sp{countid}.st)+binsz/2;
+    timevec = min(sp{countid}.st):binsz:max(sp{countid}.st);
 
     depthstep = 25; %um
-    depthedges = [min(sp{countid}.spikeDepths)-depthstep/2:depthstep:max(sp{countid}.spikeDepths)+depthstep/2];
+    depthedges = min(sp{countid}.spikeDepths)-depthstep/2:depthstep:max(sp{countid}.spikeDepths)+depthstep/2;
     tmpact = arrayfun(@(X) histcounts(sp{countid}.st(sp{countid}.spikeDepths>depthedges(X)&sp{countid}.spikeDepths<depthedges(X+1)),edges),1:length(depthedges)-1,'UniformOutput',0);
     tmpact = cat(1,tmpact{:});
     tmpact = (tmpact-nanmean(tmpact,2))./nanstd(tmpact,[],2); %Z-score
@@ -296,7 +296,7 @@ for subsesid=1:length(KiloSortPaths)
             else
                 savePath =myClusFile(1).folder;
             end
-            qMetricsExist = dir(fullfile(savePath, ['templates._jf_qMetrics.parquet']));
+            qMetricsExist = dir(fullfile(savePath, 'templates._jf_qMetrics.parquet'));
             idx = sp{countid}.SessionID==id;
             InspectionFlag = 0;
             if isempty(qMetricsExist) || Params.RedoQM
@@ -306,7 +306,7 @@ for subsesid=1:length(KiloSortPaths)
                         disp('This is compressed data and we do not want to use Python integration... uncompress temporarily')
                         % Decompression
                         success = pyrunfile("MTSDecomp_From_Matlab.py","success",datapath = strrep(fullfile(rawD(id).folder,rawD(id).name),'\','/'),...
-                            JsonPath =  strrep(fullfile(rawD(id).folder,strrep(rawD(id).name,'cbin','ch')),'\','/'), savepath = strrep(fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')),'\','/'))
+                            JsonPath =  strrep(fullfile(rawD(id).folder,strrep(rawD(id).name,'cbin','ch')),'\','/'), savepath = strrep(fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')),'\','/'));
                         % Also copy metafile
                         copyfile(strrep(fullfile(rawD(id).folder,rawD(id).name),'cbin','meta'),strrep(fullfile(Params.tmpdatafolder,rawD(id).name),'cbin','meta'))
                     end
@@ -324,7 +324,7 @@ for subsesid=1:length(KiloSortPaths)
                 BCparam.plotGlobal=1;
                 BCparam.verbose=1; % update user on progress
                 BCparam.reextractRaw=1; %Re extract raw waveforms
-                BCparam.rawWaveformMaxDef = 'firstSTD'
+                BCparam.rawWaveformMaxDef = 'firstSTD';
                 %             idx = ismember(sp{countid}.spikeTemplates,clusidtmp(Good_IDtmp)); %Only include good units
                 %careful; spikeSites zero indexed
                 [qMetric, unitType] = bc_runAllQualityMetrics(BCparam, round(sp{countid}.st(idx).*sp{countid}.sample_rate), sp{countid}.spikeTemplates(idx)+1, ...
@@ -453,7 +453,7 @@ if Params.UnitMatch
     for id = 1:length(RawDataPaths)
         ephysap_tmp = [];
         ephysap_path = fullfile(RawDataPaths(id).folder,RawDataPaths(id).name);        
-        UnitMatchExist = dir(fullfile(UMparam.SaveDir,['UnitMatch.mat']));
+        UnitMatchExist = dir(fullfile(UMparam.SaveDir,'UnitMatch.mat'));
         if (isempty(UnitMatchExist) || Params.RedoUnitMatch) && ~DecompressionFlag
             % First check if we want to use python for compressed data. If not, uncompress data first
             if any(strfind(RawDataPaths(id).name,'cbin')) && Params.DecompressLocal
@@ -461,7 +461,7 @@ if Params.UnitMatch
                     disp('This is compressed data and we do not want to use Python integration... uncompress temporarily')
                     % Decompression
                     success = pyrunfile("MTSDecomp_From_Matlab.py","success",datapath = strrep(fullfile(RawDataPaths(id).folder,RawDataPaths(id).name),'\','/'),...
-                        JsonPath =  strrep(fullfile(RawDataPaths(id).folder,strrep(RawDataPaths(id).name,'cbin','ch')),'\','/'), savepath = strrep(fullfile(Params.tmpdatafolder,strrep(RawDataPaths(id).name,'cbin','bin')),'\','/'))
+                        JsonPath =  strrep(fullfile(RawDataPaths(id).folder,strrep(RawDataPaths(id).name,'cbin','ch')),'\','/'), savepath = strrep(fullfile(Params.tmpdatafolder,strrep(RawDataPaths(id).name,'cbin','bin')),'\','/'));
                     % Also copy metafile
                     copyfile(strrep(fullfile(RawDataPaths(id).folder,RawDataPaths(id).name),'cbin','meta'),strrep(fullfile(Params.tmpdatafolder,RawDataPaths(id).name),'cbin','meta'))
                 end
@@ -475,7 +475,7 @@ if Params.UnitMatch
     [UniqueID, MatchTable] = UnitMatch(clusinfo,UMparam,sp);
     clusinfo.UniqueID = UniqueID;
     clusinfo.MatchTable = MatchTable;
-    save(fullfile(UMparam.SaveDir,['UnitMatch.mat']),'UniqueID','MatchTable','UMParam')
+    save(fullfile(UMparam.SaveDir,'UnitMatch.mat'),'UniqueID','MatchTable','UMParam')
 end
 
 %% Remove temporary files
