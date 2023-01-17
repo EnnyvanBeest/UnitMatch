@@ -1,4 +1,4 @@
-% function [clusinfo,sp] = PrepareClusInfo(KiloSortPaths,Params,RawDataPaths)
+function [clusinfo,sp] = PrepareClusInfo(KiloSortPaths,Params,RawDataPaths)
 % Prepares cluster information for subsequent analysis
 %% Inputs:
 % KiloSortPaths = List of directories pointing at kilosort output (same format as what you get when
@@ -87,7 +87,6 @@ channel = [];
 Shank=[];
 recses = [];
 countid=1;
-clear AllDecompPaths
 % figure;
 cols = jet(length(KiloSortPaths));
 for subsesid=1:length(KiloSortPaths)
@@ -390,10 +389,6 @@ for subsesid=1:length(KiloSortPaths)
     else
         AllUniqueTemplates = cat(1,AllUniqueTemplates,unique(sp{countid}.spikeTemplates));
         NoiseUnit = false(size(Good_IDtmp));
-        for id = 1:length(lfpD)
-            AllRawPaths{countid}{id} = fullfile(lfpD(id).folder,lfpD(id).name);
-            AllDecompPaths{countid}{id} = fullfile(tmpdatafolder,strrep(lfpD(id).name,'cbin','bin'));
-        end
     end
 
     addthis = nanmax(recsesAll);
@@ -479,12 +474,13 @@ if Params.UnitMatch
     UMparam.channelpos = channelpos;
     UMparam.AllRawPaths = RawDataPaths;
     UMparam.AllDecompPaths = arrayfun(@(X) fullfile(Params.tmpdatafolder,strrep(RawDataPaths(X).name,'cbin','bin')),1:length(RawDataPaths),'Uni',0);
+    UMparam.UseBombCelRawWav = 0;
 
     % Run UnitMatch
     [UniqueID, MatchTable] = UnitMatch(clusinfo,UMparam,sp);
     clusinfo.UniqueID = UniqueID;
     clusinfo.MatchTable = MatchTable;
-    save(fullfile(UMparam.SaveDir,'UnitMatch.mat'),'UniqueID','MatchTable','UMParam')
+    save(fullfile(UMparam.SaveDir,'UnitMatch.mat'),'UniqueID','MatchTable','UMparam')
 end
 
 %% Remove temporary files
