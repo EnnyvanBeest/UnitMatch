@@ -72,6 +72,7 @@ UMparam.ACGbinSize = BCparam.ACGbinSize;
 UMparam.ACGduration = BCparam.ACGduration;
 UMparam.sampleamount = BCparam.nRawSpikesToExtract; %500; % Nr. waveforms to include
 UMparam.spikeWidth =BCparam.SpikeWidth; %83; % in sample space (time)
+UMparam.UseBombCelRawWav = 0; % by default
 
 %% Initialize everything
 AllUniqueTemplates = [];
@@ -477,7 +478,6 @@ if Params.UnitMatch
         UMparam.channelpos = channelpos;
         UMparam.AllRawPaths = RawDataPaths;
         UMparam.AllDecompPaths = arrayfun(@(X) fullfile(Params.tmpdatafolder,strrep(RawDataPaths(X).name,'cbin','bin')),1:length(RawDataPaths),'Uni',0);
-        UMparam.UseBombCelRawWav = 0;
 
         % Run UnitMatch
         [UniqueID, MatchTable] = UnitMatch(clusinfo,UMparam,sp);
