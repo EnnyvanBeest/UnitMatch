@@ -1,4 +1,4 @@
-% function [clusinfo,sp] = PrepareClusInfo(KiloSortPaths,Params,RawDataPaths)
+function [clusinfo,sp] = PrepareClusInfo(KiloSortPaths,Params,RawDataPaths)
 % Prepares cluster information for subsequent analysis
 %% Inputs:
 % KiloSortPaths = List of directories pointing at kilosort output (same format as what you get when
@@ -72,6 +72,7 @@ UMparam.ACGbinSize = BCparam.ACGbinSize;
 UMparam.ACGduration = BCparam.ACGduration;
 UMparam.sampleamount = BCparam.nRawSpikesToExtract; %500; % Nr. waveforms to include
 UMparam.spikeWidth =BCparam.SpikeWidth; %83; % in sample space (time)
+UMparam.UseBombCelRawWav = 0; % by default
 
 %% Initialize everything
 AllUniqueTemplates = [];
@@ -87,7 +88,6 @@ channel = [];
 Shank=[];
 recses = [];
 countid=1;
-clear AllDecompPaths
 % figure;
 cols = jet(length(KiloSortPaths));
 for subsesid=1:length(KiloSortPaths)
@@ -390,10 +390,6 @@ for subsesid=1:length(KiloSortPaths)
     else
         AllUniqueTemplates = cat(1,AllUniqueTemplates,unique(sp{countid}.spikeTemplates));
         NoiseUnit = false(size(Good_IDtmp));
-        for id = 1:length(lfpD)
-            AllRawPaths{countid}{id} = fullfile(lfpD(id).folder,lfpD(id).name);
-            AllDecompPaths{countid}{id} = fullfile(tmpdatafolder,strrep(lfpD(id).name,'cbin','bin'));
-        end
     end
 
     addthis = nanmax(recsesAll);
@@ -478,6 +474,7 @@ if Params.UnitMatch
                 end
             end
         end
+
         % Remaining parameters
         UMparam.channelpos = channelpos;
         UMparam.AllRawPaths = RawDataPaths;
@@ -487,7 +484,7 @@ if Params.UnitMatch
         [UniqueID, MatchTable] = UnitMatch(clusinfo,UMparam,sp);
         clusinfo.UniqueID = UniqueID;
         clusinfo.MatchTable = MatchTable;
-        save(fullfile(UMparam.SaveDir,'UnitMatch.mat'),'UniqueID','MatchTable','UMParam')
+        save(fullfile(UMparam.SaveDir,'UnitMatch.mat'),'UniqueID','MatchTable','UMparam')
     end
 end
 
