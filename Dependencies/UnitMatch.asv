@@ -70,8 +70,6 @@ nclus = length(Good_Idx);
 ndays = length(unique(recsesAll));
 SameSesMat = arrayfun(@(X) cell2mat(arrayfun(@(Y) GoodRecSesID(X)==GoodRecSesID(Y),1:nclus,'Uni',0)),1:nclus,'Uni',0);
 SameSesMat = cat(1,SameSesMat{:});
-OriSessionSwitch = cell2mat(arrayfun(@(X) find(recsesAll==X,1,'first'),1:ndays,'Uni',0));
-OriSessionSwitch = [OriSessionSwitch nclus+1];
 SessionSwitch = cell2mat(arrayfun(@(X) find(GoodRecSesID==X,1,'first'),1:ndays,'Uni',0));
 SessionSwitch = [SessionSwitch nclus+1];
 
@@ -112,13 +110,7 @@ Currentlyloaded = 0;
     fprintf(1,'\b\b\b\b%3.0f%%',uid/nclus*100)
     if UseBombCelRawWav
         tmppath = dir(AllDecompPaths{GoodRecSesID(uid)});
-        spikeMap = readNPY(fullfile(rawdatapath(1).folder,['RawWaveforms_' tmppath.name],['Unit' num2str(UniqueID(Good_Idx(uid))-OriSessionSwitch(GoodRecSesID(uid))+1) '_RawSpikes.npy']));
-        spikeMap = smoothdata(spikeMap,1,'gaussian',5);
-        spikeMap = (spikeMap - mean(spikeMap(1:20,:,:),1));
-        if ~exist(fullfile(rawdatapath(1).folder,'RawWaveforms'))
-            mkdir(fullfile(rawdatapath(1).folder,'RawWaveforms'))
-        end
-        save(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']),'spikeMap')
+        spikeMap = readNPY(fullfile(rawdatapath(1).folder,['RawWaveforms_' tmppath.name],['Unit' num2str(UniqueID(Good_Idx(uid))-SessionSwitch(GoodRecSesID(uid))+1) '_RawSpikes.npy']));
     else
         pathparts = strsplit(AllDecompPaths{GoodRecSesID(uid)},'\');
         rawdatapath = dir(fullfile('\\',pathparts{1:end-1}));

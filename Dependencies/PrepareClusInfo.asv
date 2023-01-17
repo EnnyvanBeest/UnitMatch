@@ -332,7 +332,7 @@ for subsesid=1:length(KiloSortPaths)
 
                 %             idx = ismember(sp{countid}.spikeTemplates,clusidtmp(Good_IDtmp)); %Only include good units
                 %careful; spikeSites zero indexed
-                [qMetric, ~] = bc_runAllQualityMetrics(BCparam, round(sp{countid}.st(idx).*sp{countid}.sample_rate), sp{countid}.spikeTemplates(idx)+1, ...
+                [qMetric, unitType] = bc_runAllQualityMetrics(BCparam, round(sp{countid}.st(idx).*sp{countid}.sample_rate), sp{countid}.spikeTemplates(idx)+1, ...
                     sp{countid}.temps, sp{countid}.tempScalingAmps(idx),sp{countid}.pcFeat(idx,:,:),sp{countid}.pcFeatInd,channelpostmp,savePath);
 
                 UMparam.UseBombCelRawWav = 1; % If you run both bombcell and unitmatch, you can reuse bombcell's extracted units
@@ -343,9 +343,8 @@ for subsesid=1:length(KiloSortPaths)
                 end
                 %                 load(fullfile(savePath, 'qMetric.mat'))
                 bc_loadSavedMetrics
+                bc_getQualityUnitType;
             end
-            bc_getQualityUnitType;
-
             unitTypeAcrossRec{id} = unitType;
             uniqueTemplates{id} = unique(sp{countid}.spikeTemplates(idx));
 
@@ -455,8 +454,10 @@ clear spnew
 %% Match different units?
 if Params.UnitMatch
     UnitMatchExist = dir(fullfile(UMparam.SaveDir,'UnitMatch.mat'));
-    if ~isempty(UnitMatchExist) && ~Params.RedoUnitMatch
-        load(fullfile(UMparam.SaveDir,'UnitMatch.mat'))
+    if ~isempty(UnitMatchExist)
+        
+
+
     else
         % Need to decompress if decompression wasn't done yet
         for id = 1:length(RawDataPaths)
