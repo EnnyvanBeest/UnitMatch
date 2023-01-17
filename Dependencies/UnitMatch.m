@@ -1,4 +1,4 @@
-% function  [UniqueID, MatchTable] = UnitMatch(clusinfo,param,sp)
+function  [UniqueID, MatchTable] = UnitMatch(clusinfo,param,sp)
 %% Match units on neurophysiological evidence
 % Input:
 % - clusinfo (this is phy output, see also prepareinfo/spikes toolbox)
@@ -14,7 +14,7 @@
 % (Fingerprint correlation) of all possible unit pairs
 
 % Matching occurs on:
-% - Wavform Similarity: Correlation and errors
+% - Waveform Similarity: Correlation and errors
 % - Projected location difference (Centroid): distance and direction
 % - Amplitude differences
 % - Spatial decay (decrease in signal over space)
