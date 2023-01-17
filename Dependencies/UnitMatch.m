@@ -28,11 +28,11 @@ function  [UniqueID, MatchTable] = UnitMatch(clusinfo,param,sp)
 % Célian Bimbard (2022)
 
 %% Parameters - tested on these values, but feel free to try others
+global stepsize
+stepsize = 0.01; % Of probability distribution
+MakePlotsOfPairs = 1; % Plots all pairs for inspection
 Scores2Include = {'AmplitudeSim','WavformSim','WVCorr','LocAngleSim','spatialdecaySim','LocDistSim'}; %
 IncludeSpatialInitially = 1; % if 1 we include spatial distance from the start, if 0 only from the naive Bayes part
-sampleamount = param.sampleamount; %500; % Nr. waveforms to include
-spikeWidth = param.spikeWidth; %83; % in sample space (time)
-UseBombCelRawWav = param.UseBombCelRawWav;
 TakeChannelRadius = 75; %in micron around max channel
 maxdist = 200; % Maximum distance at which units are considered as potential matches
 binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
@@ -40,17 +40,19 @@ RedoExtraction = 0; % Raw waveform and parameter extraction
 RemoveRawWavForms = 1; %Remove raw waveforms again to save server space --> advised!! You can run into problems if you don't!
 % Scores2Include = {'WavformSimilarity','LocationCombined','spatialdecayDiff','AmplitudeDiff'};%}
 MakeOwnNaiveBayes = 1; % if 0, use standard matlab version, which assumes normal distributions --> not recommended
-ApplyExistingBayesModel = 1; %If 1, look if a Bayes model already exists for this mouse and applies that
-global stepsize
-stepsize = 0.01; % Of probability distribution
-MakePlotsOfPairs = 1; % Plots all pairs for inspection
+ApplyExistingBayesModel = 0; %If 1, use probability distributions made available by us
+maxrun = 1; % This is whether you want to use Bayes' output to create a new potential candidate set to optimize the probability distributions. Probably we don't want to keep optimizing?, as this can be a bit circular (?)
+
+%% Read in from param
 channelpos = param.channelpos;
 RunPyKSChronicStitched = param.RunPyKSChronicStitched;
 SaveDir = param.SaveDir;
-% AllRawPaths = param.AllRawPaths;
 AllDecompPaths = param.AllDecompPaths;
 AllRawPaths = param.AllRawPaths;
 param.nChannels = length(param.channelpos)+1; %First assume there's a sync channel as well.
+sampleamount = param.sampleamount; %500; % Nr. waveforms to include
+spikeWidth = param.spikeWidth; %83; % in sample space (time)
+UseBombCelRawWav = param.UseBombCelRawWav; % If Bombcell was also applied on this dataset, it's faster to read in the raw waveforms extracted by Bombcell
 
 %% Extract all cluster info 
 AllClusterIDs = clusinfo.cluster_id;
@@ -326,7 +328,7 @@ colormap(flipud(gray))
 colorbar
 makepretty
 
-%% Location differences between pairs of units:
+%% Location differences between pairs of units: - This is done twice to account for large drift between sessions
 flag=0;
 while flag<2
     figure('name','Projection locations all units')
@@ -627,10 +629,8 @@ npairs = 0;
 MinLoss=1;
 MaxPerf = [0 0];
 npairslatest = 0;
-maxrun = 1; % Probably we don't want to keep optimizing?, as this can be a bit circular (?)
 runid=0;
 % Priors = [0.5 0.5];
-
 Priors = [1-(nclus+nclus)./(nclus*nclus) (nclus+nclus)./(nclus*nclus)];
 BestMdl = [];
 while flag<2 && runid<maxrun
