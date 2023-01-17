@@ -309,7 +309,7 @@ for subsesid=1:length(KiloSortPaths)
             else
                 savePath =myClusFile(1).folder;
             end
-            qMetricsExist = dir(fullfile(savePath, ['templates._jf_qMetrics.parquet']));
+            qMetricsExist = dir(fullfile(savePath, ['templates._bc_qMetrics.parquet']));
             idx = sp{countid}.SessionID==id;
             InspectionFlag = 0;
             if isempty(qMetricsExist) || Params.RedoQM
@@ -317,60 +317,67 @@ for subsesid=1:length(KiloSortPaths)
                 if any(strfind(rawD(id).name,'cbin')) && Params.DecompressLocal
                     if ~exist(fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')))
                         disp('This is compressed data and we do not want to use Python integration... uncompress temporarily')
-                        % Decompression
-                        success = pyrunfile("MTSDecomp_From_Matlab.py","success",datapath = strrep(fullfile(rawD(id).folder,rawD(id).name),'\','/'),...
-                            JsonPath =  strrep(fullfile(rawD(id).folder,strrep(rawD(id).name,'cbin','ch')),'\','/'), savepath = strrep(fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')),'\','/'))
-                        % Also copy metafile
+                        decompDataFile = bc_extractCbinData(fullfile(rawD(id).folder,rawD(id).name),...
+                            [], [], [], fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')));
+                        BCparam.rawFile = decompDataFile;
+
+                        %                         % Decompression
+                        %                         success = pyrunfile("MTSDecomp_From_Matlab.py","success",datapath = strrep(fullfile(rawD(id).folder,rawD(id).name),'\','/'),...
+                        %                             JsonPath =  strrep(fullfile(rawD(id).folder,strrep(rawD(id).name,'cbin','ch')),'\','/'), savepath = strrep(fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')),'\','/'))
+                        %                         % Also copy metafile
                         copyfile(strrep(fullfile(rawD(id).folder,rawD(id).name),'cbin','meta'),strrep(fullfile(Params.tmpdatafolder,rawD(id).name),'cbin','meta'))
-                    end
-                    ephysap_tmp = fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin'));
-                    BCparam.rawFolder = [ephysap_path, '/..'];
-                    if exist('ephysap_tmp', 'var')
-                        BCparam.tmpFolder = [ephysap_tmp, '/..'];
-                    end
+                    end                   
                     DecompressionFlag = 1;
                     if Params.InspectQualityMatrix
                         InspectionFlag=1;
-                    end
+                    end                 
                 end
-               
+
+                ephysap_tmp = fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin'));
+                BCparam.rawFile = ephysap_tmp;
+                BCparam.ephysMetaFile = (strrep(fullfile(Params.tmpdatafolder,rawD(id).name),'cbin','meta'));
+
                 %             idx = ismember(sp{countid}.spikeTemplates,clusidtmp(Good_IDtmp)); %Only include good units
                 %careful; spikeSites zero indexed
                 [qMetric, unitType] = bc_runAllQualityMetrics(BCparam, round(sp{countid}.st(idx).*sp{countid}.sample_rate), sp{countid}.spikeTemplates(idx)+1, ...
-                    sp{countid}.temps, sp{countid}.tempScalingAmps(idx),sp{countid}.pcFeat(idx,:,:),sp{countid}.pcFeatInd,channelpostmp,[], savePath);
+                    sp{countid}.temps, sp{countid}.tempScalingAmps(idx),sp{countid}.pcFeat(idx,:,:),sp{countid}.pcFeatInd,channelpostmp,savePath);
 
                 UMparam.UseBombCelRawWav = 1; % If you run both bombcell and unitmatch, you can reuse bombcell's extracted units
             else
                 ephysap_tmp = fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin'));
-                BCparam.rawFolder = [ephysap_path, '/..'];
+                BCparam.rawFile = ephysap_path;
                 if exist('ephysap_tmp', 'var')
                     BCparam.tmpFolder = [ephysap_tmp, '/..'];
                 end
-                load(fullfile(savePath, 'qMetric.mat'))
+                %                 load(fullfile(savePath, 'qMetric.mat'))
+                bc_loadSavedMetrics
                 bc_getQualityUnitType;
             end
             unitTypeAcrossRec{id} = unitType;
             uniqueTemplates{id} = unique(sp{countid}.spikeTemplates(idx));
 
-            if InspectionFlag
-                bc_getRawMemMap;
-
-                %% view units + quality metrics in GUI
-                % put ephys data into structure
-                ephysData = struct;
-                ephysData.spike_times = sp{countid}.st(idx).*round(sp{countid}.sample_rate);
-                ephysData.ephys_sample_rate = sp{countid}.sample_rate;
-                ephysData.spike_times_timeline = sp{countid}.st(idx);
-                ephysData.spike_templates = sp{countid}.spikeTemplates(idx)+1; %0-indexed, make 1 indexed
-                ephysData.templates = sp{countid}.temps;
-                ephysData.template_amplitudes = sp{countid}.tempScalingAmps(idx);
-                ephysData.channel_positions = channelpostmp;
-                ephysData.waveform_t = 1e3*((0:size(sp{countid}.temps, 2) - 1) / ephysData.ephys_sample_rate);
-                ephysParams = struct;
-                plotRaw = 1;
-                probeLocation=[];
+            if InspectionFlag % Doesn't currently work: Julie will update bombcell
+                %                 bc_getRawMemMap;
+                %
+                %                 %% view units + quality metrics in GUI
+                %                 % put ephys data into structure
+                %                 ephysData = struct;
+                %                 ephysData.spike_times = sp{countid}.st(idx).*round(sp{countid}.sample_rate);
+                %                 ephysData.ephys_sample_rate = sp{countid}.sample_rate;
+                %                 ephysData.spike_times_timeline = sp{countid}.st(idx);
+                %                 ephysData.spike_templates = sp{countid}.spikeTemplates(idx)+1; %0-indexed, make 1 indexed
+                %                 ephysData.templates = sp{countid}.temps;
+                %                 ephysData.template_amplitudes = sp{countid}.tempScalingAmps(idx);
+                %                 ephysData.channel_positions = channelpostmp;
+                %                 ephysData.waveform_t = 1e3*((0:size(sp{countid}.temps, 2) - 1) / ephysData.ephys_sample_rate);
+                %                 ephysParams = struct;
+                %                 plotRaw = 1;
+                %                 probeLocation=[];
+                bc_loadMetricsForGUI
                 %% Inspect the results?
-                unitQualityGuiHandle = bc_unitQualityGUI(memMapData,ephysData,qMetric, BCparam, probeLocation, unitType, plotRaw);
+                bc_unitQualityGUI(memMapData, ephysData, qMetric, rawWaveforms, param,...
+                    probeLocation, unitType, plotRaw);
+%                 unitQualityGuiHandle = bc_unitQualityGUI(memMapData,ephysData,qMetric, BCparam, probeLocation, unitType, plotRaw);
                 disp('Not continuing until GUI closed')
                 while isvalid(unitQualityGuiHandle) && InspectQualityMatrix
                     pause(0.01)

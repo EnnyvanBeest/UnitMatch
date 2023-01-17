@@ -48,4 +48,5 @@ BCparam.templateDuration = 400;
 BCparam.pss = 40;
 % Rule to extract max chan
 BCparam.rawWaveformMaxDef = 'firstSTD';
-
+BCparam.saveAsMat=0;
+BCparam.saveAsParquet = 1;
