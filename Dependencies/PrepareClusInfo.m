@@ -1,4 +1,4 @@
-function [clusinfo,sp] = PrepareClusInfo(KiloSortPaths,Params,RawDataPaths)
+% function [clusinfo,sp] = PrepareClusInfo(KiloSortPaths,Params,RawDataPaths)
 % Prepares cluster information for subsequent analysis
 %% Inputs:
 % KiloSortPaths = List of directories pointing at kilosort output (same format as what you get when
@@ -151,34 +151,35 @@ for subsesid=1:length(KiloSortPaths)
     end
 
     %% Is it correct channelpos though...? Check using raw data
-    %     if strcmp(thisdatenow,'Chronic') %CALL THIS STITCHED --> Only works when using RunPyKS2_FromMatlab as well from this toolbox
-    %         sessionsIncluded = dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'SessionsIncluded.mat'));
-    %         sessionsIncluded = load(fullfile(sessionsIncluded.folder,sessionsIncluded.name));
-    %         rawD = arrayfun(@(X) dir(sessionsIncluded.ThesePaths{X}),1:length(sessionsIncluded.ThesePaths),'UniformOutput',0);
-    %         rawD = cat(2,rawD{:});
-    %     else
-    if UseParamsKS
-        spikeStruct = loadParamsPy(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'params.py'));
-        rawD = spikeStruct.dat_path;
-        rawD = rawD(strfind(rawD,'r"')+2:end);
-        rawD = rawD(1:strfind(rawD,'"')-1);
-        tmpdr = rawD;
-        rawD = dir(rawD);
-        if isempty(rawD)
-            rawD = dir(strrep(tmpdr,'bin','cbin'));
-        end
-        
-
-        % Save for later
-        RawDataPaths(subsesid) = rawD;
-
-        if isempty(rawD)
-            disp('Bug...?')
-            keyboard            
-        end
+    if Params.RunPyKSChronicStitched %CALL THIS STITCHED --> Only works when using RunPyKS2_FromMatlab as well from this toolbox
+        sessionsIncluded = dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'SessionsIncluded.mat'));
+        sessionsIncluded = load(fullfile(sessionsIncluded.folder,sessionsIncluded.name));
+        rawD = arrayfun(@(X) dir(sessionsIncluded.ThesePaths{X}),1:length(sessionsIncluded.ThesePaths),'UniformOutput',0);
+        rawD = cat(2,rawD{:});
     else
-        rawD = dir(fullfile(RawDataPaths(subsesid).folder,RawDataPaths(subsesid).name));
-    end   
+        if UseParamsKS
+            spikeStruct = loadParamsPy(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'params.py'));
+            rawD = spikeStruct.dat_path;
+            rawD = rawD(strfind(rawD,'r"')+2:end);
+            rawD = rawD(1:strfind(rawD,'"')-1);
+            tmpdr = rawD;
+            rawD = dir(rawD);
+            if isempty(rawD)
+                rawD = dir(strrep(tmpdr,'bin','cbin'));
+            end
+
+
+            % Save for later
+            RawDataPaths(subsesid) = rawD;
+
+            if isempty(rawD)
+                disp('Bug...?')
+                keyboard
+            end
+        else
+            rawD = dir(fullfile(RawDataPaths(subsesid).folder,RawDataPaths(subsesid).name));
+        end
+    end
     channelpostmpconv = ChannelIMROConversion(rawD(1).folder,1); % For conversion when not automatically done
 
     %% Load Cluster Info
@@ -199,7 +200,7 @@ for subsesid=1:length(KiloSortPaths)
         tmpLabel(ismember(clusinfo.cluster_id,KSLabelfile.cluster_id)) = KSLabelfile.KSLabel(ismember(KSLabelfile.cluster_id,clusinfo.cluster_id));
         Label = [Label,tmpLabel];
         totSpkNum = histc(sp{countid}.clu,sp{countid}.cids);
-        Good_IDtmp = ismember(tmpLabel,'g') & totSpkNum'>1000; %Identify good clusters
+        Good_IDtmp = ismember(tmpLabel,'g') & totSpkNum'>BCparam.minNumSpikes; %Identify good clusters
 
         % Find depth and channel
         depthtmp = nan(length(clusinfo.cluster_id),1);
@@ -342,35 +343,19 @@ for subsesid=1:length(KiloSortPaths)
                     BCparam.tmpFolder = [ephysap_tmp, '/..'];
                 end
                 %                 load(fullfile(savePath, 'qMetric.mat'))
-                bc_loadSavedMetrics
             end
+            bc_loadSavedMetrics %always load the parquet version
             bc_getQualityUnitType;
 
             unitTypeAcrossRec{id} = unitType;
             uniqueTemplates{id} = unique(sp{countid}.spikeTemplates(idx));
 
             if InspectionFlag % Doesn't currently work: Julie will update bombcell
-                %                 bc_getRawMemMap;
-                %
-                %                 %% view units + quality metrics in GUI
-                %                 % put ephys data into structure
-                %                 ephysData = struct;
-                %                 ephysData.spike_times = sp{countid}.st(idx).*round(sp{countid}.sample_rate);
-                %                 ephysData.ephys_sample_rate = sp{countid}.sample_rate;
-                %                 ephysData.spike_times_timeline = sp{countid}.st(idx);
-                %                 ephysData.spike_templates = sp{countid}.spikeTemplates(idx)+1; %0-indexed, make 1 indexed
-                %                 ephysData.templates = sp{countid}.temps;
-                %                 ephysData.template_amplitudes = sp{countid}.tempScalingAmps(idx);
-                %                 ephysData.channel_positions = channelpostmp;
-                %                 ephysData.waveform_t = 1e3*((0:size(sp{countid}.temps, 2) - 1) / ephysData.ephys_sample_rate);
-                %                 ephysParams = struct;
-                %                 plotRaw = 1;
-                %                 probeLocation=[];
+                keyboard
                 bc_loadMetricsForGUI
                 %% Inspect the results?
                 bc_unitQualityGUI(memMapData, ephysData, qMetric, rawWaveforms, param,...
                     probeLocation, unitType, plotRaw);
-%                 unitQualityGuiHandle = bc_unitQualityGUI(memMapData,ephysData,qMetric, BCparam, probeLocation, unitType, plotRaw);
                 disp('Not continuing until GUI closed')
                 while isvalid(unitQualityGuiHandle) && InspectQualityMatrix
                     pause(0.01)
@@ -403,12 +388,8 @@ for subsesid=1:length(KiloSortPaths)
         recsesAll = cat(1,recsesAll(:),repmat(addthis+1,1,length(AllUniqueTemplates))');
     end
     Good_ID = [Good_ID,Good_IDtmp]; %Identify good clusters
-
-
-
     sp{countid}.RecSes = sp{countid}.SessionID+addthis; %Keep track of recording session, as cluster IDs are not unique across sessions
     countid=countid+1;
-
     close all
 
 end
@@ -423,7 +404,6 @@ for fieldid=1:length(fields)
         eval(['spnew.' fields{fieldid} '= cat(1,sp(:).' fields{fieldid} ');'])
     catch
         eval(['spnew.' fields{fieldid} '= cat(2,sp(:).' fields{fieldid} ');'])
-
     end
 end
 
@@ -436,7 +416,6 @@ end
 clusinfo.Shank = Shank;
 clusinfo.ShankID = ShankID;
 clusinfo.RecSesID = recsesAll;
-Good_IDx = find(Good_ID);
 clusinfo.ch = channel;
 clusinfo.depth = depth;
 clusinfo.cluster_id = AllUniqueTemplates;
@@ -479,13 +458,21 @@ if Params.UnitMatch
         UMparam.channelpos = channelpos;
         UMparam.AllRawPaths = RawDataPaths;
         UMparam.AllDecompPaths = arrayfun(@(X) fullfile(Params.tmpdatafolder,strrep(RawDataPaths(X).name,'cbin','bin')),1:length(RawDataPaths),'Uni',0);
-
+        UMparam.RedoExtraction = 0;
         % Run UnitMatch
         [UniqueID, MatchTable] = UnitMatch(clusinfo,UMparam,sp);
         clusinfo.UniqueID = UniqueID;
         clusinfo.MatchTable = MatchTable;
         save(fullfile(UMparam.SaveDir,'UnitMatch.mat'),'UniqueID','MatchTable','UMparam')
     end
+elseif DecompressionFlag % You might want to at least save out averaged waveforms for every session to get back to later, if they were saved out by bomcell
+    % Remaining parameters
+    UMparam.channelpos = channelpos;
+    UMparam.AllRawPaths = RawDataPaths;
+    UMparam.AllDecompPaths = arrayfun(@(X) fullfile(Params.tmpdatafolder,strrep(RawDataPaths(X).name,'cbin','bin')),1:length(RawDataPaths),'Uni',0);
+    UMparam.RedoExtraction = 0;
+    % Extract average waveforms
+    ExtractAndSaveAverageWaveforms(clusinfo,UMparam)
 end
 
 %% Remove temporary files
@@ -495,6 +482,9 @@ if Params.DecompressLocal && DecompressionFlag
     try
         delete(fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')))
         delete(fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','meta')))
+
+        % Bombcell takes up a lot of space: delete
+
     catch ME
         keyboard
     end

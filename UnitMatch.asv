@@ -95,86 +95,17 @@ fakechannel = [channelpos(1,1) nanmean(channelpos(:,2))];
 ChanIdx = find(cell2mat(arrayfun(@(Y) norm(fakechannel-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<TakeChannelRadius); %Averaging over 10 channels helps with drift
 % MultiDimMatrix = nan(spikeWidth,length(ChanIdx),nclus,2); % number time points (max), number of channels (max?), per cluster and cross-validated
 
+% This script does the actual 
+ExtractAndSaveAverageWaveforms(clusinfo,param)
+%% Extract parameters used in UnitMatch
 % Take geographically close channels (within 50 microns!), not just index!
 timercounter = tic;
 fprintf(1,'Extracting raw waveforms. Progress: %3d%%',0)
-pathparts = strsplit(AllDecompPaths{GoodRecSesID(1)},'\');
-rawdatapath = dir(fullfile('\\',pathparts{1:end-1}));
-if isempty(rawdatapath)
-    rawdatapath = dir(fullfile(pathparts{1:end-1}));
-end
-if exist(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(1))) '_RawSpikes.mat'])) && RedoExtraction
-    delete(fullfile(rawdatapath(1).folder,'RawWaveforms','*'))
-end
-
-Currentlyloaded = 0;
  for uid = 1:nclus
-    fprintf(1,'\b\b\b\b%3.0f%%',uid/nclus*100)
-    if UseBombCelRawWav
-        tmppath = dir(AllDecompPaths{GoodRecSesID(uid)});
-        spikeMap = readNPY(fullfile(rawdatapath(1).folder,['RawWaveforms_' tmppath.name],['Unit' num2str(UniqueID(Good_Idx(uid))-OriSessionSwitch(GoodRecSesID(uid))+1) '_RawSpikes.npy']));
-        spikeMap = smoothdata(spikeMap,1,'gaussian',5);
-        spikeMap = (spikeMap - mean(spikeMap(1:20,:,:),1));
-        if ~exist(fullfile(rawdatapath(1).folder,'RawWaveforms'))
-            mkdir(fullfile(rawdatapath(1).folder,'RawWaveforms'))
-        end
-        save(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']),'spikeMap')
-    else
-        pathparts = strsplit(AllDecompPaths{GoodRecSesID(uid)},'\');
-        rawdatapath = dir(fullfile('\\',pathparts{1:end-1}));
-        if isempty(rawdatapath)
-            rawdatapath = dir(fullfile(pathparts{1:end-1}));
-        end
-        if exist(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat'])) && ~RedoExtraction
-            load(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']))
-        else
-            if ~(GoodRecSesID(uid) == Currentlyloaded) % Only load new memmap if not already loaded
-                % Map the data
-                clear memMapData
-                spikeFile = dir(AllDecompPaths{GoodRecSesID(uid)});
-                try %hacky way of figuring out if sync channel present or not
-                    n_samples = spikeFile.bytes / (param.nChannels * dataTypeNBytes);
-                    nChannels = param.nChannels - 1; % Last channel is sync, ignore for now
-                    ap_data = memmapfile(AllDecompPaths{GoodRecSesID(uid)}, 'Format', {'int16', [param.nChannels, n_samples], 'data'});
-                catch
-                    nChannels = param.nChannels - 1;
-                    n_samples = spikeFile.bytes / (nChannels * dataTypeNBytes);
-                    ap_data = memmapfile(AllDecompPaths{GoodRecSesID(uid)}, 'Format', {'int16', [nChannels, n_samples], 'data'});
-                end
-                memMapData = ap_data.Data.data;
-                Currentlyloaded = GoodRecSesID(uid);
-            end
-
-            % Spike samples
-            idx1=(sp.st(sp.spikeTemplates == AllClusterIDs(Good_Idx(uid)) & sp.RecSes == GoodRecSesID(uid)).*round(sp.sample_rate));  % Spike times in samples;
-
-            %Extract raw waveforms on the fly - % Unit uid
-            try
-                spikeIndicestmp = sort(datasample(idx1,sampleamount,'replace',false));
-            catch ME
-                spikeIndicestmp = idx1;
-            end
-            spikeMap = nan(spikeWidth,nChannels,sampleamount);
-            for iSpike = 1:length(spikeIndicestmp)
-                thisSpikeIdx = int32(spikeIndicestmp(iSpike));
-                if thisSpikeIdx > halfWidth && (thisSpikeIdx + halfWidth) < size(memMapData,2) % check that it's not out of bounds
-                    tmp = smoothdata(double(memMapData(1:nChannels,thisSpikeIdx-halfWidth:thisSpikeIdx+halfWidth)),2,'gaussian',5);
-                    tmp = (tmp - mean(tmp(:,1:20),2))';
-                    tmp(:,end+1:nChannels) = nan(size(tmp,1),nChannels-size(tmp,2));
-                    % Subtract first 10 samples to level spikes
-                    spikeMap(:,:,iSpike) = tmp;
-                end
-            end
-
-            if ~exist(fullfile(rawdatapath(1).folder,'RawWaveforms'))
-                mkdir(fullfile(rawdatapath(1).folder,'RawWaveforms'))
-            end
-            save(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']),'spikeMap')
-        end
-    end
+     fprintf(1,'\b\b\b\b%3.0f%%',uid/nclus*100)
+     load(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']))
     
     % Extract unit parameters -
-    nwavs = sum(sum(~isnan(nanmean(spikeMap,2)),1) == spikeWidth); % Actual number of waves
     % Cross-validate: first versus second half of session
     for cv = 1:2
         if cv==1
@@ -183,28 +114,28 @@ Currentlyloaded = 0;
             wavidx = floor(nwavs/2+1:nwavs);
         end
         % Find maximum channels:
-        [~,MaxChannel(uid,cv)] = nanmax(nanmax(abs(nanmean(spikeMap(35:70,:,wavidx),3)),[],1));
+        [~,MaxChannel(uid,cv)] = nanmax(nanmax(abs(spikeMap(35:70,:)),[],1));
 
         % Extract channel positions that are relevant and extract mean location
         ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChannel(uid,cv),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<TakeChannelRadius); %Averaging over 10 channels helps with drift
         Locs = channelpos(ChanIdx,:);
 
         % Mean location:
-        mu = sum(repmat(nanmax(abs(nanmean(spikeMap(:,ChanIdx,wavidx),3)),[],1),size(Locs,2),1).*Locs',2)./sum(repmat(nanmax(abs(nanmean(spikeMap(:,ChanIdx,wavidx),3)),[],1),size(Locs,2),1),2);
+        mu = sum(repmat(nanmax(abs(spikeMap(:,ChanIdx)),[],1),size(Locs,2),1).*Locs',2)./sum(repmat(nanmax(abs(nanmean(spikeMap(:,ChanIdx,wavidx),3)),[],1),size(Locs,2),1),2);
         ProjectedLocation(:,uid,cv)=mu;
 
         %     % Mean waveform - first extract the 'weight' for each channel, based on
         %     % how close they are to the projected location (closer = better)
         Distance2MaxChan = sqrt(nansum(abs(Locs-channelpos(MaxChannel(uid,cv),:)).^2,2));
         % Difference in amplitude from maximum amplitude
-        spdctmp = (nanmax(abs(nanmean(spikeMap(:,MaxChannel(uid,cv),wavidx),3)),[],1)-nanmax(abs(nanmean(spikeMap(:,ChanIdx,wavidx),3)),[],1))./nanmax(abs(nanmean(spikeMap(:,MaxChannel(uid,cv),wavidx),3)),[],1);
+        spdctmp = (nanmax(abs(spikeMap(:,MaxChannel(uid,cv))),[],1)-nanmax(abs(spikeMap(:,ChanIdx)),[],1))./nanmax(abs(spikeMap(:,MaxChannel(uid,cv))),[],1);
         % Spatial decay (average oer micron)
         spatialdecay(uid,cv) = nanmean(spdctmp./Distance2MaxChan');
 
         % Use this waveform - weighted average across channels:
         Distance2MaxProj = sqrt(nansum(abs(Locs-ProjectedLocation(:,uid,cv)').^2,2));
         weight = (TakeChannelRadius-Distance2MaxProj)./TakeChannelRadius;
-        ProjectedWaveform(:,uid,cv) = nansum(nanmean(spikeMap(:,ChanIdx,wavidx),3).*repmat(weight,1,size(spikeMap,1))',2)./sum(weight);
+        ProjectedWaveform(:,uid,cv) = nansum(spikeMap(:,ChanIdx).*repmat(weight,1,size(spikeMap,1))',2)./sum(weight);
 
         % Find significant timepoints
         wvdurtmp = find(abs(ProjectedWaveform(:,uid,cv))>abs(nanmean(ProjectedWaveform(1:20,uid,cv)))+2.5*nanstd(ProjectedWaveform(1:20,uid,cv))); % More than 2. std from baseline
@@ -219,7 +150,7 @@ Currentlyloaded = 0;
         wvdurtmp = find(sign(Peakval)*ProjectedWaveform(:,uid,cv)>0.5*sign(Peakval)*Peakval);
         waveformduration(uid,cv) = length(wvdurtmp);
         % Mean Location per individual time point:
-        ProjectedLocationPerTP(:,uid,wvdurtmp,cv) = cell2mat(arrayfun(@(tp) sum(repmat(abs(nanmean(spikeMap(tp,ChanIdx,wavidx),3)),size(Locs,2),1).*Locs',2)./sum(repmat(abs(nanmean(spikeMap(tp,ChanIdx,wavidx),3)),size(Locs,2),1),2),wvdurtmp','Uni',0));
+        ProjectedLocationPerTP(:,uid,wvdurtmp,cv) = cell2mat(arrayfun(@(tp) sum(repmat(abs(spikeMap(tp,ChanIdx)),size(Locs,2),1).*Locs',2)./sum(repmat(abs(spikeMap(tp,ChanIdx)),size(Locs,2),1),2),wvdurtmp','Uni',0));
         WaveIdx(uid,1:size(wvdurtmp),cv) = wvdurtmp;
         % Save spikes for these channels
         %         MultiDimMatrix(wvdurtmp,1:length(ChanIdx),uid,cv) = nanmean(spikeMap(wvdurtmp,ChanIdx,wavidx),3);
@@ -239,7 +170,8 @@ disp('Computing Metric similarity between pairs of units...')
 timercounter = tic;
 PeakTimeSim = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) abs(PeakTime(uid,1)-PeakTime(uid2,2)),1:nclus,'Uni',0)),1:nclus,'Uni',0);
 %Normalize between 0 and 1 (values that make sense after testing, without having outliers influence this)
-PeakTimeSim =1-cat(1,PeakTimeSim{:})./10;
+PeakTimeSim=cat(1,PeakTimeSim{:});
+PeakTimeSim =1-PeakTimeSim./quantile(PeakTimeSim(:),0.99);
 PeakTimeSim(PeakTimeSim<0)=0;
 
 waveformTimePointSim = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) sum(ismember(WaveIdx(uid,:,1),WaveIdx(uid2,:,2)))./sum(~isnan(WaveIdx(uid,:,1))),1:nclus,'Uni',0)),1:nclus,'Uni',0);
@@ -598,6 +530,8 @@ while flag<2
             close all
 
         end
+    else
+        break
     end
     flag = flag+1;
 
@@ -624,12 +558,14 @@ MaxPerf = [0 0];
 npairslatest = 0;
 runid=0;
 % Priors = [0.5 0.5];
-Priors = [1-(nclus+nclus)./(nclus*nclus) (nclus+nclus)./(nclus*nclus)];
+Priors = [priorMatch 1-priorMatch];
 BestMdl = [];
 while flag<2 && runid<maxrun
     flag = 0;
     runid=runid+1
-    if ApplyExistingBayesModel && exist(fullfile(SaveDir,'UnitMatchModel.mat'))
+    filedir = which('UnitMatch');
+    filedir = dir(filedir);
+    if ApplyExistingBayesModel && exist(fullfile(filedir.folder,'UnitMatchModel.mat'))
         load(fullfile(SaveDir,'UnitMatchModel.mat'),'BestMdl')
         % Apply naive bays classifier
         Tbl = array2table(reshape(Predictors,[],size(Predictors,3)),'VariableNames',Scores2Include); %All parameters
@@ -842,7 +778,7 @@ else
     [label, posterior, cost] = predict(BestMdl,Tbl);
 end
 MatchProbability = reshape(posterior(:,2),size(Predictors,1),size(Predictors,2));
-label = (MatchProbability>=0.99) | (MatchProbability>0.01 & RankScoreAll==1);
+label = (MatchProbability>=0.5) | (MatchProbability>0.01 & RankScoreAll==1);
 % label = reshape(label,nclus,nclus);
 [r, c] = find(triu(label)==1); %Find matches across 2 days
 Pairs = cat(2,r,c);
@@ -1137,7 +1073,6 @@ Pairs(ISIViolationsScore>0.05,:)=[];
 ProjectedWaveform = nanmean(ProjectedWaveform,3); %Average over first and second half of session
 ProjectedLocation = nanmean(ProjectedLocation,3);
 ProjectedLocationPerTP = nanmean(ProjectedLocationPerTP,4);
-
 
 %% Figures
 if MakePlotsOfPairs

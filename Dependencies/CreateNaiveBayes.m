@@ -6,7 +6,7 @@ ncross = 5;
 Scores2Include = Tbl.Properties.VariableNames;
 SmoothProbability = 5; % smoothing, since we need to make sure none of the scores have a probability of 0
 SmoothSpatialFactor = 5; % Apply another smoothing factor for spatial decay and space
-addone=1; %Add one to the distribution to not have a probability of 0
+addone=0.001; %Add probability to the distribution to not have a probability of 0 (default 0.001)
 if nargin<3
     Prior = [0.5 0.5];
 end
@@ -39,8 +39,11 @@ for scid=1:length(Scores2Include)
 %     ulim = quantile(ScoresTmp,0.975);
     % Save out probability distribution
     for Ck = 1:length(Cond)
-        Parameterkernels(:,scid,Ck) = smooth(histcounts(ScoresTmp(label==Cond(Ck)),Edges)+addone,Smoothtmp)./(sum(label==Cond(Ck))+addone);
+        % Probability Distributions
+        Parameterkernels(:,scid,Ck) = smooth(histcounts(ScoresTmp(label==Cond(Ck)),Edges),Smoothtmp)./(sum(label==Cond(Ck)));
      
+        % Avoid having 0 probability
+        Parameterkernels(:,scid,Ck) = Parameterkernels(:,scid,Ck)+addone;
 %         % modify the distribution for not frequently observed values
 %         Parameterkernels(1:find(dlim-Edges<0,1,'first'),scid,Ck) = Parameterkernels(find(dlim-Edges<0,1,'first'),scid,Ck);
 %         Parameterkernels(find(ulim-Edges<0,1,'first'):end,scid,Ck) = Parameterkernels(find(ulim-Edges<0,1,'first'),scid,Ck);
@@ -78,17 +81,19 @@ for cv = 1:ncross
 
         ScoresTmp = ScoresTmp(trainidx);
         % Scores irrespective of label:
-%         dlim = quantile(ScoresTmp,0.025);
-%         ulim = quantile(ScoresTmp,0.975);
+        %         dlim = quantile(ScoresTmp,0.025);
+        %         ulim = quantile(ScoresTmp,0.975);
 
         % Save out probability distribution
         for Ck = 1:length(Cond)
-            % Always add 1 count!!
-            ParameterkernelsCV(:,scid,Ck) = smooth(histcounts(ScoresTmp(label(trainidx)==Cond(Ck)),Edges)+addone,Smoothtmp)./(sum(label(trainidx)==Cond(Ck))+addone);
+            % Probability Distributions
+            ParameterkernelsCV(:,scid,Ck) = smooth(histcounts(ScoresTmp(label(trainidx)==Cond(Ck)),Edges),Smoothtmp)./(sum(label(trainidx)==Cond(Ck)));
 
+            % Avoid having 0 probability
+            Parameterkernels(:,scid,Ck) = Parameterkernels(:,scid,Ck)+addone;
             % modify the distribution for not frequently observed values
-%             ParameterkernelsCV(1:find(dlim-Edges<0,1,'first'),scid,Ck) = ParameterkernelsCV(find(dlim-Edges<0,1,'first'),scid,Ck);
-%             ParameterkernelsCV(find(ulim-Edges<0,1,'first'):end,scid,Ck) = ParameterkernelsCV(find(ulim-Edges<0,1,'first'),scid,Ck);
+            %             ParameterkernelsCV(1:find(dlim-Edges<0,1,'first'),scid,Ck) = ParameterkernelsCV(find(dlim-Edges<0,1,'first'),scid,Ck);
+            %             ParameterkernelsCV(find(ulim-Edges<0,1,'first'):end,scid,Ck) = ParameterkernelsCV(find(ulim-Edges<0,1,'first'),scid,Ck);
 
         end
     end
