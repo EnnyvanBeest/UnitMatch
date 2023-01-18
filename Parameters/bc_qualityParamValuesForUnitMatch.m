@@ -7,7 +7,7 @@ BCparam.plotGlobal = 1;
 BCparam.verbose=1; % update user on progress
 
 % saving parameters
-BCparam.saveAsMat=0;
+BCparam.saveAsMat=1;
 BCparam.saveAsParquet = 1;
 
 % Raw extraction parameters

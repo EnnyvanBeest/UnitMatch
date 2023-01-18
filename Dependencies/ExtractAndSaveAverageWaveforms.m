@@ -1,4 +1,4 @@
-function ExtractAndSaveAverageWaveforms(clusinfo,param)
+function ExtractAndSaveAverageWaveforms(clusinfo,param,sp)
 %% Called by UnitMatch, but can also be used on its own to save two averaged waveforms per unit per session
 
 %% Read in from param
@@ -8,8 +8,9 @@ AllRawPaths = param.AllRawPaths;
 param.nChannels = length(param.channelpos)+1; %First assume there's a sync channel as well.
 sampleamount = param.sampleamount; %500; % Nr. waveforms to include
 spikeWidth = param.spikeWidth; %83; % in sample space (time)
+halfWidth = floor(spikeWidth/2);
 UseBombCelRawWav = param.UseBombCelRawWav; % If Bombcell was also applied on this dataset, it's faster to read in the raw waveforms extracted by Bombcell
-
+SaveDir = param.SaveDir;
 %% Extract all cluster info 
 AllClusterIDs = clusinfo.cluster_id;
 UniqueID = 1:length(AllClusterIDs); % Initial assumption: All clusters are unique
@@ -33,25 +34,25 @@ rawdatapath = dir(fullfile('\\',pathparts{1:end-1}));
 if isempty(rawdatapath)
     rawdatapath = dir(fullfile(pathparts{1:end-1}));
 end
-if exist(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(1))) '_RawSpikes.mat'])) && RedoExtraction
-    delete(fullfile(rawdatapath(1).folder,'RawWaveforms','*'))
+if exist(fullfile(SaveDir,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(1))) '_RawSpikes.mat'])) && RedoExtraction
+    delete(fullfile(SaveDir,'UnitMatchWaveforms','*'))
 end
 
 Currentlyloaded = 0;
 for uid = 1:nclus
     fprintf(1,'\b\b\b\b%3.0f%%',uid/nclus*100)
     if UseBombCelRawWav
-        if exist(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat'])) && ~RedoExtraction
-            load(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']))
+        if exist(fullfile(rawdatapath(1).folder,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat'])) && ~RedoExtraction
+            load(fullfile(rawdatapath(1).folder,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']))
         else
             tmppath = dir(AllDecompPaths{GoodRecSesID(uid)});
             spikeMap = readNPY(fullfile(rawdatapath(1).folder,['RawWaveforms_' tmppath.name],['Unit' num2str(UniqueID(Good_Idx(uid))-OriSessionSwitch(GoodRecSesID(uid))+1) '_RawSpikes.npy']));
             spikeMap = smoothdata(spikeMap,1,'gaussian',5);
             spikeMap = (spikeMap - mean(spikeMap(1:20,:,:),1));
-            if ~exist(fullfile(rawdatapath(1).folder,'RawWaveforms'))
-                mkdir(fullfile(rawdatapath(1).folder,'RawWaveforms'))
+            if ~exist(fullfile(SaveDir,'UnitMatchWaveforms'))
+                mkdir(fullfile(SaveDir,'UnitMatchWaveforms'))
             end
-            save(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']),'spikeMap')
+            save(fullfile(SaveDir,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']),'spikeMap')
         end
     else
         pathparts = strsplit(AllDecompPaths{GoodRecSesID(uid)},'\');
@@ -59,8 +60,8 @@ for uid = 1:nclus
         if isempty(rawdatapath)
             rawdatapath = dir(fullfile(pathparts{1:end-1}));
         end
-        if exist(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat'])) && ~RedoExtraction
-            load(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']))
+        if exist(fullfile(SaveDir,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat'])) && ~RedoExtraction
+            load(fullfile(SaveDir,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']))
         else
             if ~(GoodRecSesID(uid) == Currentlyloaded) % Only load new memmap if not already loaded
                 % Map the data
@@ -112,10 +113,10 @@ for uid = 1:nclus
                 clear spikeMapAvg
             end
 
-            if ~exist(fullfile(rawdatapath(1).folder,'RawWaveforms'))
-                mkdir(fullfile(rawdatapath(1).folder,'RawWaveforms'))
+            if ~exist(fullfile(SaveDir,'UnitMatchWaveforms'))
+                mkdir(fullfile(SaveDir,'UnitMatchWaveforms'))
             end
-            save(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']),'spikeMap')
+            save(fullfile(SaveDir,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']),'spikeMap')
         end
     end
 end

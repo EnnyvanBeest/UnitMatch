@@ -36,8 +36,7 @@ IncludeSpatialInitially = 1; % if 1 we include spatial distance from the start, 
 TakeChannelRadius = 75; %in micron around max channel
 maxdist = 200; % Maximum distance at which units are considered as potential matches
 binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
-RedoExtraction = 0; % Raw waveform and parameter extraction
-RemoveRawWavForms = 1; %Remove raw waveforms again to save server space --> advised!! You can run into problems if you don't!
+RemoveRawWavForms = 0; %Remove averaged waveforms again to save space --> Currently only two averages saved so shouldn't be a problem to keep it, normally speaking
 % Scores2Include = {'WavformSimilarity','LocationCombined','spatialdecayDiff','AmplitudeDiff'};%}
 MakeOwnNaiveBayes = 1; % if 0, use standard matlab version, which assumes normal distributions --> not recommended
 ApplyExistingBayesModel = 0; %If 1, use probability distributions made available by us
@@ -101,7 +100,7 @@ timercounter = tic;
 fprintf(1,'Extracting raw waveforms. Progress: %3d%%',0)
  for uid = 1:nclus
      fprintf(1,'\b\b\b\b%3.0f%%',uid/nclus*100)
-     load(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']))
+     load(fullfile(SaveDir,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']))
     
     % Extract unit parameters -
     % Cross-validate: first versus second half of session
@@ -1087,7 +1086,7 @@ if MakePlotsOfPairs
         end
 
         % Load raw data
-        SM1=load(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']));
+        SM1=load(fullfile(SaveDir,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']));
         SM1 = SM1.spikeMap; %Average across these channels
 
         pathparts = strsplit(AllDecompPaths{GoodRecSesID(uid2)},'\');
@@ -1096,7 +1095,7 @@ if MakePlotsOfPairs
             rawdatapath = dir(fullfile(pathparts{1:end-1}));
         end
 
-        SM2=load(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid2))) '_RawSpikes.mat']));
+        SM2=load(fullfile(SaveDir,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid2))) '_RawSpikes.mat']));
         SM2 = SM2.spikeMap; %Average across these channels
 
         tmpfig = figure;
@@ -1306,8 +1305,8 @@ for id = 1:size(Pairs,1)
     UniqueID(Good_Idx(Pairs(id,2))) = UniqueID(Good_Idx(Pairs(id,1)));
 end
 
-if RemoveRawWavForms && exist(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(1))) '_RawSpikes.mat']))
-    delete(fullfile(rawdatapath(1).folder,'RawWaveforms','*')) % Free up space on servers
+if RemoveRawWavForms && exist(fullfile(SaveDir,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(1))) '_RawSpikes.mat']))
+    delete(fullfile(SaveDir,'UnitMatchWaveforms','*')) % Free up space on servers
 end
 %% Unused bits and pieces
 if 0

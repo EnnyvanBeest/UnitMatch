@@ -1,83 +1,58 @@
-function ExtractAndSaveAverageWaveforms(clusinfo,param)
-
-%% Parameters - tested on these values, but feel free to try others
-global stepsize
-stepsize = 0.01; % Of probability distribution
-MakePlotsOfPairs = 1; % Plots all pairs for inspection
-Scores2Include = {'AmplitudeSim','WavformSim','WVCorr','LocAngleSim','spatialdecaySim','LocDistSim'}; %
-IncludeSpatialInitially = 1; % if 1 we include spatial distance from the start, if 0 only from the naive Bayes part
-TakeChannelRadius = 75; %in micron around max channel
-maxdist = 200; % Maximum distance at which units are considered as potential matches
-binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
-RedoExtraction = 0; % Raw waveform and parameter extraction
-RemoveRawWavForms = 1; %Remove raw waveforms again to save server space --> advised!! You can run into problems if you don't!
-% Scores2Include = {'WavformSimilarity','LocationCombined','spatialdecayDiff','AmplitudeDiff'};%}
-MakeOwnNaiveBayes = 1; % if 0, use standard matlab version, which assumes normal distributions --> not recommended
-ApplyExistingBayesModel = 0; %If 1, use probability distributions made available by us
-maxrun = 1; % This is whether you want to use Bayes' output to create a new potential candidate set to optimize the probability distributions. Probably we don't want to keep optimizing?, as this can be a bit circular (?)
+function ExtractAndSaveAverageWaveforms(clusinfo,param,sp)
+%% Called by UnitMatch, but can also be used on its own to save two averaged waveforms per unit per session
 
 %% Read in from param
-channelpos = param.channelpos;
-RunPyKSChronicStitched = param.RunPyKSChronicStitched;
-SaveDir = param.SaveDir;
+RedoExtraction = param.RedoExtraction; % Raw waveform and parameter extraction
 AllDecompPaths = param.AllDecompPaths;
 AllRawPaths = param.AllRawPaths;
 param.nChannels = length(param.channelpos)+1; %First assume there's a sync channel as well.
 sampleamount = param.sampleamount; %500; % Nr. waveforms to include
 spikeWidth = param.spikeWidth; %83; % in sample space (time)
+halfWidth = floor(spikeWidth/2);
 UseBombCelRawWav = param.UseBombCelRawWav; % If Bombcell was also applied on this dataset, it's faster to read in the raw waveforms extracted by Bombcell
-
+SaveDir = param.SaveDir;
 %% Extract all cluster info 
 AllClusterIDs = clusinfo.cluster_id;
-nses = length(AllDecompPaths);
-OriginalClusID = AllClusterIDs; % Original cluster ID assigned by KS
 UniqueID = 1:length(AllClusterIDs); % Initial assumption: All clusters are unique
 Good_Idx = find(clusinfo.Good_ID); %Only care about good units at this point
 GoodRecSesID = clusinfo.RecSesID(Good_Idx);
 
 % Define day stucture
 recsesAll = clusinfo.RecSesID;
-recsesGood = recsesAll(Good_Idx);
-[X,Y]=meshgrid(recsesAll(Good_Idx));
 nclus = length(Good_Idx);
 ndays = length(unique(recsesAll));
-SameSesMat = arrayfun(@(X) cell2mat(arrayfun(@(Y) GoodRecSesID(X)==GoodRecSesID(Y),1:nclus,'Uni',0)),1:nclus,'Uni',0);
-SameSesMat = cat(1,SameSesMat{:});
 OriSessionSwitch = cell2mat(arrayfun(@(X) find(recsesAll==X,1,'first'),1:ndays,'Uni',0));
 OriSessionSwitch = [OriSessionSwitch nclus+1];
-SessionSwitch = cell2mat(arrayfun(@(X) find(GoodRecSesID==X,1,'first'),1:ndays,'Uni',0));
-SessionSwitch = [SessionSwitch nclus+1];
-dataTypeNBytes = numel(typecast(cast(0, 'uint16'), 'uint8'));
-
 
 %% Actual extraction
-timercounter = tic;
+dataTypeNBytes = numel(typecast(cast(0, 'uint16'), 'uint8')); % Define datatype
 
+timercounter = tic;
 fprintf(1,'Extracting raw waveforms. Progress: %3d%%',0)
 pathparts = strsplit(AllDecompPaths{GoodRecSesID(1)},'\');
 rawdatapath = dir(fullfile('\\',pathparts{1:end-1}));
 if isempty(rawdatapath)
     rawdatapath = dir(fullfile(pathparts{1:end-1}));
 end
-if exist(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(1))) '_RawSpikes.mat'])) && RedoExtraction
-    delete(fullfile(rawdatapath(1).folder,'RawWaveforms','*'))
+if exist(fullfile(SaveDir,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(1))) '_RawSpikes.mat'])) && RedoExtraction
+    delete(fullfile(SaveDir,'UnitMatchWaveforms','*'))
 end
 
 Currentlyloaded = 0;
 for uid = 1:nclus
     fprintf(1,'\b\b\b\b%3.0f%%',uid/nclus*100)
     if UseBombCelRawWav
-        if exist(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat'])) && ~RedoExtraction
-            load(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']))
+        if exist(fullfile(rawdatapath(1).folder,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat'])) && ~RedoExtraction
+            load(fullfile(rawdatapath(1).folder,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']))
         else
             tmppath = dir(AllDecompPaths{GoodRecSesID(uid)});
             spikeMap = readNPY(fullfile(rawdatapath(1).folder,['RawWaveforms_' tmppath.name],['Unit' num2str(UniqueID(Good_Idx(uid))-OriSessionSwitch(GoodRecSesID(uid))+1) '_RawSpikes.npy']));
             spikeMap = smoothdata(spikeMap,1,'gaussian',5);
             spikeMap = (spikeMap - mean(spikeMap(1:20,:,:),1));
-            if ~exist(fullfile(rawdatapath(1).folder,'RawWaveforms'))
-                mkdir(fullfile(rawdatapath(1).folder,'RawWaveforms'))
+            if ~exist(fullfile(SaveDir,'UnitMatchWaveforms'))
+                mkdir(fullfile(SaveDir,'UnitMatchWaveforms'))
             end
-            save(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']),'spikeMap')
+            save(fullfile(rawdatapath(1).folder,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']),'spikeMap')
         end
     else
         pathparts = strsplit(AllDecompPaths{GoodRecSesID(uid)},'\');
@@ -85,8 +60,8 @@ for uid = 1:nclus
         if isempty(rawdatapath)
             rawdatapath = dir(fullfile(pathparts{1:end-1}));
         end
-        if exist(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat'])) && ~RedoExtraction
-            load(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']))
+        if exist(fullfile(rawdatapath(1).folder,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat'])) && ~RedoExtraction
+            load(fullfile(rawdatapath(1).folder,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']))
         else
             if ~(GoodRecSesID(uid) == Currentlyloaded) % Only load new memmap if not already loaded
                 % Map the data
@@ -138,13 +113,13 @@ for uid = 1:nclus
                 clear spikeMapAvg
             end
 
-            if ~exist(fullfile(rawdatapath(1).folder,'RawWaveforms'))
-                mkdir(fullfile(rawdatapath(1).folder,'RawWaveforms'))
+            if ~exist(fullfile(rawdatapath(1).folder,'UnitMatchWaveforms'))
+                mkdir(fullfile(rawdatapath(1).folder,'UnitMatchWaveforms'))
             end
-            save(fullfile(rawdatapath(1).folder,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']),'spikeMap')
+            save(fullfile(rawdatapath(1).folder,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']),'spikeMap')
         end
     end
 end
 
 fprintf('\n')
-disp(['Extracting raw waveforms and parameters took ' num2str(round(toc(timercounter)./60)) ' minutes for ' num2str(nclus) ' units'])
+disp(['Extracting raw waveforms took ' num2str(round(toc(timercounter)./60)) ' minutes for ' num2str(nclus) ' units'])
