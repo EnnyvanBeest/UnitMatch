@@ -5,63 +5,72 @@ disp('Calculate activity correlations')
 %% Correlations per session
 Unit2Take = AllClusterIDs(Good_Idx);
 fig1 = figure('name','Cross-correlation Fingerprints');
-
+clear AllSessionCorrelations
 if ndays>1
-    for did = 1:ndays
-        PairsTmp = Pairs;
-        % We need a group of units that is likely to be a pair across at least two days
-        if did<ndays
-            pairidx = find(recsesAll(Good_Idx(Pairs(:,1))) == did & recsesAll(Good_Idx(Pairs(:,2)))==did+1);
-            PairsTmp = Pairs(pairidx,:);
-            % Only use every 'unit' once --> take the highest scoring matches
-            [val,id1,id2]=unique(PairsTmp(:,1),'stable');
-            PairsTmp = PairsTmp(id1,:);
-            [val,id1,id2]=unique(PairsTmp(:,2),'stable');
-            PairsTmp = PairsTmp(id1,:);
-            Unit2TakeIdx = PairsTmp(:,1); % Only take each unit once
-        else
-            Unit2TakeIdx = [];
-        end
-        if did>1
-            pairidx = find(recsesAll(Good_Idx(Pairs(:,2))) == did & recsesAll(Good_Idx(Pairs(:,1)))==did-1);
-            PairsTmp = Pairs(pairidx,:);
-            % Only use every 'unit' once --> take the highest scoring matches
-            [val,id1,id2]=unique(PairsTmp(:,1),'stable');
-            PairsTmp = PairsTmp(id1,:);
-            [val,id1,id2]=unique(PairsTmp(:,2),'stable');
-            PairsTmp = PairsTmp(id1,:);
-            Unit2TakeIdx = [Unit2TakeIdx; PairsTmp(:,2)];
-        end
-        % Correlation on this day
-        srMatches = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == X & sp.RecSes == did),edges),Unit2Take(Unit2TakeIdx),'UniformOutput',0);
-        srMatches = cat(1,srMatches{:});
+    for did1 = 1:ndays-1
+        for did2 = 2:ndays
+            if did2<=did1
+                continue
+            end
+            dayopt = [did1,did2];
+            for did = 1:length(dayopt)
+                PairsTmp = Pairs;
+                % We need a group of units that is likely to be a pair across at least two days
+                if did==1
+                    pairidx = find(recsesAll(Good_Idx(Pairs(:,1))) == dayopt(did) & recsesAll(Good_Idx(Pairs(:,2)))==dayopt(did+1));
+                    PairsTmp = Pairs(pairidx,:);
+                    % Only use every 'unit' once --> take the highest scoring matches
+                    [val,id1,id2]=unique(PairsTmp(:,1),'stable');
+                    PairsTmp = PairsTmp(id1,:);
+                    [val,id1,id2]=unique(PairsTmp(:,2),'stable');
+                    PairsTmp = PairsTmp(id1,:);
+                    Unit2TakeIdx = PairsTmp(:,1); % Only take each unit once
+                else
+                    Unit2TakeIdx = [];
+                end
+                if did==2
+                    pairidx = find(recsesAll(Good_Idx(Pairs(:,2))) == dayopt(did) & recsesAll(Good_Idx(Pairs(:,1)))==dayopt(did-1));
+                    PairsTmp = Pairs(pairidx,:);
+                    % Only use every 'unit' once --> take the highest scoring matches
+                    [val,id1,id2]=unique(PairsTmp(:,1),'stable');
+                    PairsTmp = PairsTmp(id1,:);
+                    [val,id1,id2]=unique(PairsTmp(:,2),'stable');
+                    PairsTmp = PairsTmp(id1,:);
+                    Unit2TakeIdx = [Unit2TakeIdx; PairsTmp(:,2)];
+                end
+                % Correlation on this day
+                srMatches = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == X & sp.RecSes == dayopt(did)),edges),Unit2Take(Unit2TakeIdx),'UniformOutput',0);
+                srMatches = cat(1,srMatches{:});
 
-        % All Units on this day
-        Unit2TakeIdxAll = find(recsesAll(Good_Idx) == did);
-        srAll = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == X & sp.RecSes == did),edges),Unit2Take(Unit2TakeIdxAll),'UniformOutput',0);
-        srAll = cat(1,srAll{:});
-        SessionCorrelation_Pair = corr(srMatches(:,1:floor(size(srMatches,2)./2))',srAll(:,1:floor(size(srMatches,2)./2))');
+                % All Units on this day
+                Unit2TakeIdxAll = find(recsesAll(Good_Idx) == dayopt(did));
+                srAll = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == X & sp.RecSes == dayopt(did)),edges),Unit2Take(Unit2TakeIdxAll),'UniformOutput',0);
+                srAll = cat(1,srAll{:});
+                SessionCorrelation_Pair = corr(srMatches(:,1:floor(size(srMatches,2)./2))',srAll(:,1:floor(size(srMatches,2)./2))');
 
-        %     % Remove =1 for the same unit (per def. 1)
-        for id = 1:length(Unit2TakeIdx)
-            SessionCorrelation_Pair(id,find(ismember(Unit2TakeIdxAll,Unit2TakeIdx(id)))) = nan;
-        end
+                %     % Remove =1 for the same unit (per def. 1)
+                for id = 1:length(Unit2TakeIdx)
+                    SessionCorrelation_Pair(id,find(ismember(Unit2TakeIdxAll,Unit2TakeIdx(id)))) = nan;
+                end
 
-        % Normalize correlations to compare across recordings
-%         SessionCorrelation_Pair = (SessionCorrelation_Pair-nanmedian(SessionCorrelation_Pair(:)))./(quantile(SessionCorrelation_Pair(:),0.95)-quantile(SessionCorrelation_Pair(:),0.05));
-        subplot(1,ndays,did)
-        imagesc(SessionCorrelation_Pair')
-        colormap(flipud(gray))
-        xlabel('Candidate Units to be matched')
-        ylabel('All units')
-        title(['Recording ' num2str(did)])
-        makepretty
+                % Normalize correlations to compare across recordings
+                %         SessionCorrelation_Pair = (SessionCorrelation_Pair-nanmedian(SessionCorrelation_Pair(:)))./(quantile(SessionCorrelation_Pair(:),0.95)-quantile(SessionCorrelation_Pair(:),0.05));
+                subplot(ndays-1,2,did)
+                imagesc(SessionCorrelation_Pair')
+                colormap(flipud(gray))
+                xlabel('Candidate Units to be matched')
+                ylabel('All units')
+                title(['Recording ' num2str(dayopt(did))])
+                makepretty
 
-        % Add all together
-        if did == 1
-            SessionCorrelations = SessionCorrelation_Pair';
-        else
-            SessionCorrelations = cat(1,SessionCorrelations,SessionCorrelation_Pair');
+                % Add all together
+                if did == 1
+                    SessionCorrelations = SessionCorrelation_Pair';
+                else
+                    SessionCorrelations = cat(1,SessionCorrelations,SessionCorrelation_Pair');
+                end
+            end
+            AllSessionCorrelations{did1,did2} = SessionCorrelations;
         end
     end
 else
@@ -98,60 +107,122 @@ else
 
 
     SessionCorrelations = cat(1,SessionCorrelations',SessionCorrelations2');
+    AllSessionCorrelations{1} = SessionCorrelations;
 end
 
 %%
-rmidx = find(sum(isnan(SessionCorrelations),2)==size(SessionCorrelations,2));
-SessionCorrelations(rmidx,:)=[];
-nclustmp = nclus-length(rmidx);
-notrmdixvec = 1:nclus;
-notrmdixvec(rmidx)=[];
-% Correlate 'fingerprints'
-FingerprintR = arrayfun(@(X) cell2mat(arrayfun(@(Y) corr(SessionCorrelations(X,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))',SessionCorrelations(Y,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))'),1:nclustmp,'UniformOutput',0)),1:nclustmp,'UniformOutput',0);
-FingerprintR = cat(1,FingerprintR{:});
-
-% If one value was only nans; put it back in and replace original
-% FingerprintR
-if any(rmidx)
-    Fingerprinttmp = nan(nclus,nclus);
-    Fingerprinttmp(1:rmidx-1,1:rmidx-1)=FingerprintR(1:rmidx-1,1:rmidx-1);
-    Fingerprinttmp(rmidx,:)=nan;
-    Fingerprinttmp(:,rmidx)=nan;
-    Fingerprinttmp(rmidx+1:end,notrmdixvec)=FingerprintR(rmidx:end,:);
-    Fingerprinttmp(notrmdixvec,rmidx+1:end)=FingerprintR(:,rmidx:end);
-    FingerprintR = Fingerprinttmp;
-    clear Fingerprinttmp
-end
-
+clear FingerPrintAll
 figure('name','Fingerprint correlations')
-imagesc(FingerprintR)
-hold on
-arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
-arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
-colormap(flipud(gray))
-xlabel('All units across both days')
-ylabel('All units across both days')
-title('Correlation Fingerprint')
-makepretty
+for did1 = 1:ndays-1
+    for did2 = 2:ndays
+        if did2<=did1
+            continue
+        end
+        SessionCorrelations = AllSessionCorrelations{did1,did2};
+        rmidx = find(sum(isnan(SessionCorrelations),2)==size(SessionCorrelations,2));
+        SessionCorrelations(rmidx,:)=[];
+        nclustmp = size(SessionCorrelations,1)-length(rmidx);
+        notrmdixvec = SessionSwitch(did):SessionSwitch(did+2)-1;
+        notrmdixvec(rmidx)=[];
+        % Correlate 'fingerprints'
+        FingerprintR = arrayfun(@(X) cell2mat(arrayfun(@(Y) corr(SessionCorrelations(X,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))',SessionCorrelations(Y,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))'),1:nclustmp,'UniformOutput',0)),1:nclustmp,'UniformOutput',0);
+        FingerprintR = cat(1,FingerprintR{:});
 
+        % If one value was only nans; put it back in and replace original
+        % FingerprintR
+        if any(rmidx)
+            Fingerprinttmp = nan(nclustmp,nclustmp);
+            Fingerprinttmp(1:rmidx-1,1:rmidx-1)=FingerprintR(1:rmidx-1,1:rmidx-1);
+            Fingerprinttmp(rmidx,:)=nan;
+            Fingerprinttmp(:,rmidx)=nan;
+            Fingerprinttmp(rmidx+1:end,notrmdixvec)=FingerprintR(rmidx:end,:);
+            Fingerprinttmp(notrmdixvec,rmidx+1:end)=FingerprintR(:,rmidx:end);
+            FingerprintR = Fingerprinttmp;
+            clear Fingerprinttmp
+        end
+
+        subplot(ndays-1,ndays-1,(did1-1)*(ndays-1)+did2-1)
+        imagesc(FingerprintR)
+        hold on
+        arrayfun(@(X) line([SessionSwitch(X)-SessionSwitch(X-1) SessionSwitch(X)-SessionSwitch(X-1)],get(gca,'ylim'),'color',[1 0 0]),did1+1,'Uni',0)
+        arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X)-SessionSwitch(X-1) SessionSwitch(X)-SessionSwitch(X-1)],'color',[1 0 0]),did1+1,'Uni',0)
+        colormap(flipud(gray))
+%         xlabel('All units across both days')
+%         ylabel('All units across both days')
+        title(['R' num2str(did2)])
+        ylabel(['R' num2str(did1)])
+        set(gca,'XTickLabel','','YTickLabel','')
+
+        makepretty
+        drawnow
+
+        FingerPrintAll{did1,did2} = FingerprintR;
+    end
+end
 %%
+FingerprintRAll = nan(nclus,nclus);
+ncellsperrecording = diff(SessionSwitch);
 SigMask = zeros(nclus,nclus);
 RankScoreAll = nan(size(SigMask));
 for pid=1:nclus
     for pid2 = 1:nclus
-        tmp1 = FingerprintR(pid,SessionSwitch(recsesGood(pid2)):SessionSwitch(recsesGood(pid2)+1)-1);
-        addthis=SessionSwitch(recsesGood(pid2))-1;
+        if pid2<pid
+            continue
+        end
+        did1 = (recsesGood(pid));
+        did2 = (recsesGood(pid2));
+        addthis3=-SessionSwitch(did1)+1;
+        addthis4 = 0;
+        if did2==did1 && did2~=ndays
+            did2=did2+1;
+        elseif did2==did1 && did2==ndays
+            addthis3=-SessionSwitch(did1)+1+ncellsperrecording(did1);
+            addthis4 = ncellsperrecording(did1-1);
+            did1 = did1-1;          
+        end
+      
+        FingerprintR = FingerPrintAll{did1,did2};
+        did2 = (recsesGood(pid2));
+        did1 = (recsesGood(pid));
+
+        if did1==did2
+            tmp1 = FingerprintR(pid+addthis3,[1:ncellsperrecording(did1)]+addthis4);
+            addthis=SessionSwitch(did1)-1;
+            addthis2 = -addthis;
+        else
+            tmp1 = FingerprintR(pid+addthis3,ncellsperrecording(did1)+1:end);
+            addthis=SessionSwitch(did2)-1;
+            addthis2 = -addthis+ncellsperrecording(did1);
+        end
 
         [val,ranktmp] = sort(tmp1,'descend');
 
         tmp1(pid2-addthis)=[];
 
-        if FingerprintR(pid,pid2)>nanmean(tmp1)+2*nanstd(tmp1)
+        if FingerprintR(pid+addthis3,pid2+addthis2)>nanmean(tmp1)+2*nanstd(tmp1)
             SigMask(pid,pid2)=1;
         end
+        FingerprintRAll(pid,pid2) = FingerprintR(pid+addthis3,pid2+addthis2);
         RankScoreAll(pid,pid2) = find(ranktmp==pid2-addthis);
     end
 end
+
+% MIRROR
+for uid=1:nclus
+    for uid2 = 1:nclus
+        if uid2<uid
+            if ~isnan(RankScoreAll(uid,uid2))
+                keyboard
+            end
+            SigMask(uid,uid2)=SigMask(uid2,uid);
+            RankScoreAll(uid,uid2)=RankScoreAll(uid2,uid);
+            FingerprintRAll(uid,uid2) = FingerprintRAll(uid2,uid);
+        end
+    end
+end
+
+FingerprintR = FingerprintRAll;
+clear FingerprintRAll
 
 figure('name','RankScore')
 subplot(1,2,1)

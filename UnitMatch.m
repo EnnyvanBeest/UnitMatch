@@ -76,7 +76,7 @@ SessionSwitch = [SessionSwitch nclus+1];
 
 %% Extract raw waveforms 
 % This script does the actual extraction
-ExtractAndSaveAverageWaveforms(clusinfo,param)
+ExtractAndSaveAverageWaveforms(clusinfo,param,sp)
 %% Extract parameters used in UnitMatch
 
 % Initialize
@@ -105,38 +105,36 @@ fprintf(1,'Extracting raw waveforms. Progress: %3d%%',0)
     % Extract unit parameters -
     % Cross-validate: first versus second half of session
     for cv = 1:2
-        if cv==1
-            wavidx = floor(1:nwavs/2);
-        else
-            wavidx = floor(nwavs/2+1:nwavs);
-        end
         % Find maximum channels:
-        [~,MaxChannel(uid,cv)] = nanmax(nanmax(abs(spikeMap(35:70,:)),[],1));
+        [~,MaxChannel(uid,cv)] = nanmax(nanmax(abs(spikeMap(35:70,:,cv)),[],1));
 
         % Extract channel positions that are relevant and extract mean location
         ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChannel(uid,cv),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<TakeChannelRadius); %Averaging over 10 channels helps with drift
         Locs = channelpos(ChanIdx,:);
 
         % Mean location:
-        mu = sum(repmat(nanmax(abs(spikeMap(:,ChanIdx)),[],1),size(Locs,2),1).*Locs',2)./sum(repmat(nanmax(abs(nanmean(spikeMap(:,ChanIdx,wavidx),3)),[],1),size(Locs,2),1),2);
+        mu = sum(repmat(nanmax(abs(spikeMap(:,ChanIdx,cv)),[],1),size(Locs,2),1).*Locs',2)./sum(repmat(nanmax(abs(nanmean(spikeMap(:,ChanIdx,cv),3)),[],1),size(Locs,2),1),2);
         ProjectedLocation(:,uid,cv)=mu;
 
         %     % Mean waveform - first extract the 'weight' for each channel, based on
         %     % how close they are to the projected location (closer = better)
         Distance2MaxChan = sqrt(nansum(abs(Locs-channelpos(MaxChannel(uid,cv),:)).^2,2));
         % Difference in amplitude from maximum amplitude
-        spdctmp = (nanmax(abs(spikeMap(:,MaxChannel(uid,cv))),[],1)-nanmax(abs(spikeMap(:,ChanIdx)),[],1))./nanmax(abs(spikeMap(:,MaxChannel(uid,cv))),[],1);
+        spdctmp = (nanmax(abs(spikeMap(:,MaxChannel(uid,cv),cv)),[],1)-nanmax(abs(spikeMap(:,ChanIdx,cv)),[],1))./nanmax(abs(spikeMap(:,MaxChannel(uid,cv),cv)),[],1);
         % Spatial decay (average oer micron)
         spatialdecay(uid,cv) = nanmean(spdctmp./Distance2MaxChan');
 
         % Use this waveform - weighted average across channels:
         Distance2MaxProj = sqrt(nansum(abs(Locs-ProjectedLocation(:,uid,cv)').^2,2));
         weight = (TakeChannelRadius-Distance2MaxProj)./TakeChannelRadius;
-        ProjectedWaveform(:,uid,cv) = nansum(spikeMap(:,ChanIdx).*repmat(weight,1,size(spikeMap,1))',2)./sum(weight);
+        ProjectedWaveform(:,uid,cv) = nansum(spikeMap(:,ChanIdx,cv).*repmat(weight,1,size(spikeMap,1))',2)./sum(weight);
 
         % Find significant timepoints
         wvdurtmp = find(abs(ProjectedWaveform(:,uid,cv))>abs(nanmean(ProjectedWaveform(1:20,uid,cv)))+2.5*nanstd(ProjectedWaveform(1:20,uid,cv))); % More than 2. std from baseline
 
+        if isempty(wvdurtmp)
+            wvdurtmp = 20:80;
+        end
         % Peak Time
         [~,PeakTime(uid,cv)] = nanmax(abs(ProjectedWaveform(wvdurtmp(1):wvdurtmp(end),uid,cv)));
         PeakTime(uid,cv) = PeakTime(uid,cv)+wvdurtmp(1)-1;
@@ -147,7 +145,7 @@ fprintf(1,'Extracting raw waveforms. Progress: %3d%%',0)
         wvdurtmp = find(sign(Peakval)*ProjectedWaveform(:,uid,cv)>0.5*sign(Peakval)*Peakval);
         waveformduration(uid,cv) = length(wvdurtmp);
         % Mean Location per individual time point:
-        ProjectedLocationPerTP(:,uid,wvdurtmp,cv) = cell2mat(arrayfun(@(tp) sum(repmat(abs(spikeMap(tp,ChanIdx)),size(Locs,2),1).*Locs',2)./sum(repmat(abs(spikeMap(tp,ChanIdx)),size(Locs,2),1),2),wvdurtmp','Uni',0));
+        ProjectedLocationPerTP(:,uid,wvdurtmp,cv) = cell2mat(arrayfun(@(tp) sum(repmat(abs(spikeMap(tp,ChanIdx,cv)),size(Locs,2),1).*Locs',2)./sum(repmat(abs(spikeMap(tp,ChanIdx,cv)),size(Locs,2),1),2),wvdurtmp','Uni',0));
         WaveIdx(uid,1:size(wvdurtmp),cv) = wvdurtmp;
         % Save spikes for these channels
         %         MultiDimMatrix(wvdurtmp,1:length(ChanIdx),uid,cv) = nanmean(spikeMap(wvdurtmp,ChanIdx,wavidx),3);
@@ -499,7 +497,7 @@ while flag<2
     
     %% three ways to define candidate scores
     % Total score larger than threshold
-    CandidatePairs = TotalScore>ThrsOpt & RankScoreAll==1;
+    CandidatePairs = TotalScore>ThrsOpt & RankScoreAll==1 & SigMask==1;
     %     CandidatePairs(tril(true(size(CandidatePairs))))=0;
     figure('name','Potential Matches')
     imagesc(CandidatePairs)
@@ -538,7 +536,7 @@ end
 % distributions are just weird
 priorMatch = 1-(nclus*ndays)./(nclus*nclus); %Now use a slightly more lenient prior
 ThrsOpt = quantile(TotalScore(:),priorMatch);
-CandidatePairs = TotalScore>ThrsOpt & RankScoreAll==1;
+CandidatePairs = TotalScore>ThrsOpt & RankScoreAll==1 & SigMask==1;
 % CandidatePairs(tril(true(size(CandidatePairs)),-1))=0;
 [uid,uid2] = find(CandidatePairs);
 Pairs = cat(2,uid,uid2);
@@ -655,65 +653,54 @@ while flag<2 && runid<maxrun
 
 
         end
-
-
     end
     drawnow
 
-    label = reshape(label,size(Predictors,1),size(Predictors,2));
-    [r, c] = find(triu(label)==1); %Find matches
+    if runid<maxrun % Otherwise a waste of time!
+        label = reshape(label,size(Predictors,1),size(Predictors,2));
+        [r, c] = find(triu(label)==1); %Find matches
 
-    Pairs = cat(2,r,c);
-    Pairs = sortrows(Pairs);
-    Pairs=unique(Pairs,'rows');
-    %     Pairs(Pairs(:,1)==Pairs(:,2),:)=[];
-    MatchProbability = reshape(posterior(:,2),size(Predictors,1),size(Predictors,2));
-    %     figure; imagesc(label)
+        Pairs = cat(2,r,c);
+        Pairs = sortrows(Pairs);
+        Pairs=unique(Pairs,'rows');
+        %     Pairs(Pairs(:,1)==Pairs(:,2),:)=[];
+        MatchProbability = reshape(posterior(:,2),size(Predictors,1),size(Predictors,2));
+        %     figure; imagesc(label)
 
-    % Functional score for optimization: compute Fingerprint for the matched units - based on Célian Bimbard's noise-correlation finger print method but applied to across session correlations
-    % Not every recording day will have the same units. Therefore we will
-    % correlate each unit's activity with average activity across different
-    % depths
-    disp('Recalculate activity correlations')
+        % Functional score for optimization: compute Fingerprint for the matched units - based on Célian Bimbard's noise-correlation finger print method but applied to across session correlations
+        % Not every recording day will have the same units. Therefore we will
+        % correlate each unit's activity with average activity across different
+        % depths
+        disp('Recalculate activity correlations')
 
-    % Use a bunch of units with high total scores as reference population
-    [PairScore,sortid] = sort(cell2mat(arrayfun(@(X) MatchProbability(Pairs(X,1),Pairs(X,2)),1:size(Pairs,1),'Uni',0)),'descend');
-    Pairs = Pairs(sortid,:);
-    CrossCorrelationFingerPrint
+        % Use a bunch of units with high total scores as reference population
+        [PairScore,sortid] = sort(cell2mat(arrayfun(@(X) MatchProbability(Pairs(X,1),Pairs(X,2)),1:size(Pairs,1),'Uni',0)),'descend');
+        Pairs = Pairs(sortid,:);
+        CrossCorrelationFingerPrint
 
-    tmpf = triu(FingerprintR,1);
-    tmpm = triu(MatchProbability,1);
-    tmpm = tmpm(tmpf~=0);
-    tmpf = tmpf(tmpf~=0);
-    tmpr = triu(RankScoreAll,1);
-    tmpr = tmpr(tmpr~=0);
+        tmpf = triu(FingerprintR,1);
+        tmpm = triu(MatchProbability,1);
+        tmpm = tmpm(tmpf~=0);
+        tmpf = tmpf(tmpf~=0);
+        tmpr = triu(RankScoreAll,1);
+        tmpr = tmpr(tmpr~=0);
 
-    figure;
-    scatter(tmpm,tmpf,14,tmpr,'filled')
-    colormap(cat(1,[0 0 0],winter))
-    xlabel('Match Probability')
-    ylabel('Cross-correlation fingerprint')
-    makepretty
-    drawnow
+        figure;
+        scatter(tmpm,tmpf,14,tmpr,'filled')
+        colormap(cat(1,[0 0 0],winter))
+        xlabel('Match Probability')
+        ylabel('Cross-correlation fingerprint')
+        makepretty
+        drawnow
 
-    % New Pairs for new round
-    CandidatePairs = label==1 & RankScoreAll==1;
-    CandidatePairs(tril(true(size(CandidatePairs)),-1))=0;
-    [uid,uid2] = find(CandidatePairs);
-    Pairs = cat(2,uid,uid2);
-    Pairs = sortrows(Pairs);
-    Pairs=unique(Pairs,'rows');
-
-    % for the naive bayes classifier to properly learn, we also need some examples of non-matches that score high on one but not the other parameters
-    leaveoutmatches = label==1&RankScoreAll>nanmedian(RankScoreAll(:));
-    leaveoutmatches(tril(true(size(leaveoutmatches)),-1))=0;
-    [uid,uid2] = find(leaveoutmatches);
-    NoPairs = cat(2,uid,uid2);
-    NoPairs = sortrows(NoPairs);
-    NoPairs = unique(NoPairs,'rows');
-
-    % Put together for making the naive bayes model
-    Pairs = cat(1,Pairs,NoPairs);
+        % New Pairs for new round
+        CandidatePairs = label==1 & RankScoreAll==1& SigMask==1;
+        CandidatePairs(tril(true(size(CandidatePairs)),-1))=0;
+        [uid,uid2] = find(CandidatePairs);
+        Pairs = cat(2,uid,uid2);
+        Pairs = sortrows(Pairs);
+        Pairs=unique(Pairs,'rows');
+    end
 end
 
 %% If this was stitched pykilosort, we know what pykilosort thought about the matches
@@ -775,7 +762,7 @@ else
     [label, posterior, cost] = predict(BestMdl,Tbl);
 end
 MatchProbability = reshape(posterior(:,2),size(Predictors,1),size(Predictors,2));
-label = (MatchProbability>=0.5) | (MatchProbability>0.01 & RankScoreAll==1);
+label = (MatchProbability>=0.5) | (MatchProbability>0.01 & RankScoreAll==1 & SigMask==1);
 % label = reshape(label,nclus,nclus);
 [r, c] = find(triu(label)==1); %Find matches across 2 days
 Pairs = cat(2,r,c);
@@ -818,12 +805,12 @@ CrossCorrelationFingerPrint
 %%
 figure;
 subplot(1,3,1)
-imagesc(RankScoreAll==1)
+imagesc(RankScoreAll==1 & SigMask==1)
 hold on
 arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
 arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
 colormap(flipud(gray))
-title('Rankscore == 1')
+title('Rankscore == 1*')
 makepretty
 
 subplot(1,3,2)
@@ -836,7 +823,7 @@ title('Match Probability>0.5')
 makepretty
 
 subplot(1,3,3)
-imagesc(MatchProbability>=0.99 | (MatchProbability>=0.01 & RankScoreAll==1))
+imagesc(MatchProbability>=0.99 | (MatchProbability>=0.01 & RankScoreAll==1 & SigMask==1))
 hold on
 arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
 arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
@@ -860,7 +847,7 @@ ylabel('Cross-correlation fingerprint')
 makepretty
 
 %% Extract final pairs:
-label = MatchProbability>=0.99 | (MatchProbability>=0.01 & RankScoreAll==1);
+label = MatchProbability>=0.99 | (MatchProbability>=0.01 & RankScoreAll==1 & SigMask==1);
 [r, c] = find(triu(label,1)); %Find matches
 Pairs = cat(2,r,c);
 Pairs = sortrows(Pairs);
@@ -1073,6 +1060,9 @@ ProjectedLocationPerTP = nanmean(ProjectedLocationPerTP,4);
 
 %% Figures
 if MakePlotsOfPairs
+    if ~isdir(fullfile(SaveDir,'MatchFigures'))
+        mkdir(fullfile(SaveDir,'MatchFigures'))
+    end
     % Pairs = Pairs(any(ismember(Pairs,[8,68,47,106]),2),:);
     %     AllClusterIDs(Good_Idx(Pairs))
     for pairid=1:size(Pairs,1)
@@ -1290,8 +1280,9 @@ if MakePlotsOfPairs
 
         drawnow
         set(gcf,'units','normalized','outerposition',[0 0 1 1])
-        saveas(gcf,fullfile(SaveDir,[num2str(round(MatchProbability(uid,uid2).*100)) 'ClusID' num2str(AllClusterIDs(Good_Idx(uid))) 'vs' num2str(AllClusterIDs(Good_Idx(uid2))) '.fig']))
-        saveas(gcf,fullfile(SaveDir,[num2str(round(MatchProbability(uid,uid2).*100)) 'ClusID' num2str(AllClusterIDs(Good_Idx(uid))) 'vs' num2str(AllClusterIDs(Good_Idx(uid2))) '.bmp']))
+       
+        saveas(gcf,fullfile(SaveDir,'MatchFigures',[num2str(round(MatchProbability(uid,uid2).*100)) 'ClusID' num2str(AllClusterIDs(Good_Idx(uid))) 'vs' num2str(AllClusterIDs(Good_Idx(uid2))) '.fig']))
+        saveas(gcf,fullfile(SaveDir,'MatchFigures',[num2str(round(MatchProbability(uid,uid2).*100)) 'ClusID' num2str(AllClusterIDs(Good_Idx(uid))) 'vs' num2str(AllClusterIDs(Good_Idx(uid2))) '.bmp']))
 
         close(tmpfig)
     end

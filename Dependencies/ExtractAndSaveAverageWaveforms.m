@@ -11,7 +11,7 @@ spikeWidth = param.spikeWidth; %83; % in sample space (time)
 halfWidth = floor(spikeWidth/2);
 UseBombCelRawWav = param.UseBombCelRawWav; % If Bombcell was also applied on this dataset, it's faster to read in the raw waveforms extracted by Bombcell
 SaveDir = param.SaveDir;
-%% Extract all cluster info 
+%% Extract all cluster info
 AllClusterIDs = clusinfo.cluster_id;
 UniqueID = 1:length(AllClusterIDs); % Initial assumption: All clusters are unique
 Good_Idx = find(clusinfo.Good_ID); %Only care about good units at this point
@@ -42,17 +42,13 @@ Currentlyloaded = 0;
 for uid = 1:nclus
     fprintf(1,'\b\b\b\b%3.0f%%',uid/nclus*100)
     if UseBombCelRawWav
-        if exist(fullfile(rawdatapath(1).folder,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat'])) && ~RedoExtraction
-            load(fullfile(rawdatapath(1).folder,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']))
+        if exist(fullfile(SaveDir,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat'])) && ~RedoExtraction
+            continue
         else
             tmppath = dir(AllDecompPaths{GoodRecSesID(uid)});
             spikeMap = readNPY(fullfile(rawdatapath(1).folder,['RawWaveforms_' tmppath.name],['Unit' num2str(UniqueID(Good_Idx(uid))-OriSessionSwitch(GoodRecSesID(uid))+1) '_RawSpikes.npy']));
             spikeMap = smoothdata(spikeMap,1,'gaussian',5);
             spikeMap = (spikeMap - mean(spikeMap(1:20,:,:),1));
-            if ~exist(fullfile(SaveDir,'UnitMatchWaveforms'))
-                mkdir(fullfile(SaveDir,'UnitMatchWaveforms'))
-            end
-            save(fullfile(SaveDir,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']),'spikeMap')
         end
     else
         pathparts = strsplit(AllDecompPaths{GoodRecSesID(uid)},'\');
@@ -61,7 +57,7 @@ for uid = 1:nclus
             rawdatapath = dir(fullfile(pathparts{1:end-1}));
         end
         if exist(fullfile(SaveDir,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat'])) && ~RedoExtraction
-            load(fullfile(SaveDir,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']))
+            continue
         else
             if ~(GoodRecSesID(uid) == Currentlyloaded) % Only load new memmap if not already loaded
                 % Map the data
@@ -100,26 +96,27 @@ for uid = 1:nclus
                     spikeMap(:,:,iSpike) = tmp;
                 end
             end
-            %Actual number of wavefroms
-            nwavs = sum(sum(~isnan(nanmean(spikeMap,2)),1) == spikeWidth); % Actual number of waves
-            for cv = 1:2
-                if cv==1
-                    wavidx = floor(1:nwavs/2);
-                else
-                    wavidx = floor(nwavs/2+1:nwavs);
-                end
-                spikeMapAvg = nanmean(spikeMap(:,:,wavidx),3);
-                spikeMap = spikeMapAvg;
-                clear spikeMapAvg
-            end
-
-            if ~exist(fullfile(SaveDir,'UnitMatchWaveforms'))
-                mkdir(fullfile(SaveDir,'UnitMatchWaveforms'))
-            end
-            save(fullfile(SaveDir,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']),'spikeMap')
         end
     end
+    %Actual number of wavefroms
+    nwavs = sum(sum(~isnan(nanmean(spikeMap,2)),1) == spikeWidth); % Actual number of waves
+    for cv = 1:2
+        if cv==1
+            wavidx = floor(1:nwavs/2);
+        else
+            wavidx = floor(nwavs/2+1:nwavs);
+        end
+        spikeMapAvg(:,:,cv) = nanmean(spikeMap(:,:,wavidx),3);
+    end
+    spikeMap = spikeMapAvg;
+    clear spikeMapAvg
+
+    if ~exist(fullfile(SaveDir,'UnitMatchWaveforms'))
+        mkdir(fullfile(SaveDir,'UnitMatchWaveforms'))
+    end
+    save(fullfile(SaveDir,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']),'spikeMap')
 end
+
 
 fprintf('\n')
 disp(['Extracting raw waveforms took ' num2str(round(toc(timercounter)./60)) ' minutes for ' num2str(nclus) ' units'])

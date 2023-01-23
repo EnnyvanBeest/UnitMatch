@@ -1,4 +1,4 @@
-% function [clusinfo,sp] = PrepareClusInfo(KiloSortPaths,Params,RawDataPaths)
+function [clusinfo,sp] = PrepareClusInfo(KiloSortPaths,Params,RawDataPaths)
 % Prepares cluster information for subsequent analysis
 %% Inputs:
 % KiloSortPaths = List of directories pointing at kilosort output (same format as what you get when
@@ -476,12 +476,14 @@ if Params.DecompressLocal && DecompressionFlag
     clear memMapData
     clear ap_data
     try
-        delete(fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')))
-        delete(fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','meta')))
+        for id = 1:length(RawDataPaths)
+            delete(fullfile(Params.tmpdatafolder,strrep(RawDataPaths(id).name,'cbin','bin')))
+            delete(fullfile(Params.tmpdatafolder,strrep(RawDataPaths(id).name,'cbin','meta')))
 
-        % Bombcell takes up a lot of space: delete
-        
-
+            % Bombcell takes up a lot of space: delete
+            delete(fullfile(Params.tmpdatafolder,['RawWaveforms_' strrep(RawDataPaths(id).name,'cbin','bin')],'*'))
+            rmdir(fullfile(Params.tmpdatafolder,['RawWaveforms_' strrep(RawDataPaths(id).name,'cbin','bin')]))
+        end
     catch ME
         keyboard
     end
