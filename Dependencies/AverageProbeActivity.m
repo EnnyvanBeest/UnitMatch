@@ -159,7 +159,7 @@ for midx = length(MiceOpt)
                 for shid = 1:nshanks
                     binned_spikes_depth = zeros(length(unique_depths),length(corr_edges)-1);
                     parfor curr_depth = 1:length(unique_depths)
-                        binned_spikes_depth(curr_depth,:) = histcounts(st(spikeID& depth_group == unique_depths(curr_depth) & spikeShank==shid-1), corr_edges);
+                        binned_spikes_depth(curr_depth,:) = histcounts(st(spikeID& depth_group == unique_depths(curr_depth) & spikeShank==ShankOpt(shid)), corr_edges);
                     end
                     %     % Z-score
                     %     binned_spikes_depth = (binned_spikes_depth - nanmean(binned_spikes_depth(:)))./nanstd(binned_spikes_depth(:));

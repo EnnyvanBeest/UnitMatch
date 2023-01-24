@@ -1065,6 +1065,8 @@ if MakePlotsOfPairs
     end
     if size(Pairs,1)>drawmax
         DrawPairs = randsample(1:size(Pairs,1),drawmax,'false');
+    else
+        DrawPairs = 1:size(Pairs,1);
     end
     % Pairs = Pairs(any(ismember(Pairs,[8,68,47,106]),2),:);
     %     AllClusterIDs(Good_Idx(Pairs))

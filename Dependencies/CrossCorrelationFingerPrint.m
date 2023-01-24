@@ -106,24 +106,30 @@ else
     makepretty
 
 
-    SessionCorrelations = cat(1,SessionCorrelations',SessionCorrelations2');
+    SessionCorrelations = nanmean(cat(3,SessionCorrelations',SessionCorrelations2'),3);
     AllSessionCorrelations{1} = SessionCorrelations;
 end
 
 %%
 clear FingerPrintAll
 figure('name','Fingerprint correlations')
-for did1 = 1:ndays-1
-    for did2 = 2:ndays
-        if did2<=did1
+for did1 = 1:ndays
+    for did2 = 1:ndays
+        if did2<=did1 && ndays~=1
             continue
         end
         SessionCorrelations = AllSessionCorrelations{did1,did2};
         rmidx = find(sum(isnan(SessionCorrelations),2)==size(SessionCorrelations,2));
         SessionCorrelations(rmidx,:)=[];
         nclustmp = size(SessionCorrelations,1)-length(rmidx);
-        notrmdixvec = SessionSwitch(did1):SessionSwitch(did1+2)-1;
-        notrmdixvec(rmidx)=[];
+        try
+            notrmdixvec = SessionSwitch(did1):SessionSwitch(did1+2)-1;
+            notrmdixvec(rmidx)=[];
+        catch
+            notrmdixvec = SessionSwitch(did1):SessionSwitch(did1+1)-1;
+            notrmdixvec(rmidx)=[];
+
+        end
         % Correlate 'fingerprints'
         FingerprintR = arrayfun(@(X) cell2mat(arrayfun(@(Y) corr(SessionCorrelations(X,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))',SessionCorrelations(Y,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))'),1:nclustmp,'UniformOutput',0)),1:nclustmp,'UniformOutput',0);
         FingerprintR = cat(1,FingerprintR{:});
@@ -141,7 +147,9 @@ for did1 = 1:ndays-1
             clear Fingerprinttmp
         end
 
+        if ndays>1
         subplot(ndays-1,ndays-1,(did1-1)*(ndays-1)+did2-1)
+        end
         imagesc(FingerprintR)
         hold on
         arrayfun(@(X) line([SessionSwitch(X)-SessionSwitch(X-1) SessionSwitch(X)-SessionSwitch(X-1)],get(gca,'ylim'),'color',[1 0 0]),did1+1,'Uni',0)
@@ -176,9 +184,14 @@ for pid=1:nclus
         if did2==did1 && did2~=ndays
             did2=did2+1;
         elseif did2==did1 && did2==ndays
-            addthis3= -SessionSwitch(did1)+1+ncellsperrecording(did1-1); %for pid we need to subtract when there's mltiple sessions
-            addthis4 = ncellsperrecording(did1-1); % For the columns (pid2)
-            did1 = did1-1;           % Subtract a day, because we didn't redo this up there
+            try
+                addthis3= -SessionSwitch(did1)+1+ncellsperrecording(did1-1); %for pid we need to subtract when there's mltiple sessions
+                addthis4 = ncellsperrecording(did1-1); % For the columns (pid2)
+                did1 = did1-1;           % Subtract a day, because we didn't redo this up there
+            catch
+                addthis3= -SessionSwitch(did1)+1; %for pid we need to subtract when there's mltiple sessions
+                addthis4 = 0; % For the columns (pid2)
+            end
         end
       
         FingerprintR = FingerPrintAll{did1,did2};

@@ -453,10 +453,16 @@ if Params.UnitMatch
                 if any(strfind(RawDataPaths(id).name,'cbin')) && Params.DecompressLocal
                     if ~exist(fullfile(Params.tmpdatafolder,strrep(RawDataPaths(id).name,'cbin','bin')))
                         disp('This is compressed data and we do not want to use Python integration... uncompress temporarily')
+
+                        decompDataFile = bc_extractCbinData(fullfile(rawD(id).folder,rawD(id).name),...
+                            [], [], 0, fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')));
+                        BCparam.rawFile = decompDataFile;
+
+
                         % Decompression
-                        success = pyrunfile("MTSDecomp_From_Matlab.py","success",datapath = strrep(fullfile(RawDataPaths(id).folder,RawDataPaths(id).name),'\','/'),...
-                            JsonPath =  strrep(fullfile(RawDataPaths(id).folder,strrep(RawDataPaths(id).name,'cbin','ch')),'\','/'), savepath = strrep(fullfile(Params.tmpdatafolder,strrep(RawDataPaths(id).name,'cbin','bin')),'\','/'));
-                        % Also copy metafile
+%                         success = pyrunfile("MTSDecomp_From_Matlab.py","success",datapath = strrep(fullfile(RawDataPaths(id).folder,RawDataPaths(id).name),'\','/'),...
+%                             JsonPath =  strrep(fullfile(RawDataPaths(id).folder,strrep(RawDataPaths(id).name,'cbin','ch')),'\','/'), savepath = strrep(fullfile(Params.tmpdatafolder,strrep(RawDataPaths(id).name,'cbin','bin')),'\','/'));
+%                         % Also copy metafile
                         copyfile(strrep(fullfile(RawDataPaths(id).folder,RawDataPaths(id).name),'cbin','meta'),strrep(fullfile(Params.tmpdatafolder,RawDataPaths(id).name),'cbin','meta'))
                     end
                     ephysap_tmp = fullfile(Params.tmpdatafolder,strrep(RawDataPaths(id).name,'cbin','bin'));
@@ -477,7 +483,7 @@ elseif DecompressionFlag % You might want to at least save out averaged waveform
 end
 
 %% Remove temporary files
-if Params.DecompressLocal && DecompressionFlag
+if 0%Params.DecompressLocal && DecompressionFlag
     clear memMapData
     clear ap_data
     try
