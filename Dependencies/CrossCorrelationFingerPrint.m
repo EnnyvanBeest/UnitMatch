@@ -122,7 +122,7 @@ for did1 = 1:ndays-1
         rmidx = find(sum(isnan(SessionCorrelations),2)==size(SessionCorrelations,2));
         SessionCorrelations(rmidx,:)=[];
         nclustmp = size(SessionCorrelations,1)-length(rmidx);
-        notrmdixvec = SessionSwitch(did):SessionSwitch(did+2)-1;
+        notrmdixvec = SessionSwitch(did1):SessionSwitch(did1+2)-1;
         notrmdixvec(rmidx)=[];
         % Correlate 'fingerprints'
         FingerprintR = arrayfun(@(X) cell2mat(arrayfun(@(Y) corr(SessionCorrelations(X,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))',SessionCorrelations(Y,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))'),1:nclustmp,'UniformOutput',0)),1:nclustmp,'UniformOutput',0);
@@ -176,19 +176,21 @@ for pid=1:nclus
         if did2==did1 && did2~=ndays
             did2=did2+1;
         elseif did2==did1 && did2==ndays
-            addthis3=-SessionSwitch(did1)+1+ncellsperrecording(did1);
-            addthis4 = ncellsperrecording(did1-1);
-            did1 = did1-1;          
+            addthis3= -SessionSwitch(did1)+1+ncellsperrecording(did1-1); %for pid we need to subtract when there's mltiple sessions
+            addthis4 = ncellsperrecording(did1-1); % For the columns (pid2)
+            did1 = did1-1;           % Subtract a day, because we didn't redo this up there
         end
       
         FingerprintR = FingerPrintAll{did1,did2};
+
+        % Reset days
         did2 = (recsesGood(pid2));
         did1 = (recsesGood(pid));
 
         if did1==did2
             tmp1 = FingerprintR(pid+addthis3,[1:ncellsperrecording(did1)]+addthis4);
             addthis=SessionSwitch(did1)-1;
-            addthis2 = -addthis;
+            addthis2 = addthis3;
         else
             tmp1 = FingerprintR(pid+addthis3,ncellsperrecording(did1)+1:end);
             addthis=SessionSwitch(did2)-1;
@@ -199,7 +201,7 @@ for pid=1:nclus
 
         tmp1(pid2-addthis)=[];
 
-        if FingerprintR(pid+addthis3,pid2+addthis2)>nanmean(tmp1)+2*nanstd(tmp1)
+        if FingerprintR(pid+addthis3,pid2+addthis2)>quantile(tmp1,0.99)
             SigMask(pid,pid2)=1;
         end
         FingerprintRAll(pid,pid2) = FingerprintR(pid+addthis3,pid2+addthis2);
@@ -243,5 +245,5 @@ arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[
 colormap(flipud(gray))
 xlabel('All units across both days')
 ylabel('All units across both days')
-title('correlations>95th percentile of distribution')
+title('correlations>99th percentile of distribution')
 makepretty

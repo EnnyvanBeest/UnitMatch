@@ -41,7 +41,7 @@ RemoveRawWavForms = 0; %Remove averaged waveforms again to save space --> Curren
 MakeOwnNaiveBayes = 1; % if 0, use standard matlab version, which assumes normal distributions --> not recommended
 ApplyExistingBayesModel = 0; %If 1, use probability distributions made available by us
 maxrun = 1; % This is whether you want to use Bayes' output to create a new potential candidate set to optimize the probability distributions. Probably we don't want to keep optimizing?, as this can be a bit circular (?)
-
+drawmax = 20; % Maximum number of drawed matches (otherwise it takes forever!)
 %% Read in from param
 channelpos = param.channelpos;
 RunPyKSChronicStitched = param.RunPyKSChronicStitched;
@@ -823,7 +823,7 @@ title('Match Probability>0.5')
 makepretty
 
 subplot(1,3,3)
-imagesc(MatchProbability>=0.99 | (MatchProbability>=0.01 & RankScoreAll==1 & SigMask==1))
+imagesc(MatchProbability>=0.99 | (MatchProbability>=0.05 & RankScoreAll==1 & SigMask==1))
 hold on
 arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
 arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
@@ -847,7 +847,7 @@ ylabel('Cross-correlation fingerprint')
 makepretty
 
 %% Extract final pairs:
-label = MatchProbability>=0.99 | (MatchProbability>=0.01 & RankScoreAll==1 & SigMask==1);
+label = MatchProbability>=0.99 | (MatchProbability>=0.05 & RankScoreAll==1 & SigMask==1);
 [r, c] = find(triu(label,1)); %Find matches
 Pairs = cat(2,r,c);
 Pairs = sortrows(Pairs);
@@ -1063,9 +1063,12 @@ if MakePlotsOfPairs
     if ~isdir(fullfile(SaveDir,'MatchFigures'))
         mkdir(fullfile(SaveDir,'MatchFigures'))
     end
+    if size(Pairs,1)>drawmax
+        DrawPairs = randsample(1:size(Pairs,1),drawmax,'false');
+    end
     % Pairs = Pairs(any(ismember(Pairs,[8,68,47,106]),2),:);
     %     AllClusterIDs(Good_Idx(Pairs))
-    for pairid=1:size(Pairs,1)
+    for pairid=DrawPairs
         uid = Pairs(pairid,1);
         uid2 = Pairs(pairid,2);
 
@@ -1250,8 +1253,10 @@ if MakePlotsOfPairs
         end
 
         subplot(3,3,9)
-
-        plot(SessionCorrelations(uid,:),'b-'); hold on; plot(SessionCorrelations(uid2,:),'r-')
+        SessionCorrelations = AllSessionCorrelations{recsesGood(uid),recsesGood(uid2)};
+        addthis3=-SessionSwitch(recsesGood(uid))+1;
+        addthis4=-SessionSwitch(recsesGood(uid2))+1;    
+        plot(SessionCorrelations(uid+addthis3,:),'b-'); hold on; plot(SessionCorrelations(uid2+addthis4,:),'r-')
         hold off
         xlabel('Unit')
         ylabel('Cross-correlation')

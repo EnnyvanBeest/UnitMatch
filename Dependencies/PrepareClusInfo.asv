@@ -481,8 +481,8 @@ if Params.DecompressLocal && DecompressionFlag
             delete(fullfile(Params.tmpdatafolder,strrep(RawDataPaths(id).name,'cbin','meta')))
 
             % Bombcell takes up a lot of space: delete
-            delete(fullfile(Params.tmpdatafolder,strrep(RawDataPaths(id).name,'cbin','bin'),'*'))
-            rmdir()
+            delete(fullfile(Params.tmpdatafolder,['RawWaveforms_' strrep(RawDataPaths(id).name,'cbin','bin')],'*'))
+            rmdir(fullfile(Params.tmpdatafolder,['RawWaveforms_' strrep(RawDataPaths(id).name,'cbin','bin')]))
         end
     catch ME
         keyboard
