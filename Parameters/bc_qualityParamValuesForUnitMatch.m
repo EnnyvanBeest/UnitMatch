@@ -42,6 +42,7 @@ BCparam.minNumSpikes = 300;
 % recording parametrs
 BCparam.ephys_sample_rate = 30000;
 BCparam.nChannels = 385;
+BCparam.nSyncChannels = 1;
 
 % distance metric parameters
 BCparam.computeDistanceMetrics = 0;

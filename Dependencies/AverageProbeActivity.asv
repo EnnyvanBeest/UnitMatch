@@ -14,10 +14,10 @@ PlotLFP = 0;
 plotUnitActivity = 0;
 GoodUnits = cell(1,length(MiceOpt));
 for midx = length(MiceOpt)
-    myKsDir = fullfile(LocalDir,MiceOpt{midx});
+    myKsDir = fullfile(KilosortDir,MiceOpt{midx});
     if strcmp(RecordingType,'Chronic')  % These are my chronic mice, one dataset per mouse
         %% Loading data from kilosort/phy easily
-        myKsDir = fullfile(LocalDir,MiceOpt{midx});
+        myKsDir = fullfile(KilosortDir,MiceOpt{midx});
         subksdirs = dir(fullfile(myKsDir,'Chronic','Probe*')); %This changed because now I suddenly had 2 probes per recording
         if length(subksdirs)<1
             clear subksdirs
@@ -29,14 +29,14 @@ for midx = length(MiceOpt)
         for probeid = 1:length(ProbeOpt)
             %Saving directory
             thisprobe =  ProbeOpt{probeid}
-            myKsDir = fullfile(LocalDir,MiceOpt{midx},'*',thisprobe);
+            myKsDir = fullfile(KilosortDir,MiceOpt{midx},'*',thisprobe);
             % Check for multiple subfolders?
             subsesopt = dir(myKsDir);
             subsesopt(~[subsesopt.isdir])=[];
             subsesopt(ismember({subsesopt(:).name},{'..','.phy'}))=[];
 
             if strcmp(RecordingType{midx},'Chronic')
-                if ~RunPyKSChronic %MatchUnitsAcrossDays
+                if ~PrepareClusInfoparams.RunPyKSChronicStitched %MatchUnitsAcrossDays
                     disp('Unit matching in Matlab')
                     subsesopt(cell2mat(cellfun(@(X) any(strfind(X,'Chronic')),{subsesopt(:).folder},'UniformOutput',0))) = []; %Use separate days and match units via matlab script
                 else
@@ -74,21 +74,29 @@ for midx = length(MiceOpt)
             end
 
             for IMROID = 1:length(subsesoptGroups)
-                %% Create saving directory
+                %% Create saving directoryed
                 clear params
-                %                 params.thisdate=[];
                 thisIMRO = IMROTableOpt{IMROID};
-                thisdate = params.thisdate;
+                thisdate = [];
                 if ~exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,thisIMRO))
                     mkdir(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,thisIMRO))
                 end
-
+                PrepareClusInfoparams.SaveDir = fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,thisIMRO);
 
                 %% Get cluster information                
                 [clusinfo,sp] = PrepareClusInfo(subsesoptAll(subsesoptGroups{IMROID}),PrepareClusInfoparams);
+                
                 %% Save out
                 GoodUnits{midx}{probeid}{IMROID} = clusinfo;
 
+                % This extracts the parameters within clusinfo and sp
+                % struct for further analysis
+                ExtractFields({clusinfo,sp})
+                spikeShank = nan(length(clu),1);
+                ShankOpt = unique(Shank);
+                for shid = 1:length(ShankOpt)
+                    spikeShank(ismember(clu,cluster_id(Shank==ShankOpt(shid)))&ismember(RecSes,recses(Shank==ShankOpt(shid)))) = ShankOpt(shid);
+                end
                 %% Show Activity on probe
                 depthbins = min(depth):100:max(depth);
                 depthavg = min(depth)+50:100:max(depth)-50;
@@ -96,9 +104,9 @@ for midx = length(MiceOpt)
                 for shid = 1:length(ShankOpt)
                     % Clusters on this shank
                     parfor deptid=1:length(depthbins)-1
-                        tmpclu = spikeCluster(ismember(spikeShank,ShankOpt(shid))& spikeDepths>=depthbins(deptid)&spikeDepths<=depthbins(deptid+1));
+                        tmpclu = clu(ismember(spikeShank,ShankOpt(shid))& spikeDepths>=depthbins(deptid)&spikeDepths<=depthbins(deptid+1));
 
-                        tmpst = spikeTimes(ismember(spikeShank,ShankOpt(shid))& spikeDepths>=depthbins(deptid)&spikeDepths<=depthbins(deptid+1));
+                        tmpst = st(ismember(spikeShank,ShankOpt(shid))& spikeDepths>=depthbins(deptid)&spikeDepths<=depthbins(deptid+1));
 
                         spShDepth(deptid,shid) = nanmean(histcounts(tmpst,'BinWidth',1))./length(unique(tmpclu));
 
@@ -116,22 +124,22 @@ for midx = length(MiceOpt)
                     ylabel('Depth (micron)')
                 end
                 %% Get multiunit correlation - Copied from Petersen github
-                goodonly=0
+                goodonly=1
                 if goodonly
-                    spikeID = ismember(spikeCluster,Good_ID);
+                    spikeID = ismember(clu,Good_ID);
                 else
-                    spikeID = true(length(spikeCluster),1);
+                    spikeID = true(length(clu),1);
                     try
                         % Some form of quality control
-                        spikeID(ismember(spikeCluster,cluster_id(clusinfo.n_spikes<=quantile(clusinfo.n_spikes,0.01))))=0; %too little spikes
-                        spikeID(ismember(spikeCluster,cluster_id(clusinfo.n_spikes>=quantile(clusinfo.n_spikes,0.99))))=0; %too many spikes
-                        spikeID(ismember(spikeCluster,cluster_id(clusinfo.amp>=quantile(clusinfo.amp,0.99))))=0; %ridiculous amplitudes
-                        spikeID(ismember(spikeCluster,cluster_id(clusinfo.fr>=quantile(clusinfo.fr,0.99))))=0; %ridiculous firing rates
-                        spikeID(ismember(spikeCluster,cluster_id(clusinfo.ContamPct>=quantile(clusinfo.ContamPct,0.99))))=0; %ridiculous Contamination percentage
-                        spikeID(ismember(spikeCluster,cluster_id(ismember(cellstr(Label),'noise'))))=0; %noise should not count, only MUA and good unit
+                        spikeID(ismember(clu,cluster_id(clusinfo.n_spikes<=quantile(clusinfo.n_spikes,0.01))))=0; %too little spikes
+                        spikeID(ismember(clu,cluster_id(clusinfo.n_spikes>=quantile(clusinfo.n_spikes,0.99))))=0; %too many spikes
+                        spikeID(ismember(clu,cluster_id(clusinfo.amp>=quantile(clusinfo.amp,0.99))))=0; %ridiculous amplitudes
+                        spikeID(ismember(clu,cluster_id(clusinfo.fr>=quantile(clusinfo.fr,0.99))))=0; %ridiculous firing rates
+                        spikeID(ismember(clu,cluster_id(clusinfo.ContamPct>=quantile(clusinfo.ContamPct,0.99))))=0; %ridiculous Contamination percentage
+                        spikeID(ismember(clu,cluster_id(ismember(cellstr(Label),'noise'))))=0; %noise should not count, only MUA and good unit
                     catch
                         disp('This is non curated data, using all units from kilosort output')
-                        spikeID = true(length(spikeCluster),1);
+                        spikeID = true(length(clu),1);
                     end
                 end
                 n_corr_groups = 80;
@@ -143,7 +151,7 @@ for midx = length(MiceOpt)
                 unique_depths = 1:length(depth_group_edges)-1;
 
                 spike_binning = 1; % seconds
-                corr_edges = nanmin(spikeTimes(spikeID)):spike_binning:nanmax(spikeTimes(spikeID));
+                corr_edges = nanmin(st(spikeID)):spike_binning:nanmax(st(spikeID));
                 corr_centers = corr_edges(1:end-1) + diff(corr_edges);
 
                 nshanks = length(ShankOpt);
@@ -151,7 +159,7 @@ for midx = length(MiceOpt)
                 for shid = 1:nshanks
                     binned_spikes_depth = zeros(length(unique_depths),length(corr_edges)-1);
                     parfor curr_depth = 1:length(unique_depths)
-                        binned_spikes_depth(curr_depth,:) = histcounts(spikeTimes(spikeID& depth_group == unique_depths(curr_depth) & spikeShank==shid), corr_edges);
+                        binned_spikes_depth(curr_depth,:) = histcounts(st(spikeID& depth_group == unique_depths(curr_depth) & spikeShank==shid), corr_edges);
                     end
                     %     % Z-score
                     %     binned_spikes_depth = (binned_spikes_depth - nanmean(binned_spikes_depth(:)))./nanstd(binned_spikes_depth(:));
@@ -243,7 +251,7 @@ for midx = length(MiceOpt)
 
             thisdate = Dates4Mouse{didx};
             %% Loading data from kilosort/phy easily
-            myKsDir = fullfile(LocalDir,MiceOpt{midx},thisdate);
+            myKsDir = fullfile(KilosortDir,MiceOpt{midx},thisdate);
             subksdirs = dir(fullfile(myKsDir,'Probe*')); %This changed because now I suddenly had 2 probes per recording
             if length(subksdirs)<1
                 clear subksdirs
@@ -303,8 +311,8 @@ for midx = length(MiceOpt)
                 for shid = 1:length(ShankOpt)
 
                     parfor deptid=1:length(depthbins)-1
-                        tmpclu = spikeCluster(ismember(spikeShank,ShankOpt(shid))& spikeDepths>=depthbins(deptid)&spikeDepths<=depthbins(deptid+1));
-                        tmpst = spikeTimes(ismember(spikeShank,ShankOpt(shid))& spikeDepths>=depthbins(deptid)&spikeDepths<=depthbins(deptid+1));
+                        tmpclu = clu(ismember(spikeShank,ShankOpt(shid))& spikeDepths>=depthbins(deptid)&spikeDepths<=depthbins(deptid+1));
+                        tmpst = st(ismember(spikeShank,ShankOpt(shid))& spikeDepths>=depthbins(deptid)&spikeDepths<=depthbins(deptid+1));
 
                         spShDepth(deptid,shid) = nanmean(histcounts(tmpst,'BinWidth',1))./length(unique(tmpclu));
 
@@ -326,20 +334,20 @@ for midx = length(MiceOpt)
                 %% Get multiunit correlation - Copied from Petersen github
                 goodonly=0
                 if goodonly
-                    spikeID = ismember(spikeCluster,Good_ID);
+                    spikeID = ismember(clu,Good_ID);
                 else
-                    spikeID = true(length(spikeCluster),1);
+                    spikeID = true(length(clu),1);
                     try
                         % Some form of quality control
-                        spikeID(ismember(spikeCluster,cluster_id(clusinfo.n_spikes<=quantile(clusinfo.n_spikes,0.01))))=0; %too little spikes
-                        spikeID(ismember(spikeCluster,cluster_id(clusinfo.n_spikes>=quantile(clusinfo.n_spikes,0.99))))=0; %too many spikes
-                        spikeID(ismember(spikeCluster,cluster_id(clusinfo.amp>=quantile(clusinfo.amp,0.99))))=0; %ridiculous amplitudes
-                        spikeID(ismember(spikeCluster,cluster_id(clusinfo.fr>=quantile(clusinfo.fr,0.99))))=0; %ridiculous firing rates
-                        spikeID(ismember(spikeCluster,cluster_id(clusinfo.ContamPct>=quantile(clusinfo.ContamPct,0.99))))=0; %ridiculous Contamination percentage
-                        spikeID(ismember(spikeCluster,cluster_id(ismember(cellstr(Label),'noise'))))=0; %noise should not count, only MUA and good unit
+                        spikeID(ismember(clu,cluster_id(clusinfo.n_spikes<=quantile(clusinfo.n_spikes,0.01))))=0; %too little spikes
+                        spikeID(ismember(clu,cluster_id(clusinfo.n_spikes>=quantile(clusinfo.n_spikes,0.99))))=0; %too many spikes
+                        spikeID(ismember(clu,cluster_id(clusinfo.amp>=quantile(clusinfo.amp,0.99))))=0; %ridiculous amplitudes
+                        spikeID(ismember(clu,cluster_id(clusinfo.fr>=quantile(clusinfo.fr,0.99))))=0; %ridiculous firing rates
+                        spikeID(ismember(clu,cluster_id(clusinfo.ContamPct>=quantile(clusinfo.ContamPct,0.99))))=0; %ridiculous Contamination percentage
+                        spikeID(ismember(clu,cluster_id(ismember(cellstr(Label),'noise'))))=0; %noise should not count, only MUA and good unit
                     catch
                         disp('This is non curated data, using all units from kilosort output')
-                        spikeID = true(length(spikeCluster),1);
+                        spikeID = true(length(clu),1);
                     end
                 end
                 n_corr_groups = 80;
@@ -351,7 +359,7 @@ for midx = length(MiceOpt)
                 unique_depths = 1:length(depth_group_edges)-1;
 
                 spike_binning = 1; % seconds
-                corr_edges = nanmin(spikeTimes(spikeID)):spike_binning:nanmax(spikeTimes(spikeID));
+                corr_edges = nanmin(st(spikeID)):spike_binning:nanmax(st(spikeID));
                 corr_centers = corr_edges(1:end-1) + diff(corr_edges);
 
                 nshanks = length(ShankOpt);
@@ -359,7 +367,7 @@ for midx = length(MiceOpt)
                 for shid = 1:nshanks
                     binned_spikes_depth = zeros(length(unique_depths),length(corr_edges)-1);
                     parfor curr_depth = 1:length(unique_depths)
-                        binned_spikes_depth(curr_depth,:) = histcounts(spikeTimes(spikeID& depth_group == unique_depths(curr_depth) & spikeShank==ShankOpt(shid)), corr_edges);
+                        binned_spikes_depth(curr_depth,:) = histcounts(st(spikeID& depth_group == unique_depths(curr_depth) & spikeShank==ShankOpt(shid)), corr_edges);
                     end
                     %     % Z-score
                     %     binned_spikes_depth = (binned_spikes_depth - nanmean(binned_spikes_depth(:)))./nanstd(binned_spikes_depth(:));
@@ -475,9 +483,9 @@ for midx = length(MiceOpt)
                                 %Spike rate / histogram
                                 %                 binSize = 0.1;
                                 binSize = BinSizeOpt(bid);
-                                Edges = min(spikeTimes(:)):binSize:max(spikeTimes(:));
+                                Edges = min(st(:)):binSize:max(st(:));
 
-                                SpikeRatePerTP = arrayfun(@(Y) histcounts(spikeTimes(spikeCluster'== Y),...
+                                SpikeRatePerTP = arrayfun(@(Y) histcounts(st(clu'== Y),...
                                     Edges)./binSize,cluster_id(Good_IDx),'UniformOutput',0);
                                 SpikeRatePerTP = cat(1,SpikeRatePerTP{:});
 
@@ -552,9 +560,9 @@ for midx = length(MiceOpt)
 
                     end
                     binSize = BinSizeOpt(bid);
-                    Edges = min(spikeTimes(:)):binSize:max(spikeTimes(:));
+                    Edges = min(st(:)):binSize:max(st(:));
 
-                    SpikeRatePerTP = arrayfun(@(Y) histcounts(spikeTimes(spikeCluster'== Y),...
+                    SpikeRatePerTP = arrayfun(@(Y) histcounts(st(clu'== Y),...
                         Edges)./binSize,cluster_id(Good_IDx),'UniformOutput',0);
                     SpikeRatePerTP = cat(1,SpikeRatePerTP{:});
 
@@ -648,8 +656,8 @@ for midx = length(MiceOpt)
         title(['Good Units Across Days/Shank ' MiceOpt{midx}])
         makepretty
 
-        saveas(gcf,fullfile(LocalDir,MiceOpt{midx},'UnitsAcrossDays.fig'))
-        saveas(gcf,fullfile(LocalDir,MiceOpt{midx},'UnitsAcrossDays.bmp'))
+        saveas(gcf,fullfile(KilosortDir,MiceOpt{midx},'UnitsAcrossDays.fig'))
+        saveas(gcf,fullfile(KilosortDir,MiceOpt{midx},'UnitsAcrossDays.bmp'))
 
     end
 end

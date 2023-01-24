@@ -5,7 +5,7 @@ function [clusinfo,sp] = PrepareClusInfo(KiloSortPaths,Params,RawDataPaths)
 % calling 'dir') for all sessions you want to analyze as one session (e.g.
 % chronic recordings with same IMRO table: give a list with all sessions)
 
-% Params: with: 
+% Params: with:
 % Params.loadPCs=1;
 % Params.RunPyKSChronicStitched = 1
 % Params.DecompressLocal = 1; %if 1, uncompress data first if it's currently compressed
@@ -118,25 +118,27 @@ for subsesid=1:length(KiloSortPaths)
     edges = min(sp{countid}.st)-binsz/2:binsz:max(sp{countid}.st)+binsz/2;
     timevec = min(sp{countid}.st):binsz:max(sp{countid}.st);
 
-    depthstep = 25; %um
-    depthedges = min(sp{countid}.spikeDepths)-depthstep/2:depthstep:max(sp{countid}.spikeDepths)+depthstep/2;
-    tmpact = arrayfun(@(X) histcounts(sp{countid}.st(sp{countid}.spikeDepths>depthedges(X)&sp{countid}.spikeDepths<depthedges(X+1)),edges),1:length(depthedges)-1,'UniformOutput',0);
-    tmpact = cat(1,tmpact{:});
-    tmpact = (tmpact-nanmean(tmpact,2))./nanstd(tmpact,[],2); %Z-score
-    tpidx = find(sum(tmpact>3,1)>0.5*length(depthedges)-1);
+    if 0
+        depthstep = 25; %um
+        depthedges = min(sp{countid}.spikeDepths)-depthstep/2:depthstep:max(sp{countid}.spikeDepths)+depthstep/2;
+        tmpact = arrayfun(@(X) histcounts(sp{countid}.st(sp{countid}.spikeDepths>depthedges(X)&sp{countid}.spikeDepths<depthedges(X+1)),edges),1:length(depthedges)-1,'UniformOutput',0);
+        tmpact = cat(1,tmpact{:});
+        tmpact = (tmpact-nanmean(tmpact,2))./nanstd(tmpact,[],2); %Z-score
+        tpidx = find(sum(tmpact>3,1)>0.5*length(depthedges)-1);
 
-    % Remove these timepoints
-    rmidx = arrayfun(@(X) find(sp{countid}.st>timevec(X)-binsz/2&sp{countid}.st<timevec(X)+binsz/2),tpidx,'UniformOutput',0);
-    rmidx = cat(1,rmidx{:});
-    scatter(sp{countid}.st(rmidx),sp{countid}.spikeDepths(rmidx),4,[1 0 0],'filled')
-    drawnow
-    nori = length(sp{countid}.st);
-    fields = fieldnames(sp{countid});
-    for fid = 1:length(fields)
-        eval(['tmp = sp{countid}. ' fields{fid} ';'])
-        if any(size(tmp) == nori)
-            tmp(rmidx,:,:)=[];
-            eval(['sp{countid}.' fields{fid} '=tmp;'])
+        % Remove these timepoints
+        rmidx = arrayfun(@(X) find(sp{countid}.st>timevec(X)-binsz/2&sp{countid}.st<timevec(X)+binsz/2),tpidx,'UniformOutput',0);
+        rmidx = cat(1,rmidx{:});
+        scatter(sp{countid}.st(rmidx),sp{countid}.spikeDepths(rmidx),4,[1 0 0],'filled')
+        drawnow
+        nori = length(sp{countid}.st);
+        fields = fieldnames(sp{countid});
+        for fid = 1:length(fields)
+            eval(['tmp = sp{countid}. ' fields{fid} ';'])
+            if any(size(tmp) == nori)
+                tmp(rmidx,:,:)=[];
+                eval(['sp{countid}.' fields{fid} '=tmp;'])
+            end
         end
     end
 
@@ -298,10 +300,12 @@ for subsesid=1:length(KiloSortPaths)
     %     hold on
     %     drawnow
     DecompressionFlag = 0;
-    
+
     if Params.RunQualityMetrics
         uniqueTemplates = [];
         unitTypeAcrossRec= [];
+        UMparam.UseBombCelRawWav = 1; % If you run both bombcell and unitmatch, you can reuse bombcell's extracted units
+
         %% Quality matrix - Bombcell (https://github.com/Julie-Fabre/bombcell)
         for id = 1:length(rawD)
             ephysap_tmp = [];
@@ -320,14 +324,14 @@ for subsesid=1:length(KiloSortPaths)
                     if ~exist(fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')))
                         disp('This is compressed data and we do not want to use Python integration... uncompress temporarily')
                         decompDataFile = bc_extractCbinData(fullfile(rawD(id).folder,rawD(id).name),...
-                            [], [], [], fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')));
+                            [], [], 0, fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')));
                         BCparam.rawFile = decompDataFile;
                         copyfile(strrep(fullfile(rawD(id).folder,rawD(id).name),'cbin','meta'),strrep(fullfile(Params.tmpdatafolder,rawD(id).name),'cbin','meta'))
-                    end                   
+                    end
                     DecompressionFlag = 1;
                     if Params.InspectQualityMatrix
                         InspectionFlag=1;
-                    end                 
+                    end
                 end
                 BCparam.rawFile = fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin'));
                 BCparam.ephysMetaFile = (strrep(fullfile(Params.tmpdatafolder,rawD(id).name),'cbin','meta'));
@@ -337,7 +341,6 @@ for subsesid=1:length(KiloSortPaths)
                 [qMetric, ~] = bc_runAllQualityMetrics(BCparam, round(sp{countid}.st(idx).*sp{countid}.sample_rate), sp{countid}.spikeTemplates(idx)+1, ...
                     sp{countid}.temps, sp{countid}.tempScalingAmps(idx),sp{countid}.pcFeat(idx,:,:),sp{countid}.pcFeatInd,channelpostmp,savePath);
 
-                UMparam.UseBombCelRawWav = 1; % If you run both bombcell and unitmatch, you can reuse bombcell's extracted units
             else
                 BCparam.rawFile = fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin'));
                 if exist('ephysap_tmp', 'var')
@@ -345,7 +348,7 @@ for subsesid=1:length(KiloSortPaths)
                 end
                 %                 load(fullfile(savePath, 'qMetric.mat'))
             end
-            bc_loadSavedMetrics %always load the parquet version
+            bc_loadSavedMetrics(savePath) %always load the parquet version
             bc_getQualityUnitType;
 
             unitTypeAcrossRec{id} = unitType;
@@ -438,6 +441,8 @@ if Params.UnitMatch
     UnitMatchExist = dir(fullfile(UMparam.SaveDir,'UnitMatch.mat'));
     if ~isempty(UnitMatchExist) && ~Params.RedoUnitMatch
         load(fullfile(UMparam.SaveDir,'UnitMatch.mat'))
+        clusinfo.UniqueID = UniqueID;
+        clusinfo.MatchTable = MatchTable;
     else
         % Need to decompress if decompression wasn't done yet
         for id = 1:length(RawDataPaths)
@@ -459,7 +464,7 @@ if Params.UnitMatch
                 end
             end
         end
-   
+
         % Run UnitMatch
         [UniqueID, MatchTable] = UnitMatch(clusinfo,UMparam,sp);
         clusinfo.UniqueID = UniqueID;
@@ -498,11 +503,7 @@ return
 % spikeCluster = cat(1,sp(:).clu);
 % spikeAmps = cat(1,sp(:).spikeAmps);
 % spikeDepths = cat(1,sp(:).spikeDepths);
-% spikeShank = nan(length(spikeCluster),1);
-% ShankOpt = unique(Shank);
-% for shid = 1:length(ShankOpt)
-%     spikeShank(ismember(spikeCluster,cluster_id(Shank==ShankOpt(shid)))&ismember(spikeRecSes,recses(Shank==ShankOpt(shid)))) = ShankOpt(shid);
-% end
+
 % templateDepths = cat(1,sp(:).templateDepths);
 % tempAmps = cat(1,sp(:).tempAmps);
 % tempsUnW = cat(1,sp(:).tempsUnW);

@@ -23,7 +23,7 @@ RecordingType(ismember(MiceOpt,{'AL032','EB014'}))={'Chronic'}; %EB014', % Or ma
 PrepareClusInfoparams.RunPyKSChronicStitched = 1; % if 1, run PyKS chronic recordings stitched when same IMRO table was used
 PrepareClusInfoparams.CopyToTmpFirst = 1; % If 1, copy data to local first, don't run from server (= advised!)
 PrepareClusInfoparams.DecompressLocal = 1; % If 1, uncompress data first if it's currently compressed (= necessary for unitmatch and faster for QualityMetrics))
-PrepareClusInfoparams.RedoQM = 1; %if 1, redo quality metrics if it already exists
+PrepareClusInfoparams.RedoQM = 0; %if 1, redo quality metrics if it already exists
 PrepareClusInfoparams.RunQualityMetrics = 1; % If 1, Run the quality metrics (Bombcell @JulieFabre)
 PrepareClusInfoparams.loadPCs=1; % Do we need the PCs for data analysis (YES IF QM!)? If not you save a lot of time keeping this at 0
 PrepareClusInfoparams.InspectQualityMatrix =0; % If 1, Inspect the quality matrix/data set using the GUI (manual inspection)

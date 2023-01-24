@@ -85,6 +85,7 @@ nChannels = cbinMeta.n_channels;
 nSamples = cbinMeta.chunk_bounds([1:nChunks] + iChunkStart) - cbinMeta.chunk_bounds([1:nChunks] + iChunkStart - 1);
 chunkSizeBytes = cbinMeta.chunk_offsets([1:nChunks] + iChunkStart) - cbinMeta.chunk_offsets([1:nChunks] + iChunkStart - 1);
 offset = cbinMeta.chunk_offsets([1:nChunks] + iChunkStart - 1);
+dataTypeNBytes = numel(typecast(cast(0, cbinMeta.dtype), 'uint8'));
 
 if doParfor
     %tic
@@ -97,7 +98,7 @@ if doParfor
         % read a chunk from the compressed data
         fid = fopen(fileName, 'r');
         fseek(fid, offset(iChunk), 'bof');
-        compData = fread(fid, chunkSizeBytes(iChunk), '*uint8');
+        compData = fread(fid, chunkSizeBytes(iChunk),'*int8');
         fclose(fid);
 
         decompData = zmat(compData, 0, 'zlib');
@@ -118,11 +119,11 @@ else
         % read a chunk from the compressed data
         fid = fopen(fileName, 'r');
         fseek(fid, offset(iChunk), 'bof');
-        compData = fread(fid, chunkSizeBytes(iChunk), '*uint8');
+        compData = fread(fid, chunkSizeBytes(iChunk),'*int16');
         fclose(fid);
 
-        decompData = zmat(compData, 0, 'zlib');
-        decompData = reshape(decompData, nSamples(iChunk), nChannels);
+        decompData = zmat(compData, 0, cbinMeta.algorithm);
+        decompData = reshape(decompData, nSamples(iChunk)*dataTypeNBytes, nChannels);
         chunkData = cumsum(decompData(:, chIdx), 1);
         %     data(startIdx(iChunk):endIdx(iChunk), :) = chunkData(iSampleStart(iChunk):iSampleEnd(iChunk), :);
         data{iChunk} = chunkData(iSampleStart(iChunk):iSampleEnd(iChunk), :);
