@@ -13,6 +13,8 @@ This work is supported by Marie Sklodowska-Curie 101022757 (Enny H. van Beest)
 Toolboxes used for matching part:
 - https://github.com/EnnyvanBeest/spikes (forked from https://github.com/cortex-lab/spikes, but also tested with the original spikes)
 - https://github.com/kwikteam/npy-matlab
+
+Toolboxes very useful and integrated with UnitMatch:
 - https://github.com/Julie-Fabre/bombcell
 
 Toolboxes used for other parts of pipeline:
