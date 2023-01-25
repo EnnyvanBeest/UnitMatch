@@ -1257,8 +1257,8 @@ if MakePlotsOfPairs
         subplot(3,3,9)
         if recsesGood(uid) == recsesGood(uid2) && recsesGood(uid)~=ndays
             SessionCorrelations = AllSessionCorrelations{recsesGood(uid),recsesGood(uid2)+1};
-        elseif recsesGood(uid) == recsesGood(uid2) && recsesGood(uid)==ndays && ndays>1
-            SessionCorrelations = AllSessionCorrelations{recsesGood(uid)-1,recsesGood(uid2)};
+        elseif recsesGood(uid) == recsesGood(uid2) && recsesGood(uid)==ndays
+
         else
             SessionCorrelations = AllSessionCorrelations{recsesGood(uid),recsesGood(uid2)};
         end

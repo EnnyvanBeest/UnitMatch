@@ -454,8 +454,8 @@ if Params.UnitMatch
                     if ~exist(fullfile(Params.tmpdatafolder,strrep(RawDataPaths(id).name,'cbin','bin')))
                         disp('This is compressed data and we do not want to use Python integration... uncompress temporarily')
 
-                        decompDataFile = bc_extractCbinData(fullfile(rawD(id).folder,rawD(id).name),...
-                            [], [], 0, fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')));
+                        decompDataFile = bc_extractCbinData(fullfile(RawDataPaths(id).folder,RawDataPaths(id).name),...
+                            [], [], 0, fullfile(Params.tmpdatafolder,strrep(RawDataPaths(id).name,'cbin','bin')));
                         BCparam.rawFile = decompDataFile;
 
 
@@ -466,7 +466,7 @@ if Params.UnitMatch
                         copyfile(strrep(fullfile(RawDataPaths(id).folder,RawDataPaths(id).name),'cbin','meta'),strrep(fullfile(Params.tmpdatafolder,RawDataPaths(id).name),'cbin','meta'))
                     end
                     ephysap_tmp = fullfile(Params.tmpdatafolder,strrep(RawDataPaths(id).name,'cbin','bin'));
-                    DecompressionFlag = 1;
+%                     DecompressionFlag = 1;
                 end
             end
         end

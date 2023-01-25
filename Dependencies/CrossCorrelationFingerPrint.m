@@ -120,8 +120,8 @@ for did1 = 1:ndays
         end
         SessionCorrelations = AllSessionCorrelations{did1,did2};
         rmidx = find(sum(isnan(SessionCorrelations),2)==size(SessionCorrelations,2));
-        SessionCorrelations(rmidx,:)=[];
-        nclustmp = size(SessionCorrelations,1)-length(rmidx);
+        nclustmp = size(SessionCorrelations,1);
+%         SessionCorrelations(rmidx,:)=[];
         try
             notrmdixvec = SessionSwitch(did1):SessionSwitch(did1+2)-1;
             notrmdixvec(rmidx)=[];
@@ -131,7 +131,7 @@ for did1 = 1:ndays
 
         end
         % Correlate 'fingerprints'
-        FingerprintR = arrayfun(@(X) cell2mat(arrayfun(@(Y) corr(SessionCorrelations(X,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))',SessionCorrelations(Y,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))'),1:nclustmp,'UniformOutput',0)),1:nclustmp,'UniformOutput',0);
+        FingerprintR = arrayfun(@(X) cell2mat(arrayfun(@(Y) corr(SessionCorrelations(X,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))',SessionCorrelations(Y,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))'),notrmdixvec,'UniformOutput',0)),notrmdixvec,'UniformOutput',0);
         FingerprintR = cat(1,FingerprintR{:});
 
         % If one value was only nans; put it back in and replace original
@@ -148,7 +148,7 @@ for did1 = 1:ndays
         end
 
         if ndays>1
-        subplot(ndays-1,ndays-1,(did1-1)*(ndays-1)+did2-1)
+            subplot(ndays-1,ndays-1,(did1-1)*(ndays-1)+did2-1)
         end
         imagesc(FingerprintR)
         hold on
@@ -209,7 +209,7 @@ for pid=1:nclus
             addthis=SessionSwitch(did2)-1;
             addthis2 = -addthis+ncellsperrecording(did1);
         end
-
+        tmp1(isnan(tmp1))=0;
         [val,ranktmp] = sort(tmp1,'descend');
 
         tmp1(pid2-addthis)=[];
