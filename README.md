@@ -1,7 +1,7 @@
 # UnitMatch
 Ephys toolbox to match single units (electrophysiology) either within the same recording (oversplits) or across recordings
 
-![image](https://user-images.githubusercontent.com/7621880/204564863-ab2e04f5-6d1c-4eb5-aa69-76eaa85cba0f.png)
+![image](https://github.com/EnnyvanBeest/UnitMatch/blob/main/Logo.png)
 
 This toolbox was created in November 2022-January 2023 by Enny H. van Beest with the purpose of creating a tool to match units across multiple recording(day)s, and/or merge oversplit units within the same day.
 It uses spatial position and quality metrics similarity, both standard and unstandard metrics, to find possible matches. The alrogirthm is internally optimized using cross-correlation fingerprints (after the idea of Célian Bimbard).
