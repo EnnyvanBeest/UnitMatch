@@ -374,11 +374,11 @@ for subsesid=1:length(KiloSortPaths)
         Good_IDtmp(unitType ~= 1) = 0; % MUA
         Good_IDtmp(unitType == 1) =1; % Good
         Good_IDtmp(unitType == 0) =0;
-        NoiseUnit = false(size(Good_IDtmp));
-        NoiseUnit(unitType == 0)=1; % NOISE
+%         NoiseUnit = false(size(Good_IDtmp));
+%         NoiseUnit(unitType == 0)=1; % NOISE
     else
         AllUniqueTemplates = cat(1,AllUniqueTemplates,unique(sp{countid}.spikeTemplates));
-        NoiseUnit = false(size(Good_IDtmp));
+%         NoiseUnit = false(size(Good_IDtmp));
     end
 
     addthis = nanmax(recsesAll);
@@ -389,7 +389,7 @@ for subsesid=1:length(KiloSortPaths)
         recsesAlltmp = arrayfun(@(X) repmat(addthis+X,1,length(uniqueTemplates{X})),[1:length(uniqueTemplates)],'UniformOutput',0);
         recsesAll =cat(1,recsesAll(:), cat(2,recsesAlltmp{:})');
     else
-        recsesAll = cat(1,recsesAll(:),repmat(addthis+1,1,length(AllUniqueTemplates))');
+        recsesAll = cat(1,recsesAll(:),repmat(addthis+1,1,length(Good_IDtmp))');
     end
     Good_ID = [Good_ID,Good_IDtmp]; %Identify good clusters
     sp{countid}.RecSes = sp{countid}.SessionID+addthis; %Keep track of recording session, as cluster IDs are not unique across sessions
@@ -425,7 +425,7 @@ clusinfo.depth = depth;
 clusinfo.cluster_id = AllUniqueTemplates;
 clusinfo.group = Label;
 clusinfo.Good_ID = Good_ID;
-clusinfo.Noise_ID = NoiseUnit;
+% clusinfo.Noise_ID = NoiseUnit;
 
 sp = spnew;
 sp.sample_rate = sp.sample_rate(1);

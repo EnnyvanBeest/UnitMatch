@@ -71,8 +71,9 @@ SameSesMat = arrayfun(@(X) cell2mat(arrayfun(@(Y) GoodRecSesID(X)==GoodRecSesID(
 SameSesMat = cat(1,SameSesMat{:});
 OriSessionSwitch = cell2mat(arrayfun(@(X) find(recsesAll==X,1,'first'),1:ndays,'Uni',0));
 OriSessionSwitch = [OriSessionSwitch nclus+1];
-SessionSwitch = cell2mat(arrayfun(@(X) find(GoodRecSesID==X,1,'first'),1:ndays,'Uni',0));
-SessionSwitch = [SessionSwitch nclus+1];
+SessionSwitch = arrayfun(@(X) find(GoodRecSesID==X,1,'first'),1:ndays,'Uni',0);
+SessionSwitch(cellfun(@isempty,SessionSwitch))=[];
+SessionSwitch = [cell2mat(SessionSwitch) nclus+1];
 
 %% Extract raw waveforms 
 % This script does the actual extraction
@@ -1263,8 +1264,8 @@ if MakePlotsOfPairs
             SessionCorrelations = AllSessionCorrelations{recsesGood(uid),recsesGood(uid2)};
         end
         addthis3=-SessionSwitch(recsesGood(uid))+1;
-%         addthis4=-SessionSwitch(recsesGood(uid))+1;    
-        plot(SessionCorrelations(uid+addthis3,:),'b-'); hold on; plot(SessionCorrelations(uid2+addthis3,:),'r-')
+        addthis4=-SessionSwitch(recsesGood(uid2))+1+ncellsperrecording(recsesGood(uid));    
+        plot(SessionCorrelations(uid+addthis3,:),'b-'); hold on; plot(SessionCorrelations(uid2+addthis4,:),'r-')
         hold off
         xlabel('Unit')
         ylabel('Cross-correlation')

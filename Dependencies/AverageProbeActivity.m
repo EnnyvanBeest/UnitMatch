@@ -623,42 +623,42 @@ for midx = length(MiceOpt)
                 end
             end
         end
-        %% number of good units across days
-        figure('name','Units across days')
-        nrdays = length(GoodUnits{midx});
-        countday = 1;
-        for didx = 1:nrdays
-            tmpCell = GoodUnits{midx}{didx};
-            if isempty(tmpCell)
+    end
+    %% number of good units across days
+    figure('name','Units across days')
+    nrdays = length(GoodUnits{midx});
+    countday = 1;
+    for didx = 1:nrdays
+        tmpCell = GoodUnits{midx}{didx};
+        if isempty(tmpCell)
+            continue
+        end
+        nprobe = length(tmpCell);
+        for pidx = 1:nprobe
+            tmpUnits = tmpCell{pidx};
+            depthGU = tmpUnits.depth(logical(tmpUnits.Good_ID));
+            ShankGU = tmpUnits.Shank(logical(tmpUnits.Good_ID));
+            if isempty(depthGU)
                 continue
             end
-            nprobe = length(tmpCell);
-            for pidx = 1:nprobe
-                tmpUnits = tmpCell{pidx};
-                depthGU = tmpUnits.depth(logical(tmpUnits.Good_ID));
-                ShankGU = tmpUnits.Shank(logical(tmpUnits.Good_ID));
-                if isempty(depthGU)
-                    continue
-                end
 
-                scatter(countday-0.15+0.3*(pidx-1)+0.05*ShankGU,depthGU,8,'filled')
-                hold on
+            scatter(countday-(0.015*nprobe)+0.03*(pidx-1)+0.005*ShankGU,depthGU,8,'filled')
+            hold on
 
-                text(countday-0.15+0.3*(pidx-1),max(depthGU)+250,['n=' num2str(sum(tmpUnits.Good_ID))])
+            text(countday-(0.015*nprobe)+0.03*(pidx-1),max(depthGU)+250,['n=' num2str(length(unique(tmpUnits.UniqueID(logical(tmpUnits.Good_ID)))))])
 
-            end
-            countday = countday+1;
         end
-        ylim([0 max(get(gca,'ylim'))+300])
-        xlim([0 countday])
-        xlabel('Day/Shank')
-        ylabel('Depth from probetip')
-        title(['Good Units Across Days/Shank ' MiceOpt{midx}])
-        makepretty
-
-        saveas(gcf,fullfile(KilosortDir,MiceOpt{midx},'UnitsAcrossDays.fig'))
-        saveas(gcf,fullfile(KilosortDir,MiceOpt{midx},'UnitsAcrossDays.bmp'))
-
+        countday = countday+1;
     end
+    ylim([0 max(get(gca,'ylim'))+300])
+%     xlim([0.5 countday-0.5])
+    xlabel('Recording/Shank')
+    ylabel('Depth from probetip')
+    title(['Good Units Across Days/Shank ' MiceOpt{midx}])
+    makepretty
+
+    saveas(gcf,fullfile(KilosortDir,MiceOpt{midx},'UnitsAcrossDays.fig'))
+    saveas(gcf,fullfile(KilosortDir,MiceOpt{midx},'UnitsAcrossDays.bmp'))
+
 end
 

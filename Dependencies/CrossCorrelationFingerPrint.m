@@ -111,6 +111,8 @@ else
 end
 
 %%
+ncellsperrecording = diff(SessionSwitch);
+
 clear FingerPrintAll
 figure('name','Fingerprint correlations')
 for did1 = 1:ndays
@@ -123,7 +125,7 @@ for did1 = 1:ndays
         nclustmp = size(SessionCorrelations,1);
 %         SessionCorrelations(rmidx,:)=[];
         try
-            notrmdixvec = SessionSwitch(did1):SessionSwitch(did1+2)-1;
+            notrmdixvec = 1:ncellsperrecording(did1)+ncellsperrecording(did2);
             notrmdixvec(rmidx)=[];
         catch
             notrmdixvec = SessionSwitch(did1):SessionSwitch(did1+1)-1;
@@ -169,7 +171,6 @@ for did1 = 1:ndays
 end
 %%
 FingerprintRAll = nan(nclus,nclus);
-ncellsperrecording = diff(SessionSwitch);
 SigMask = zeros(nclus,nclus);
 RankScoreAll = nan(size(SigMask));
 for pid=1:nclus
