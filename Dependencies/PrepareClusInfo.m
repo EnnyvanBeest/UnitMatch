@@ -1,4 +1,4 @@
-function [clusinfo,sp] = PrepareClusInfo(KiloSortPaths,Params,RawDataPaths)
+% function [clusinfo,sp] = PrepareClusInfo(KiloSortPaths,Params,RawDataPaths)
 % Prepares cluster information for subsequent analysis
 %% Inputs:
 % KiloSortPaths = List of directories pointing at kilosort output (same format as what you get when
@@ -60,19 +60,6 @@ catch ME
     disp(ME)
     UseParamsKS = 1;
 end
-
-%% Bombcell parameters
-% clear BCparam
-bc_qualityParamValuesForUnitMatch;
-
-%% UnitMatch Parameters
-UMparam.RunPyKSChronicStitched = Params.RunPyKSChronicStitched;
-UMparam.SaveDir = fullfile(Params.SaveDir);
-UMparam.ACGbinSize = BCparam.ACGbinSize;
-UMparam.ACGduration = BCparam.ACGduration;
-UMparam.sampleamount = BCparam.nRawSpikesToExtract; %500; % Nr. waveforms to include
-UMparam.spikeWidth =BCparam.SpikeWidth; %83; % in sample space (time)
-UMparam.UseBombCelRawWav = 0; % by default
 
 %% Initialize everything
 AllUniqueTemplates = [];
@@ -185,6 +172,10 @@ for subsesid=1:length(KiloSortPaths)
     end
     channelpostmpconv = ChannelIMROConversion(rawD(1).folder,1); % For conversion when not automatically done
 
+    %% Bombcell parameters
+    % clear paramBC
+    paramBC = bc_qualityParamValuesForUnitMatch(dir(strrep(fullfile(rawD(1).folder,rawD(1).name),'cbin','meta')),fullfile(Params.tmpdatafolder,strrep(rawD(1).name,'cbin','bin')));
+
     %% Load Cluster Info
     myClusFile = dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'cluster_info.tsv')); % If you did phy (manual curation) we will find this one... We can trust you, right?
     if isempty(myClusFile)
@@ -203,7 +194,7 @@ for subsesid=1:length(KiloSortPaths)
         tmpLabel(ismember(clusinfo.cluster_id,KSLabelfile.cluster_id)) = KSLabelfile.KSLabel(ismember(KSLabelfile.cluster_id,clusinfo.cluster_id));
         Label = [Label,tmpLabel];
         totSpkNum = histc(sp{countid}.clu,sp{countid}.cids);
-        Good_IDtmp = ismember(tmpLabel,'g') & totSpkNum'>BCparam.minNumSpikes; %Identify good clusters
+        Good_IDtmp = ismember(tmpLabel,'g') & totSpkNum'>paramBC.minNumSpikes; %Identify good clusters
 
         % Find depth and channel
         depthtmp = nan(length(clusinfo.cluster_id),1);
@@ -302,9 +293,8 @@ for subsesid=1:length(KiloSortPaths)
     DecompressionFlag = 0;
 
     if Params.RunQualityMetrics
-        uniqueTemplates = [];
+        theseuniqueTemplates = [];
         unitTypeAcrossRec= [];
-        UMparam.UseBombCelRawWav = 1; % If you run both bombcell and unitmatch, you can reuse bombcell's extracted units
 
         %% Quality matrix - Bombcell (https://github.com/Julie-Fabre/bombcell)
         for id = 1:length(rawD)
@@ -315,17 +305,17 @@ for subsesid=1:length(KiloSortPaths)
             else
                 savePath =myClusFile(1).folder;
             end
-            qMetricsExist = dir(fullfile(savePath,'templates._bc_qMetrics.parquet'));
+            qMetricsExist = ~isempty(dir(fullfile(savePath, 'qMetric*.mat'))) || ~isempty(dir(fullfile(savePath, 'templates._bc_qMetrics.parquet')));
             idx = sp{countid}.SessionID==id;
             InspectionFlag = 0;
             if isempty(qMetricsExist) || Params.RedoQM
                 % First check if we want to use python for compressed data. If not, uncompress data first
                 if any(strfind(rawD(id).name,'cbin')) && Params.DecompressLocal
+                    % detect whether data is compressed, decompress locally if necessary
                     if ~exist(fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')))
                         disp('This is compressed data and we do not want to use Python integration... uncompress temporarily')
                         decompDataFile = bc_extractCbinData(fullfile(rawD(id).folder,rawD(id).name),...
-                            [], [], 0, fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')));
-                        BCparam.rawFile = decompDataFile;
+                            [], [], 0,  fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')));
                         copyfile(strrep(fullfile(rawD(id).folder,rawD(id).name),'cbin','meta'),strrep(fullfile(Params.tmpdatafolder,rawD(id).name),'cbin','meta'))
                     end
                     DecompressionFlag = 1;
@@ -333,33 +323,46 @@ for subsesid=1:length(KiloSortPaths)
                         InspectionFlag=1;
                     end
                 end
-                BCparam.rawFile = fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin'));
-                BCparam.ephysMetaFile = (strrep(fullfile(Params.tmpdatafolder,rawD(id).name),'cbin','meta'));
+                % load data BOMBCELL way
+                [spikeTimes_samples, spikeTemplates, ...
+                    templateWaveforms, templateAmplitudes, pcFeatures, pcFeatureIdx, channelPositions] = bc_loadEphysData(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name),id);
+
+                paramBC.rawFile = fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin'));
+                paramBC.ephysMetaFile = (strrep(fullfile(Params.tmpdatafolder,rawD(id).name),'cbin','meta'));
 
                 %             idx = ismember(sp{countid}.spikeTemplates,clusidtmp(Good_IDtmp)); %Only include good units
                 %careful; spikeSites zero indexed
-                [qMetric, ~] = bc_runAllQualityMetrics(BCparam, round(sp{countid}.st(idx).*sp{countid}.sample_rate), sp{countid}.spikeTemplates(idx)+1, ...
-                    sp{countid}.temps, sp{countid}.tempScalingAmps(idx),sp{countid}.pcFeat(idx,:,:),sp{countid}.pcFeatInd,channelpostmp,savePath);
+                [qMetric, unitType] = bc_runAllQualityMetrics(paramBC, spikeTimes_samples, spikeTemplates, ...
+                    templateWaveforms, templateAmplitudes,pcFeatures,pcFeatureIdx,channelPositions, savePath);
 
             else
-                BCparam.rawFile = fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin'));
+                paramBC.rawFile = fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin'));
                 if exist('ephysap_tmp', 'var')
-                    BCparam.tmpFolder = [ephysap_tmp, '/..'];
+                    paramBC.tmpFolder = [ephysap_tmp, '/..'];
                 end
+                [paramBC, qMetric, fractionRPVs_allTauR] = bc_loadSavedMetrics(savePath);
+                unitType = bc_getQualityUnitType(paramBC, qMetric);
+                bc_plotGlobalQualityMetric(qMetric, paramBC, unitType, uniqueTemplates, forGUI.tempWv);
+
                 %                 load(fullfile(savePath, 'qMetric.mat'))
             end
-            bc_loadSavedMetrics(savePath) %always load the parquet version
-            bc_getQualityUnitType;
-
             unitTypeAcrossRec{id} = unitType;
-            uniqueTemplates{id} = unique(sp{countid}.spikeTemplates(idx));
+            theseuniqueTemplates{id} = unique(sp{countid}.spikeTemplates(idx));
 
             if InspectionFlag % Doesn't currently work: Julie will update bombcell
-                keyboard
                 bc_loadMetricsForGUI
                 %% Inspect the results?
-                bc_unitQualityGUI(memMapData, ephysData, qMetric, rawWaveforms, param,...
-                    probeLocation, unitType, plotRaw);
+                % GUI guide:
+                % left/right arrow: toggle between units
+                % g : go to next good unit
+                % m : go to next multi-unit
+                % n : go to next noise unit
+                % up/down arrow: toggle between time chunks in the raw data
+                % u: brings up a input dialog to enter the unit you want to go to
+                unitQualityGuiHandle = bc_unitQualityGUI(memMapData, ephysData, qMetric, forGUI, rawWaveforms, ...
+                    param, probeLocation, unitType, plotRaw)             
+%                 bc_unitQualityGUI(memMapData, ephysData, qMetric, rawWaveforms, paramBC,...
+%                     probeLocation, unitType, plotRaw);
                 disp('Not continuing until GUI closed')
                 while isvalid(unitQualityGuiHandle) && InspectQualityMatrix
                     pause(0.01)
@@ -369,7 +372,7 @@ for subsesid=1:length(KiloSortPaths)
             %% Apply QM findings:
             disp('Only use units that passed the quality matrix parameters')
         end
-        AllUniqueTemplates = cat(1,AllUniqueTemplates(:),cat(1,uniqueTemplates{:}));
+        AllUniqueTemplates = cat(1,AllUniqueTemplates(:),cat(1,theseuniqueTemplates{:}));
         unitType = cat(1,unitTypeAcrossRec{:});
         Good_IDtmp(unitType ~= 1) = 0; % MUA
         Good_IDtmp(unitType == 1) =1; % Good
@@ -385,8 +388,8 @@ for subsesid=1:length(KiloSortPaths)
     if isempty(addthis)
         addthis=0;
     end
-    if exist('uniqueTemplates','var') && iscell(uniqueTemplates)
-        recsesAlltmp = arrayfun(@(X) repmat(addthis+X,1,length(uniqueTemplates{X})),[1:length(uniqueTemplates)],'UniformOutput',0);
+    if exist('uniqueTemplates','var') && iscell(theseuniqueTemplates)
+        recsesAlltmp = arrayfun(@(X) repmat(addthis+X,1,length(theseuniqueTemplates{X})),[1:length(theseuniqueTemplates)],'UniformOutput',0);
         recsesAll =cat(1,recsesAll(:), cat(2,recsesAlltmp{:})');
     else
         recsesAll = cat(1,recsesAll(:),repmat(addthis+1,1,length(Good_IDtmp))');
@@ -431,8 +434,15 @@ sp = spnew;
 sp.sample_rate = sp.sample_rate(1);
 clear spnew
 
-%% Match different units?
-% Remaining parameters
+%% UnitMatch Parameters
+UMparam.RunPyKSChronicStitched = Params.RunPyKSChronicStitched;
+UMparam.SaveDir = fullfile(Params.SaveDir);
+UMparam.ACGbinSize = paramBC.ACGbinSize;
+UMparam.ACGduration = paramBC.ACGduration;
+UMparam.sampleamount = paramBC.nRawSpikesToExtract; %500; % Nr. waveforms to include
+UMparam.spikeWidth =paramBC.SpikeWidth; %82; % in sample space (time)
+UMparam.UseBombCelRawWav = Params.RunQualityMetrics; % 1 by default
+
 UMparam.channelpos = channelpos;
 UMparam.AllRawPaths = RawDataPaths;
 UMparam.AllDecompPaths = arrayfun(@(X) fullfile(Params.tmpdatafolder,strrep(RawDataPaths(X).name,'cbin','bin')),1:length(RawDataPaths),'Uni',0);
@@ -456,7 +466,7 @@ if Params.UnitMatch
 
                         decompDataFile = bc_extractCbinData(fullfile(RawDataPaths(id).folder,RawDataPaths(id).name),...
                             [], [], 0, fullfile(Params.tmpdatafolder,strrep(RawDataPaths(id).name,'cbin','bin')));
-                        BCparam.rawFile = decompDataFile;
+                        paramBC.rawFile = decompDataFile;
 
 
                         % Decompression
