@@ -46,7 +46,9 @@ for uid = 1:nclus
             continue
         else
             tmppath = param.KSDir(GoodRecSesID(uid));
-            spikeMap = readNPY(fullfile(tmppath.folder,tmppath.name,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))-OriSessionSwitch(GoodRecSesID(uid))+1) '_RawSpikes.npy']));            
+            spikeMap = readNPY(fullfile(tmppath.folder,tmppath.name,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))-OriSessionSwitch(GoodRecSesID(uid))+1) '_RawSpikes.npy']));
+            spikeMap = smoothdata(spikeMap,1,'gaussian',5);
+            spikeMap = (spikeMap - mean(spikeMap(1:20,:,:),1));
         end
     else
         pathparts = strsplit(AllDecompPaths{GoodRecSesID(uid)},'\');
@@ -95,19 +97,19 @@ for uid = 1:nclus
                 end
             end
         end
-        %Actual number of wavefroms
-        nwavs = sum(sum(~isnan(nanmean(spikeMap,2)),1) == spikeWidth); % Actual number of waves
-        for cv = 1:2
-            if cv==1
-                wavidx = floor(1:nwavs/2);
-            else
-                wavidx = floor(nwavs/2+1:nwavs);
-            end
-            spikeMapAvg(:,:,cv) = nanmean(spikeMap(:,:,wavidx),3);
-        end
-        spikeMap = spikeMapAvg;
-        clear spikeMapAvg
     end
+    %Actual number of wavefroms
+    nwavs = sum(sum(~isnan(nanmean(spikeMap,2)),1) == spikeWidth); % Actual number of waves
+    for cv = 1:2
+        if cv==1
+            wavidx = floor(1:nwavs/2);
+        else
+            wavidx = floor(nwavs/2+1:nwavs);
+        end
+        spikeMapAvg(:,:,cv) = nanmean(spikeMap(:,:,wavidx),3);
+    end
+    spikeMap = spikeMapAvg;
+    clear spikeMapAvg
 
     if ~exist(fullfile(SaveDir,'UnitMatchWaveforms'))
         mkdir(fullfile(SaveDir,'UnitMatchWaveforms'))

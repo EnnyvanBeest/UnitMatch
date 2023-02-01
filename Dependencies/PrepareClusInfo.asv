@@ -437,16 +437,16 @@ clear spnew
 %% UnitMatch Parameters
 UMparam.RunPyKSChronicStitched = Params.RunPyKSChronicStitched;
 UMparam.SaveDir = fullfile(Params.SaveDir);
-UMparam.ACGbinSize =  0.001;%paramBC.ACGbinSize;
-UMparam.ACGduration = 1;%paramBC.ACGduration;
+UMparam.ACGbinSize = paramBC.ACGbinSize;
+UMparam.ACGduration = paramBC.ACGduration;
 UMparam.sampleamount = paramBC.nRawSpikesToExtract; %500; % Nr. waveforms to include
-UMparam.spikeWidth =paramBC.spikeWidth; %82; % in sample space (time)
+UMparam.spikeWidth =paramBC.SpikeWidth; %82; % in sample space (time)
 UMparam.UseBombCelRawWav = Params.RunQualityMetrics; % 1 by default
-UMparam.KSDir = KiloSortPaths;
+
 UMparam.channelpos = channelpos;
 UMparam.AllRawPaths = RawDataPaths;
 UMparam.AllDecompPaths = arrayfun(@(X) fullfile(Params.tmpdatafolder,strrep(RawDataPaths(X).name,'cbin','bin')),1:length(RawDataPaths),'Uni',0);
-UMparam.RedoExtraction = 1;
+UMparam.RedoExtraction = 0;
 if Params.UnitMatch
     UnitMatchExist = dir(fullfile(UMparam.SaveDir,'UnitMatch.mat'));
     if ~isempty(UnitMatchExist) && ~Params.RedoUnitMatch
