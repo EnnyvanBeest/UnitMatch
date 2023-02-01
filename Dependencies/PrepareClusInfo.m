@@ -9,9 +9,9 @@
 % Params.loadPCs=1;
 % Params.RunPyKSChronicStitched = 1
 % Params.DecompressLocal = 1; %if 1, uncompress data first if it's currently compressed
-% Params.RedoQM = 0; %if 1, redo quality matrix if it already exists
-% Params.RunQualityMetrics = 1; % If 1, Run the quality matrix
-% Params.InspectQualityMatrix =0; % Inspect the quality matrix/data set using the GUI
+% Params.RedoQM = 0; %if 1, redo quality metrics if it already exists
+% Params.RunQualityMetrics = 1; % If 1, Run the quality metrics
+% Params.InspectQualityMetrics =0; % Inspect the quality metrics/data set using the GUI
 % Params.UnitMatch = 1; % Matching chronic recording using QM instead of using pyks chronic output
 % Params.RedoUnitMatch = 0; % Redo unitmatch
 % Params.SaveDir% Directory to save QM and UnitMatch results
@@ -38,9 +38,9 @@ try
         Params.loadPCs=1;
         Params.RunPyKSChronicStitched = 1;
         Params.DecompressLocal = 1; %if 1, uncompress data first if it's currently compressed
-        Params.RedoQM = 0; %if 1, redo quality matrix if it already exists
-        Params.RunQualityMetrics = 1; % If 1, Run the quality matrix
-        Params.InspectQualityMatrix =0; % Inspect the quality matrix/data set using the GUI
+        Params.RedoQM = 0; %if 1, redo quality metrics if it already exists
+        Params.RunQualityMetrics = 1; % If 1, Run the quality metrics
+        Params.InspectQualityMetrics =0; % Inspect the quality metrics/data set using the GUI
         Params.UnitMatch = 1; % Matching chronic recording using QM instead of using pyks chronic output
         Params.RedoUnitMatch = 0; % Redo unitmatch
         Params.SaveDir = KiloSortPaths(1); % Directory to save QM and UnitMatch results
@@ -296,7 +296,7 @@ for subsesid=1:length(KiloSortPaths)
         theseuniqueTemplates = [];
         unitTypeAcrossRec= [];
 
-        %% Quality matrix - Bombcell (https://github.com/Julie-Fabre/bombcell)
+        %% Quality metrics - Bombcell (https://github.com/Julie-Fabre/bombcell)
         for id = 1:length(rawD)
             ephysap_tmp = [];
             ephysap_path = fullfile(rawD(id).folder,rawD(id).name);
@@ -305,7 +305,7 @@ for subsesid=1:length(KiloSortPaths)
             else
                 savePath =myClusFile(1).folder;
             end
-            qMetricsExist = ~isempty(dir(fullfile(savePath, 'qMetric*.mat'))) || ~isempty(dir(fullfile(savePath, 'templates._bc_qMetrics.parquet')));
+            qMetricsExist = ~isempty(dir(fullfile(savePath, '**', 'templates._bc_qMetrics.parquet'))); % ~isempty(dir(fullfile(savePath, 'qMetric*.mat'))) not used anymore?
             idx = sp{countid}.SessionID==id;
             InspectionFlag = 0;
             if isempty(qMetricsExist) || Params.RedoQM
@@ -319,7 +319,7 @@ for subsesid=1:length(KiloSortPaths)
                         copyfile(strrep(fullfile(rawD(id).folder,rawD(id).name),'cbin','meta'),strrep(fullfile(Params.tmpdatafolder,rawD(id).name),'cbin','meta'))
                     end
                     DecompressionFlag = 1;
-                    if Params.InspectQualityMatrix
+                    if Params.InspectQualityMetrics
                         InspectionFlag=1;
                     end
                 end
@@ -340,9 +340,19 @@ for subsesid=1:length(KiloSortPaths)
                 if exist('ephysap_tmp', 'var')
                     paramBC.tmpFolder = [ephysap_tmp, '/..'];
                 end
-                [paramBC, qMetric, fractionRPVs_allTauR] = bc_loadSavedMetrics(savePath);
+                d = dir(fullfile(savePath, '**', 'templates._bc_qMetrics.parquet'));
+                qMetricsPath = d.folder;
+                [paramBC, qMetric, fractionRPVs_allTauR] = bc_loadSavedMetrics(qMetricsPath);
                 unitType = bc_getQualityUnitType(paramBC, qMetric);
+
+                %{ 
+                % Commmented by CB for now    
+                spike_templates_0idx = readNPY([savePath filesep 'spike_templates.npy']);
+                spikeTemplates = spike_templates_0idx + 1;
+                uniqueTemplates = unique(spikeTemplates);
+                % need to load forGUI.tempWv??
                 bc_plotGlobalQualityMetric(qMetric, paramBC, unitType, uniqueTemplates, forGUI.tempWv);
+                %}
 
                 %                 load(fullfile(savePath, 'qMetric.mat'))
             end
@@ -364,13 +374,13 @@ for subsesid=1:length(KiloSortPaths)
 %                 bc_unitQualityGUI(memMapData, ephysData, qMetric, rawWaveforms, paramBC,...
 %                     probeLocation, unitType, plotRaw);
                 disp('Not continuing until GUI closed')
-                while isvalid(unitQualityGuiHandle) && Params.InspectQualityMatrix
+                while isvalid(unitQualityGuiHandle) && Params.InspectQualityMetrics
                     pause(0.01)
                 end
                 disp('GUI closed')
             end
             %% Apply QM findings:
-            disp('Only use units that passed the quality matrix parameters')
+            disp('Only use units that passed the quality metrics parameters')
         end
         AllUniqueTemplates = cat(1,AllUniqueTemplates(:),cat(1,theseuniqueTemplates{:}));
         unitType = cat(1,unitTypeAcrossRec{:});
