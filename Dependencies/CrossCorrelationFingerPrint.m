@@ -6,15 +6,18 @@ disp('Calculate activity correlations')
 Unit2Take = AllClusterIDs(Good_Idx);
 fig1 = figure('name','Cross-correlation Fingerprints');
 clear AllSessionCorrelations
+nrows = (ndays*ndays)-1;
+rowcount = 1;
 for did1 = 1:ndays
     for did2 = 1:ndays
         if did2<did1
             continue
         elseif did2==did1
             % All Units on this day
-            Unit2TakeIdxAll = find(recsesAll(Good_Idx) == 1);
-            srAll = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == X & sp.RecSes == 1),edges),Unit2Take(Unit2TakeIdxAll),'UniformOutput',0);
+            Unit2TakeIdxAll = find(recsesAll(Good_Idx) == did1);
+            srAll = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == X & sp.RecSes == did1),edges),Unit2Take(Unit2TakeIdxAll),'UniformOutput',0);
             srAll = cat(1,srAll{:});
+            srAll(:,sum(srAll==0,1)==size(srAll,1))=[]; % Remove bins with 0 spikes
 
             % Find cross-correlation in first and second half of session
             SessionCorrelations = corr(srAll(:,1:floor(size(srAll,2)./2))',srAll(:,1:floor(size(srAll,2)./2))')';
@@ -26,19 +29,19 @@ for did1 = 1:ndays
                 SessionCorrelations2(id,find(ismember(Unit2TakeIdxAll,Unit2TakeIdxAll(id)))) = nan;
             end
 
-            subplot(1,2,1)
+            subplot(nrows,2,(rowcount-1)*2+1)
             imagesc(SessionCorrelations')
             colormap(flipud(gray))
             xlabel('Candidate Units to be matched')
-            ylabel('All units')
+            ylabel(['Within day ' num2str(did1)])
             title(['First half of recording'])
             makepretty
 
-            subplot(1,2,2)
+            subplot(nrows,2,rowcount*2)
             imagesc(SessionCorrelations2')
             colormap(flipud(gray))
             xlabel('Candidate Units to be matched')
-            ylabel('All units')
+            ylabel(['Within day ' num2str(did1)])
             title(['Second half of recording'])
             makepretty
 
@@ -90,11 +93,11 @@ for did1 = 1:ndays
 
                 % Normalize correlations to compare across recordings
                 %         SessionCorrelation_Pair = (SessionCorrelation_Pair-nanmedian(SessionCorrelation_Pair(:)))./(quantile(SessionCorrelation_Pair(:),0.95)-quantile(SessionCorrelation_Pair(:),0.05));
-                subplot(ndays-1,2,did)
+                subplot(nrows,2,(rowcount-1)*2+did)
                 imagesc(SessionCorrelation_Pair')
                 colormap(flipud(gray))
                 xlabel('Candidate Units to be matched')
-                ylabel('All units')
+                ylabel(['Across days ' num2str(dayopt(did))])
                 title(['Recording ' num2str(dayopt(did))])
                 makepretty
 
@@ -107,11 +110,12 @@ for did1 = 1:ndays
             end
             AllSessionCorrelations{did1,did2} = SessionCorrelations;
         end
+        rowcount=rowcount+1;
     end
 end
 %%
 ncellsperrecording = diff(SessionSwitch);
-
+rowcount = 1;
 clear FingerPrintAll
 figure('name','Fingerprint correlations')
 for did1 = 1:ndays
@@ -148,9 +152,7 @@ for did1 = 1:ndays
             clear Fingerprinttmp
         end
 
-        if ndays>1
-            subplot(ndays-1,ndays-1,(did1-1)*(ndays-1)+did2-1)
-        end
+        subplot(ndays,ndays,(did1-1)*ndays+did2)
         imagesc(FingerprintR)
         hold on
         arrayfun(@(X) line([SessionSwitch(X)-SessionSwitch(X-1)+1 SessionSwitch(X)-SessionSwitch(X-1)+1],get(gca,'ylim'),'color',[1 0 0]),did1+1,'Uni',0)
@@ -181,17 +183,7 @@ for pid=1:nclus
         did2 = (recsesGood(pid2));
         addthis3=-SessionSwitch(did1)+1;
         addthis4 = 0;
-
-        if did2==did1 && did2==ndays
-            try
-                addthis3= -SessionSwitch(did1)+1+ncellsperrecording(did1-1); %for pid we need to subtract when there's mltiple sessions
-                addthis4 = ncellsperrecording(did1-1); % For the columns (pid2)
-            catch
-                addthis3= -SessionSwitch(did1)+1; %for pid we need to subtract when there's mltiple sessions
-                addthis4 = 0; % For the columns (pid2)
-            end
-        end
-
+    
         FingerprintR = FingerPrintAll{did1,did2};
         if did1==did2
             tmp1 = FingerprintR(pid+addthis3,[1:ncellsperrecording(did1)]+addthis4);
