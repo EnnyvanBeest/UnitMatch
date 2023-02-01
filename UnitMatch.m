@@ -1,4 +1,4 @@
-function  [UniqueID, MatchTable] = UnitMatch(clusinfo,param,sp)
+% function  [UniqueID, MatchTable] = UnitMatch(clusinfo,param,sp)
 %% Match units on neurophysiological evidence
 % Input:
 % - clusinfo (this is phy output, see also prepareinfo/spikes toolbox)
@@ -202,7 +202,7 @@ WVCorr = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) corr(ProjectedWaveform(35:70,
 WVCorr = cat(1,WVCorr{:});
 
 % Make WVCorr a normal distribution
-WVCorr = erfinv(WVCorr);
+WVCorr = atanh(WVCorr);
 WVCorr = (WVCorr-nanmin(WVCorr(:)))./(nanmax(WVCorr(:))-nanmin(WVCorr(:)));
 
 % sort of Normalize distribution
