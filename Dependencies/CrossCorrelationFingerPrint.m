@@ -148,11 +148,7 @@ for did1 = 1:ndays
         % FingerprintR
         if any(rmidx)
             Fingerprinttmp = nan(nclustmp,nclustmp);
-            Fingerprinttmp(1:rmidx-1,1:rmidx-1)=FingerprintR(1:rmidx-1,1:rmidx-1);
-            Fingerprinttmp(rmidx,:)=nan;
-            Fingerprinttmp(:,rmidx)=nan;
-            Fingerprinttmp(rmidx+1:end,notrmdixvec)=FingerprintR(rmidx:end,:);
-            Fingerprinttmp(notrmdixvec,rmidx+1:end)=FingerprintR(:,rmidx:end);
+            Fingerprinttmp(setdiff(1:nclustmp,rmidx),setdiff(1:nclustmp,rmidx)) = FingerprintR;
             FingerprintR = Fingerprinttmp;
             clear Fingerprinttmp
         end

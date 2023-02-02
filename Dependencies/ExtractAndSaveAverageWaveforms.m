@@ -45,8 +45,8 @@ for uid = 1:nclus
         if exist(fullfile(SaveDir,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat'])) && ~RedoExtraction
             continue
         else
-            tmppath = param.KSDir(GoodRecSesID(uid));
-            spikeMap = readNPY(fullfile(tmppath.folder,tmppath.name,'RawWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))-OriSessionSwitch(GoodRecSesID(uid))+1) '_RawSpikes.npy']));            
+            tmppath = dir(fullfile(param.KSDir(GoodRecSesID(uid)).folder,param.KSDir(GoodRecSesID(uid)).name,'**','RawWaveforms*'));
+            spikeMap = readNPY(fullfile(tmppath.folder,tmppath.name,['Unit' num2str(UniqueID(Good_Idx(uid))-OriSessionSwitch(GoodRecSesID(uid))+1) '_RawSpikes.npy']));            
         end
     else
         pathparts = strsplit(AllDecompPaths{GoodRecSesID(uid)},'\');
