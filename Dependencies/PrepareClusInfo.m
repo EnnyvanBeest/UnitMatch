@@ -1,4 +1,4 @@
-% function [clusinfo,sp] = PrepareClusInfo(KiloSortPaths,Params,RawDataPaths)
+function [clusinfo,sp] = PrepareClusInfo(KiloSortPaths,Params,RawDataPaths)
 % Prepares cluster information for subsequent analysis
 %% Inputs:
 % KiloSortPaths = List of directories pointing at kilosort output (same format as what you get when
@@ -175,7 +175,7 @@ for subsesid=1:length(KiloSortPaths)
     %% Bombcell parameters
     % clear paramBC
     paramBC = bc_qualityParamValuesForUnitMatch(dir(strrep(fullfile(rawD(1).folder,rawD(1).name),'cbin','meta')),fullfile(Params.tmpdatafolder,strrep(rawD(1).name,'cbin','bin')));
-
+%     paramBC.reextractRaw = 0;
     %% Load Cluster Info
     myClusFile = dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'cluster_info.tsv')); % If you did phy (manual curation) we will find this one... We can trust you, right?
     if isempty(myClusFile)
@@ -342,7 +342,7 @@ for subsesid=1:length(KiloSortPaths)
                 end
                 d = dir(fullfile(savePath, '**', 'templates._bc_qMetrics.parquet'));
                 qMetricsPath = d.folder;
-                [paramBC, qMetric, fractionRPVs_allTauR] = bc_loadSavedMetrics(qMetricsPath);
+                [~, qMetric, fractionRPVs_allTauR] = bc_loadSavedMetrics(qMetricsPath);
                 unitType = bc_getQualityUnitType(paramBC, qMetric);
 
                 %{ 
@@ -385,8 +385,8 @@ for subsesid=1:length(KiloSortPaths)
         AllUniqueTemplates = cat(1,AllUniqueTemplates(:),cat(1,theseuniqueTemplates{:}));
         unitType = cat(1,unitTypeAcrossRec{:});
         Good_IDtmp(unitType ~= 1) = 0; % MUA
-        Good_IDtmp(unitType == 1) =1; % Good
-        Good_IDtmp(unitType == 0) =0;
+        Good_IDtmp(unitType == 1) = 1; % Good
+        Good_IDtmp(unitType == 0) = 0;
 %         NoiseUnit = false(size(Good_IDtmp));
 %         NoiseUnit(unitType == 0)=1; % NOISE
     else
@@ -456,7 +456,7 @@ UMparam.KSDir = KiloSortPaths;
 UMparam.channelpos = channelpos;
 UMparam.AllRawPaths = RawDataPaths;
 UMparam.AllDecompPaths = arrayfun(@(X) fullfile(Params.tmpdatafolder,strrep(RawDataPaths(X).name,'cbin','bin')),1:length(RawDataPaths),'Uni',0);
-UMparam.RedoExtraction = 1;
+UMparam.RedoExtraction = 0;
 if Params.UnitMatch
     UnitMatchExist = dir(fullfile(UMparam.SaveDir,'UnitMatch.mat'));
     if ~isempty(UnitMatchExist) && ~Params.RedoUnitMatch
