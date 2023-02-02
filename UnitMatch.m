@@ -296,9 +296,18 @@ while flag<2
 
     disp('Computing location angle (direction) differences between pairs of units, per individual time point of the waveform...')
     % Difference in angle between two time points
-    LocAngle = arrayfun(@(uid) cell2mat(arrayfun(@(tp) atan(abs(squeeze(ProjectedLocationPerTP(1,uid,tp,:)-ProjectedLocationPerTP(1,uid,tp-1,:)))./abs(squeeze(ProjectedLocationPerTP(2,uid,tp,:)-ProjectedLocationPerTP(2,uid,tp-1,:)))),2:spikeWidth,'Uni',0)),1:nclus,'Uni',0);
-    LocAngleSim = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) circ_mean(abs(LocAngle{uid}(1,~isnan(LocAngle{uid}(1,:)) & ~isnan(LocAngle{uid2}(2,:)))' - LocAngle{uid2}(2,~isnan(LocAngle{uid}(1,:)) & ~isnan(LocAngle{uid2}(2,:)))')),1:nclus,'Uni',0)),1:nclus,'Uni',0);
-    LocAngleSim = cat(1,LocAngleSim{:});
+    x1 = ProjectedLocationPerTP(:,:,2:spikeWidth,:);
+    x2 = ProjectedLocationPerTP(:,:,1:spikeWidth-1,:);
+    LocAngle = squeeze(atan(abs(x1(1,:,:,:)-x2(1,:,:,:))./abs(x1(2,:,:,:)-x2(2,:,:,:))));
+    x1 = repmat(LocAngle(:,:,1),[1 1 nclus]);
+    x2 = permute(repmat(LocAngle(:,:,2),[1 1 nclus]),[3 2 1]);
+    w = ~isnan(x1+x2);
+    x1(~w) = 0;
+    x2(~w) = 0;
+    LocAngleSim = squeeze(circ_mean(abs(x1-x2),w,2));
+    % LocAngle = arrayfun(@(uid) cell2mat(arrayfun(@(tp) atan(abs(squeeze(ProjectedLocationPerTP(1,uid,tp,:)-ProjectedLocationPerTP(1,uid,tp-1,:)))./abs(squeeze(ProjectedLocationPerTP(2,uid,tp,:)-ProjectedLocationPerTP(2,uid,tp-1,:)))),2:spikeWidth,'Uni',0)),1:nclus,'Uni',0);
+    % LocAngleSim = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) circ_mean(abs(LocAngle{uid}(1,~isnan(LocAngle{uid}(1,:)) & ~isnan(LocAngle{uid2}(2,:)))' - LocAngle{uid2}(2,~isnan(LocAngle{uid}(1,:)) & ~isnan(LocAngle{uid2}(2,:)))')),1:nclus,'Uni',0)),1:nclus,'Uni',0);
+    % LocAngleSim = cat(1,LocAngleSim{:});
 
     % Variance in error, corrected by average error. This captures whether
     % the trajectory is consistenly separate
