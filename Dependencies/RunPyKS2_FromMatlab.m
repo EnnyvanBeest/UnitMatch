@@ -207,7 +207,7 @@ for midx = 1:length(MiceOpt)
 
             % Check if there's an ephys folder, if so run pyks2
             tmpephysdir = dir(fullfile(DataDir{DataDir2Use(midx)},MiceOpt{midx},thisdate,'ephys',['*' MiceOpt{midx} '*']));
-             tmpephysdir(find(cell2mat(cellfun(@(X) any(strfind(X,'NatImages')),{tmpephysdir(:).name},'UniformOutput',0))))=[]; %These are sessions from AV team, do not include for now
+%              tmpephysdir(find(cell2mat(cellfun(@(X) any(strfind(X,'NatImages')),{tmpephysdir(:).name},'UniformOutput',0))))=[]; %These are sessions from AV team, do not include for now
             tmpephysdir(find(cell2mat(cellfun(@(X) any(strfind(X,'Spontaneous')),{tmpephysdir(:).name},'UniformOutput',0))))=[];
             tmpephysdir(find(cell2mat(cellfun(@(X) any(strfind(X,'ActivePassive')),{tmpephysdir(:).name},'UniformOutput',0))))=[];
 
@@ -222,7 +222,7 @@ for midx = 1:length(MiceOpt)
 
                 for sesid = 1:length(tmpfile)
 
-                    if isempty(tmpfile) || any(strfind(tmpfile(sesid).folder,'NatImages')) ||  any(strfind(tmpfile(sesid).folder,'Spontaneous')) % Not my session
+                    if isempty(tmpfile) %|| any(strfind(tmpfile(sesid).folder,'NatImages')) ||  any(strfind(tmpfile(sesid).folder,'Spontaneous')) % Not my session
                         continue
                     end
                     ProbeName = strsplit(tmpfile(sesid).name,'imec');

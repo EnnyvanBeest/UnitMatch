@@ -6,7 +6,7 @@ disp('Calculate activity correlations')
 Unit2Take = AllClusterIDs(Good_Idx);
 fig1 = figure('name','Cross-correlation Fingerprints');
 clear AllSessionCorrelations
-nrows = (ndays*ndays)-1;
+nrows = (ndays*ndays);
 rowcount = 1;
 for did1 = 1:ndays
     for did2 = 1:ndays
@@ -136,8 +136,13 @@ for did1 = 1:ndays
 
         end
         % Correlate 'fingerprints'
-        FingerprintR = arrayfun(@(X) cell2mat(arrayfun(@(Y) corr(SessionCorrelations(X,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))',SessionCorrelations(Y,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))'),notrmdixvec,'UniformOutput',0)),notrmdixvec,'UniformOutput',0);
-        FingerprintR = cat(1,FingerprintR{:});
+        try
+            FingerprintR = arrayfun(@(X) cell2mat(arrayfun(@(Y) corr(SessionCorrelations(X,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))',SessionCorrelations(Y,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))'),notrmdixvec,'UniformOutput',0)),notrmdixvec,'UniformOutput',0);
+            FingerprintR = cat(1,FingerprintR{:});
+        catch ME
+            disp(ME)
+            keyboard
+        end
 
         % If one value was only nans; put it back in and replace original
         % FingerprintR

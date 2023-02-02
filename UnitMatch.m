@@ -1,4 +1,4 @@
-% function  [UniqueID, MatchTable] = UnitMatch(clusinfo,param,sp)
+function  [UniqueID, MatchTable] = UnitMatch(clusinfo,param,sp)
 %% Match units on neurophysiological evidence
 % Input:
 % - clusinfo (this is phy output, see also prepareinfo/spikes toolbox)
@@ -802,7 +802,7 @@ disp('Recalculate activity correlations')
 % Use a bunch of units with high total scores as reference population
 [PairScore,sortid] = sort(cell2mat(arrayfun(@(X) MatchProbability(Pairs(X,1),Pairs(X,2)),1:size(Pairs,1),'Uni',0)),'descend');
 Pairs = Pairs(sortid,:);
-CrossCorrelationFingerPrint
+% CrossCorrelationFingerPrint - do we really need this again?
 %%
 figure;
 subplot(1,3,1)
@@ -1256,13 +1256,8 @@ if MakePlotsOfPairs
         end
 
         subplot(3,3,9)
-        if recsesGood(uid) == recsesGood(uid2) && recsesGood(uid)~=ndays
-            SessionCorrelations = AllSessionCorrelations{recsesGood(uid),recsesGood(uid2)+1};
-        elseif recsesGood(uid) == recsesGood(uid2) && recsesGood(uid)==ndays && ndays>1
-            SessionCorrelations = AllSessionCorrelations{recsesGood(uid)-1,recsesGood(uid2)};
-        else
-            SessionCorrelations = AllSessionCorrelations{recsesGood(uid),recsesGood(uid2)};
-        end
+       
+        SessionCorrelations = AllSessionCorrelations{recsesGood(uid),recsesGood(uid2)};
         addthis3=-SessionSwitch(recsesGood(uid))+1;
         addthis4=-SessionSwitch(recsesGood(uid2))+1+ncellsperrecording(recsesGood(uid));    
         plot(SessionCorrelations(uid+addthis3,:),'b-'); hold on; plot(SessionCorrelations(uid2+addthis4,:),'r-')

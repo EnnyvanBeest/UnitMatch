@@ -9,7 +9,7 @@ storevideopath=fullfile(tmpdatafolder,'Videos');
 HistoFolder = 'E:\Data\Histology'; % Necessary when aligning to histology
 
 %% Information on experiments
-MiceOpt = {'AL032'}; % Add all mice you want to analyse
+MiceOpt = {'CB016'}; %AL032 Add all mice you want to analyse
 nidq_sync_used = zeros(1,length(MiceOpt)); % Was an external nidq used for syncing (typically sync feeds directly into IMEC)
 nidq_sync_used(ismember(MiceOpt,{'EB001','CB007','CB008'}))=1; % Except for these mice...
 DataDir2Use = repmat(1,[1,length(MiceOpt)]); % In case you have multiple DataDir, index which directory is used for each mouse
@@ -17,10 +17,10 @@ DataDir2Use = repmat(1,[1,length(MiceOpt)]); % In case you have multiple DataDir
 ProbeType = repmat({'1_3b'},1,length(MiceOpt)); % WE need to know which probe type was used for each mice. Default:
 ProbeType(ismember(MiceOpt,{'AL032'}))={'2_4S'}; % Change to 2_4Shank for these mice
 RecordingType = repmat({'Acute'},1,length(MiceOpt)); % And whether recordings were acute (default)
-RecordingType(ismember(MiceOpt,{'AL032','EB014'}))={'Chronic'}; %EB014', % Or maybe Chronic?
+RecordingType(ismember(MiceOpt,{'AL032','EB014','CB016'}))={'Chronic'}; %EB014', % Or maybe Chronic?
 
 %% Parameters on how to prepare units/data for analysis
-PrepareClusInfoparams.RunPyKSChronicStitched = 1; % if 1, run PyKS chronic recordings stitched when same IMRO table was used
+PrepareClusInfoparams.RunPyKSChronicStitched = 0; % if 1, run PyKS chronic recordings stitched when same IMRO table was used
 PrepareClusInfoparams.CopyToTmpFirst = 1; % If 1, copy data to local first, don't run from server (= advised!)
 PrepareClusInfoparams.DecompressLocal = 1; % If 1, uncompress data first if it's currently compressed (= necessary for unitmatch and faster for QualityMetrics))
 PrepareClusInfoparams.RedoQM = 1; %if 1, redo quality metrics if it already exists
