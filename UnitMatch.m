@@ -1259,7 +1259,11 @@ if MakePlotsOfPairs
        
         SessionCorrelations = AllSessionCorrelations{recsesGood(uid),recsesGood(uid2)};
         addthis3=-SessionSwitch(recsesGood(uid))+1;
-        addthis4=-SessionSwitch(recsesGood(uid2))+1+ncellsperrecording(recsesGood(uid));    
+        if recsesGood(uid2)>recsesGood(uid)
+            addthis4=-SessionSwitch(recsesGood(uid2))+1+ncellsperrecording(recsesGood(uid));
+        else
+            addthis4=-SessionSwitch(recsesGood(uid2))+1;
+        end
         plot(SessionCorrelations(uid+addthis3,:),'b-'); hold on; plot(SessionCorrelations(uid2+addthis4,:),'r-')
         hold off
         xlabel('Unit')
