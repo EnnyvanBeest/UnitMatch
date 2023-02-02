@@ -137,8 +137,10 @@ for did1 = 1:ndays
         end
         % Correlate 'fingerprints'
         try
-            FingerprintR = arrayfun(@(X) cell2mat(arrayfun(@(Y) corr(SessionCorrelations(X,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))',SessionCorrelations(Y,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))'),notrmdixvec,'UniformOutput',0)),notrmdixvec,'UniformOutput',0);
-            FingerprintR = cat(1,FingerprintR{:});
+            x = SessionCorrelations(notrmdixvec,:)';
+            FingerprintR = corr(x,x,'rows','pairwise');
+            % FingerprintR = arrayfun(@(X) cell2mat(arrayfun(@(Y) corr(SessionCorrelations(X,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))',SessionCorrelations(Y,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))'),notrmdixvec,'UniformOutput',0)),notrmdixvec,'UniformOutput',0);
+            % FingerprintR = cat(1,FingerprintR{:});
         catch ME
             disp(ME)
             keyboard

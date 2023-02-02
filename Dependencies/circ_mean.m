@@ -1,4 +1,4 @@
-function [mu ul ll] = circ_mean(alpha, w, dim)
+function [mu, ul, ll] = circ_mean(alpha, w, dim)
 %
 % mu = circ_mean(alpha, w)
 %   Computes the mean direction for circular data.

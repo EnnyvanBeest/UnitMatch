@@ -280,16 +280,19 @@ while flag<2
 
     disp('Computing location distances between pairs of units...')
     timercounter = tic;
-    LocDist = arrayfun(@(X) cell2mat(arrayfun(@(Y) pdist(cat(2,ProjectedLocation(:,X,1),ProjectedLocation(:,Y,2))'),1:nclus,'Uni',0)),1:nclus,'Uni',0);
-    LocDist = cat(1,LocDist{:}); % Normal difference
+    LocDist = sqrt((ProjectedLocation(1,:,1)'-ProjectedLocation(1,:,2)).^2 + ...
+        (ProjectedLocation(2,:,1)'-ProjectedLocation(2,:,2)).^2);
+    % LocDist = arrayfun(@(X) cell2mat(arrayfun(@(Y) pdist(cat(2,ProjectedLocation(:,X,1),ProjectedLocation(:,Y,2))'),1:nclus,'Uni',0)),1:nclus,'Uni',0);
+    % LocDist = cat(1,LocDist{:}); % Normal difference
 
     disp('Computing location distances between pairs of units, per individual time point of the waveform...')
     % Difference in distance at different time points
-    LocDist = sqrt((ProjectedLocation(1,:,1)'-ProjectedLocation(1,:,2)).^2 + ...
-        (ProjectedLocation(2,:,1)'-ProjectedLocation(2,:,2)).^2);
+    x1 = repmat(squeeze(ProjectedLocationPerTP(:,:,:,1)),[1 1 1 size(ProjectedLocationPerTP,2)]);
+    x2 = permute(repmat(squeeze(ProjectedLocationPerTP(:,:,:,2)),[1 1 1 size(ProjectedLocationPerTP,2)]),[1 4 3 2]);
+    LocDistSim = squeeze(nanmean(sqrt(sum((x1-x2).^2,1)),3));
     % LocDistSign = arrayfun(@(uid) arrayfun(@(uid2)  cell2mat(arrayfun(@(X) pdist(cat(2,squeeze(ProjectedLocationPerTP(:,uid,X,1)),squeeze(ProjectedLocationPerTP(:,uid2,X,2)))'),1:spikeWidth,'Uni',0)),1:nclus,'Uni',0),1:nclus,'Uni',0);
     % LocDistSign = cat(1,LocDistSign{:});
-    LocDistSim = cellfun(@(X) nanmean(X),LocDistSign);
+    % LocDistSim = cellfun(@(X) nanmean(X),LocDistSign);
 
     disp('Computing location angle (direction) differences between pairs of units, per individual time point of the waveform...')
     % Difference in angle between two time points
