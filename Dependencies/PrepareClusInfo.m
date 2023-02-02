@@ -370,7 +370,7 @@ for subsesid=1:length(KiloSortPaths)
                 % up/down arrow: toggle between time chunks in the raw data
                 % u: brings up a input dialog to enter the unit you want to go to
                 unitQualityGuiHandle = bc_unitQualityGUI(memMapData, ephysData, qMetric, forGUI, rawWaveforms, ...
-                    param, probeLocation, unitType, plotRaw)             
+                    param, probeLocation, unitType, loadRawTraces)             
 %                 bc_unitQualityGUI(memMapData, ephysData, qMetric, rawWaveforms, paramBC,...
 %                     probeLocation, unitType, plotRaw);
                 disp('Not continuing until GUI closed')
