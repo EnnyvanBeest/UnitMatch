@@ -342,7 +342,7 @@ for subsesid=1:length(KiloSortPaths)
                 end
                 d = dir(fullfile(savePath, '**', 'templates._bc_qMetrics.parquet'));
                 qMetricsPath = d.folder;
-                [paramBC, qMetric, fractionRPVs_allTauR] = bc_loadSavedMetrics(qMetricsPath);
+                [~, qMetric, fractionRPVs_allTauR] = bc_loadSavedMetrics(qMetricsPath);
                 unitType = bc_getQualityUnitType(paramBC, qMetric);
 
                 %{ 
