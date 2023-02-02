@@ -385,8 +385,8 @@ for subsesid=1:length(KiloSortPaths)
         AllUniqueTemplates = cat(1,AllUniqueTemplates(:),cat(1,theseuniqueTemplates{:}));
         unitType = cat(1,unitTypeAcrossRec{:});
         Good_IDtmp(unitType ~= 1) = 0; % MUA
-        Good_IDtmp(unitType == 1) =1; % Good
-        Good_IDtmp(unitType == 0) =0;
+        Good_IDtmp(unitType == 1) = 1; % Good
+        Good_IDtmp(unitType == 0) = 0;
 %         NoiseUnit = false(size(Good_IDtmp));
 %         NoiseUnit(unitType == 0)=1; % NOISE
     else
