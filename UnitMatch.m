@@ -289,7 +289,8 @@ while flag<2
     % Difference in distance at different time points
     x1 = repmat(squeeze(ProjectedLocationPerTP(:,:,:,1)),[1 1 1 size(ProjectedLocationPerTP,2)]);
     x2 = permute(repmat(squeeze(ProjectedLocationPerTP(:,:,:,2)),[1 1 1 size(ProjectedLocationPerTP,2)]),[1 4 3 2]);
-    LocDistSim = squeeze(nanmean(sqrt(sum((x1-x2).^2,1)),3));
+    LocDistSign = sqrt(sum((x1-x2).^2,1));
+    LocDistSim = squeeze(nanmean(LocDistSign,3));
     % LocDistSign = arrayfun(@(uid) arrayfun(@(uid2)  cell2mat(arrayfun(@(X) pdist(cat(2,squeeze(ProjectedLocationPerTP(:,uid,X,1)),squeeze(ProjectedLocationPerTP(:,uid2,X,2)))'),1:spikeWidth,'Uni',0)),1:nclus,'Uni',0),1:nclus,'Uni',0);
     % LocDistSign = cat(1,LocDistSign{:});
     % LocDistSim = cellfun(@(X) nanmean(X),LocDistSign);
@@ -311,7 +312,8 @@ while flag<2
 
     % Variance in error, corrected by average error. This captures whether
     % the trajectory is consistenly separate
-    MSELoc = cell2mat(cellfun(@(X) nanvar(X)./nanmean(X)+nanmean(X),LocDistSign,'Uni',0));
+    MSELoc = squeeze(nanvar(LocDistSign,[],3)./nanmean(LocDistSign,3)+nanmean(LocDistSign,3));
+    % MSELoc = cell2mat(cellfun(@(X) nanvar(X)./nanmean(X)+nanmean(X),LocDistSign,'Uni',0));
 
     % Normalize each of them from 0 to 1, 1 being the 'best'
     % If distance > maxdist micron it will never be the same unit:
