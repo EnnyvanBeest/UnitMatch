@@ -67,8 +67,10 @@ recsesGood = recsesAll(Good_Idx);
 [X,Y]=meshgrid(recsesAll(Good_Idx));
 nclus = length(Good_Idx);
 ndays = length(unique(recsesAll));
-SameSesMat = arrayfun(@(X) cell2mat(arrayfun(@(Y) GoodRecSesID(X)==GoodRecSesID(Y),1:nclus,'Uni',0)),1:nclus,'Uni',0);
-SameSesMat = cat(1,SameSesMat{:});
+x = repmat(GoodRecSesID,[1 numel(GoodRecSesID)]);
+SameSesMat = x == x';
+% SameSesMat = arrayfun(@(X) cell2mat(arrayfun(@(Y) GoodRecSesID(X)==GoodRecSesID(Y),1:nclus,'Uni',0)),1:nclus,'Uni',0);
+% SameSesMat = cat(1,SameSesMat{:});
 OriSessionSwitch = cell2mat(arrayfun(@(X) find(recsesAll==X,1,'first'),1:ndays,'Uni',0));
 OriSessionSwitch = [OriSessionSwitch nclus+1];
 SessionSwitch = arrayfun(@(X) find(GoodRecSesID==X,1,'first'),1:ndays,'Uni',0);
@@ -99,10 +101,10 @@ ChanIdx = find(cell2mat(arrayfun(@(Y) norm(fakechannel-channelpos(Y,:)),1:size(c
 % Take geographically close channels (within 50 microns!), not just index!
 timercounter = tic;
 fprintf(1,'Extracting raw waveforms. Progress: %3d%%',0)
- for uid = 1:nclus
-     fprintf(1,'\b\b\b\b%3.0f%%',uid/nclus*100)
-     load(fullfile(SaveDir,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']))
-    
+for uid = 1:nclus
+    fprintf(1,'\b\b\b\b%3.0f%%',uid/nclus*100)
+    load(fullfile(SaveDir,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']))
+
     % Extract unit parameters -
     % Cross-validate: first versus second half of session
     for cv = 1:2
@@ -164,25 +166,34 @@ disp(['Extracting raw waveforms and parameters took ' num2str(round(toc(timercou
 % spatialdecay = nan(nclus,2); % how fast does the unit decay across space, first versus second half
 disp('Computing Metric similarity between pairs of units...')
 timercounter = tic;
-PeakTimeSim = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) abs(PeakTime(uid,1)-PeakTime(uid2,2)),1:nclus,'Uni',0)),1:nclus,'Uni',0);
+x1 = repmat(PeakTime(:,1),[1 numel(PeakTime(:,1))]);
+x2 = repmat(PeakTime(:,2),[1 numel(PeakTime(:,2))]);
+PeakTimeSim = abs(x1 - x2');
+% PeakTimeSim = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) abs(PeakTime(uid,1)-PeakTime(uid2,2)),1:nclus,'Uni',0)),1:nclus,'Uni',0);
+% PeakTimeSim=cat(1,PeakTimeSim{:});
 %Normalize between 0 and 1 (values that make sense after testing, without having outliers influence this)
-PeakTimeSim=cat(1,PeakTimeSim{:});
 PeakTimeSim =1-PeakTimeSim./quantile(PeakTimeSim(:),0.99);
 PeakTimeSim(PeakTimeSim<0)=0;
 
 waveformTimePointSim = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) sum(ismember(WaveIdx(uid,:,1),WaveIdx(uid2,:,2)))./sum(~isnan(WaveIdx(uid,:,1))),1:nclus,'Uni',0)),1:nclus,'Uni',0);
 waveformTimePointSim = cat(1,waveformTimePointSim{:});
 
-spatialdecaySim = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) abs(spatialdecay(uid,1)-spatialdecay(uid2,2)),1:nclus,'Uni',0)),1:nclus,'Uni',0);
-spatialdecaySim = cat(1,spatialdecaySim{:});
+x1 = repmat(spatialdecay(:,1),[1 numel(spatialdecay(:,1))]);
+x2 = repmat(spatialdecay(:,2),[1 numel(spatialdecay(:,2))]);
+spatialdecaySim = abs(x1 - x2');
+% spatialdecaySim = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) abs(spatialdecay(uid,1)-spatialdecay(uid2,2)),1:nclus,'Uni',0)),1:nclus,'Uni',0);
+% spatialdecaySim = cat(1,spatialdecaySim{:});
 % Make (more) normal
 spatialdecaySim = sqrt(spatialdecaySim);
 spatialdecaySim = 1-((spatialdecaySim-nanmin(spatialdecaySim(:)))./(quantile(spatialdecaySim(:),0.99)-nanmin(spatialdecaySim(:))));
 spatialdecaySim(spatialdecaySim<0)=0;
 
 % Ampitude difference
-AmplitudeSim = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) abs(Amplitude(uid,1)-Amplitude(uid2,2)),1:nclus,'Uni',0)),1:nclus,'Uni',0);
-AmplitudeSim = cat(1,AmplitudeSim{:});
+x1 = repmat(Amplitude(:,1),[1 numel(Amplitude(:,1))]);
+x2 = repmat(Amplitude(:,2),[1 numel(Amplitude(:,2))]);
+AmplitudeSim = abs(x1 - x2');
+% AmplitudeSim = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) abs(Amplitude(uid,1)-Amplitude(uid2,2)),1:nclus,'Uni',0)),1:nclus,'Uni',0);
+% AmplitudeSim = cat(1,AmplitudeSim{:});
 % Make (more) normal
 AmplitudeSim = sqrt(AmplitudeSim);
 AmplitudeSim = 1-((AmplitudeSim-nanmin(AmplitudeSim(:)))./(quantile(AmplitudeSim(:),.99)-nanmin(AmplitudeSim(:))));
@@ -196,10 +207,14 @@ timercounter = tic;
 % Normalize between 0 and 1
 ProjectedWaveformNorm = ProjectedWaveform(35:70,:,:);
 ProjectedWaveformNorm = (ProjectedWaveformNorm-nanmin(ProjectedWaveformNorm,[],1))./(nanmax(ProjectedWaveformNorm,[],1)-nanmin(ProjectedWaveformNorm,[],1));
-RawWVMSE = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) nanmean((ProjectedWaveformNorm(:,uid,1)-ProjectedWaveformNorm(:,uid2,2)).^2),1:nclus,'Uni',0)),1:nclus,'Uni',0);
-RawWVMSE = cat(1,RawWVMSE{:});
-WVCorr = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) corr(ProjectedWaveform(35:70,uid,1),ProjectedWaveform(35:70,uid2,2)),1:nclus,'Uni',0)),1:nclus,'Uni',0);
-WVCorr = cat(1,WVCorr{:});
+x1 = repmat(ProjectedWaveformNorm(:,:,1),[1 1 size(ProjectedWaveformNorm,2)]);
+x2 = permute(repmat(ProjectedWaveformNorm(:,:,2),[1 1 size(ProjectedWaveformNorm,2)]),[1 3 2]);
+RawWVMSE = squeeze(nanmean((x1 - x2).^2));
+% RawWVMSE = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) nanmean((ProjectedWaveformNorm(:,uid,1)-ProjectedWaveformNorm(:,uid2,2)).^2),1:nclus,'Uni',0)),1:nclus,'Uni',0);
+% RawWVMSE = cat(1,RawWVMSE{:});
+WVCorr = corr(ProjectedWaveform(35:70,:,1),ProjectedWaveform(35:70,:,2));
+% WVCorr = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) corr(ProjectedWaveform(35:70,uid,1),ProjectedWaveform(35:70,uid2,2)),1:nclus,'Uni',0)),1:nclus,'Uni',0);
+% WVCorr = cat(1,WVCorr{:});
 
 % Make WVCorr a normal distribution
 WVCorr = atanh(WVCorr);
@@ -270,8 +285,10 @@ while flag<2
 
     disp('Computing location distances between pairs of units, per individual time point of the waveform...')
     % Difference in distance at different time points
-    LocDistSign = arrayfun(@(uid) arrayfun(@(uid2)  cell2mat(arrayfun(@(X) pdist(cat(2,squeeze(ProjectedLocationPerTP(:,uid,X,1)),squeeze(ProjectedLocationPerTP(:,uid2,X,2)))'),1:spikeWidth,'Uni',0)),1:nclus,'Uni',0),1:nclus,'Uni',0);
-    LocDistSign = cat(1,LocDistSign{:});
+    LocDist = sqrt((ProjectedLocation(1,:,1)'-ProjectedLocation(1,:,2)).^2 + ...
+        (ProjectedLocation(2,:,1)'-ProjectedLocation(2,:,2)).^2);
+    % LocDistSign = arrayfun(@(uid) arrayfun(@(uid2)  cell2mat(arrayfun(@(X) pdist(cat(2,squeeze(ProjectedLocationPerTP(:,uid,X,1)),squeeze(ProjectedLocationPerTP(:,uid2,X,2)))'),1:spikeWidth,'Uni',0)),1:nclus,'Uni',0),1:nclus,'Uni',0);
+    % LocDistSign = cat(1,LocDistSign{:});
     LocDistSim = cellfun(@(X) nanmean(X),LocDistSign);
 
     disp('Computing location angle (direction) differences between pairs of units, per individual time point of the waveform...')
