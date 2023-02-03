@@ -158,7 +158,7 @@ for uid = 1:nclus
 end
 
 fprintf('\n')
-disp(['Extracting raw waveforms and parameters took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])
+disp(['Extracting raw waveforms and parameters took ' num2str(round(toc(timercounter)./60)) ' minutes for ' num2str(nclus) ' units'])
 
 %% Metrics
 % PeakTime = nan(nclus,2); % Peak time first versus second half
@@ -176,15 +176,8 @@ PeakTimeSim = abs(x1 - x2');
 PeakTimeSim =1-PeakTimeSim./quantile(PeakTimeSim(:),0.99);
 PeakTimeSim(PeakTimeSim<0)=0;
 
-% can't find much better for this one
-waveformTimePointSim = nan(nclus,nclus);
-for uid = 1:nclus
-    for uid2 = 1:nclus
-        waveformTimePointSim(uid,uid2) = sum(ismember(WaveIdx(uid,:,1),WaveIdx(uid2,:,2)))./sum(~isnan(WaveIdx(uid,:,1)));
-    end
-end
-% waveformTimePointSim = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) sum(ismember(WaveIdx(uid,:,1),WaveIdx(uid2,:,2)))./sum(~isnan(WaveIdx(uid,:,1))),1:nclus,'Uni',0)),1:nclus,'Uni',0);
-% waveformTimePointSim = cat(1,waveformTimePointSim{:});
+waveformTimePointSim = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) sum(ismember(WaveIdx(uid,:,1),WaveIdx(uid2,:,2)))./sum(~isnan(WaveIdx(uid,:,1))),1:nclus,'Uni',0)),1:nclus,'Uni',0);
+waveformTimePointSim = cat(1,waveformTimePointSim{:});
 
 x1 = repmat(spatialdecay(:,1),[1 numel(spatialdecay(:,1))]);
 x2 = repmat(spatialdecay(:,2),[1 numel(spatialdecay(:,2))]);
@@ -402,7 +395,7 @@ while flag<2
     makepretty
     LocDistSim(isnan(LocDistSim))=0;
     LocationCombined = nanmean(cat(3,LocDistSim,LocAngleSim),3);
-    disp(['Extracting projected location took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])
+    disp(['Extracting projected location took ' num2str(round(toc(timercounter)./60)) ' minutes for ' num2str(nclus) ' units'])
 
     %% These are the parameters to include:
     figure('name','Total Score components');
@@ -530,8 +523,6 @@ while flag<2
     % correlate each unit's activity with average activity across different
     % depths
     % Use a bunch of units with high total scores as reference population
-    timercounter = tic;
-    disp('Computing fingerprints correlations...')
     [PairScore,sortid] = sort(cell2mat(arrayfun(@(X) TotalScore(Pairs(X,1),Pairs(X,2)),1:size(Pairs,1),'Uni',0)),'descend');
     Pairs = Pairs(sortid,:);
     CrossCorrelationFingerPrint
@@ -542,8 +533,7 @@ while flag<2
     xlabel('TotalScore')
     ylabel('Cross-correlation fingerprint')
     makepretty
-    disp(['Computing fingerprints correlations took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])
-
+    
     %% three ways to define candidate scores
     % Total score larger than threshold
     CandidatePairs = TotalScore>ThrsOpt & SigMask==1;
@@ -590,7 +580,7 @@ CandidatePairs = TotalScore>ThrsOpt & RankScoreAll==1 & SigMask==1;
 [uid,uid2] = find(CandidatePairs);
 Pairs = cat(2,uid,uid2);
 Pairs = sortrows(Pairs);
-Pairs = unique(Pairs,'rows');
+Pairs=unique(Pairs,'rows');
 
 %% Naive bayes classifier
 % Usually this means there's no variance in the match distribution
@@ -600,13 +590,13 @@ npairs = 0;
 MinLoss=1;
 MaxPerf = [0 0];
 npairslatest = 0;
-runid = 0;
+runid=0;
 % Priors = [0.5 0.5];
 Priors = [priorMatch 1-priorMatch];
 BestMdl = [];
 while flag<2 && runid<maxrun
     flag = 0;
-    runid = runid+1;
+    runid=runid+1
     filedir = which('UnitMatch');
     filedir = dir(filedir);
     if ApplyExistingBayesModel && exist(fullfile(filedir.folder,'UnitMatchModel.mat'))
@@ -810,7 +800,7 @@ else
     [label, posterior, cost] = predict(BestMdl,Tbl);
 end
 MatchProbability = reshape(posterior(:,2),size(Predictors,1),size(Predictors,2));
-slabel = (MatchProbability>=param.ProbabilityThreshold) | (MatchProbability>0.05 & RankScoreAll==1 & SigMask==1);
+label = (MatchProbability>=param.ProbabilityThreshold) | (MatchProbability>0.05 & RankScoreAll==1 & SigMask==1);
 % label = reshape(label,nclus,nclus);
 [r, c] = find(triu(label)==1); %Find matches across 2 days
 Pairs = cat(2,r,c);
@@ -991,7 +981,7 @@ ylabel('Nr Pairs')
 legend('Self Score','Matches','Threshold','Location','best')
 makepretty
 saveas(gcf,fullfile(SaveDir,'ScoresSelfvsMatch.fig'))
-saveas(gcf,fullfile(SaveDir,'ScoresSelfvsMatch.bmp'))
+saveas(gcf,fullfile(SaveDir,'RankScoreVSProbability.bmp'))
 
 save(fullfile(SaveDir,'MatchingScores.mat'),'BestMdl','SessionSwitch','GoodRecSesID','AllClusterIDs','Good_Idx','WavformSim','WVCorr','LocationCombined','waveformTimePointSim','PeakTimeSim','spatialdecaySim','TotalScore','label','MatchProbability')
 save(fullfile(SaveDir,'UnitMatchModel.mat'),'BestMdl')
@@ -1362,7 +1352,7 @@ end
 %% Assign same Unique ID
 [PairID1,PairID2]=meshgrid(AllClusterIDs(Good_Idx));
 [recses1,recses2] = meshgrid(recsesAll(Good_Idx));
-MatchTable = table(PairID1(:),PairID2(:),recses1(:),recses2(:),MatchProbability(:),RankScoreAll(:),FingerprintR(:),'VariableNames',{'ID1','ID2','RecSes1','RecSes2','MatchProb','RankScore','FingerprintCor'});
+MatchTable = table(PairID1(:),PairID2(:),recses1(:),recses2(:),MatchProbability(:),RankScoreAll(:),FingerprintR(:),'VariableNames',{'ID1','ID2','RecSes1','RecSes2','MatchProb','RankScore','FingerprintCor'})
 for id = 1:size(Pairs,1)
     UniqueID(Good_Idx(Pairs(id,2))) = UniqueID(Good_Idx(Pairs(id,1)));
 end

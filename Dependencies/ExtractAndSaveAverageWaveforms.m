@@ -109,6 +109,10 @@ for uid = 1:nclus
         clear spikeMapAvg
     end
 
+    % Detrending
+    spikeMap = permute(spikeMap,[2,1,3]); %detrend works over columns
+    spikeMap = detrend(spikeMap,1); % Detrend (linearly) to be on the safe side. OVER TIME!
+    spikeMap = permute(spikeMap,[2,1,3]);  % Put back in order
     if ~exist(fullfile(SaveDir,'UnitMatchWaveforms'))
         mkdir(fullfile(SaveDir,'UnitMatchWaveforms'))
     end
