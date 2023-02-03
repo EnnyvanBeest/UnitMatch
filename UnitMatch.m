@@ -139,7 +139,8 @@ for uid = 1:nclus
             wvdurtmp = 20:80;
         end
         % Peak Time
-        [~,PeakTime(uid,cv)] = nanmax(abs(ProjectedWaveform(wvdurtmp(1):wvdurtmp(end),uid,cv)));
+        [~,PeakTime(uid,cv)] = nanmax(abs([nan; diff(ProjectedWaveform(wvdurtmp(1):wvdurtmp(end),uid,cv))]));
+
         PeakTime(uid,cv) = PeakTime(uid,cv)+wvdurtmp(1)-1;
         Peakval = ProjectedWaveform(PeakTime(uid,cv),uid,cv);
         Amplitude(uid,cv) = Peakval;
@@ -529,7 +530,7 @@ while flag<2
     
     %% three ways to define candidate scores
     % Total score larger than threshold
-    CandidatePairs = TotalScore>ThrsOpt & RankScoreAll==1 & SigMask==1;
+    CandidatePairs = TotalScore>ThrsOpt & SigMask==1;
     %     CandidatePairs(tril(true(size(CandidatePairs))))=0;
     figure('name','Potential Matches')
     imagesc(CandidatePairs)
@@ -794,7 +795,7 @@ else
     [label, posterior, cost] = predict(BestMdl,Tbl);
 end
 MatchProbability = reshape(posterior(:,2),size(Predictors,1),size(Predictors,2));
-label = (MatchProbability>=0.5) | (MatchProbability>0.01 & RankScoreAll==1 & SigMask==1);
+label = (MatchProbability>=param.ProbabilityThreshold) | (MatchProbability>0.05 & RankScoreAll==1 & SigMask==1);
 % label = reshape(label,nclus,nclus);
 [r, c] = find(triu(label)==1); %Find matches across 2 days
 Pairs = cat(2,r,c);
@@ -846,7 +847,7 @@ title('Rankscore == 1*')
 makepretty
 
 subplot(1,3,2)
-imagesc(MatchProbability>0.5)
+imagesc(MatchProbability>param.ProbabilityThreshold)
 hold on
 arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
 arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
@@ -855,7 +856,9 @@ title('Match Probability>0.5')
 makepretty
 
 subplot(1,3,3)
-imagesc(MatchProbability>=0.99 | (MatchProbability>=0.05 & RankScoreAll==1 & SigMask==1))
+imagesc(MatchProbability>=param.ProbabilityThreshold | (MatchProbability>0.05 & RankScoreAll==1 & SigMask==1));
+
+% imagesc(MatchProbability>=0.99 | (MatchProbability>=0.05 & RankScoreAll==1 & SigMask==1))
 hold on
 arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
 arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
@@ -879,7 +882,8 @@ ylabel('Cross-correlation fingerprint')
 makepretty
 
 %% Extract final pairs:
-label = MatchProbability>=0.99 | (MatchProbability>=0.05 & RankScoreAll==1 & SigMask==1);
+label = MatchProbability>=param.ProbabilityThreshold | (MatchProbability>0.05 & RankScoreAll==1 & SigMask==1);
+% label = MatchProbability>=0.99 | (MatchProbability>=0.05 & RankScoreAll==1 & SigMask==1);
 [r, c] = find(triu(label,1)); %Find matches
 Pairs = cat(2,r,c);
 Pairs = sortrows(Pairs);
@@ -1094,6 +1098,8 @@ ProjectedLocationPerTP = nanmean(ProjectedLocationPerTP,4);
 if MakePlotsOfPairs
     if ~isdir(fullfile(SaveDir,'MatchFigures'))
         mkdir(fullfile(SaveDir,'MatchFigures'))
+    else
+        delete(fullfile(SaveDir,'MatchFigures','*'))
     end
     if size(Pairs,1)>drawmax
         DrawPairs = randsample(1:size(Pairs,1),drawmax,'false');
