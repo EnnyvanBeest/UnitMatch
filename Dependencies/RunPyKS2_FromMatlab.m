@@ -33,7 +33,7 @@ for midx = 1:length(MiceOpt)
 
             % Check if there's an ephys folder, if so run pyks2
             tmpephysdir = dir(fullfile(DataDir{DataDir2Use(midx)},MiceOpt{midx},thisdate,'ephys',['*' MiceOpt{midx} '*']));
-            tmpephysdir(find(cell2mat(cellfun(@(X) any(strfind(X,'NatImages')),{tmpephysdir(:).name},'UniformOutput',0))))=[]; %These are sessions from AV team, do not include for now
+%             tmpephysdir(find(cell2mat(cellfun(@(X) any(strfind(X,'NatImages')),{tmpephysdir(:).name},'UniformOutput',0))))=[]; %These are sessions from AV team, do not include for now
             tmpephysdir(find(cell2mat(cellfun(@(X) any(strfind(X,'Spontaneous')),{tmpephysdir(:).name},'UniformOutput',0))))=[];
             tmpephysdir(find(cell2mat(cellfun(@(X) any(strfind(X,'ActivePassive')),{tmpephysdir(:).name},'UniformOutput',0))))=[];
 
@@ -111,8 +111,8 @@ for midx = 1:length(MiceOpt)
                     continue
                 end
 
-                if ~exist(fullfile(ChronicTmpFolder,['IMRO_' num2str(id)]))
-                    mkdir(fullfile(ChronicTmpFolder,['IMRO_' num2str(id)]))
+                if ~exist(fullfile(tmpdatafolder,['IMRO_' num2str(id)]))
+                    mkdir(fullfile(tmpdatafolder,['IMRO_' num2str(id)]))
                 end
                 if length(ThesePaths)>maxses
                     theseses = theseses(1:maxses)
@@ -122,13 +122,13 @@ for midx = 1:length(MiceOpt)
                 dat_path = ['['];
                 for sesid = 1:length(ThesePaths)
                     tmpfile = dir(ThesePaths{sesid});
-                    if ~exist(fullfile(ChronicTmpFolder,['IMRO_' num2str(id)],tmpfile(1).name)) & ~doneflag
+                    if ~exist(fullfile(tmpdatafolder,['IMRO_' num2str(id)],tmpfile(1).name)) & ~doneflag
                         disp('Copying data to local folder...')
-                        copyfile(fullfile(tmpfile(1).folder,tmpfile(1).name),fullfile(ChronicTmpFolder,['IMRO_' num2str(id)],tmpfile(1).name))
+                        copyfile(fullfile(tmpfile(1).folder,tmpfile(1).name),fullfile(tmpdatafolder,['IMRO_' num2str(id)],tmpfile(1).name))
                         metafile = dir(fullfile(tmpfile(1).folder,'*ap.meta'));
-                        copyfile(fullfile(metafile.folder,metafile.name),fullfile(ChronicTmpFolder,['IMRO_' num2str(id)],metafile.name))
+                        copyfile(fullfile(metafile.folder,metafile.name),fullfile(tmpdatafolder,['IMRO_' num2str(id)],metafile.name))
                         chfile = dir(fullfile(tmpfile(1).folder,'*ap.ch'));
-                        copyfile(fullfile(chfile.folder,chfile.name),fullfile(ChronicTmpFolder,['IMRO_' num2str(id)],chfile.name))
+                        copyfile(fullfile(chfile.folder,chfile.name),fullfile(tmpdatafolder,['IMRO_' num2str(id)],chfile.name))
                     end
                     dat_path = [dat_path '"' strrep(fullfile(tmpfile(1).folder,tmpfile(1).name),'\','/') '", '];
                 end
@@ -136,7 +136,7 @@ for midx = 1:length(MiceOpt)
                 dat_path(end) = ']'
                 % PyKS2
                 if ~doneflag
-                    RunFromFolder = fullfile(ChronicTmpFolder,['IMRO_' num2str(id)]);
+                    RunFromFolder = fullfile(tmpdatafolder,['IMRO_' num2str(id)]);
                    
                     success = pyrunfile("RunPyKS2_FileInput.py","success",ThisFile = strrep(fullfile(RunFromFolder),'\','/'))
                     clear success
@@ -152,9 +152,9 @@ for midx = 1:length(MiceOpt)
                     % Remove temporary files
                     disp('Delete temporary folder')
                     try
-                        subfolds = dir(fullfile(ChronicTmpFolder,['IMRO_' num2str(id), '\**']))
+                        subfolds = dir(fullfile(tmpdatafolder,['IMRO_' num2str(id), '\**']))
                         arrayfun(@(X) delete(fullfile(X.folder,X.name)),subfolds,'UniformOutput',0)
-                        subfolds = dir(fullfile(ChronicTmpFolder,['IMRO_' num2str(id), '\**']))
+                        subfolds = dir(fullfile(tmpdatafolder,['IMRO_' num2str(id), '\**']))
                         subfolds = unique({subfolds(:).folder});
                         subfolds = fliplr(sort(subfolds));
                         cellfun(@(X) rmdir(X),subfolds,'UniformOutput',0)

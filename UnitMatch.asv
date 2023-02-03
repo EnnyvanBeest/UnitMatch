@@ -981,7 +981,7 @@ ylabel('Nr Pairs')
 legend('Self Score','Matches','Threshold','Location','best')
 makepretty
 saveas(gcf,fullfile(SaveDir,'ScoresSelfvsMatch.fig'))
-saveas(gcf,fullfile(SaveDir,'ScoresSelfvsMatch.bmp'))
+saveas(gcf,fullfile(SaveDir,'RankScoreVSProbability.bmp'))
 
 save(fullfile(SaveDir,'MatchingScores.mat'),'BestMdl','SessionSwitch','GoodRecSesID','AllClusterIDs','Good_Idx','WavformSim','WVCorr','LocationCombined','waveformTimePointSim','PeakTimeSim','spatialdecaySim','TotalScore','label','MatchProbability')
 save(fullfile(SaveDir,'UnitMatchModel.mat'),'BestMdl')
