@@ -1,6 +1,2 @@
-.batch_process_pinkavrig_videos*
 *.asv
-*checkpoint.ipynb
-*.pyc
-*.vscode
-*.idea
+
