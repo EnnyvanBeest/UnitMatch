@@ -38,7 +38,7 @@ nShanks = LayOut{1};
 nCols = LayOut{2};
 nChan = LayOut{3};
 if nChan>length(Shankmap)
-    nChan = length(Shankmap)
+    nChan = length(Shankmap);
 end
 
 if nShanks==1
