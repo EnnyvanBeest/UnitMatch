@@ -158,7 +158,7 @@ for uid = 1:nclus
 end
 
 fprintf('\n')
-disp(['Extracting raw waveforms and parameters took ' num2str(round(toc(timercounter)./60)) ' minutes for ' num2str(nclus) ' units'])
+disp(['Extracting raw waveforms and parameters took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])
 
 %% Metrics
 % PeakTime = nan(nclus,2); % Peak time first versus second half
@@ -536,7 +536,7 @@ while flag<2
     xlabel('TotalScore')
     ylabel('Cross-correlation fingerprint')
     makepretty
-    disp(['Computing fingerprints correlations took ' num2str(round(toc(timercounter)./60)) ' minutes for ' num2str(nclus) ' units'])
+    disp(['Computing fingerprints correlations took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])
 
     %% three ways to define candidate scores
     % Total score larger than threshold
@@ -584,7 +584,7 @@ CandidatePairs = TotalScore>ThrsOpt & RankScoreAll==1 & SigMask==1;
 [uid,uid2] = find(CandidatePairs);
 Pairs = cat(2,uid,uid2);
 Pairs = sortrows(Pairs);
-Pairs=unique(Pairs,'rows');
+Pairs = unique(Pairs,'rows');
 
 %% Naive bayes classifier
 % Usually this means there's no variance in the match distribution
@@ -594,13 +594,13 @@ npairs = 0;
 MinLoss=1;
 MaxPerf = [0 0];
 npairslatest = 0;
-runid=0;
+runid = 0;
 % Priors = [0.5 0.5];
 Priors = [priorMatch 1-priorMatch];
 BestMdl = [];
 while flag<2 && runid<maxrun
     flag = 0;
-    runid=runid+1
+    runid = runid+1;
     filedir = which('UnitMatch');
     filedir = dir(filedir);
     if ApplyExistingBayesModel && exist(fullfile(filedir.folder,'UnitMatchModel.mat'))
@@ -805,7 +805,7 @@ else
     [label, posterior, cost] = predict(BestMdl,Tbl);
 end
 MatchProbability = reshape(posterior(:,2),size(Predictors,1),size(Predictors,2));
-label = (MatchProbability>=param.ProbabilityThreshold) | (MatchProbability>0.05 & RankScoreAll==1 & SigMask==1);
+slabel = (MatchProbability>=param.ProbabilityThreshold) | (MatchProbability>0.05 & RankScoreAll==1 & SigMask==1);
 % label = reshape(label,nclus,nclus);
 [r, c] = find(triu(label)==1); %Find matches across 2 days
 Pairs = cat(2,r,c);
