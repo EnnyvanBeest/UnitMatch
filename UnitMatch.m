@@ -400,7 +400,7 @@ while flag<2
     makepretty
     LocDistSim(isnan(LocDistSim))=0;
     LocationCombined = nanmean(cat(3,LocDistSim,LocAngleSim),3);
-    disp(['Extracting projected location took ' num2str(round(toc(timercounter)./60)) ' minutes for ' num2str(nclus) ' units'])
+    disp(['Extracting projected location took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])
 
     %% These are the parameters to include:
     figure('name','Total Score components');
