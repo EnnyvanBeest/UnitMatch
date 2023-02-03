@@ -97,37 +97,7 @@ for subsesid=1:length(KiloSortPaths)
     [sp{countid}.spikeAmps, sp{countid}.spikeDepths, sp{countid}.templateDepths, sp{countid}.templateXpos, sp{countid}.tempAmps, sp{countid}.tempsUnW, sp{countid}.templateDuration, sp{countid}.waveforms] = templatePositionsAmplitudes(sp{countid}.temps, sp{countid}.winv, sp{countid}.ycoords, sp{countid}.xcoords, sp{countid}.spikeTemplates, sp{countid}.tempScalingAmps); %from the spikes toolbox
 
     %% Remove noise; spikes across all channels'
-    figure
-    scatter(sp{countid}.st,sp{countid}.spikeDepths,4,[0 0 0],'filled')
-    hold on
-
-    binsz = 0.001;
-    edges = min(sp{countid}.st)-binsz/2:binsz:max(sp{countid}.st)+binsz/2;
-    timevec = min(sp{countid}.st):binsz:max(sp{countid}.st);
-
-    if 0
-        depthstep = 25; %um
-        depthedges = min(sp{countid}.spikeDepths)-depthstep/2:depthstep:max(sp{countid}.spikeDepths)+depthstep/2;
-        tmpact = arrayfun(@(X) histcounts(sp{countid}.st(sp{countid}.spikeDepths>depthedges(X)&sp{countid}.spikeDepths<depthedges(X+1)),edges),1:length(depthedges)-1,'UniformOutput',0);
-        tmpact = cat(1,tmpact{:});
-        tmpact = (tmpact-nanmean(tmpact,2))./nanstd(tmpact,[],2); %Z-score
-        tpidx = find(sum(tmpact>3,1)>0.5*length(depthedges)-1);
-
-        % Remove these timepoints
-        rmidx = arrayfun(@(X) find(sp{countid}.st>timevec(X)-binsz/2&sp{countid}.st<timevec(X)+binsz/2),tpidx,'UniformOutput',0);
-        rmidx = cat(1,rmidx{:});
-        scatter(sp{countid}.st(rmidx),sp{countid}.spikeDepths(rmidx),4,[1 0 0],'filled')
-        drawnow
-        nori = length(sp{countid}.st);
-        fields = fieldnames(sp{countid});
-        for fid = 1:length(fields)
-            eval(['tmp = sp{countid}. ' fields{fid} ';'])
-            if any(size(tmp) == nori)
-                tmp(rmidx,:,:)=[];
-                eval(['sp{countid}.' fields{fid} '=tmp;'])
-            end
-        end
-    end
+    sp{countid} = RemoveNoiseAmplitudeBased(sp{countid});
 
     %% Channel data
     myClusFile = dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'channel_map.npy'));
@@ -176,6 +146,7 @@ for subsesid=1:length(KiloSortPaths)
     % clear paramBC
     paramBC = bc_qualityParamValuesForUnitMatch(dir(strrep(fullfile(rawD(1).folder,rawD(1).name),'cbin','meta')),fullfile(Params.tmpdatafolder,strrep(rawD(1).name,'cbin','bin')));
     paramBC.reextractRaw = 1;
+
     %% Load Cluster Info
     myClusFile = dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'cluster_info.tsv')); % If you did phy (manual curation) we will find this one... We can trust you, right?
     if isempty(myClusFile)
@@ -323,17 +294,14 @@ for subsesid=1:length(KiloSortPaths)
                         InspectionFlag=1;
                     end
                 end
-                % load data BOMBCELL way
-                [spikeTimes_samples, spikeTemplates, ...
-                    templateWaveforms, templateAmplitudes, pcFeatures, pcFeatureIdx, channelPositions] = bc_loadEphysData(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name),id);
 
                 paramBC.rawFile = fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin'));
                 paramBC.ephysMetaFile = (strrep(fullfile(Params.tmpdatafolder,rawD(id).name),'cbin','meta'));
 
                 %             idx = ismember(sp{countid}.spikeTemplates,clusidtmp(Good_IDtmp)); %Only include good units
                 %careful; spikeSites zero indexed
-                [qMetric, unitType] = bc_runAllQualityMetrics(paramBC, spikeTimes_samples, spikeTemplates, ...
-                    templateWaveforms, templateAmplitudes,pcFeatures,pcFeatureIdx,channelPositions, savePath);
+                [qMetric, unitType] = bc_runAllQualityMetrics(paramBC, sp{countid}.st*sp{countid}.sample_rate, sp{countid}.spikeTemplates+1, ...
+                    sp{countid}.temps, sp{countid}.tempScalingAmps,sp{countid}.pcFeat,sp{countid}.pcFeatInd+1,channelpostmp, savePath); % Be careful, bombcell needs 1-indexed!
 
             else
                 paramBC.rawFile = fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin'));

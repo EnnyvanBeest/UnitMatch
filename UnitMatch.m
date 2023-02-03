@@ -139,7 +139,7 @@ for uid = 1:nclus
             wvdurtmp = 20:80;
         end
         % Peak Time
-        [~,PeakTime(uid,cv)] = nanmax(abs([nan; diff(ProjectedWaveform(wvdurtmp(1):wvdurtmp(end),uid,cv))]));
+        [~,PeakTime(uid,cv)] = nanmax([nan; diff(diff(ProjectedWaveform(wvdurtmp(1):wvdurtmp(end),uid,cv)))]);
 
         PeakTime(uid,cv) = PeakTime(uid,cv)+wvdurtmp(1)-1;
         Peakval = ProjectedWaveform(PeakTime(uid,cv),uid,cv);
@@ -154,6 +154,10 @@ for uid = 1:nclus
         % Save spikes for these channels
         %         MultiDimMatrix(wvdurtmp,1:length(ChanIdx),uid,cv) = nanmean(spikeMap(wvdurtmp,ChanIdx,wavidx),3);
 
+    end
+    if  norm(channelpos(MaxChannel(uid,1),:)-channelpos(MaxChannel(uid,2),:))>TakeChannelRadius
+        keyboard
+       
     end
 end
 
