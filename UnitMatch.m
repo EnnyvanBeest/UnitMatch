@@ -175,8 +175,15 @@ PeakTimeSim = abs(x1 - x2');
 PeakTimeSim =1-PeakTimeSim./quantile(PeakTimeSim(:),0.99);
 PeakTimeSim(PeakTimeSim<0)=0;
 
-waveformTimePointSim = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) sum(ismember(WaveIdx(uid,:,1),WaveIdx(uid2,:,2)))./sum(~isnan(WaveIdx(uid,:,1))),1:nclus,'Uni',0)),1:nclus,'Uni',0);
-waveformTimePointSim = cat(1,waveformTimePointSim{:});
+% can't find much better for this one
+waveformTimePointSim = nan(nclus,nclus);
+for uid = 1:nclus
+    for uid2 = 1:nclus
+        waveformTimePointSim(uid,uid2) = sum(ismember(WaveIdx(uid,:,1),WaveIdx(uid2,:,2)))./sum(~isnan(WaveIdx(uid,:,1)));
+    end
+end
+% waveformTimePointSim = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) sum(ismember(WaveIdx(uid,:,1),WaveIdx(uid2,:,2)))./sum(~isnan(WaveIdx(uid,:,1))),1:nclus,'Uni',0)),1:nclus,'Uni',0);
+% waveformTimePointSim = cat(1,waveformTimePointSim{:});
 
 x1 = repmat(spatialdecay(:,1),[1 numel(spatialdecay(:,1))]);
 x2 = repmat(spatialdecay(:,2),[1 numel(spatialdecay(:,2))]);
@@ -516,6 +523,8 @@ while flag<2
     % correlate each unit's activity with average activity across different
     % depths
     % Use a bunch of units with high total scores as reference population
+    timercounter = tic;
+    disp('Computing fingerprints correlations...')
     [PairScore,sortid] = sort(cell2mat(arrayfun(@(X) TotalScore(Pairs(X,1),Pairs(X,2)),1:size(Pairs,1),'Uni',0)),'descend');
     Pairs = Pairs(sortid,:);
     CrossCorrelationFingerPrint
@@ -526,7 +535,8 @@ while flag<2
     xlabel('TotalScore')
     ylabel('Cross-correlation fingerprint')
     makepretty
-    
+    disp(['Computing fingerprints correlations took ' num2str(round(toc(timercounter)./60)) ' minutes for ' num2str(nclus) ' units'])
+
     %% three ways to define candidate scores
     % Total score larger than threshold
     CandidatePairs = TotalScore>ThrsOpt & RankScoreAll==1 & SigMask==1;
