@@ -158,7 +158,7 @@ for uid = 1:nclus
 end
 
 fprintf('\n')
-disp(['Extracting raw waveforms and parameters took ' num2str(round(toc(timercounter)./60)) ' minutes for ' num2str(nclus) ' units'])
+disp(['Extracting raw waveforms and parameters took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])
 
 %% Metrics
 % PeakTime = nan(nclus,2); % Peak time first versus second half
@@ -176,8 +176,15 @@ PeakTimeSim = abs(x1 - x2');
 PeakTimeSim =1-PeakTimeSim./quantile(PeakTimeSim(:),0.99);
 PeakTimeSim(PeakTimeSim<0)=0;
 
-waveformTimePointSim = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) sum(ismember(WaveIdx(uid,:,1),WaveIdx(uid2,:,2)))./sum(~isnan(WaveIdx(uid,:,1))),1:nclus,'Uni',0)),1:nclus,'Uni',0);
-waveformTimePointSim = cat(1,waveformTimePointSim{:});
+% can't find much better for this one
+waveformTimePointSim = nan(nclus,nclus);
+for uid = 1:nclus
+    for uid2 = 1:nclus
+        waveformTimePointSim(uid,uid2) = sum(ismember(WaveIdx(uid,:,1),WaveIdx(uid2,:,2)))./sum(~isnan(WaveIdx(uid,:,1)));
+    end
+end
+% waveformTimePointSim = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) sum(ismember(WaveIdx(uid,:,1),WaveIdx(uid2,:,2)))./sum(~isnan(WaveIdx(uid,:,1))),1:nclus,'Uni',0)),1:nclus,'Uni',0);
+% waveformTimePointSim = cat(1,waveformTimePointSim{:});
 
 x1 = repmat(spatialdecay(:,1),[1 numel(spatialdecay(:,1))]);
 x2 = repmat(spatialdecay(:,2),[1 numel(spatialdecay(:,2))]);
@@ -395,7 +402,7 @@ while flag<2
     makepretty
     LocDistSim(isnan(LocDistSim))=0;
     LocationCombined = nanmean(cat(3,LocDistSim,LocAngleSim),3);
-    disp(['Extracting projected location took ' num2str(round(toc(timercounter)./60)) ' minutes for ' num2str(nclus) ' units'])
+    disp(['Extracting projected location took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])
 
     %% These are the parameters to include:
     figure('name','Total Score components');
@@ -523,6 +530,8 @@ while flag<2
     % correlate each unit's activity with average activity across different
     % depths
     % Use a bunch of units with high total scores as reference population
+    timercounter = tic;
+    disp('Computing fingerprints correlations...')
     [PairScore,sortid] = sort(cell2mat(arrayfun(@(X) TotalScore(Pairs(X,1),Pairs(X,2)),1:size(Pairs,1),'Uni',0)),'descend');
     Pairs = Pairs(sortid,:);
     CrossCorrelationFingerPrint
@@ -533,7 +542,8 @@ while flag<2
     xlabel('TotalScore')
     ylabel('Cross-correlation fingerprint')
     makepretty
-    
+    disp(['Computing fingerprints correlations took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])
+
     %% three ways to define candidate scores
     % Total score larger than threshold
     CandidatePairs = TotalScore>ThrsOpt & SigMask==1;
@@ -580,7 +590,7 @@ CandidatePairs = TotalScore>ThrsOpt & RankScoreAll==1 & SigMask==1;
 [uid,uid2] = find(CandidatePairs);
 Pairs = cat(2,uid,uid2);
 Pairs = sortrows(Pairs);
-Pairs=unique(Pairs,'rows');
+Pairs = unique(Pairs,'rows');
 
 %% Naive bayes classifier
 % Usually this means there's no variance in the match distribution
@@ -590,13 +600,13 @@ npairs = 0;
 MinLoss=1;
 MaxPerf = [0 0];
 npairslatest = 0;
-runid=0;
+runid = 0;
 % Priors = [0.5 0.5];
 Priors = [priorMatch 1-priorMatch];
 BestMdl = [];
 while flag<2 && runid<maxrun
     flag = 0;
-    runid=runid+1
+    runid = runid+1;
     filedir = which('UnitMatch');
     filedir = dir(filedir);
     if ApplyExistingBayesModel && exist(fullfile(filedir.folder,'UnitMatchModel.mat'))
@@ -800,7 +810,7 @@ else
     [label, posterior, cost] = predict(BestMdl,Tbl);
 end
 MatchProbability = reshape(posterior(:,2),size(Predictors,1),size(Predictors,2));
-label = (MatchProbability>=param.ProbabilityThreshold) | (MatchProbability>0.05 & RankScoreAll==1 & SigMask==1);
+slabel = (MatchProbability>=param.ProbabilityThreshold) | (MatchProbability>0.05 & RankScoreAll==1 & SigMask==1);
 % label = reshape(label,nclus,nclus);
 [r, c] = find(triu(label)==1); %Find matches across 2 days
 Pairs = cat(2,r,c);
