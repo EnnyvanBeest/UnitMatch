@@ -105,16 +105,18 @@ for uid = 1:nclus
     fprintf(1,'\b\b\b\b%3.0f%%',uid/nclus*100)
     load(fullfile(SaveDir,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']))
 
+    % Extract channel positions that are relevant and extract mean location
+    [~,MaxChanneltmp] = nanmax(nanmax(abs(nanmean(spikeMap(35:70,:,:),3)),[],1));
+    ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChanneltmp,:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<TakeChannelRadius); %Averaging over 10 channels helps with drift
+    Locs = channelpos(ChanIdx,:);
+
     % Extract unit parameters -
     % Cross-validate: first versus second half of session
     for cv = 1:2
         % Find maximum channels:
-        [~,MaxChannel(uid,cv)] = nanmax(nanmax(abs(spikeMap(35:70,:,cv)),[],1));
-
-        % Extract channel positions that are relevant and extract mean location
-        ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChannel(uid,cv),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<TakeChannelRadius); %Averaging over 10 channels helps with drift
-        Locs = channelpos(ChanIdx,:);
-
+        [~,MaxChannel(uid,cv)] = nanmax(nanmax(abs(spikeMap(35:70,ChanIdx,cv)),[],1)); %Only over relevant channels, in case there's other spikes happening elsewhere simultaneously
+        MaxChannel(uid,cv) = MaxChannel(uid,cv)+min(ChanIdx(:))-1;
+     
         % Mean location:
         mu = sum(repmat(nanmax(abs(spikeMap(:,ChanIdx,cv)),[],1),size(Locs,2),1).*Locs',2)./sum(repmat(nanmax(abs(nanmean(spikeMap(:,ChanIdx,cv),3)),[],1),size(Locs,2),1),2);
         ProjectedLocation(:,uid,cv)=mu;
@@ -814,7 +816,7 @@ else
     [label, posterior, cost] = predict(BestMdl,Tbl);
 end
 MatchProbability = reshape(posterior(:,2),size(Predictors,1),size(Predictors,2));
-slabel = (MatchProbability>=param.ProbabilityThreshold) | (MatchProbability>0.05 & RankScoreAll==1 & SigMask==1);
+label = (MatchProbability>=param.ProbabilityThreshold) | (MatchProbability>0.05 & RankScoreAll==1 & SigMask==1);
 % label = reshape(label,nclus,nclus);
 [r, c] = find(triu(label)==1); %Find matches across 2 days
 Pairs = cat(2,r,c);
