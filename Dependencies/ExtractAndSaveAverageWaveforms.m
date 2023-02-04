@@ -46,6 +46,10 @@ for uid = 1:nclus
             continue
         else
             tmppath = dir(fullfile(param.KSDir(GoodRecSesID(uid)).folder,param.KSDir(GoodRecSesID(uid)).name,'**','RawWaveforms*'));
+            if length(tmppath)>1
+                % Probably stitched:
+                tmppath = tmppath(GoodRecSesID(uid));
+            end
             spikeMap = readNPY(fullfile(tmppath.folder,tmppath.name,['Unit' num2str(UniqueID(Good_Idx(uid))-OriSessionSwitch(GoodRecSesID(uid))+1) '_RawSpikes.npy']));            
         end
     else

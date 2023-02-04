@@ -115,7 +115,7 @@ for uid = 1:nclus
     for cv = 1:2
         % Find maximum channels:
         [~,MaxChannel(uid,cv)] = nanmax(nanmax(abs(spikeMap(35:70,ChanIdx,cv)),[],1)); %Only over relevant channels, in case there's other spikes happening elsewhere simultaneously
-        MaxChannel(uid,cv) = MaxChannel(uid,cv)+min(ChanIdx(:))-1;
+        MaxChannel(uid,cv) = ChanIdx(MaxChannel(uid,cv));
      
         % Mean location:
         mu = sum(repmat(nanmax(abs(spikeMap(:,ChanIdx,cv)),[],1),size(Locs,2),1).*Locs',2)./sum(repmat(nanmax(abs(nanmean(spikeMap(:,ChanIdx,cv),3)),[],1),size(Locs,2),1),2);
