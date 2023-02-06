@@ -119,7 +119,7 @@ for uid = 1:nclus
      
         % Mean location:
         mu = sum(repmat(nanmax(abs(spikeMap(:,ChanIdx,cv)),[],1),size(Locs,2),1).*Locs',2)./sum(repmat(nanmax(abs(nanmean(spikeMap(:,ChanIdx,cv),3)),[],1),size(Locs,2),1),2);
-        ProjectedLocation(:,uid,cv)=mu;
+        ProjectedLocation(:,uid,cv) = mu;
 
         %     % Mean waveform - first extract the 'weight' for each channel, based on
         %     % how close they are to the projected location (closer = better)
@@ -567,8 +567,10 @@ while flag<2
     %% Calculate median drift on this population (between days)
     if ndays>1
         for did = 1:ndays-1
-            idx = find(Pairs(:,1)>=SessionSwitch(did)&Pairs(:,1)<SessionSwitch(did+1) & Pairs(:,2)>=SessionSwitch(did+1)&Pairs(:,2)<SessionSwitch(did+2));
-            drift = nanmedian(cell2mat(arrayfun(@(uid) (nanmean(ProjectedLocation(:,Pairs(idx,1),:),3)-nanmean(ProjectedLocation(:,Pairs(idx,2),:),3)),1:size(Pairs,1),'Uni',0)),2);
+            [uid,uid2] = find(CandidatePairs);
+            BestPairs = cat(2,uid,uid2);
+            idx = find(BestPairs(:,1)>=SessionSwitch(did)&BestPairs(:,1)<SessionSwitch(did+1) & BestPairs(:,2)>=SessionSwitch(did+1)&BestPairs(:,2)<SessionSwitch(did+2));
+            drift = nanmedian(nanmean(ProjectedLocation(:,BestPairs(idx,1),:),3)-nanmean(ProjectedLocation(:,BestPairs(idx,2),:),3),2);
             disp(['Median drift recording ' num2str(did) ' calculated: X=' num2str(drift(1)) ', Y=' num2str(drift(2))])
             if flag
                 break
