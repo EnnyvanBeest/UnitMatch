@@ -315,7 +315,8 @@ for subsesid=1:length(KiloSortPaths)
                 qMetricsPath = d.folder;
                 [~, qMetric, fractionRPVs_allTauR] = bc_loadSavedMetrics(qMetricsPath);
                 unitType = bc_getQualityUnitType(paramBC, qMetric);
-
+                unitType(:) = 1;
+                
                 %{ 
                 % Commmented by CB for now    
                 spike_templates_0idx = readNPY([savePath filesep 'spike_templates.npy']);
