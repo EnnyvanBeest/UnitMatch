@@ -142,7 +142,6 @@ for subsesid=1:length(KiloSortPaths)
             rawD = dir(fullfile(RawDataPaths(subsesid).folder,RawDataPaths(subsesid).name));
         end
         AllKiloSortPaths = [AllKiloSortPaths KiloSortPaths(subsesid)];
-
     end
     channelpostmpconv = ChannelIMROConversion(rawD(1).folder,1); % For conversion when not automatically done
 
