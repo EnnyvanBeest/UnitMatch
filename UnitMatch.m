@@ -1153,6 +1153,7 @@ if MakePlotsOfPairs
         tmpfig = figure;
         cols =  distinguishable_colors(length(Pairs{pairid}));
         clear hleg
+        addforamplitude=0;
         for uidx = 1:length(Pairs{pairid})
             uid = Pairs{pairid}(uidx);
 
@@ -1197,15 +1198,15 @@ if MakePlotsOfPairs
             subplot(3,3,6)
             hold on
             idx1=find(sp.spikeTemplates == AllClusterIDs(Good_Idx(uid)) & sp.RecSes == GoodRecSesID(uid));
-            scatter(sp.st(idx1)./60,sp.spikeAmps(idx1)+(uidx-1)*200,4,cols(uidx,:),'filled')
+            scatter(sp.st(idx1)./60,sp.spikeAmps(idx1)+addforamplitude,4,cols(uidx,:),'filled')
 
             xlims = get(gca,'xlim');
             % Other axis
             [h1,edges,binsz]=histcounts(sp.spikeAmps(idx1));
             %Normalize between 0 and 1
             h1 = ((h1-nanmin(h1))./(nanmax(h1)-nanmin(h1)))*10+xlims(2)+10;
-            plot(h1,edges(1:end-1)+(uidx-1)*200,'-','color',cols(uidx,:));
-
+            plot(h1,edges(1:end-1)+addforamplitude,'-','color',cols(uidx,:));
+            addforamplitude = addforamplitude+edges(end-1);
 
             % compute ACG
             [ccg, ~] = CCGBz([double(sp.st(idx1)); double(sp.st(idx1))], [ones(size(sp.st(idx1), 1), 1); ...
@@ -1217,7 +1218,6 @@ if MakePlotsOfPairs
             plot(ACG,'color',cols(uidx,:));
             title(['AutoCorrelogram'])
             makepretty
-
         end
 
         % make subplots pretty
@@ -1231,8 +1231,9 @@ if MakePlotsOfPairs
         xlimcur = get(gca,'xlim');
         xlim([xlimcur(1) xlimcur(2)+diff(xlimcur)*1.2])
         legend(hleg,arrayfun(@(X) ['ID' num2str(AllClusterIDs(Good_Idx(X))) ', Rec' num2str(GoodRecSesID(X))],Pairs{pairid},'Uni',0),'Location','best')
-        Probs = cell2mat(arrayfun(@(X) MatchProbability(Pairs{pairid}(X),Pairs{pairid}(X+1)),1:length(Pairs{pairid})-1,'Uni',0));
-        title(['Probability=' num2str(round(Probs.*100)) '%'])
+        Probs = cell2mat(arrayfun(@(X) [num2str(round(MatchProbability(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        Probs(end)=[];
+        title(['Probability=' Probs '%'])
 
 
         subplot(3,3,[2])
@@ -1246,24 +1247,32 @@ if MakePlotsOfPairs
         hc= colorbar;
         hc.Label.String = 'timesample';
         makepretty
-        tmp = cell2mat(arrayfun(@(X) LocDistSim(Pairs{pairid}(X),Pairs{pairid}(X+1)),1:length(Pairs{pairid})-1,'Uni',0));
-        tmp2 = cell2mat(arrayfun(@(X) LocAngleSim(Pairs{pairid}(X),Pairs{pairid}(X+1)),1:length(Pairs{pairid})-1,'Uni',0));
-        title(['Distance: ' num2str(round(tmp*100)./100) ', angle: ' num2str(round(tmp2*100)./100)])
+        tmp = cell2mat(arrayfun(@(X) [num2str(round(LocDistSim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)./100) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp(end)=[];
+        tmp2 = cell2mat(arrayfun(@(X) [num2str(round(LocAngleSim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)./100) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp2(end)=[];  
+        title(['Distance: ' tmp ', angle: ' tmp2])
 
         subplot(3,3,5)
         xlabel('X position')
         ylabel('um from tip')
         makepretty
-        title(['Chan ' num2str(MaxChannel(Pairs{pairid}))])
+        tmp = cell2mat(arrayfun(@(X) [num2str(MaxChannel(Pairs{pairid}(X))) ','],1:length(Pairs{pairid}),'Uni',0));
+        tmp(end)=[];      
+        title(['Chan ' tmp])
 
         subplot(3,3,3)
         makepretty
-        tmp = cell2mat(arrayfun(@(X) WavformSim(Pairs{pairid}(X),Pairs{pairid}(X+1)),1:length(Pairs{pairid})-1,'Uni',0));
-        tmp2 = cell2mat(arrayfun(@(X) WVCorr(Pairs{pairid}(X),Pairs{pairid}(X+1)),1:length(Pairs{pairid})-1,'Uni',0));
-        tmp3 = cell2mat(arrayfun(@(X) AmplitudeSim(Pairs{pairid}(X),Pairs{pairid}(X+1)),1:length(Pairs{pairid})-1,'Uni',0));
-        tmp4 = cell2mat(arrayfun(@(X) spatialdecaySim(Pairs{pairid}(X),Pairs{pairid}(X+1)),1:length(Pairs{pairid})-1,'Uni',0));
-        title(['Waveform Similarity=' num2str(round(tmp*100)./100) ', WVCorr=' num2str(round(tmp2*100)./100) ', Ampl=' ...
-            num2str(round(tmp3*100)./100) ', decay='  num2str(round(tmp4*100)./100)])
+        tmp = cell2mat(arrayfun(@(X) [num2str(round(WavformSim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)./100) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp(end)=[];
+        tmp2 = cell2mat(arrayfun(@(X) [num2str(round(WVCorr(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)./100) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp2(end)=[];
+         tmp3 = cell2mat(arrayfun(@(X) [num2str(round(AmplitudeSim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)./100) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp3(end)=[];
+         tmp4 = cell2mat(arrayfun(@(X) [num2str(round(spatialdecaySim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)./100) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp4(end)=[];
+      
+        title(['Waveform Similarity=' tmp ', WVCorr=' tmp2 ', Ampl=' tmp3 ', decay='  tmp4])
 
         subplot(3,3,6)
         xlabel('Time (min)')
@@ -1303,10 +1312,11 @@ if MakePlotsOfPairs
         end
         xlabel('Unit')
         ylabel('Cross-correlation')
-        tmp = cell2mat(arrayfun(@(X) FingerprintR(Pairs{pairid}(X),Pairs{pairid}(X+1)),1:length(Pairs{pairid})-1,'Uni',0));
-        tmp1 = cell2mat(arrayfun(@(X) RankScoreAll(Pairs{pairid}(X),Pairs{pairid}(X+1)),1:length(Pairs{pairid})-1,'Uni',0));
-
-        title(['Fingerprint r=' num2str(round(tmp*100)/100) ', rank=' num2str(tmp1)])
+        tmp = cell2mat(arrayfun(@(X) [num2str(round(FingerprintR(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)./100) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp(end)=[];
+        tmp2 = cell2mat(arrayfun(@(X) [num2str(round(RankScoreAll(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)./100) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp2(end)=[];
+        title(['Fingerprint r=' tmp ', rank=' tmp2])
         ylims = get(gca,'ylim');
         set(gca,'ylim',[ylims(1) ylims(2)*1.2])
         PosMain = get(gca,'Position');
@@ -1332,9 +1342,10 @@ if MakePlotsOfPairs
 
         drawnow
         set(gcf,'units','normalized','outerposition',[0 0 1 1])
-
-        saveas(gcf,fullfile(SaveDir,'MatchFigures',[num2str(round(MatchProbability(uid,uid2).*100)) 'ClusID' num2str(AllClusterIDs(Good_Idx(uid))) 'vs' num2str(AllClusterIDs(Good_Idx(uid2))) '.fig']))
-        saveas(gcf,fullfile(SaveDir,'MatchFigures',[num2str(round(MatchProbability(uid,uid2).*100)) 'ClusID' num2str(AllClusterIDs(Good_Idx(uid))) 'vs' num2str(AllClusterIDs(Good_Idx(uid2))) '.bmp']))
+        
+        fname = cell2mat(arrayfun(@(X) ['ID' num2str(AllClusterIDs(Good_Idx(X))) ', Rec' num2str(GoodRecSesID(X))],Pairs{pairid},'Uni',0));
+        saveas(gcf,fullfile(SaveDir,'MatchFigures',[fname '.fig']))
+        saveas(gcf,fullfile(SaveDir,'MatchFigures',[fname '.bmp']))
 
         close(tmpfig)
     end
