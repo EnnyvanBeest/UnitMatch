@@ -41,7 +41,7 @@ RemoveRawWavForms = 0; %Remove averaged waveforms again to save space --> Curren
 MakeOwnNaiveBayes = 1; % if 0, use standard matlab version, which assumes normal distributions --> not recommended
 ApplyExistingBayesModel = 0; %If 1, use probability distributions made available by us
 maxrun = 1; % This is whether you want to use Bayes' output to create a new potential candidate set to optimize the probability distributions. Probably we don't want to keep optimizing?, as this can be a bit circular (?)
-drawmax = 20; % Maximum number of drawed matches (otherwise it takes forever!)
+drawmax = inf; % Maximum number of drawed matches (otherwise it takes forever!)
 %% Read in from param
 channelpos = param.channelpos;
 RunPyKSChronicStitched = param.RunPyKSChronicStitched;
@@ -1230,8 +1230,8 @@ if MakePlotsOfPairs
         set(gca,'yticklabel',arrayfun(@(X) num2str(X./10),cellfun(@(X) str2num(X),get(gca,'yticklabel')),'UniformOutput',0))
         xlabel('Xpos (um)')
         ylabel('Ypos (um)')
-        xlimcur = get(gca,'xlim');
-        xlim([xlimcur(1) xlimcur(2)+diff(xlimcur)*1.2])
+        ylimcur = get(gca,'ylim');
+        ylim([ylimcur(1) ylimcur(2)*1.005])
         legend(hleg,arrayfun(@(X) ['ID' num2str(AllClusterIDs(Good_Idx(X))) ', Rec' num2str(GoodRecSesID(X))],Pairs{pairid},'Uni',0),'Location','best')
         Probs = cell2mat(arrayfun(@(X) [num2str(round(MatchProbability(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)) ','],1:length(Pairs{pairid})-1,'Uni',0));
         Probs(end)=[];

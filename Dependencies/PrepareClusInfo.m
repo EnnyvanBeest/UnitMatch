@@ -142,7 +142,7 @@ for subsesid=1:length(KiloSortPaths)
         if UseParamsKS
             spikeStruct = loadParamsPy(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'params.py'));
             rawD = spikeStruct.dat_path;
-            rawD = rawD(strfind(rawD,'r"')+2:end);
+            rawD = rawD(strfind(rawD,'"')+1:end);
             rawD = rawD(1:strfind(rawD,'"')-1);
             tmpdr = rawD;
             rawD = dir(rawD);
@@ -335,7 +335,7 @@ for subsesid=1:length(KiloSortPaths)
                 qMetricsPath = d.folder;
                 [~, qMetric, fractionRPVs_allTauR] = bc_loadSavedMetrics(qMetricsPath);
                 unitType = bc_getQualityUnitType(paramBC, qMetric);
-                unitType(:) = 1;
+%                 unitType(:) = 1; ???
                 
                 %{ 
                 % Commmented by CB for now    
