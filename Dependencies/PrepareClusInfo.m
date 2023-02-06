@@ -141,6 +141,8 @@ for subsesid=1:length(KiloSortPaths)
         else
             rawD = dir(fullfile(RawDataPaths(subsesid).folder,RawDataPaths(subsesid).name));
         end
+        AllKiloSortPaths = [AllKiloSortPaths KiloSortPaths(subsesid)];
+
     end
     channelpostmpconv = ChannelIMROConversion(rawD(1).folder,1); % For conversion when not automatically done
 
@@ -352,33 +354,34 @@ for subsesid=1:length(KiloSortPaths)
             %% Apply QM findings:
             disp('Only use units that passed the quality metrics parameters')
             % This is necessary inside this loop when running stitched - don't change!!
-            addthis = nanmax(recsesAll);
-            if isempty(addthis)
-                addthis=0;
-            end
+            Good_IDtmp = nan(1,length(unitType)); % Replace with unitType
             Good_IDtmp(unitType ~= 1) = 0; % MUA
             Good_IDtmp(unitType == 1) = 1; % Good
             Good_IDtmp(unitType == 0) = 0;
             %         NoiseUnit = false(size(Good_IDtmp));
             %         NoiseUnit(unitType == 0)=1; % NOISE
 
-            if exist('uniqueTemplates','var') && iscell(theseuniqueTemplates)
-                recsesAlltmp = arrayfun(@(X) repmat(addthis+X,1,length(theseuniqueTemplates{X})),[1:length(theseuniqueTemplates)],'UniformOutput',0);
-                recsesAll =cat(1,recsesAll(:), cat(2,recsesAlltmp{:})');
-            else
-                recsesAll = cat(1,recsesAll(:),repmat(addthis+1,1,length(Good_IDtmp))');
-            end
+           
             Good_ID = [Good_ID,Good_IDtmp]; %Identify good clusters
-            addthis = addthis+1;
 
         end
+       
         AllUniqueTemplates = cat(1,AllUniqueTemplates(:),cat(1,theseuniqueTemplates{:}));
 
     else
         AllUniqueTemplates = cat(1,AllUniqueTemplates,unique(sp{countid}.spikeTemplates));
         %         NoiseUnit = false(size(Good_IDtmp));
     end
-
+    addthis = nanmax(recsesAll);
+    if isempty(addthis)
+        addthis=0;
+    end
+    if exist('theseuniqueTemplates','var') && iscell(theseuniqueTemplates)
+        recsesAlltmp = arrayfun(@(X) repmat(addthis+X,1,length(theseuniqueTemplates{X})),[1:length(theseuniqueTemplates)],'UniformOutput',0);
+        recsesAll =cat(1,recsesAll(:), cat(2,recsesAlltmp{:})');
+    else
+        recsesAll = cat(1,recsesAll(:),repmat(addthis+1,1,length(Good_IDtmp))');
+    end
     sp{countid}.RecSes = sp{countid}.SessionID+countid-1; %Keep track of recording session, as cluster IDs are not unique across sessions
     countid=countid+1;
     close all
