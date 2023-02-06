@@ -396,8 +396,15 @@ fields = fieldnames(sp(1));
 for fieldid=1:length(fields)
     try
         eval(['spnew.' fields{fieldid} '= cat(1,sp(:).' fields{fieldid} ');'])
-    catch
-        eval(['spnew.' fields{fieldid} '= cat(2,sp(:).' fields{fieldid} ');'])
+    catch ME
+        if strcmp(ME.message,'Out of memory.')
+            eval(['spnew.' fields{fieldid} ' = sp(1).' fields{fieldid} ';'])
+            for tmpid = 2:length(sp)
+                eval(['spnew.' fields{fieldid} ' = cat(1,spnew.' fields{fieldid} ', sp(tmpid).' fields{fieldid} ');'])
+            end
+        else
+            eval(['spnew.' fields{fieldid} '= cat(2,sp(:).' fields{fieldid} ');'])
+        end
     end
 end
 
