@@ -1368,7 +1368,7 @@ end
 %% Assign same Unique ID
 [PairID1,PairID2]=meshgrid(AllClusterIDs(Good_Idx));
 [recses1,recses2] = meshgrid(recsesAll(Good_Idx));
-MatchTable = table(PairID1(:),PairID2(:),recses1(:),recses2(:),MatchProbability(:),RankScoreAll(:),FingerprintR(:),'VariableNames',{'ID1','ID2','RecSes1','RecSes2','MatchProb','RankScore','FingerprintCor'})
+MatchTable = table(PairID1(:),PairID2(:),recses1(:),recses2(:),MatchProbability(:),RankScoreAll(:),FingerprintR(:),'VariableNames',{'ID1','ID2','RecSes1','RecSes2','MatchProb','RankScore','FingerprintCor'});
 for id = 1:size(Pairs,1)
     UniqueID(Good_Idx(Pairs(id,2))) = UniqueID(Good_Idx(Pairs(id,1)));
 end
