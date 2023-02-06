@@ -74,6 +74,7 @@ depth = [];
 channel = [];
 Shank=[];
 recses = [];
+AllKiloSortPaths = [];
 countid=1;
 % figure;
 cols = jet(length(KiloSortPaths));
@@ -97,37 +98,7 @@ for subsesid=1:length(KiloSortPaths)
     [sp{countid}.spikeAmps, sp{countid}.spikeDepths, sp{countid}.templateDepths, sp{countid}.templateXpos, sp{countid}.tempAmps, sp{countid}.tempsUnW, sp{countid}.templateDuration, sp{countid}.waveforms] = templatePositionsAmplitudes(sp{countid}.temps, sp{countid}.winv, sp{countid}.ycoords, sp{countid}.xcoords, sp{countid}.spikeTemplates, sp{countid}.tempScalingAmps); %from the spikes toolbox
 
     %% Remove noise; spikes across all channels'
-    figure
-    scatter(sp{countid}.st,sp{countid}.spikeDepths,4,[0 0 0],'filled')
-    hold on
-
-    binsz = 0.001;
-    edges = min(sp{countid}.st)-binsz/2:binsz:max(sp{countid}.st)+binsz/2;
-    timevec = min(sp{countid}.st):binsz:max(sp{countid}.st);
-
-    if 0
-        depthstep = 25; %um
-        depthedges = min(sp{countid}.spikeDepths)-depthstep/2:depthstep:max(sp{countid}.spikeDepths)+depthstep/2;
-        tmpact = arrayfun(@(X) histcounts(sp{countid}.st(sp{countid}.spikeDepths>depthedges(X)&sp{countid}.spikeDepths<depthedges(X+1)),edges),1:length(depthedges)-1,'UniformOutput',0);
-        tmpact = cat(1,tmpact{:});
-        tmpact = (tmpact-nanmean(tmpact,2))./nanstd(tmpact,[],2); %Z-score
-        tpidx = find(sum(tmpact>3,1)>0.5*length(depthedges)-1);
-
-        % Remove these timepoints
-        rmidx = arrayfun(@(X) find(sp{countid}.st>timevec(X)-binsz/2&sp{countid}.st<timevec(X)+binsz/2),tpidx,'UniformOutput',0);
-        rmidx = cat(1,rmidx{:});
-        scatter(sp{countid}.st(rmidx),sp{countid}.spikeDepths(rmidx),4,[1 0 0],'filled')
-        drawnow
-        nori = length(sp{countid}.st);
-        fields = fieldnames(sp{countid});
-        for fid = 1:length(fields)
-            eval(['tmp = sp{countid}. ' fields{fid} ';'])
-            if any(size(tmp) == nori)
-                tmp(rmidx,:,:)=[];
-                eval(['sp{countid}.' fields{fid} '=tmp;'])
-            end
-        end
-    end
+    sp{countid} = RemoveNoiseAmplitudeBased(sp{countid});
 
     %% Channel data
     myClusFile = dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'channel_map.npy'));
@@ -146,6 +117,7 @@ for subsesid=1:length(KiloSortPaths)
         rawD = arrayfun(@(X) dir(sessionsIncluded.ThesePaths{X}),1:length(sessionsIncluded.ThesePaths),'UniformOutput',0);
         rawD = cat(2,rawD{:});
         RawDataPaths = rawD;
+        AllKiloSortPaths = [AllKiloSortPaths repmat(KiloSortPaths(subsesid),1,length(rawD))];
     else
         if UseParamsKS
             spikeStruct = loadParamsPy(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'params.py'));
@@ -176,6 +148,7 @@ for subsesid=1:length(KiloSortPaths)
     % clear paramBC
     paramBC = bc_qualityParamValuesForUnitMatch(dir(strrep(fullfile(rawD(1).folder,rawD(1).name),'cbin','meta')),fullfile(Params.tmpdatafolder,strrep(rawD(1).name,'cbin','bin')));
     paramBC.reextractRaw = 1;
+
     %% Load Cluster Info
     myClusFile = dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'cluster_info.tsv')); % If you did phy (manual curation) we will find this one... We can trust you, right?
     if isempty(myClusFile)
@@ -323,17 +296,14 @@ for subsesid=1:length(KiloSortPaths)
                         InspectionFlag=1;
                     end
                 end
-                % load data BOMBCELL way
-                [spikeTimes_samples, spikeTemplates, ...
-                    templateWaveforms, templateAmplitudes, pcFeatures, pcFeatureIdx, channelPositions] = bc_loadEphysData(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name),id);
 
                 paramBC.rawFile = fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin'));
                 paramBC.ephysMetaFile = (strrep(fullfile(Params.tmpdatafolder,rawD(id).name),'cbin','meta'));
 
                 %             idx = ismember(sp{countid}.spikeTemplates,clusidtmp(Good_IDtmp)); %Only include good units
                 %careful; spikeSites zero indexed
-                [qMetric, unitType] = bc_runAllQualityMetrics(paramBC, spikeTimes_samples, spikeTemplates, ...
-                    templateWaveforms, templateAmplitudes,pcFeatures,pcFeatureIdx,channelPositions, savePath);
+                [qMetric, unitType] = bc_runAllQualityMetrics(paramBC, sp{countid}.st(idx)*sp{countid}.sample_rate, sp{countid}.spikeTemplates(idx)+1, ...
+                    sp{countid}.temps, sp{countid}.tempScalingAmps(idx),sp{countid}.pcFeat(idx,:,:),sp{countid}.pcFeatInd+1,channelpostmp, savePath); % Be careful, bombcell needs 1-indexed!
 
             else
                 paramBC.rawFile = fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin'));
@@ -370,9 +340,9 @@ for subsesid=1:length(KiloSortPaths)
                 % up/down arrow: toggle between time chunks in the raw data
                 % u: brings up a input dialog to enter the unit you want to go to
                 unitQualityGuiHandle = bc_unitQualityGUI(memMapData, ephysData, qMetric, forGUI, rawWaveforms, ...
-                    param, probeLocation, unitType, loadRawTraces)             
-%                 bc_unitQualityGUI(memMapData, ephysData, qMetric, rawWaveforms, paramBC,...
-%                     probeLocation, unitType, plotRaw);
+                    param, probeLocation, unitType, loadRawTraces)
+                %                 bc_unitQualityGUI(memMapData, ephysData, qMetric, rawWaveforms, paramBC,...
+                %                     probeLocation, unitType, plotRaw);
                 disp('Not continuing until GUI closed')
                 while isvalid(unitQualityGuiHandle) && Params.InspectQualityMetrics
                     pause(0.01)
@@ -381,31 +351,35 @@ for subsesid=1:length(KiloSortPaths)
             end
             %% Apply QM findings:
             disp('Only use units that passed the quality metrics parameters')
+            % This is necessary inside this loop when running stitched - don't change!!
+            addthis = nanmax(recsesAll);
+            if isempty(addthis)
+                addthis=0;
+            end
+            Good_IDtmp(unitType ~= 1) = 0; % MUA
+            Good_IDtmp(unitType == 1) = 1; % Good
+            Good_IDtmp(unitType == 0) = 0;
+            %         NoiseUnit = false(size(Good_IDtmp));
+            %         NoiseUnit(unitType == 0)=1; % NOISE
+
+            if exist('uniqueTemplates','var') && iscell(theseuniqueTemplates)
+                recsesAlltmp = arrayfun(@(X) repmat(addthis+X,1,length(theseuniqueTemplates{X})),[1:length(theseuniqueTemplates)],'UniformOutput',0);
+                recsesAll =cat(1,recsesAll(:), cat(2,recsesAlltmp{:})');
+            else
+                recsesAll = cat(1,recsesAll(:),repmat(addthis+1,1,length(Good_IDtmp))');
+            end
+            Good_ID = [Good_ID,Good_IDtmp]; %Identify good clusters
+            addthis = addthis+1;
+
         end
         AllUniqueTemplates = cat(1,AllUniqueTemplates(:),cat(1,theseuniqueTemplates{:}));
-        unitType = cat(1,unitTypeAcrossRec{:});
-        Good_IDtmp(unitType ~= 1) = 0; % MUA
-        Good_IDtmp(unitType == 1) = 1; % Good
-        Good_IDtmp(unitType == 0) = 0;
-%         NoiseUnit = false(size(Good_IDtmp));
-%         NoiseUnit(unitType == 0)=1; % NOISE
+
     else
         AllUniqueTemplates = cat(1,AllUniqueTemplates,unique(sp{countid}.spikeTemplates));
-%         NoiseUnit = false(size(Good_IDtmp));
+        %         NoiseUnit = false(size(Good_IDtmp));
     end
 
-    addthis = nanmax(recsesAll);
-    if isempty(addthis)
-        addthis=0;
-    end
-    if exist('uniqueTemplates','var') && iscell(theseuniqueTemplates)
-        recsesAlltmp = arrayfun(@(X) repmat(addthis+X,1,length(theseuniqueTemplates{X})),[1:length(theseuniqueTemplates)],'UniformOutput',0);
-        recsesAll =cat(1,recsesAll(:), cat(2,recsesAlltmp{:})');
-    else
-        recsesAll = cat(1,recsesAll(:),repmat(addthis+1,1,length(Good_IDtmp))');
-    end
-    Good_ID = [Good_ID,Good_IDtmp]; %Identify good clusters
-    sp{countid}.RecSes = sp{countid}.SessionID+addthis; %Keep track of recording session, as cluster IDs are not unique across sessions
+    sp{countid}.RecSes = sp{countid}.SessionID+countid-1; %Keep track of recording session, as cluster IDs are not unique across sessions
     countid=countid+1;
     close all
 
@@ -452,7 +426,7 @@ UMparam.ACGduration = 1;%paramBC.ACGduration;
 UMparam.sampleamount = paramBC.nRawSpikesToExtract; %500; % Nr. waveforms to include
 UMparam.spikeWidth =paramBC.spikeWidth; %82; % in sample space (time)
 UMparam.UseBombCelRawWav = Params.RunQualityMetrics; % 1 by default
-UMparam.KSDir = KiloSortPaths;
+UMparam.KSDir = AllKiloSortPaths;
 UMparam.channelpos = channelpos;
 UMparam.AllRawPaths = RawDataPaths;
 UMparam.AllDecompPaths = arrayfun(@(X) fullfile(Params.tmpdatafolder,strrep(RawDataPaths(X).name,'cbin','bin')),1:length(RawDataPaths),'Uni',0);
