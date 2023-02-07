@@ -43,6 +43,7 @@ ApplyExistingBayesModel = 0; %If 1, use probability distributions made available
 maxrun = 1; % This is whether you want to use Bayes' output to create a new potential candidate set to optimize the probability distributions. Probably we don't want to keep optimizing?, as this can be a bit circular (?)
 drawmax = inf; % Maximum number of drawed matches (otherwise it takes forever!)
 VisibleSetting = 'off'; %Do we want to see the figures being plot online?
+
 %% Read in from param
 channelpos = param.channelpos;
 RunPyKSChronicStitched = param.RunPyKSChronicStitched;
@@ -553,7 +554,7 @@ while flag<2
     disp('Computing fingerprints correlations...')
     [~,sortid] = sort(cell2mat(arrayfun(@(X) TotalScore(Pairs(X,1),Pairs(X,2)),1:size(Pairs,1),'Uni',0)),'descend');
     Pairs = Pairs(sortid,:);
-    [FingerprintR,RankScoreAll,SigMask,AllSessionCorrelations] = crossCorrelationFingerPrint(srAllDays,Pairs,Unit2Take,recsesGood);
+    [FingerprintR,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCorrelationFingerPrint(srAllDays,Pairs,Unit2Take,recsesGood);
     % CrossCorrelationFingerPrint_BU
 
     figure;
@@ -747,7 +748,7 @@ while flag<2 && runid<maxrun
         % Use a bunch of units with high total scores as reference population
         [PairScore,sortid] = sort(cell2mat(arrayfun(@(X) MatchProbability(Pairs(X,1),Pairs(X,2)),1:size(Pairs,1),'Uni',0)),'descend');
         Pairs = Pairs(sortid,:);
-        [FingerprintR,RankScoreAll,SigMask,AllSessionCorrelations] = crossCorrelationFingerPrint(srAllDays,Pairs,Unit2Take,recsesGood);
+        [FingerprintR,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCorrelationFingerPrint(srAllDays,Pairs,Unit2Take,recsesGood);
         % CrossCorrelationFingerPrint_BU
 
         tmpf = triu(FingerprintR,1);

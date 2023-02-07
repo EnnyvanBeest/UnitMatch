@@ -1,4 +1,4 @@
-function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelations] = crossCorrelationFingerPrint(srAllDays,Pairs,Unit2Take,recsesGood)
+function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCorrelationFingerPrint(srAllDays,Pairs,Unit2Take,recsesGood)
     %% This function will compute the cross-correlation fingerprint.
 
     nclus = numel(Unit2Take);
