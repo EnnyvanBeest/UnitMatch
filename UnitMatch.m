@@ -230,7 +230,7 @@ disp(['Calculating waveform similarity took ' num2str(round(toc(timercounter))) 
 
 figure('name','Waveform similarity measures')
 subplot(1,3,1)
-h=imagesc(WVCorr);
+imagesc(WVCorr);
 title('Waveform correlations')
 xlabel('Unit Y')
 ylabel('Unit Z')
@@ -242,7 +242,7 @@ colorbar
 makepretty
 
 subplot(1,3,2)
-h=imagesc(WavformSim);
+imagesc(WavformSim);
 title('Waveform mean squared errors')
 xlabel('Unit Y')
 ylabel('Unit Z')
@@ -254,7 +254,7 @@ colorbar
 makepretty
 
 subplot(1,3,3)
-h=imagesc((WVCorr+WavformSim)/2);
+imagesc((WVCorr+WavformSim)/2);
 title('Average Waveform scores')
 xlabel('Unit Y')
 ylabel('Unit Z')
@@ -484,15 +484,15 @@ while flag<2
     for scid2=1:length(Scores2Include)
         Predictors = cat(3,Predictors,eval(Scores2Include{scid2}));
 
-        if ~IncludeSpatialInitially & strcmp(Scores2Include{scid2},'LocDistSim')
+        if ~IncludeSpatialInitially && strcmp(Scores2Include{scid2},'LocDistSim')
             continue
         end
         eval(['TotalScore=TotalScore+' Scores2Include{scid2} ';'])
     end
     figure('name','TotalScore')
     subplot(2,1,1)
-    h=imagesc(TotalScore,[0 length(Scores2Include)]);
-    title(['Total Score'])
+    imagesc(TotalScore,[0 length(Scores2Include)]);
+    title('Total Score')
     xlabel('Unit_i')
     ylabel('Unit_j')
     hold on
@@ -540,6 +540,7 @@ while flag<2
     [~,sortid] = sort(cell2mat(arrayfun(@(X) TotalScore(Pairs(X,1),Pairs(X,2)),1:size(Pairs,1),'Uni',0)),'descend');
     Pairs = Pairs(sortid,:);
     [FingerprintR,RankScoreAll,SigMask,AllSessionCorrelations] = crossCorrelationFingerPrint(srAllDays,Pairs,Unit2Take,recsesGood);
+    % CrossCorrelationFingerPrint_BU
 
     figure;
     h=scatter(TotalScore(:),FingerprintR(:),14,RankScoreAll(:),'filled','AlphaData',0.1);
@@ -731,7 +732,8 @@ while flag<2 && runid<maxrun
         % Use a bunch of units with high total scores as reference population
         [PairScore,sortid] = sort(cell2mat(arrayfun(@(X) MatchProbability(Pairs(X,1),Pairs(X,2)),1:size(Pairs,1),'Uni',0)),'descend');
         Pairs = Pairs(sortid,:);
-        CrossCorrelationFingerPrint
+        [FingerprintR,RankScoreAll,SigMask,AllSessionCorrelations] = crossCorrelationFingerPrint(srAllDays,Pairs,Unit2Take,recsesGood);
+        % CrossCorrelationFingerPrint_BU
 
         tmpf = triu(FingerprintR,1);
         tmpm = triu(MatchProbability,1);
@@ -859,6 +861,7 @@ saveas(gcf,fullfile(SaveDir,'ProbabilitiesMatches.bmp'))
 % [PairScore,sortid] = sort(cell2mat(arrayfun(@(X) MatchProbability(Pairs(X,1),Pairs(X,2)),1:size(Pairs,1),'Uni',0)),'descend');
 % Pairs = Pairs(sortid,:);
 % CrossCorrelationFingerPrint - do we really need this again?
+
 %%
 figure;
 subplot(1,3,1)
@@ -1151,6 +1154,8 @@ if MakePlotsOfPairs
     end
     % Pairs = Pairs(any(ismember(Pairs,[8,68,47,106]),2),:);
     %     AllClusterIDs(Good_Idx(Pairs))
+
+    ncellsperrecording = diff(SessionSwitch);
     for pairid=DrawPairs
         tmpfig = figure('visible','off');
         cols =  distinguishable_colors(length(Pairs{pairid}));
