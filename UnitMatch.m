@@ -32,9 +32,9 @@ global stepsize
 stepsize = 0.01; % Of probability distribution
 MakePlotsOfPairs = 1; % Plots all pairs for inspection
 Scores2Include = {'AmplitudeSim','WavformSim','WVCorr','LocAngleSim','spatialdecaySim','LocDistSim'}; %
-IncludeSpatialInitially = 1; % if 1 we include spatial distance from the start, if 0 only from the naive Bayes part
+IncludeSpatialInitially = 0; % if 1 we include spatial distance from the start, if 0 only from the naive Bayes part
 TakeChannelRadius = 75; %in micron around max channel
-maxdist = 200; % Maximum distance at which units are considered as potential matches
+maxdist = 500; % Maximum distance at which units are considered as potential matches
 binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
 RemoveRawWavForms = 0; %Remove averaged waveforms again to save space --> Currently only two averages saved so shouldn't be a problem to keep it, normally speaking
 % Scores2Include = {'WavformSimilarity','LocationCombined','spatialdecayDiff','AmplitudeDiff'};%}
@@ -42,6 +42,7 @@ MakeOwnNaiveBayes = 1; % if 0, use standard matlab version, which assumes normal
 ApplyExistingBayesModel = 0; %If 1, use probability distributions made available by us
 maxrun = 1; % This is whether you want to use Bayes' output to create a new potential candidate set to optimize the probability distributions. Probably we don't want to keep optimizing?, as this can be a bit circular (?)
 drawmax = inf; % Maximum number of drawed matches (otherwise it takes forever!)
+
 %% Read in from param
 channelpos = param.channelpos;
 RunPyKSChronicStitched = param.RunPyKSChronicStitched;
@@ -90,7 +91,7 @@ PeakTime = nan(nclus,2); % Peak time first versus second half
 MaxChannel = nan(nclus,2); % Max channel first versus second half
 waveformduration = nan(nclus,2); % Waveformduration first versus second half
 Amplitude = nan(nclus,2); % Maximum (weighted) amplitude, first versus second half
-
+NewPeakLoc = floor(spikeWidth./2); % This is where all peaks will be aligned to!
 spatialdecay = nan(nclus,2); % how fast does the unit decay across space, first versus second half
 WaveIdx = nan(nclus,spikeWidth,2);
 %Calculate how many channels are likely to be included
@@ -116,10 +117,36 @@ for uid = 1:nclus
         % Find maximum channels:
         [~,MaxChannel(uid,cv)] = nanmax(nanmax(abs(spikeMap(35:70,ChanIdx,cv)),[],1)); %Only over relevant channels, in case there's other spikes happening elsewhere simultaneously
         MaxChannel(uid,cv) = ChanIdx(MaxChannel(uid,cv));
-     
+
         % Mean location:
         mu = sum(repmat(nanmax(abs(spikeMap(:,ChanIdx,cv)),[],1),size(Locs,2),1).*Locs',2)./sum(repmat(nanmax(abs(nanmean(spikeMap(:,ChanIdx,cv),3)),[],1),size(Locs,2),1),2);
         ProjectedLocation(:,uid,cv) = mu;
+        % Use this waveform - weighted average across channels:
+        Distance2MaxProj = sqrt(nansum(abs(Locs-ProjectedLocation(:,uid,cv)').^2,2));
+        weight = (TakeChannelRadius-Distance2MaxProj)./TakeChannelRadius;
+        ProjectedWaveform(:,uid,cv) = nansum(spikeMap(:,ChanIdx,cv).*repmat(weight,1,size(spikeMap,1))',2)./sum(weight);
+        % Find significant timepoints
+        wvdurtmp = find(abs(ProjectedWaveform(:,uid,cv))>abs(nanmean(ProjectedWaveform(1:20,uid,cv)))+2.5*nanstd(ProjectedWaveform(1:20,uid,cv))); % More than 2. std from baseline
+        if isempty(wvdurtmp)
+            wvdurtmp = 20:80;
+        end
+        % Peak Time
+        [~,PeakTime(uid,cv)] = nanmax([nan; nan; diff(diff(ProjectedWaveform(wvdurtmp(1):wvdurtmp(end),uid,cv)))]);
+        PeakTime(uid,cv) = PeakTime(uid,cv)+wvdurtmp(1)-1;
+
+        % Shift data so that peak is at timepoint x
+        if PeakTime(uid,cv)~=NewPeakLoc
+            ProjectedWaveform(:,uid,cv) = circshift(ProjectedWaveform(:,uid,cv),-(PeakTime(uid,cv)-NewPeakLoc));
+            spikeMap(:,:,cv) = circshift(spikeMap(:,:,cv),-(PeakTime(uid,cv)-NewPeakLoc),1);
+            if PeakTime(uid,cv)-NewPeakLoc<0
+                ProjectedWaveform(1:-(PeakTime(uid,cv)-NewPeakLoc),uid,cv) = nan;
+                spikeMap(1:-(PeakTime(uid,cv)-NewPeakLoc),:,cv) = nan;
+            else
+                ProjectedWaveform(spikeWidth-(PeakTime(uid,cv)-NewPeakLoc):spikeWidth,uid,cv) = nan;
+                spikeMap(spikeWidth-(PeakTime(uid,cv)-NewPeakLoc):spikeWidth,:,cv) = nan;
+            end
+        end
+
 
         %     % Mean waveform - first extract the 'weight' for each channel, based on
         %     % how close they are to the projected location (closer = better)
@@ -129,21 +156,7 @@ for uid = 1:nclus
         % Spatial decay (average oer micron)
         spatialdecay(uid,cv) = nanmean(spdctmp./Distance2MaxChan');
 
-        % Use this waveform - weighted average across channels:
-        Distance2MaxProj = sqrt(nansum(abs(Locs-ProjectedLocation(:,uid,cv)').^2,2));
-        weight = (TakeChannelRadius-Distance2MaxProj)./TakeChannelRadius;
-        ProjectedWaveform(:,uid,cv) = nansum(spikeMap(:,ChanIdx,cv).*repmat(weight,1,size(spikeMap,1))',2)./sum(weight);
-
-        % Find significant timepoints
-        wvdurtmp = find(abs(ProjectedWaveform(:,uid,cv))>abs(nanmean(ProjectedWaveform(1:20,uid,cv)))+2.5*nanstd(ProjectedWaveform(1:20,uid,cv))); % More than 2. std from baseline
-
-        if isempty(wvdurtmp)
-            wvdurtmp = 20:80;
-        end
-        % Peak Time
-        [~,PeakTime(uid,cv)] = nanmax([nan; diff(diff(ProjectedWaveform(wvdurtmp(1):wvdurtmp(end),uid,cv)))]);
-
-        PeakTime(uid,cv) = PeakTime(uid,cv)+wvdurtmp(1)-1;
+       
         Peakval = ProjectedWaveform(PeakTime(uid,cv),uid,cv);
         Amplitude(uid,cv) = Peakval;
 
@@ -647,7 +660,8 @@ while flag<2 && runid<maxrun
             % Apply naive bays classifier
             Tbl = array2table(reshape(Predictors,[],size(Predictors,3)),'VariableNames',Scores2Include); %All parameters
             [label, posterior] = ApplyNaiveBayes(Tbl,Parameterkernels,[0 1],Priors);
-
+            saveas(gcf,fullfile(SaveDir,'ProbabilityDistribution.fig'))
+            saveas(gcf,fullfile(SaveDir,'ProbabilityDistribution.bmp'))
         else % This uses matlab package. Warning: normal distributions assumed?
             try
                 Mdl = fitcnb(Tbl,label);
@@ -807,6 +821,10 @@ end
 disp('Extracting final pairs of units...')
 Tbl = array2table(reshape(Predictors,[],size(Predictors,3)),'VariableNames',Scores2Include); %All parameters
 if isfield(BestMdl,'Parameterkernels')
+    BestMdl.VariableNames = Scores2Include;
+    Edges = [0:stepsize:1];
+    ScoreVector = Edges(1)+stepsize/2:stepsize:Edges(end)-stepsize/2;
+    BestMdl.ScoreVector = ScoreVector;
     if RunPyKSChronicStitched
         [label, posterior,performance] = ApplyNaiveBayes(Tbl,BestMdl.Parameterkernels,PyKSLabel(:),Priors);
         disp(['Correctly labelled ' num2str(round(performance(2)*1000)/10) '% of PyKS Matches and ' num2str(round(performance(1)*1000)/10) '% of PyKS non matches'])
@@ -1104,6 +1122,7 @@ xlabel('Unit_i')
 ylabel('Unit_j')
 zlabel('Counts')
 title('Identified Matches')
+
 %% ISI violations (for over splits matching)
 ISIViolationsScore = nan(1,size(Pairs,1));
 fprintf(1,'Computing functional properties similarity. Progress: %3d%%',0)
@@ -1114,7 +1133,6 @@ for pairid= 1:size(Pairs,1)
         DifScore = diff(sort([sp.st(idx1); sp.st(idx2)]));
         ISIViolationsScore(pairid) = sum(DifScore.*1000<1.5)./length(DifScore);
         fprintf(1,'\b\b\b\b%3.0f%%',pairid/size(Pairs,1)*100)
-
     end
 end
 fprintf('\n')
@@ -1127,6 +1145,16 @@ ProjectedWaveform = nanmean(ProjectedWaveform,3); %Average over first and second
 ProjectedLocation = nanmean(ProjectedLocation,3);
 ProjectedLocationPerTP = nanmean(ProjectedLocationPerTP,4);
 
+%% Change these parameters to probabilities of being a match
+% Scores2Include = {'AmplitudeSim','WavformSim','WVCorr','LocAngleSim','spatialdecaySim','LocDistSim'}; %
+for pidx = 1:length(Scores2Include)
+    eval(['tmp = ' Scores2Include{pidx} ';'])
+    tmp = reshape(tmp,1,[]);
+    [~,minidx] = min(abs(tmp- BestMdl.ScoreVector'));
+    tmp = BestMdl.Parameterkernels(minidx,strcmp(BestMdl.VariableNames,Scores2Include{pidx}),2)./(BestMdl.Parameterkernels(minidx,strcmp(BestMdl.VariableNames,Scores2Include{pidx}),2)+BestMdl.Parameterkernels(minidx,strcmp(BestMdl.VariableNames,Scores2Include{pidx}),1));
+    eval([Scores2Include{pidx} '= reshape(tmp,nclus,nclus);'])
+
+end
 %% Assign same Unique ID
 OriUniqueID = UniqueID; %need for plotting
 [PairID1,PairID2]=meshgrid(AllClusterIDs(Good_Idx));
@@ -1157,7 +1185,7 @@ if MakePlotsOfPairs
     %     AllClusterIDs(Good_Idx(Pairs))
     for pairid=DrawPairs
         tmpfig = figure;
-        cols =  distinguishable_colors(length(Pairs{pairid}));
+        cols =  jet(length(Pairs{pairid}));
         clear hleg
         addforamplitude=0;
         for uidx = 1:length(Pairs{pairid})
