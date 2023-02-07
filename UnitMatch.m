@@ -41,7 +41,7 @@ RemoveRawWavForms = 0; %Remove averaged waveforms again to save space --> Curren
 MakeOwnNaiveBayes = 1; % if 0, use standard matlab version, which assumes normal distributions --> not recommended
 ApplyExistingBayesModel = 0; %If 1, use probability distributions made available by us
 maxrun = 1; % This is whether you want to use Bayes' output to create a new potential candidate set to optimize the probability distributions. Probably we don't want to keep optimizing?, as this can be a bit circular (?)
-drawmax = 20; % Maximum number of drawed matches (otherwise it takes forever!)
+drawmax = inf; % Maximum number of drawed matches (otherwise it takes forever!)
 %% Read in from param
 channelpos = param.channelpos;
 RunPyKSChronicStitched = param.RunPyKSChronicStitched;
@@ -1138,6 +1138,7 @@ Pairs = arrayfun(@(X) find(UniqueID(Good_Idx)==X),uId,'Uni',0);
 Pairs(cellfun(@length,Pairs)==1) = [];
 
 %% Figures
+
 if MakePlotsOfPairs
     if ~isdir(fullfile(SaveDir,'MatchFigures'))
         mkdir(fullfile(SaveDir,'MatchFigures'))
@@ -1152,7 +1153,7 @@ if MakePlotsOfPairs
     % Pairs = Pairs(any(ismember(Pairs,[8,68,47,106]),2),:);
     %     AllClusterIDs(Good_Idx(Pairs))
     for pairid=DrawPairs
-        tmpfig = figure;
+        tmpfig = figure('visible','off');
         cols =  distinguishable_colors(length(Pairs{pairid}));
         clear hleg
         for uidx = 1:length(Pairs{pairid})
@@ -1332,13 +1333,10 @@ if MakePlotsOfPairs
         xlabel('Finger print r')
         makepretty
 
-        drawnow
         set(gcf,'units','normalized','outerposition',[0 0 1 1])
 
         saveas(gcf,fullfile(SaveDir,'MatchFigures',[num2str(round(MatchProbability(uid,uid2).*100)) 'ClusID' num2str(AllClusterIDs(Good_Idx(uid))) 'vs' num2str(AllClusterIDs(Good_Idx(uid2))) '.fig']))
         saveas(gcf,fullfile(SaveDir,'MatchFigures',[num2str(round(MatchProbability(uid,uid2).*100)) 'ClusID' num2str(AllClusterIDs(Good_Idx(uid))) 'vs' num2str(AllClusterIDs(Good_Idx(uid2))) '.bmp']))
-
-        close(tmpfig)
     end
 end
 
