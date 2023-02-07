@@ -10,6 +10,7 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelations] = crossCo
     rowcount = 1;
     AllSessionCorrelations = cell(ndays,ndays);
     
+    %% Computes all the cross-correlation matrices
     tic
     for did1 = 1:ndays
         for did2 = did1:ndays
@@ -51,24 +52,24 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelations] = crossCo
                 for did = 1:length(dayopt)
                     % We need a group of units that is likely to be a pair across at least two days
                     if did==1
-                        pairidx = find(recsesGood(Pairs(:,1)) == dayopt(did) & recsesGood(Pairs(:,2))==dayopt(did+1));
+                        pairidx = recsesGood(Pairs(:,1)) == dayopt(did) & recsesGood(Pairs(:,2))==dayopt(did+1);
                         PairsTmp = Pairs(pairidx,:);
                         % Only use every 'unit' once --> take the highest scoring matches
-                        [val,id1,id2]=unique(PairsTmp(:,1),'stable');
+                        [~,id1,~]=unique(PairsTmp(:,1),'stable');
                         PairsTmp = PairsTmp(id1,:);
-                        [val,id1,id2]=unique(PairsTmp(:,2),'stable');
+                        [~,id1,~]=unique(PairsTmp(:,2),'stable');
                         PairsTmp = PairsTmp(id1,:);
                         Unit2TakeIdx = PairsTmp(:,1); % Only take each unit once
                     else
                         Unit2TakeIdx = [];
                     end
                     if did==2
-                        pairidx = find(recsesGood(Pairs(:,2)) == dayopt(did) & recsesGood(Pairs(:,1))==dayopt(did-1));
+                        pairidx = recsesGood(Pairs(:,2)) == dayopt(did) & recsesGood(Pairs(:,1))==dayopt(did-1);
                         PairsTmp = Pairs(pairidx,:);
                         % Only use every 'unit' once --> take the highest scoring matches
-                        [val,id1,id2]=unique(PairsTmp(:,1),'stable');
+                        [~,id1,~]=unique(PairsTmp(:,1),'stable');
                         PairsTmp = PairsTmp(id1,:);
-                        [val,id1,id2]=unique(PairsTmp(:,2),'stable');
+                        [~,id1,~]=unique(PairsTmp(:,2),'stable');
                         PairsTmp = PairsTmp(id1,:);
                         Unit2TakeIdx = [Unit2TakeIdx; PairsTmp(:,2)];
                     end
@@ -84,7 +85,7 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelations] = crossCo
     
                     % Remove =1 for the same unit (per def. 1)
                     for id = 1:length(Unit2TakeIdx)
-                        SessionCorrelation_Pair(id,find(ismember(Unit2TakeIdxAll,Unit2TakeIdx(id)))) = nan;
+                        SessionCorrelation_Pair(id,ismember(Unit2TakeIdxAll,Unit2TakeIdx(id))) = nan;
                     end
     
                     % Normalize correlations to compare across recordings
@@ -111,17 +112,13 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelations] = crossCo
     end
     toc
 
-    %
+    %% Computes the correlation of the fingerprints
     tic
     ncellsperrecording = diff(SessionSwitch);
-    rowcount = 1;
-    clear FingerPrintAll
+    FingerPrintAll = cell(ndays,ndays);
     figure('name','Fingerprint correlations')
     for did1 = 1:ndays
-        for did2 = 1:ndays
-            if did2<did1
-                continue
-            end
+        for did2 = did1:ndays
             SessionCorrelations = AllSessionCorrelations{did1,did2};
             rmidx = find(sum(isnan(SessionCorrelations),2)==size(SessionCorrelations,2));
             nclustmp = size(SessionCorrelations,1);
@@ -169,32 +166,32 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelations] = crossCo
             FingerPrintAll{did1,did2} = FingerprintR;
         end
     end
-    %
+    toc
+    
+    %%
+    tic
     FingerprintRAll = nan(nclus,nclus);
     SigMask = zeros(nclus,nclus);
     RankScoreAll = nan(size(SigMask));
     for pid=1:nclus
-        for pid2 = 1:nclus
-            if pid2<pid
-                continue
-            end
+        for pid2 = pid:nclus
             did1 = (recsesGood(pid));
             did2 = (recsesGood(pid2));
-            addthis3=-SessionSwitch(did1)+1;
+            addthis3 = -SessionSwitch(did1)+1;
             addthis4 = 0;
     
             FingerprintR = FingerPrintAll{did1,did2};
             if did1==did2
-                tmp1 = FingerprintR(pid+addthis3,[1:ncellsperrecording(did1)]+addthis4);
-                addthis=SessionSwitch(did1)-1;
+                tmp1 = FingerprintR(pid+addthis3,(1:ncellsperrecording(did1))+addthis4);
+                addthis = SessionSwitch(did1)-1;
                 addthis2 = addthis3;
             else
                 tmp1 = FingerprintR(pid+addthis3,ncellsperrecording(did1)+1:end);
-                addthis=SessionSwitch(did2)-1;
+                addthis = SessionSwitch(did2)-1;
                 addthis2 = -addthis+ncellsperrecording(did1);
             end
             tmp1(isnan(tmp1))=0;
-            [val,ranktmp] = sort(tmp1,'descend');
+            [~,ranktmp] = sort(tmp1,'descend');
     
             tmp1(pid2-addthis)=[];
     
@@ -219,6 +216,7 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelations] = crossCo
             end
         end
     end
+    toc
     
     figure('name','RankScore')
     subplot(1,2,1)
@@ -241,5 +239,4 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelations] = crossCo
     ylabel('All units across both days')
     title('correlations>99th percentile of distribution')
     makepretty
-    toc
 end
