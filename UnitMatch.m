@@ -46,17 +46,17 @@ drawmax = inf; % Maximum number of drawed matches (otherwise it takes forever!)
 channelpos = param.channelpos;
 RunPyKSChronicStitched = param.RunPyKSChronicStitched;
 SaveDir = param.SaveDir;
-AllDecompPaths = param.AllDecompPaths;
-AllRawPaths = param.AllRawPaths;
+% AllDecompPaths = param.AllDecompPaths;
+% AllRawPaths = param.AllRawPaths;
 param.nChannels = length(param.channelpos)+1; %First assume there's a sync channel as well.
-sampleamount = param.sampleamount; %500; % Nr. waveforms to include
+% sampleamount = param.sampleamount; %500; % Nr. waveforms to include
 spikeWidth = param.spikeWidth; %83; % in sample space (time)
-UseBombCelRawWav = param.UseBombCelRawWav; % If Bombcell was also applied on this dataset, it's faster to read in the raw waveforms extracted by Bombcell
+% UseBombCelRawWav = param.UseBombCelRawWav; % If Bombcell was also applied on this dataset, it's faster to read in the raw waveforms extracted by Bombcell
 
 %% Extract all cluster info 
 AllClusterIDs = clusinfo.cluster_id;
-nses = length(AllDecompPaths);
-OriginalClusID = AllClusterIDs; % Original cluster ID assigned by KS
+% nses = length(AllDecompPaths);
+% OriginalClusID = AllClusterIDs; % Original cluster ID assigned by KS
 UniqueID = 1:length(AllClusterIDs); % Initial assumption: All clusters are unique
 Good_Idx = find(clusinfo.Good_ID); %Only care about good units at this point
 GoodRecSesID = clusinfo.RecSesID(Good_Idx);
@@ -67,10 +67,10 @@ recsesGood = recsesAll(Good_Idx);
 [X,Y]=meshgrid(recsesAll(Good_Idx));
 nclus = length(Good_Idx);
 ndays = length(unique(recsesAll));
-x = repmat(GoodRecSesID,[1 numel(GoodRecSesID)]);
-SameSesMat = x == x';
-OriSessionSwitch = cell2mat(arrayfun(@(X) find(recsesAll==X,1,'first'),1:ndays,'Uni',0));
-OriSessionSwitch = [OriSessionSwitch nclus+1];
+% x = repmat(GoodRecSesID,[1 numel(GoodRecSesID)]);
+% SameSesMat = x == x';
+% OriSessionSwitch = cell2mat(arrayfun(@(X) find(recsesAll==X,1,'first'),1:ndays,'Uni',0));
+% OriSessionSwitch = [OriSessionSwitch nclus+1];
 SessionSwitch = arrayfun(@(X) find(GoodRecSesID==X,1,'first'),1:ndays,'Uni',0);
 SessionSwitch(cellfun(@isempty,SessionSwitch))=[];
 SessionSwitch = [cell2mat(SessionSwitch) nclus+1];
@@ -321,6 +321,7 @@ while flag<2
     x1(~w) = 0;
     x2(~w) = 0;
     LocAngleSim = squeeze(circ_mean(abs(x1-x2),w,2));
+    LocAngleSim(squeeze(all(w==0,2))) = 1; % hack by CB. Not sure how to deal with that.
 
     % Variance in error, corrected by average error. This captures whether
     % the trajectory is consistenly separate
