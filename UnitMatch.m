@@ -415,7 +415,11 @@ while flag<2
     for sid = 1:length(Scores2Include)
         eval(['tmp = ' Scores2Include{sid} ';'])
         subplot(round(sqrt(length(Scores2Include))),ceil(sqrt(length(Scores2Include))),sid)
+        try
         h=imagesc(tmp,[quantile(tmp(:),0.1) 1]);
+        catch
+        h=imagesc(tmp,[0 1]);
+        end
         title(Scores2Include{sid})
         xlabel('Unit_i')
         ylabel('Unit_j')
