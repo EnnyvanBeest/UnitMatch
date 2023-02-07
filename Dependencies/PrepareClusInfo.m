@@ -112,17 +112,37 @@ for subsesid=1:length(KiloSortPaths)
 
     %% Is it correct channelpos though...? Check using raw data
     if Params.RunPyKSChronicStitched %CALL THIS STITCHED --> Only works when using RunPyKS2_FromMatlab as well from this toolbox
-        sessionsIncluded = dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'SessionsIncluded.mat'));
-        sessionsIncluded = load(fullfile(sessionsIncluded.folder,sessionsIncluded.name));
-        rawD = arrayfun(@(X) dir(sessionsIncluded.ThesePaths{X}),1:length(sessionsIncluded.ThesePaths),'UniformOutput',0);
-        rawD = cat(2,rawD{:});
+        if UseParamsKS
+            try
+                spikeStruct = loadParamsPy(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'params.py'));
+                rawD = spikeStruct.dat_path;
+                rawD = strsplit(rawD,',');
+                for rid=1:length(rawD)
+                    rawD{rid} = rawD{rid}(strfind(rawD{rid},'"')+1:end);
+                    rawD{rid} = rawD{rid}(1:strfind(rawD{rid},'"')-1);
+                    rawD{rid} = dir(rawD{rid});
+                    if isempty(rawD{rid})
+                        rawD{rid} = dir(strrep(rawD{rid},'bin','cbin'));
+                    end
+                end
+                rawD = cat(2,rawD{:});
+            catch
+                sessionsIncluded = dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'SessionsIncluded.mat'));
+                sessionsIncluded = load(fullfile(sessionsIncluded.folder,sessionsIncluded.name));
+                rawD = arrayfun(@(X) dir(sessionsIncluded.ThesePaths{X}),1:length(sessionsIncluded.ThesePaths),'UniformOutput',0);
+                rawD = cat(2,rawD{:});
+            end
+        else
+            rawD = dir(fullfile(RawDataPaths(subsesid).folder,RawDataPaths(subsesid).name));
+        end
+       
         RawDataPaths = rawD;
         AllKiloSortPaths = [AllKiloSortPaths repmat(KiloSortPaths(subsesid),1,length(rawD))];
     else
         if UseParamsKS
             spikeStruct = loadParamsPy(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'params.py'));
             rawD = spikeStruct.dat_path;
-            rawD = rawD(strfind(rawD,'r"')+2:end);
+            rawD = rawD(strfind(rawD,'"')+1:end);
             rawD = rawD(1:strfind(rawD,'"')-1);
             tmpdr = rawD;
             rawD = dir(rawD);
@@ -315,7 +335,7 @@ for subsesid=1:length(KiloSortPaths)
                 qMetricsPath = d.folder;
                 [~, qMetric, fractionRPVs_allTauR] = bc_loadSavedMetrics(qMetricsPath);
                 unitType = bc_getQualityUnitType(paramBC, qMetric);
-                unitType(:) = 1;
+%                 unitType(:) = 1; ???
                 
                 %{ 
                 % Commmented by CB for now    
