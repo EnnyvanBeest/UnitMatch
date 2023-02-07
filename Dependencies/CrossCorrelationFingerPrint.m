@@ -120,20 +120,19 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelations] = crossCo
     for did1 = 1:ndays
         for did2 = did1:ndays
             SessionCorrelations = AllSessionCorrelations{did1,did2};
-            rmidx = find(sum(isnan(SessionCorrelations),2)==size(SessionCorrelations,2));
+            rmidx = find(all(isnan(SessionCorrelations),2));
             nclustmp = size(SessionCorrelations,1);
-            SessionCorrelations(rmidx,:)=[];
+            % SessionCorrelations(rmidx,:)=[];
             try
-                notrmdixvec = 1:nclustmp;
-                notrmdixvec(rmidx)=[];
+                notrmidxvec = 1:nclustmp;
+                notrmidxvec(rmidx)=[];
             catch
-                notrmdixvec = SessionSwitch(did1):SessionSwitch(did1+1)-1;
-                notrmdixvec(rmidx)=[];
-    
+                notrmidxvec = SessionSwitch(did1):SessionSwitch(did1+1)-1;
+                notrmidxvec(rmidx)=[];
             end
             % Correlate 'fingerprints'
             try
-                x = SessionCorrelations(notrmdixvec,:)';
+                x = SessionCorrelations(notrmidxvec,:)';
                 FingerprintR = corr(x,x,'rows','pairwise');
             catch ME
                 disp(ME)
@@ -168,7 +167,8 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelations] = crossCo
     end
     toc
     
-    %%
+    %% Get the rank
+    %%% Could be sped up?? need some time
     tic
     FingerprintRAll = nan(nclus,nclus);
     SigMask = zeros(nclus,nclus);
