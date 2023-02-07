@@ -42,22 +42,22 @@ MakeOwnNaiveBayes = 1; % if 0, use standard matlab version, which assumes normal
 ApplyExistingBayesModel = 0; %If 1, use probability distributions made available by us
 maxrun = 1; % This is whether you want to use Bayes' output to create a new potential candidate set to optimize the probability distributions. Probably we don't want to keep optimizing?, as this can be a bit circular (?)
 drawmax = inf; % Maximum number of drawed matches (otherwise it takes forever!)
-
+VisibleSetting = 'off'; %Do we want to see the figures being plot online?
 %% Read in from param
 channelpos = param.channelpos;
 RunPyKSChronicStitched = param.RunPyKSChronicStitched;
 SaveDir = param.SaveDir;
-AllDecompPaths = param.AllDecompPaths;
-AllRawPaths = param.AllRawPaths;
+% AllDecompPaths = param.AllDecompPaths;
+% AllRawPaths = param.AllRawPaths;
 param.nChannels = length(param.channelpos)+1; %First assume there's a sync channel as well.
-sampleamount = param.sampleamount; %500; % Nr. waveforms to include
+% sampleamount = param.sampleamount; %500; % Nr. waveforms to include
 spikeWidth = param.spikeWidth; %83; % in sample space (time)
-UseBombCelRawWav = param.UseBombCelRawWav; % If Bombcell was also applied on this dataset, it's faster to read in the raw waveforms extracted by Bombcell
+% UseBombCelRawWav = param.UseBombCelRawWav; % If Bombcell was also applied on this dataset, it's faster to read in the raw waveforms extracted by Bombcell
 
 %% Extract all cluster info 
 AllClusterIDs = clusinfo.cluster_id;
-nses = length(AllDecompPaths);
-OriginalClusID = AllClusterIDs; % Original cluster ID assigned by KS
+% nses = length(AllDecompPaths);
+% OriginalClusID = AllClusterIDs; % Original cluster ID assigned by KS
 UniqueID = 1:length(AllClusterIDs); % Initial assumption: All clusters are unique
 Good_Idx = find(clusinfo.Good_ID); %Only care about good units at this point
 GoodRecSesID = clusinfo.RecSesID(Good_Idx);
@@ -68,12 +68,10 @@ recsesGood = recsesAll(Good_Idx);
 [X,Y]=meshgrid(recsesAll(Good_Idx));
 nclus = length(Good_Idx);
 ndays = length(unique(recsesAll));
-x = repmat(GoodRecSesID,[1 numel(GoodRecSesID)]);
-SameSesMat = x == x';
-% SameSesMat = arrayfun(@(X) cell2mat(arrayfun(@(Y) GoodRecSesID(X)==GoodRecSesID(Y),1:nclus,'Uni',0)),1:nclus,'Uni',0);
-% SameSesMat = cat(1,SameSesMat{:});
-OriSessionSwitch = cell2mat(arrayfun(@(X) find(recsesAll==X,1,'first'),1:ndays,'Uni',0));
-OriSessionSwitch = [OriSessionSwitch nclus+1];
+% x = repmat(GoodRecSesID,[1 numel(GoodRecSesID)]);
+% SameSesMat = x == x';
+% OriSessionSwitch = cell2mat(arrayfun(@(X) find(recsesAll==X,1,'first'),1:ndays,'Uni',0));
+% OriSessionSwitch = [OriSessionSwitch nclus+1];
 SessionSwitch = arrayfun(@(X) find(GoodRecSesID==X,1,'first'),1:ndays,'Uni',0);
 SessionSwitch(cellfun(@isempty,SessionSwitch))=[];
 SessionSwitch = [cell2mat(SessionSwitch) nclus+1];
@@ -189,8 +187,6 @@ timercounter = tic;
 x1 = repmat(PeakTime(:,1),[1 numel(PeakTime(:,1))]);
 x2 = repmat(PeakTime(:,2),[1 numel(PeakTime(:,2))]);
 PeakTimeSim = abs(x1 - x2');
-% PeakTimeSim = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) abs(PeakTime(uid,1)-PeakTime(uid2,2)),1:nclus,'Uni',0)),1:nclus,'Uni',0);
-% PeakTimeSim=cat(1,PeakTimeSim{:});
 %Normalize between 0 and 1 (values that make sense after testing, without having outliers influence this)
 PeakTimeSim =1-PeakTimeSim./quantile(PeakTimeSim(:),0.99);
 PeakTimeSim(PeakTimeSim<0)=0;
@@ -202,14 +198,10 @@ for uid = 1:nclus
         waveformTimePointSim(uid,uid2) = sum(ismember(WaveIdx(uid,:,1),WaveIdx(uid2,:,2)))./sum(~isnan(WaveIdx(uid,:,1)));
     end
 end
-% waveformTimePointSim = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) sum(ismember(WaveIdx(uid,:,1),WaveIdx(uid2,:,2)))./sum(~isnan(WaveIdx(uid,:,1))),1:nclus,'Uni',0)),1:nclus,'Uni',0);
-% waveformTimePointSim = cat(1,waveformTimePointSim{:});
 
 x1 = repmat(spatialdecay(:,1),[1 numel(spatialdecay(:,1))]);
 x2 = repmat(spatialdecay(:,2),[1 numel(spatialdecay(:,2))]);
 spatialdecaySim = abs(x1 - x2');
-% spatialdecaySim = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) abs(spatialdecay(uid,1)-spatialdecay(uid2,2)),1:nclus,'Uni',0)),1:nclus,'Uni',0);
-% spatialdecaySim = cat(1,spatialdecaySim{:});
 % Make (more) normal
 spatialdecaySim = sqrt(spatialdecaySim);
 spatialdecaySim = 1-((spatialdecaySim-nanmin(spatialdecaySim(:)))./(quantile(spatialdecaySim(:),0.99)-nanmin(spatialdecaySim(:))));
@@ -219,8 +211,6 @@ spatialdecaySim(spatialdecaySim<0)=0;
 x1 = repmat(Amplitude(:,1),[1 numel(Amplitude(:,1))]);
 x2 = repmat(Amplitude(:,2),[1 numel(Amplitude(:,2))]);
 AmplitudeSim = abs(x1 - x2');
-% AmplitudeSim = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) abs(Amplitude(uid,1)-Amplitude(uid2,2)),1:nclus,'Uni',0)),1:nclus,'Uni',0);
-% AmplitudeSim = cat(1,AmplitudeSim{:});
 % Make (more) normal
 AmplitudeSim = sqrt(AmplitudeSim);
 AmplitudeSim = 1-((AmplitudeSim-nanmin(AmplitudeSim(:)))./(quantile(AmplitudeSim(:),.99)-nanmin(AmplitudeSim(:))));
@@ -237,12 +227,8 @@ ProjectedWaveformNorm = (ProjectedWaveformNorm-nanmin(ProjectedWaveformNorm,[],1
 x1 = repmat(ProjectedWaveformNorm(:,:,1),[1 1 size(ProjectedWaveformNorm,2)]);
 x2 = permute(repmat(ProjectedWaveformNorm(:,:,2),[1 1 size(ProjectedWaveformNorm,2)]),[1 3 2]);
 RawWVMSE = squeeze(nanmean((x1 - x2).^2));
-% RawWVMSE = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) nanmean((ProjectedWaveformNorm(:,uid,1)-ProjectedWaveformNorm(:,uid2,2)).^2),1:nclus,'Uni',0)),1:nclus,'Uni',0);
-% RawWVMSE = cat(1,RawWVMSE{:});
-WVCorr = corr(ProjectedWaveform(35:70,:,1),ProjectedWaveform(35:70,:,2));
-% WVCorr = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) corr(ProjectedWaveform(35:70,uid,1),ProjectedWaveform(35:70,uid2,2)),1:nclus,'Uni',0)),1:nclus,'Uni',0);
-% WVCorr = cat(1,WVCorr{:});
 
+WVCorr = corr(ProjectedWaveform(35:70,:,1),ProjectedWaveform(35:70,:,2));
 % Make WVCorr a normal distribution
 WVCorr = atanh(WVCorr);
 WVCorr = (WVCorr-nanmin(WVCorr(:)))./(nanmax(WVCorr(:))-nanmin(WVCorr(:)));
@@ -254,9 +240,10 @@ WavformSim = 1-WavformSim;
 WavformSim(WavformSim<0) = 0;
 
 disp(['Calculating waveform similarity took ' num2str(round(toc(timercounter))) ' seconds for ' num2str(nclus) ' units'])
+
 figure('name','Waveform similarity measures')
 subplot(1,3,1)
-h=imagesc(WVCorr);
+imagesc(WVCorr);
 title('Waveform correlations')
 xlabel('Unit Y')
 ylabel('Unit Z')
@@ -268,7 +255,7 @@ colorbar
 makepretty
 
 subplot(1,3,2)
-h=imagesc(WavformSim);
+imagesc(WavformSim);
 title('Waveform mean squared errors')
 xlabel('Unit Y')
 ylabel('Unit Z')
@@ -280,7 +267,7 @@ colorbar
 makepretty
 
 subplot(1,3,3)
-h=imagesc((WVCorr+WavformSim)/2);
+imagesc((WVCorr+WavformSim)/2);
 title('Average Waveform scores')
 xlabel('Unit Y')
 ylabel('Unit Z')
@@ -290,6 +277,23 @@ arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[
 colormap(flipud(gray))
 colorbar
 makepretty
+
+%% Get traces for fingerprint correlations
+
+disp('Computing neural traces...')
+timercounter = tic;
+edges = floor(min(sp.st))-binsz/2:binsz:ceil(max(sp.st))+binsz/2;
+Unit2Take = AllClusterIDs(Good_Idx);
+srAllDays = cell(1,ndays); 
+for did = 1:ndays
+    Unit2TakeIdxAll = find(recsesAll(Good_Idx) == did);
+    srAllDays{did} = nan(numel(Unit2TakeIdxAll),numel(edges)-1);
+    for uid = 1:numel(Unit2TakeIdxAll)
+        srAllDays{did}(uid,:) =  histcounts(sp.st(sp.spikeTemplates == Unit2Take(Unit2TakeIdxAll(uid)) & sp.RecSes == did),edges);
+    end
+end
+
+disp(['Calculating neural traces took ' num2str(round(toc(timercounter))) ' seconds for ' num2str(nclus) ' units'])
 
 %% Location differences between pairs of units: - This is done twice to account for large drift between sessions
 flag=0;
@@ -311,8 +315,6 @@ while flag<2
     timercounter = tic;
     LocDist = sqrt((ProjectedLocation(1,:,1)'-ProjectedLocation(1,:,2)).^2 + ...
         (ProjectedLocation(2,:,1)'-ProjectedLocation(2,:,2)).^2);
-    % LocDist = arrayfun(@(X) cell2mat(arrayfun(@(Y) pdist(cat(2,ProjectedLocation(:,X,1),ProjectedLocation(:,Y,2))'),1:nclus,'Uni',0)),1:nclus,'Uni',0);
-    % LocDist = cat(1,LocDist{:}); % Normal difference
 
     disp('Computing location distances between pairs of units, per individual time point of the waveform...')
     % Difference in distance at different time points
@@ -320,9 +322,6 @@ while flag<2
     x2 = permute(repmat(squeeze(ProjectedLocationPerTP(:,:,:,2)),[1 1 1 size(ProjectedLocationPerTP,2)]),[1 4 3 2]);
     LocDistSign = sqrt(sum((x1-x2).^2,1));
     LocDistSim = squeeze(nanmean(LocDistSign,3));
-    % LocDistSign = arrayfun(@(uid) arrayfun(@(uid2)  cell2mat(arrayfun(@(X) pdist(cat(2,squeeze(ProjectedLocationPerTP(:,uid,X,1)),squeeze(ProjectedLocationPerTP(:,uid2,X,2)))'),1:spikeWidth,'Uni',0)),1:nclus,'Uni',0),1:nclus,'Uni',0);
-    % LocDistSign = cat(1,LocDistSign{:});
-    % LocDistSim = cellfun(@(X) nanmean(X),LocDistSign);
 
     disp('Computing location angle (direction) differences between pairs of units, per individual time point of the waveform...')
     % Difference in angle between two time points
@@ -335,14 +334,11 @@ while flag<2
     x1(~w) = 0;
     x2(~w) = 0;
     LocAngleSim = squeeze(circ_mean(abs(x1-x2),w,2));
-    % LocAngle = arrayfun(@(uid) cell2mat(arrayfun(@(tp) atan(abs(squeeze(ProjectedLocationPerTP(1,uid,tp,:)-ProjectedLocationPerTP(1,uid,tp-1,:)))./abs(squeeze(ProjectedLocationPerTP(2,uid,tp,:)-ProjectedLocationPerTP(2,uid,tp-1,:)))),2:spikeWidth,'Uni',0)),1:nclus,'Uni',0);
-    % LocAngleSim = arrayfun(@(uid) cell2mat(arrayfun(@(uid2) circ_mean(abs(LocAngle{uid}(1,~isnan(LocAngle{uid}(1,:)) & ~isnan(LocAngle{uid2}(2,:)))' - LocAngle{uid2}(2,~isnan(LocAngle{uid}(1,:)) & ~isnan(LocAngle{uid2}(2,:)))')),1:nclus,'Uni',0)),1:nclus,'Uni',0);
-    % LocAngleSim = cat(1,LocAngleSim{:});
+    LocAngleSim(squeeze(all(w==0,2))) = 1; % hack by CB. Not sure how to deal with that.
 
     % Variance in error, corrected by average error. This captures whether
     % the trajectory is consistenly separate
     MSELoc = squeeze(nanvar(LocDistSign,[],3)./nanmean(LocDistSign,3)+nanmean(LocDistSign,3));
-    % MSELoc = cell2mat(cellfun(@(X) nanvar(X)./nanmean(X)+nanmean(X),LocDistSign,'Uni',0));
 
     % Normalize each of them from 0 to 1, 1 being the 'best'
     % If distance > maxdist micron it will never be the same unit:
@@ -356,7 +352,7 @@ while flag<2
     %
     figure('name','Distance Measures')
     subplot(4,2,1)
-    h=imagesc(LocDist);
+    imagesc(LocDist);
     title('LocationDistance')
     xlabel('Unit_i')
     ylabel('Unit_j')
@@ -368,12 +364,12 @@ while flag<2
     makepretty
 
     subplot(4,2,2)
-    h=histogram(LocDist(:));
+    histogram(LocDist(:));
     xlabel('Score')
     makepretty
 
     subplot(4,2,3)
-    h=imagesc(LocDistSim);
+    imagesc(LocDistSim);
     title('LocationDistanceAveraged')
     xlabel('Unit_i')
     ylabel('Unit_j')
@@ -384,12 +380,12 @@ while flag<2
     colorbar
     makepretty
     subplot(4,2,4)
-    h=histogram(LocDistSim(:));
+    histogram(LocDistSim(:));
     xlabel('Score')
     makepretty
 
     subplot(4,2,5)
-    h=imagesc(MSELoc);
+    imagesc(MSELoc);
     title('average trajectory error')
     xlabel('Unit_i')
     ylabel('Unit_j')
@@ -405,7 +401,7 @@ while flag<2
     makepretty
 
     subplot(4,2,7)
-    h=imagesc(LocAngleSim);
+    imagesc(LocAngleSim);
     title('circular mean Angle difference')
     xlabel('Unit_i')
     ylabel('Unit_j')
@@ -429,9 +425,9 @@ while flag<2
         eval(['tmp = ' Scores2Include{sid} ';'])
         subplot(round(sqrt(length(Scores2Include))),ceil(sqrt(length(Scores2Include))),sid)
         try
-        h=imagesc(tmp,[quantile(tmp(:),0.1) 1]);
+        imagesc(tmp,[quantile(tmp(:),0.1) 1]);
         catch
-        h=imagesc(tmp,[0 1]);
+        imagesc(tmp,[0 1]);
         end
         title(Scores2Include{sid})
         xlabel('Unit_i')
@@ -502,15 +498,15 @@ while flag<2
     for scid2=1:length(Scores2Include)
         Predictors = cat(3,Predictors,eval(Scores2Include{scid2}));
 
-        if ~IncludeSpatialInitially & strcmp(Scores2Include{scid2},'LocDistSim')
+        if ~IncludeSpatialInitially && strcmp(Scores2Include{scid2},'LocDistSim')
             continue
         end
         eval(['TotalScore=TotalScore+' Scores2Include{scid2} ';'])
     end
     figure('name','TotalScore')
     subplot(2,1,1)
-    h=imagesc(TotalScore,[0 length(Scores2Include)]);
-    title(['Total Score'])
+    imagesc(TotalScore,[0 length(Scores2Include)]);
+    title('Total Score')
     xlabel('Unit_i')
     ylabel('Unit_j')
     hold on
@@ -545,8 +541,8 @@ while flag<2
     [uid,uid2] = find(label);
     Pairs = cat(2,uid,uid2);
     Pairs = sortrows(Pairs);
-    Pairs=unique(Pairs,'rows');
-    Pairs(Pairs(:,1)==Pairs(:,2),:)=[];
+    Pairs = unique(Pairs,'rows');
+    Pairs(Pairs(:,1) == Pairs(:,2),:)=[];
 
     %% Functional score for optimization: compute Fingerprint for the matched units - based on Célian Bimbard's noise-correlation finger print method but applied to across session correlations
     % Not every recording day will have the same units. Therefore we will
@@ -555,9 +551,10 @@ while flag<2
     % Use a bunch of units with high total scores as reference population
     timercounter = tic;
     disp('Computing fingerprints correlations...')
-    [PairScore,sortid] = sort(cell2mat(arrayfun(@(X) TotalScore(Pairs(X,1),Pairs(X,2)),1:size(Pairs,1),'Uni',0)),'descend');
+    [~,sortid] = sort(cell2mat(arrayfun(@(X) TotalScore(Pairs(X,1),Pairs(X,2)),1:size(Pairs,1),'Uni',0)),'descend');
     Pairs = Pairs(sortid,:);
-    CrossCorrelationFingerPrint
+    [FingerprintR,RankScoreAll,SigMask,AllSessionCorrelations] = crossCorrelationFingerPrint(srAllDays,Pairs,Unit2Take,recsesGood);
+    % CrossCorrelationFingerPrint_BU
 
     figure;
     h=scatter(TotalScore(:),FingerprintR(:),14,RankScoreAll(:),'filled','AlphaData',0.1);
@@ -750,7 +747,8 @@ while flag<2 && runid<maxrun
         % Use a bunch of units with high total scores as reference population
         [PairScore,sortid] = sort(cell2mat(arrayfun(@(X) MatchProbability(Pairs(X,1),Pairs(X,2)),1:size(Pairs,1),'Uni',0)),'descend');
         Pairs = Pairs(sortid,:);
-        CrossCorrelationFingerPrint
+        [FingerprintR,RankScoreAll,SigMask,AllSessionCorrelations] = crossCorrelationFingerPrint(srAllDays,Pairs,Unit2Take,recsesGood);
+        % CrossCorrelationFingerPrint_BU
 
         tmpf = triu(FingerprintR,1);
         tmpm = triu(MatchProbability,1);
@@ -876,12 +874,13 @@ end
 saveas(gcf,fullfile(SaveDir,'ProbabilitiesMatches.fig'))
 saveas(gcf,fullfile(SaveDir,'ProbabilitiesMatches.bmp'))
 %% Fingerprint correlations
-disp('Recalculate activity correlations')
+% disp('Recalculate activity correlations')
 
 % Use a bunch of units with high total scores as reference population
 % [PairScore,sortid] = sort(cell2mat(arrayfun(@(X) MatchProbability(Pairs(X,1),Pairs(X,2)),1:size(Pairs,1),'Uni',0)),'descend');
 % Pairs = Pairs(sortid,:);
 % CrossCorrelationFingerPrint - do we really need this again?
+
 %%
 figure;
 subplot(1,3,1)
@@ -1170,6 +1169,7 @@ Pairs = arrayfun(@(X) find(UniqueID(Good_Idx)==X),uId,'Uni',0);
 Pairs(cellfun(@length,Pairs)==1) = [];
 
 %% Figures
+
 if MakePlotsOfPairs
     if ~isdir(fullfile(SaveDir,'MatchFigures'))
         mkdir(fullfile(SaveDir,'MatchFigures'))
@@ -1183,10 +1183,12 @@ if MakePlotsOfPairs
     end
     % Pairs = Pairs(any(ismember(Pairs,[8,68,47,106]),2),:);
     %     AllClusterIDs(Good_Idx(Pairs))
+
+    ncellsperrecording = diff(SessionSwitch);
     for pairid=DrawPairs
-        tmpfig = figure;
+        tmpfig = figure('visible',VisibleSetting);
         cols =  jet(length(Pairs{pairid}));
-        clear hleg
+              clear hleg
         addforamplitude=0;
         for uidx = 1:length(Pairs{pairid})
             uid = Pairs{pairid}(uidx);
@@ -1374,14 +1376,11 @@ if MakePlotsOfPairs
         xlabel('Finger print r')
         makepretty
 
-        drawnow
         set(gcf,'units','normalized','outerposition',[0 0 1 1])
         
         fname = cell2mat(arrayfun(@(X) ['ID' num2str(AllClusterIDs(Good_Idx(X))) ', Rec' num2str(GoodRecSesID(X))],Pairs{pairid},'Uni',0));
         saveas(gcf,fullfile(SaveDir,'MatchFigures',[fname '.fig']))
         saveas(gcf,fullfile(SaveDir,'MatchFigures',[fname '.bmp']))
-
-        close(tmpfig)
     end
 end
 
