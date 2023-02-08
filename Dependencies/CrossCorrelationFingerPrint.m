@@ -1,4 +1,4 @@
-function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCorrelationFingerPrint(srAllDays,Pairs,Unit2Take,recsesGood)
+function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelations] = crossCorrelationFingerPrint(srAllDays,Pairs,Unit2Take,recsesGood)
     %% This function will compute the cross-correlation fingerprint.
 
     nclus = numel(Unit2Take);
@@ -178,9 +178,9 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCo
             if did1 == did2
                 clusIdxD1 = 1:diff(SessionSwitch(did1+(0:1)));
                 clusIdxD2 = 1:diff(SessionSwitch(did2+(0:1)));
-            else
-                clusIdxD1 = SessionSwitch(did1):SessionSwitch(did1+1)-1;
-                clusIdxD2 = SessionSwitch(did2):SessionSwitch(did2+1)-1;
+            else 
+                clusIdxD1 = 1:diff(SessionSwitch(did1+(0:1)));
+                clusIdxD2 = diff(SessionSwitch(did1+(0:1)))+(1:diff(SessionSwitch(did2+(0:1))));
             end
             clusIdxD1All = SessionSwitch(did1):SessionSwitch(did1+1)-1;
             clusIdxD2All = SessionSwitch(did2):SessionSwitch(did2+1)-1;
