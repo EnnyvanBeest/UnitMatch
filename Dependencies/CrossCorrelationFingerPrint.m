@@ -170,9 +170,9 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCo
     %% Get the rank
     %%% Could in the same loop as above?
     tic
-    FingerprintRAll2 = nan(nclus,nclus);
-    SigMask2 = zeros(nclus,nclus);
-    RankScoreAll2 = nan(size(SigMask));
+    FingerprintRAll = nan(nclus,nclus);
+    SigMask = zeros(nclus,nclus);
+    RankScoreAll = nan(size(SigMask));
     for did1 = 1:ndays
         for did2 = did1:ndays
             if did1 == did2
@@ -187,18 +187,18 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCo
 
             % Save fingerprint
             FingerprintR = FingerPrintAll{did1,did2}(clusIdxD1,clusIdxD2);
-            FingerprintRAll2(clusIdxD1All,clusIdxD2All) = FingerprintR;
+            FingerprintRAll(clusIdxD1All,clusIdxD2All) = FingerprintR;
 
             FingerprintR(isnan(FingerprintR)) = 0; % should not participate to the rank
 
             % Find rank
-            [~,idx] = sort(FingerprintR',1,'descend');
+            [~,idx] = sort(FingerprintR,2,'descend');
             for c = 1:numel(clusIdxD1All)
-                RankScoreAll2(clusIdxD1All(c),clusIdxD2All(idx(:,c))) = 1:numel(clusIdxD2All);
+                RankScoreAll(clusIdxD1All(c),clusIdxD2All(idx(c,:))) = 1:numel(clusIdxD2All);
             end
 
             % Find SigMask
-            SigMask2(clusIdxD1All,clusIdxD2All) = FingerprintR > quantile(FingerprintR,0.99,2);
+            SigMask(clusIdxD1All,clusIdxD2All) = FingerprintR > quantile(FingerprintR,0.99,2);
         end
     end
     toc
