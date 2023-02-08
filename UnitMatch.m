@@ -1164,19 +1164,19 @@ ProjectedLocationPerTP = nanmean(ProjectedLocationPerTP,4);
 
 %% Change these parameters to probabilities of being a match
 % Scores2Include = {'AmplitudeSim','WavformSim','WVCorr','LocAngleSim','spatialdecaySim','LocDistSim'}; %
-for pidx = 1:length(Scores2Include)
-    eval(['tmp = ' Scores2Include{pidx} ';'])
-    tmp = reshape(tmp,1,[]);
-    [~,minidx] = min(abs(tmp- BestMdl.ScoreVector'));
-    tmp = BestMdl.Parameterkernels(minidx,strcmp(BestMdl.VariableNames,Scores2Include{pidx}),2)./(BestMdl.Parameterkernels(minidx,strcmp(BestMdl.VariableNames,Scores2Include{pidx}),2)+BestMdl.Parameterkernels(minidx,strcmp(BestMdl.VariableNames,Scores2Include{pidx}),1));
-    eval([Scores2Include{pidx} '= reshape(tmp,nclus,nclus);'])
-
-end
+% for pidx = 1:length(Scores2Include)
+%     eval(['tmp = ' Scores2Include{pidx} ';'])
+%     tmp = reshape(tmp,1,[]);
+%     [~,minidx] = min(abs(tmp- BestMdl.ScoreVector'));
+%     tmp = (BestMdl.Parameterkernels(minidx,strcmp(BestMdl.VariableNames,Scores2Include{pidx}),2).*Priors(2))./(BestMdl.Parameterkernels(minidx,strcmp(BestMdl.VariableNames,Scores2Include{pidx}),2)./nansum(BestMdl.Parameterkernels(:,strcmp(BestMdl.VariableNames,Scores2Include{pidx}),2)));
+%     eval([Scores2Include{pidx} '= reshape(tmp,nclus,nclus);'])
+% 
+% end
 %% Assign same Unique ID
 OriUniqueID = UniqueID; %need for plotting
 [PairID1,PairID2]=meshgrid(AllClusterIDs(Good_Idx));
 [recses1,recses2] = meshgrid(recsesAll(Good_Idx));
-MatchTable = table(PairID1(:),PairID2(:),recses1(:),recses2(:),MatchProbability(:),RankScoreAll(:),FingerprintR(:),'VariableNames',{'ID1','ID2','RecSes1','RecSes2','MatchProb','RankScore','FingerprintCor'});
+MatchTable = table(PairID1(:),PairID2(:),recses1(:),recses2(:),MatchProbability(:),RankScoreAll(:),FingerprintR(:),TotalScore(:),'VariableNames',{'ID1','ID2','RecSes1','RecSes2','MatchProb','RankScore','FingerprintCor','TotalScore'});
 for id = 1:size(Pairs,1)
     UniqueID(Good_Idx(Pairs(id,2))) = UniqueID(Good_Idx(Pairs(id,1)));
 end
