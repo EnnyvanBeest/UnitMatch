@@ -31,8 +31,8 @@ function  [UniqueID, MatchTable] = UnitMatch(clusinfo,param,sp)
 global stepsize
 stepsize = 0.01; % Of probability distribution
 MakePlotsOfPairs = 1; % Plots all pairs for inspection
-% Scores2Include = {'AmplitudeSim','WavformSim','WVCorr','LocAngleSim','spatialdecaySim','LocDistSim'}; %
-Scores2Include = {'WavformSim','WVCorr','LocAngleSim','spatialdecaySim','LocDistSim'}; %
+Scores2Include = {'AmplitudeSim','WavformSim','WVCorr','LocAngleSim','spatialdecaySim','LocDistSim'}; %
+% Scores2Include = {'WavformSim','WVCorr','LocAngleSim','spatialdecaySim','LocDistSim'}; %
 TakeChannelRadius = 75; %in micron around max channel
 maxdist = 500; % Maximum distance at which units are considered as potential matches
 binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
@@ -54,6 +54,8 @@ param.nChannels = length(param.channelpos)+1; %First assume there's a sync chann
 % sampleamount = param.sampleamount; %500; % Nr. waveforms to include
 spikeWidth = param.spikeWidth; %83; % in sample space (time)
 % UseBombCelRawWav = param.UseBombCelRawWav; % If Bombcell was also applied on this dataset, it's faster to read in the raw waveforms extracted by Bombcell
+NewPeakLoc = floor(spikeWidth./2); % This is where all peaks will be aligned to!
+waveidx = NewPeakLoc-15:NewPeakLoc+15; % Force this analysis window
 
 %% Extract all cluster info
 AllClusterIDs = clusinfo.cluster_id;
@@ -82,7 +84,6 @@ SessionSwitch = [cell2mat(SessionSwitch) nclus+1];
 ExtractAndSaveAverageWaveforms(clusinfo,param,sp)
 
 %% Extract parameters used in UnitMatch
-
 % Initialize
 ProjectedLocation = nan(2,nclus,2);
 ProjectedLocationPerTP = nan(2,nclus,spikeWidth,2);
@@ -91,7 +92,6 @@ PeakTime = nan(nclus,2); % Peak time first versus second half
 MaxChannel = nan(nclus,2); % Max channel first versus second half
 waveformduration = nan(nclus,2); % Waveformduration first versus second half
 Amplitude = nan(nclus,2); % Maximum (weighted) amplitude, first versus second half
-NewPeakLoc = floor(spikeWidth./2); % This is where all peaks will be aligned to!
 spatialdecay = nan(nclus,2); % how fast does the unit decay across space, first versus second half
 WaveIdx = nan(nclus,spikeWidth,2);
 %Calculate how many channels are likely to be included
@@ -128,7 +128,7 @@ for uid = 1:nclus
         % Find significant timepoints
         wvdurtmp = find(abs(ProjectedWaveform(:,uid,cv))>abs(nanmean(ProjectedWaveform(1:20,uid,cv)))+2.5*nanstd(ProjectedWaveform(1:20,uid,cv))); % More than 2. std from baseline
         if isempty(wvdurtmp)
-            wvdurtmp = 20:80;
+            wvdurtmp = waveidx;
         end
         % Peak Time - to be safe take derivatives and actual max
         tmp1 = [nan; nan; diff(diff(ProjectedWaveform(wvdurtmp(1):wvdurtmp(end),uid,cv)))];
@@ -173,17 +173,18 @@ for uid = 1:nclus
         spdctmp = (nanmax(abs(spikeMap(:,MaxChannel(uid,cv),cv)),[],1)-nanmax(abs(spikeMap(:,ChanIdx,cv)),[],1))./nanmax(abs(spikeMap(:,MaxChannel(uid,cv),cv)),[],1);
         % Spatial decay (average oer micron)
         spatialdecay(uid,cv) = nanmean(spdctmp./Distance2MaxChan');
-
-
         Peakval = ProjectedWaveform(PeakTime(uid,cv),uid,cv);
         Amplitude(uid,cv) = Peakval;
 
         % Full width half maximum
         wvdurtmp = find(sign(Peakval)*ProjectedWaveform(:,uid,cv)>0.5*sign(Peakval)*Peakval);
         waveformduration(uid,cv) = length(wvdurtmp);
+        if isempty(wvdurtmp)
+            wvdurtmp = waveidx';
+        end
         % Mean Location per individual time point:
         ProjectedLocationPerTP(:,uid,wvdurtmp,cv) = cell2mat(arrayfun(@(tp) sum(repmat(abs(spikeMap(tp,ChanIdx,cv)),size(Locs,2),1).*Locs',2)./sum(repmat(abs(spikeMap(tp,ChanIdx,cv)),size(Locs,2),1),2),wvdurtmp','Uni',0));
-        WaveIdx(uid,1:size(wvdurtmp),cv) = wvdurtmp;
+        WaveIdx(uid,1:length(wvdurtmp),cv) = wvdurtmp;
         % Save spikes for these channels
         %         MultiDimMatrix(wvdurtmp,1:length(ChanIdx),uid,cv) = nanmean(spikeMap(wvdurtmp,ChanIdx,wavidx),3);
 
@@ -246,7 +247,7 @@ x1 = repmat(ProjectedWaveformNorm(:,:,1),[1 1 size(ProjectedWaveformNorm,2)]);
 x2 = permute(repmat(ProjectedWaveformNorm(:,:,2),[1 1 size(ProjectedWaveformNorm,2)]),[1 3 2]);
 RawWVMSE = squeeze(nanmean((x1 - x2).^2));
 
-WVCorr = corr(ProjectedWaveform(35:70,:,1),ProjectedWaveform(35:70,:,2));
+WVCorr = corr(ProjectedWaveformNorm(:,:,1),ProjectedWaveformNorm(:,:,2));
 % Make WVCorr a normal distribution
 WVCorr = atanh(WVCorr);
 WVCorr = (WVCorr-nanmin(WVCorr(:)))./(nanmax(WVCorr(:))-nanmin(WVCorr(:)));
@@ -601,6 +602,11 @@ while flag<2
             [uid,uid2] = find(CandidatePairs);
             BestPairs = cat(2,uid,uid2);
             idx = find(BestPairs(:,1)>=SessionSwitch(did)&BestPairs(:,1)<SessionSwitch(did+1) & BestPairs(:,2)>=SessionSwitch(did+1)&BestPairs(:,2)<SessionSwitch(did+2));
+            if isempty(idx)
+                disp('No pairs found to do any drift correction...')
+                flag = 1;
+                break
+            end
             drift = nanmedian(nanmean(ProjectedLocation(:,BestPairs(idx,1),:),3)-nanmean(ProjectedLocation(:,BestPairs(idx,2),:),3),2);
             disp(['Median drift recording ' num2str(did) ' calculated: X=' num2str(drift(1)) ', Y=' num2str(drift(2))])
             if flag
@@ -626,6 +632,8 @@ end
 priorMatch = 1-(nclus*ndays)./(nclus*nclus); %Now use a slightly more lenient prior
 ThrsOpt = quantile(TotalScore(:),priorMatch);
 CandidatePairs = TotalScore>ThrsOpt & RankScoreAll==1 & SigMask==1;
+ % Also assume kilosort does a good job
+ CandidatePairs(logical(eye(size(CandidatePairs))))=1;
 % CandidatePairs(tril(true(size(CandidatePairs)),-1))=0;
 [uid,uid2] = find(CandidatePairs);
 Pairs = cat(2,uid,uid2);
@@ -668,6 +676,7 @@ while flag<2 && runid<maxrun
         Tbl = array2table(reshape(tmp,[],size(tmp,2)),'VariableNames',Scores2Include); %All parameters
         % Use Rank as 'correct' label
         label = reshape(CandidatePairs(Pairs(:,1),Pairs(:,2)),1,[])';
+       
         if MakeOwnNaiveBayes
             % Work in progress
             [Parameterkernels,Performance] = CreateNaiveBayes(Tbl,label,Priors);
@@ -1169,17 +1178,21 @@ Pairs(ISIViolationsScore>0.05,:)=[];
 % Units on the diagonal are matched by (Py)KS within a day. Very likely to
 % be correct:
 disp(['Evaluating Naive Bayes...'])
-FPEst = (1-(sum(diag(MatchProbability)>param.ProbabilityThreshold)./nclus))*100;
+FNEst = (1-(sum(diag(MatchProbability)>param.ProbabilityThreshold)./nclus))*100;
 disp([num2str(round(sum(diag(MatchProbability)>param.ProbabilityThreshold)./nclus*100)) '% of units were matched with itself'])
-disp(['False negative estimate: ' num2str(round(FPEst*100)/100) '%'])
+disp(['False negative estimate: ' num2str(round(FNEst*100)/100) '%'])
 
+lowselfscores = find(diag(MatchProbability<param.ProbabilityThreshold));
+if FNEst>5
+    keyboard
+end
 % Units off diagonal within a day are not matched by (Py)KS within a day. 
-FNEst=nan(1,ndays);
+FPEst=nan(1,ndays);
 for did = 1:ndays
     tmpprob = double(MatchProbability(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1)>param.ProbabilityThreshold);
     tmpprob(logical(eye(size(tmpprob)))) = nan;
-    FNEst(did) = sum(tmpprob(:)==1)./sum(~isnan(tmpprob(:)))*100;
-    disp(['False positive estimate recording ' num2str(did) ': ' num2str(round(FNEst(did)*100)/100) '%'])
+    FPEst(did) = sum(tmpprob(:)==1)./sum(~isnan(tmpprob(:)))*100;
+    disp(['False positive estimate recording ' num2str(did) ': ' num2str(round(FPEst(did)*100)/100) '%'])
 end
 BestMdl.FalsePositiveEstimate = FPEst;
 BestMdl.FalseNegativeEstimate = FNEst;
@@ -1188,12 +1201,10 @@ BestMdl.FalseNegativeEstimate = FNEst;
 save(fullfile(SaveDir,'MatchingScores.mat'),'BestMdl','SessionSwitch','GoodRecSesID','AllClusterIDs','Good_Idx','WavformSim','WVCorr','LocationCombined','waveformTimePointSim','PeakTimeSim','spatialdecaySim','TotalScore','label','MatchProbability')
 save(fullfile(SaveDir,'UnitMatchModel.mat'),'BestMdl')
 
-%% Average in 3rd dimension (halfs of a session)
-ProjectedWaveform = nanmean(ProjectedWaveform,3); %Average over first and second half of session
-ProjectedLocation = nanmean(ProjectedLocation,3);
-ProjectedLocationPerTP = nanmean(ProjectedLocationPerTP,4);
-
-
+% %% Average in 3rd dimension (halfs of a session)
+% ProjectedWaveform = nanmean(ProjectedWaveform,3); %Average over first and second half of session
+% ProjectedLocation = nanmean(ProjectedLocation,3);
+% ProjectedLocationPerTP = nanmean(ProjectedLocationPerTP,4);
 
 %% Change these parameters to probabilities of being a match
 % Scores2Include = {'AmplitudeSim','WavformSim','WVCorr','LocAngleSim','spatialdecaySim','LocDistSim'}; %
@@ -1219,8 +1230,11 @@ uId = unique(UniqueID(Good_Idx));
 Pairs = arrayfun(@(X) find(UniqueID(Good_Idx)==X),uId,'Uni',0);
 Pairs(cellfun(@length,Pairs)==1) = [];
 
+for id =1:length(lowselfscores)
+    Pairs{end+1} = [lowselfscores(id) lowselfscores(id)];
+end
+ 
 %% Figures
-
 if MakePlotsOfPairs
     timercounter = tic;
     disp('Plotting pairs...')
@@ -1245,6 +1259,11 @@ if MakePlotsOfPairs
         clear hleg
         addforamplitude=0;
         for uidx = 1:length(Pairs{pairid})
+            if cv==2 %Alternate between CVs
+                cv=1;
+            else
+                cv=2;
+            end
             uid = Pairs{pairid}(uidx);
 
             % Load raw data
@@ -1256,17 +1275,17 @@ if MakePlotsOfPairs
             ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChannel(uid,cv),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<TakeChannelRadius); %Averaging over 10 channels helps with drift
             Locs = channelpos(ChanIdx,:);
             for id = 1:length(Locs)
-                plot(Locs(id,1)*5+[1:size(SM1,1)],Locs(id,2)*10+nanmean(SM1(:,ChanIdx(id),:),3),'-','color',cols(uidx,:),'LineWidth',1)
+                plot(Locs(id,1)*5+[1:size(SM1,1)],Locs(id,2)*10+SM1(:,ChanIdx(id),cv),'-','color',cols(uidx,:),'LineWidth',1)
             end
-            hleg(uidx) = plot(ProjectedLocation(1,uid)*5+[1:size(SM1,1)],ProjectedLocation(2,uid)*10+ProjectedWaveform(:,uid),'--','color',cols(uidx,:),'LineWidth',2);
+            hleg(uidx) = plot(ProjectedLocation(1,uid,cv)*5+[1:size(SM1,1)],ProjectedLocation(2,uid,cv)*10+ProjectedWaveform(:,uid,cv),'--','color',cols(uidx,:),'LineWidth',2);
 
 
             subplot(3,3,[2])
             hold on
-            takesamples = WaveIdx(uid,:,:);
+            takesamples = WaveIdx(uid,:,cv);
             takesamples = unique(takesamples(~isnan(takesamples)));
-            h(1) = plot(squeeze(ProjectedLocationPerTP(1,uid,takesamples)),squeeze(ProjectedLocationPerTP(2,uid,takesamples)),'-','color',cols(uidx,:));
-            scatter(squeeze(ProjectedLocationPerTP(1,uid,takesamples)),squeeze(ProjectedLocationPerTP(2,uid,takesamples)),30,takesamples,'filled')
+            h(1) = plot(squeeze(ProjectedLocationPerTP(1,uid,takesamples,cv)),squeeze(ProjectedLocationPerTP(2,uid,takesamples,cv)),'-','color',cols(uidx,:));
+            scatter(squeeze(ProjectedLocationPerTP(1,uid,takesamples,cv)),squeeze(ProjectedLocationPerTP(2,uid,takesamples,cv)),30,takesamples,'filled')
             colormap(hot)
 
 
@@ -1275,26 +1294,31 @@ if MakePlotsOfPairs
                 plot(channelpos(:,1),channelpos(:,2),'k.')
                 hold on
             end
-            h(1)=plot(channelpos(MaxChannel(uid),1),channelpos(MaxChannel(uid),2),'.','color',cols(uidx,:),'MarkerSize',15);
+            h(1)=plot(channelpos(MaxChannel(uid,cv),1),channelpos(MaxChannel(uid,cv),2),'.','color',cols(uidx,:),'MarkerSize',15);
 
 
             subplot(3,3,3)
             hold on
-            SM1 = squeeze(nanmean(SM1(:,MaxChannel(uid),:),2));
-            h(1)=plot(nanmean(SM1(:,1:2:end),2),'-','color',cols(uidx,:));
-            h(2)=plot(nanmean(SM1(:,2:2:end),2),'--','color',cols(uidx,:));
+            h(1)=plot(SM1(:,MaxChannel(uid,cv),cv),'-','color',cols(uidx,:));
 
             % Scatter spikes of each unit
             subplot(3,3,6)
             hold on
             idx1=find(sp.spikeTemplates == AllClusterIDs(Good_Idx(uid)) & sp.RecSes == GoodRecSesID(uid));
+            if length(unique(Pairs{pairid}))==1
+                if cv==1
+                    idx1 = idx1(1:floor(length(idx1)/2));
+                else
+                    idx1 = idx1(ceil(length(idx1)/2):end);
+                end
+            end
             scatter(sp.st(idx1)./60,sp.spikeAmps(idx1)+addforamplitude,4,cols(uidx,:),'filled')
 
             xlims = get(gca,'xlim');
             % Other axis
             [h1,edges,binsz]=histcounts(sp.spikeAmps(idx1));
             %Normalize between 0 and 1
-            h1 = ((h1-nanmin(h1))./(nanmax(h1)-nanmin(h1)))*10+xlims(2)+10;
+            h1 = ((h1-nanmin(h1))./(nanmax(h1)-nanmin(h1)))*10+xlims(2);
             plot(h1,edges(1:end-1)+addforamplitude,'-','color',cols(uidx,:));
             addforamplitude = addforamplitude+edges(end-1);
 
@@ -1335,7 +1359,12 @@ if MakePlotsOfPairs
         set(gca,'xlim',[min(get(gca,'xlim')) - stretch, max(get(gca,'xlim')) + stretch])
         %     legend([h(1),h(2)],{['Unit ' num2str(uid)],['Unit ' num2str(uid2)]})
         hc= colorbar;
+        try
         hc.Label.String = 'timesample';
+        catch ME
+            disp(ME)
+            keyboard
+        end
         makepretty
         tmp = cell2mat(arrayfun(@(X) [num2str(round(LocDistSim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)./100) ','],1:length(Pairs{pairid})-1,'Uni',0));
         tmp(end)=[];
@@ -1430,11 +1459,12 @@ if MakePlotsOfPairs
         xlabel('Finger print r')
         makepretty
 
-        set(gcf,'units','normalized','outerposition',[0 0 1 1])
+        set(tmpfig,'units','normalized','outerposition',[0 0 1 1])
 
         fname = cell2mat(arrayfun(@(X) ['ID' num2str(AllClusterIDs(Good_Idx(X))) ', Rec' num2str(GoodRecSesID(X))],Pairs{pairid},'Uni',0));
-        saveas(gcf,fullfile(SaveDir,'MatchFigures',[fname '.fig']))
-        saveas(gcf,fullfile(SaveDir,'MatchFigures',[fname '.bmp']))
+        saveas(tmpfig,fullfile(SaveDir,'MatchFigures',[fname '.fig']))
+        saveas(tmpfig,fullfile(SaveDir,'MatchFigures',[fname '.bmp']))
+        delete(tmpfig)
     end
 
     disp(['Plotting pairs took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])
