@@ -32,7 +32,7 @@ global stepsize
 stepsize = 0.01; % Of probability distribution
 MakePlotsOfPairs = 1; % Plots all pairs for inspection
 Scores2Include = {'AmplitudeSim','WavformSim','WVCorr','LocAngleSim','spatialdecaySim','LocDistSim'}; %
-IncludeSpatialInitially = 0; % if 1 we include spatial distance from the start, if 0 only from the naive Bayes part
+IncludeSpatialInitially = 1; % if 1 we include spatial distance from the start, if 0 only from the naive Bayes part
 TakeChannelRadius = 75; %in micron around max channel
 maxdist = 500; % Maximum distance at which units are considered as potential matches
 binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
@@ -445,6 +445,9 @@ while flag<2
     saveas(gcf,fullfile(SaveDir,'TotalScoreComponents.bmp'))
 
     %% Calculate total score
+    disp('Computing total score...')
+    timercounter = tic;
+
     priorMatch = 1-(nclus*ndays)./(nclus*nclus);
     leaveoutmatches = false(nclus,nclus,length(Scores2Include)); %Used later
     figure;
@@ -546,6 +549,8 @@ while flag<2
     Pairs = unique(Pairs,'rows');
     Pairs(Pairs(:,1) == Pairs(:,2),:)=[];
 
+    disp(['Computing total score took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])
+
     %% Functional score for optimization: compute Fingerprint for the matched units - based on Célian Bimbard's noise-correlation finger print method but applied to across session correlations
     % Not every recording day will have the same units. Therefore we will
     % correlate each unit's activity with average activity across different
@@ -629,6 +634,10 @@ runid = 0;
 Priors = [priorMatch 1-priorMatch];
 BestMdl = [];
 while flag<2 && runid<maxrun
+
+    timercounter = tic;
+    disp('Getting the Naive Bayes model...')
+
     flag = 0;
     runid = runid+1;
     filedir = which('UnitMatch');
@@ -775,6 +784,7 @@ while flag<2 && runid<maxrun
         Pairs = sortrows(Pairs);
         Pairs=unique(Pairs,'rows');
     end
+    disp(['Getting the Naive Bayes model took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])
 end
 
 %% If this was stitched pykilosort, we know what pykilosort thought about the matches
@@ -817,8 +827,11 @@ if RunPyKSChronicStitched
     end
     legend('Non-matches','Matches')
 end
+
 %% Extract final pairs:
 disp('Extracting final pairs of units...')
+timercounter = tic;
+   
 Tbl = array2table(reshape(Predictors,[],size(Predictors,3)),'VariableNames',Scores2Include); %All parameters
 if isfield(BestMdl,'Parameterkernels')
     BestMdl.VariableNames = Scores2Include;
@@ -858,6 +871,9 @@ title('Identified matches')
 makepretty
 saveas(gcf,fullfile(SaveDir,'IdentifiedMatches.fig'))
 saveas(gcf,fullfile(SaveDir,'IdentifiedMatches.bmp'))
+
+disp(['Extracting final pair of units took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])
+
 %% Check different probabilities, what does the match graph look like?
 figure;
 takethisprob = [0.5 0.75 0.95 0.99];
@@ -1173,6 +1189,9 @@ Pairs(cellfun(@length,Pairs)==1) = [];
 %% Figures
 
 if MakePlotsOfPairs
+    timercounter = tic;
+    disp('Plotting pairs...')
+
     if ~isdir(fullfile(SaveDir,'MatchFigures'))
         mkdir(fullfile(SaveDir,'MatchFigures'))
     else
@@ -1384,6 +1403,8 @@ if MakePlotsOfPairs
         saveas(gcf,fullfile(SaveDir,'MatchFigures',[fname '.fig']))
         saveas(gcf,fullfile(SaveDir,'MatchFigures',[fname '.bmp']))
     end
+
+    disp(['Plotting pairs took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])
 end
 
 %% Clean up
