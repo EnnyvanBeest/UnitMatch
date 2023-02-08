@@ -13,7 +13,7 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCo
     %% Computes all the cross-correlation matrices
     tic
     for did1 = 1:ndays
-        for did2 = did1:ndays
+        for did2 = 1:ndays
             if did2==did1
                 % All Units on this day
                 srAll = srAllDays{did1};
@@ -118,7 +118,7 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCo
     FingerPrintAll = cell(ndays,ndays);
     figure('name','Fingerprint correlations')
     for did1 = 1:ndays
-        for did2 = did1:ndays
+        for did2 = 1:ndays
             SessionCorrelations = AllSessionCorrelations{did1,did2};
             rmidx = find(all(isnan(SessionCorrelations),2));
             nclustmp = size(SessionCorrelations,1);
@@ -174,7 +174,7 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCo
     SigMask = zeros(nclus,nclus);
     RankScoreAll = nan(size(SigMask));
     for did1 = 1:ndays
-        for did2 = did1:ndays
+        for did2 = 1:ndays
             if did1 == did2
                 clusIdxD1 = 1:diff(SessionSwitch(did1+(0:1)));
                 clusIdxD2 = 1:diff(SessionSwitch(did2+(0:1)));
@@ -202,6 +202,19 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCo
         end
     end
     toc
+
+    %%% I don't think this should be mirrored
+    % % MIRROR
+    % for uid=1:nclus
+    %     for uid2 = uid+1:nclus
+    %         if ~isnan(RankScoreAll(uid,uid2))
+    %             keyboard
+    %         end
+    %         SigMask(uid,uid2)=SigMask(uid2,uid);
+    %         RankScoreAll(uid,uid2)=RankScoreAll(uid2,uid);
+    %         FingerprintRAll(uid,uid2) = FingerprintRAll(uid2,uid);
+    %     end
+    % end
     
     figure('name','RankScore')
     subplot(1,2,1)
