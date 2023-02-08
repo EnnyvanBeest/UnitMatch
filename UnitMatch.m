@@ -80,6 +80,7 @@ SessionSwitch = [cell2mat(SessionSwitch) nclus+1];
 %% Extract raw waveforms 
 % This script does the actual extraction
 ExtractAndSaveAverageWaveforms(clusinfo,param,sp)
+
 %% Extract parameters used in UnitMatch
 
 % Initialize

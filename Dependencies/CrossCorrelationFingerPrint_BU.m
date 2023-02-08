@@ -8,23 +8,23 @@ nrows = (ndays*ndays);
 rowcount = 1;
 AllSessionCorrelations = cell(ndays,ndays);
 
-srAllDays = cell(1,ndays); 
-for did = 1:ndays
-    Unit2TakeIdxAll = find(recsesAll(Good_Idx) == did);
-    srAllDays{did} = nan(numel(Unit2TakeIdxAll),numel(edges)-1);
-    for uid = 1:numel(Unit2TakeIdxAll)
-        srAllDays{did}(uid,:) =  histcounts(sp.st(sp.spikeTemplates == Unit2Take(Unit2TakeIdxAll(uid)) & sp.RecSes == did),edges);
-    end
-end
+% srAllDays = cell(1,ndays); 
+% for did = 1:ndays
+%     Unit2TakeIdxAll = find(recsesAll(Good_Idx) == did);
+%     srAllDays{did} = nan(numel(Unit2TakeIdxAll),numel(edges)-1);
+%     for uid = 1:numel(Unit2TakeIdxAll)
+%         srAllDays{did}(uid,:) =  histcounts(sp.st(sp.spikeTemplates == Unit2Take(Unit2TakeIdxAll(uid)) & sp.RecSes == did),edges);
+%     end
+% end
 
 for did1 = 1:ndays
     for did2 = did1:ndays
         if did2==did1
             % All Units on this day
             Unit2TakeIdxAll = find(recsesAll(Good_Idx) == did1);
-            srAll = srAllDays{did1};
-            % srAll = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == X & sp.RecSes == did1),edges),Unit2Take(Unit2TakeIdxAll),'UniformOutput',0);
-            % srAll = cat(1,srAll{:});
+%             srAll = srAllDays{did1};
+            srAll = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == X & sp.RecSes == did1),edges),Unit2Take(Unit2TakeIdxAll),'UniformOutput',0);
+            srAll = cat(1,srAll{:});
             srAll(:,sum(srAll==0,1)==size(srAll,1))=[]; % Remove bins with 0 spikes
 
             % Find cross-correlation in first and second half of session
@@ -86,14 +86,14 @@ for did1 = 1:ndays
 
                 % Correlation on this day
                 sortIdx = cell2mat(arrayfun(@(x) find(Unit2Take(Unit2TakeIdxAll) == x), Unit2Take(Unit2TakeIdx), 'uni', 0));
-                srMatches = srAllDays{dayopt(did)}(sortIdx,:); % hacky
-                % srMatches = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == X & sp.RecSes == dayopt(did)),edges),Unit2Take(Unit2TakeIdx),'UniformOutput',0);
-                % srMatches = cat(1,srMatches{:});
+%                 srMatches = srAllDays{dayopt(did)}(sortIdx,:); % hacky
+                srMatches = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == X & sp.RecSes == dayopt(did)),edges),Unit2Take(Unit2TakeIdx),'UniformOutput',0);
+                srMatches = cat(1,srMatches{:});
 
                 % All Units on this day
-                srAll = srAllDays{dayopt(did)};
-                % srAll = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == X & sp.RecSes == dayopt(did)),edges),Unit2Take(Unit2TakeIdxAll),'UniformOutput',0);
-                % srAll = cat(1,srAll{:});
+%                 srAll = srAllDays{dayopt(did)};
+                srAll = arrayfun(@(X) histcounts(sp.st(sp.spikeTemplates == X & sp.RecSes == dayopt(did)),edges),Unit2Take(Unit2TakeIdxAll),'UniformOutput',0);
+                srAll = cat(1,srAll{:});
                 SessionCorrelation_Pair = corr(srMatches(:,1:floor(size(srMatches,2)./2))',srAll(:,1:floor(size(srMatches,2)./2))');
 
                 %     % Remove =1 for the same unit (per def. 1)
@@ -149,9 +149,9 @@ for did1 = 1:ndays
         % Correlate 'fingerprints'
         try
             x = SessionCorrelations(notrmdixvec,:)';
-            FingerprintR = corr(x,x,'rows','pairwise');
-            % FingerprintR = arrayfun(@(X) cell2mat(arrayfun(@(Y) corr(SessionCorrelations(X,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))',SessionCorrelations(Y,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))'),notrmdixvec,'UniformOutput',0)),notrmdixvec,'UniformOutput',0);
-            % FingerprintR = cat(1,FingerprintR{:});
+%             FingerprintR = corr(x,x,'rows','pairwise');
+            FingerprintR = arrayfun(@(X) cell2mat(arrayfun(@(Y) corr(SessionCorrelations(X,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))',SessionCorrelations(Y,~isnan(SessionCorrelations(X,:))&~isnan(SessionCorrelations(Y,:)))'),notrmdixvec,'UniformOutput',0)),notrmdixvec,'UniformOutput',0);
+            FingerprintR = cat(1,FingerprintR{:});
         catch ME
             disp(ME)
             keyboard
