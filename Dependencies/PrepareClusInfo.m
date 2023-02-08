@@ -461,7 +461,7 @@ UMparam.channelpos = channelpos;
 UMparam.AllRawPaths = RawDataPaths;
 UMparam.AllDecompPaths = arrayfun(@(X) fullfile(Params.tmpdatafolder,strrep(RawDataPaths(X).name,'cbin','bin')),1:length(RawDataPaths),'Uni',0);
 UMparam.RedoExtraction = 1;
-UMparam.ProbabilityThreshold = 0.85;
+UMparam.ProbabilityThreshold = 0.5;
 
 if Params.UnitMatch
     UnitMatchExist = dir(fullfile(UMparam.SaveDir,'UnitMatch.mat'));
