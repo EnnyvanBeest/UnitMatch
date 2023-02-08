@@ -168,52 +168,37 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCo
     toc
     
     %% Get the rank
-    %%% Could be sped up?? need some time
+    %%% Could in the same loop as above?
     tic
-    FingerprintRAll = nan(nclus,nclus);
-    SigMask = zeros(nclus,nclus);
-    RankScoreAll = nan(size(SigMask));
-    for pid=1:nclus
-        for pid2 = pid:nclus
-            did1 = (recsesGood(pid));
-            did2 = (recsesGood(pid2));
-            addthis3 = -SessionSwitch(did1)+1;
-            addthis4 = 0;
-    
-            FingerprintR = FingerPrintAll{did1,did2};
-            if did1==did2
-                tmp1 = FingerprintR(pid+addthis3,(1:ncellsperrecording(did1))+addthis4);
-                addthis = SessionSwitch(did1)-1;
-                addthis2 = addthis3;
+    FingerprintRAll2 = nan(nclus,nclus);
+    SigMask2 = zeros(nclus,nclus);
+    RankScoreAll2 = nan(size(SigMask));
+    for did1 = 1:ndays
+        for did2 = did1:ndays
+            if did1 == did2
+                clusIdxD1 = 1:diff(SessionSwitch(did1+(0:1)));
+                clusIdxD2 = 1:diff(SessionSwitch(did2+(0:1)));
             else
-                tmp1 = FingerprintR(pid+addthis3,ncellsperrecording(did1)+1:end);
-                addthis = SessionSwitch(did2)-1;
-                addthis2 = -addthis+ncellsperrecording(did1);
+                clusIdxD1 = SessionSwitch(did1):SessionSwitch(did1+1)-1;
+                clusIdxD2 = SessionSwitch(did2):SessionSwitch(did2+1)-1;
             end
-            tmp1(isnan(tmp1))=0;
-            [~,ranktmp] = sort(tmp1,'descend');
-    
-            tmp1(pid2-addthis)=[];
-    
-            if FingerprintR(pid+addthis3,pid2+addthis2)>quantile(tmp1,0.99)
-                SigMask(pid,pid2)=1;
+            clusIdxD1All = SessionSwitch(did1):SessionSwitch(did1+1)-1;
+            clusIdxD2All = SessionSwitch(did2):SessionSwitch(did2+1)-1;
+
+            % Save fingerprint
+            FingerprintR = FingerPrintAll{did1,did2}(clusIdxD1,clusIdxD2);
+            FingerprintRAll2(clusIdxD1All,clusIdxD2All) = FingerprintR;
+
+            FingerprintR(isnan(FingerprintR)) = 0; % should not participate to the rank
+
+            % Find rank
+            [~,idx] = sort(FingerprintR',1,'descend');
+            for c = 1:numel(clusIdxD1All)
+                RankScoreAll2(clusIdxD1All(c),clusIdxD2All(idx(:,c))) = 1:numel(clusIdxD2All);
             end
-            FingerprintRAll(pid,pid2) = FingerprintR(pid+addthis3,pid2+addthis2);
-            RankScoreAll(pid,pid2) = find(ranktmp==pid2-addthis);
-        end
-    end
-    
-    % MIRROR
-    for uid=1:nclus
-        for uid2 = 1:nclus
-            if uid2<uid
-                if ~isnan(RankScoreAll(uid,uid2))
-                    keyboard
-                end
-                SigMask(uid,uid2)=SigMask(uid2,uid);
-                RankScoreAll(uid,uid2)=RankScoreAll(uid2,uid);
-                FingerprintRAll(uid,uid2) = FingerprintRAll(uid2,uid);
-            end
+
+            % Find SigMask
+            SigMask2(clusIdxD1All,clusIdxD2All) = FingerprintR > quantile(FingerprintR,0.99,2);
         end
     end
     toc
