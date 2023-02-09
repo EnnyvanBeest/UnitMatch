@@ -245,7 +245,8 @@ x1 = ProjectedWaveform(waveidx,:,1);
 x2 = ProjectedWaveform(waveidx,:,2);
 % x2(WaveIdx(:,:,2)'==0)=nan; 
 % Correlate
-WVCorr = corr(x1,x2,'rows','complete');
+WVCorr = corr(x1,x2,'rows','pairwise');
+
 % Make WVCorr a normal distribution
 WVCorr = atanh(WVCorr);
 WVCorr = (WVCorr-nanmin(WVCorr(:)))./(nanmax(WVCorr(~isinf(WVCorr(:))))-nanmin(WVCorr(:)));
