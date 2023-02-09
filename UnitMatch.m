@@ -31,8 +31,8 @@ function  [UniqueID, MatchTable] = UnitMatch(clusinfo,param,sp)
 global stepsize
 stepsize = 0.01; % Of probability distribution
 MakePlotsOfPairs = 1; % Plots all pairs for inspection
-Scores2Include = {'AmplitudeSim','WavformSim','LocAngleSim','spatialdecaySim','LocDistSim'}; %
-% Scores2Include = {'AmplitudeSim','WavformMSE','WVCorr','LocAngleSim','spatialdecaySim','LocDistSim'}; %
+% Scores2Include = {'AmplitudeSim','WavformSim','LocAngleSim','spatialdecaySim','LocDistSim'}; %
+Scores2Include = {'AmplitudeSim','WavformMSE','WVCorr','LocAngleSim','spatialdecaySim','LocDistSim'}; %
 TakeChannelRadius = 75; %in micron around max channel
 maxdist = 500; % Maximum distance at which units are considered as potential matches
 binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
@@ -231,7 +231,6 @@ AmplitudeSim = abs(x1 - x2');
 AmplitudeSim = sqrt(AmplitudeSim);
 AmplitudeSim = 1-((AmplitudeSim-nanmin(AmplitudeSim(:)))./(quantile(AmplitudeSim(:),.99)-nanmin(AmplitudeSim(:))));
 AmplitudeSim(AmplitudeSim<0)=0;
-
 disp(['Calculating other metrics took ' num2str(round(toc(timercounter))) ' seconds for ' num2str(nclus) ' units'])
 
 %% Waveform similarity
@@ -251,7 +250,6 @@ WVCorr = corr(x1,x2,'rows','complete');
 WVCorr = atanh(WVCorr);
 WVCorr = (WVCorr-nanmin(WVCorr(:)))./(nanmax(WVCorr(~isinf(WVCorr(:))))-nanmin(WVCorr(:)));
 
-
 ProjectedWaveformNorm = cat(3,x1,x2);
 ProjectedWaveformNorm = (ProjectedWaveformNorm-nanmin(ProjectedWaveformNorm,[],1))./(nanmax(ProjectedWaveformNorm,[],1)-nanmin(ProjectedWaveformNorm,[],1));
 x1 = repmat(ProjectedWaveformNorm(:,:,1),[1 1 size(ProjectedWaveformNorm,2)]);
@@ -265,7 +263,6 @@ WavformMSE = 1-WavformMSE;
 WavformMSE(WavformMSE<0) = 0;
 
 disp(['Calculating waveform similarity took ' num2str(round(toc(timercounter))) ' seconds for ' num2str(nclus) ' units'])
-
 figure('name','Waveform similarity measures')
 subplot(1,3,1)
 imagesc(WVCorr);
@@ -353,10 +350,9 @@ while flag<2
     x2 = ProjectedLocationPerTP(:,:,1:spikeWidth-1,:);
     LocAngle = squeeze(atan(abs(x1(1,:,:,:)-x2(1,:,:,:))./abs(x1(2,:,:,:)-x2(2,:,:,:))));
     x1 = repmat(LocAngle(:,:,1),[1 1 nclus]);
-    x2 = permute(repmat(LocAngle(:,:,2),[1 1 nclus]),[3 2 1]); % Don't think permutation is necessary here?
+    x2 = permute(repmat(LocAngle(:,:,2),[1 1 nclus]),[3 2 1]); %   
     w = ~isnan(abs(x1-x2));
     LocAngleSim = squeeze(circ_mean(abs(x1-x2),w,2));
-    LocAngleSim(squeeze(all(w==0,2))) = 1; % hack by CB. Not sure how to deal with that.
 
     % Variance in error, corrected by average error. This captures whether
     % the trajectory is consistenly separate
@@ -589,7 +585,7 @@ while flag<2
 
     %% three ways to define candidate scores
     % Total score larger than threshold
-    CandidatePairs = TotalScore>ThrsOpt & SigMask==1;
+    CandidatePairs = TotalScore>ThrsOpt; % Add rankscore?
     %     CandidatePairs(tril(true(size(CandidatePairs))))=0;
     figure('name','Potential Matches')
     imagesc(CandidatePairs)
@@ -1400,16 +1396,16 @@ if MakePlotsOfPairs
 
         subplot(3,3,3)
         makepretty
-        tmp = cell2mat(arrayfun(@(X) [num2str(round(WavformSim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)./100) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp = cell2mat(arrayfun(@(X) [num2str(round(WavformMSE(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)./100) ','],1:length(Pairs{pairid})-1,'Uni',0));
         tmp(end)=[];
-%         tmp2 = cell2mat(arrayfun(@(X) [num2str(round(WVCorr(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)./100) ','],1:length(Pairs{pairid})-1,'Uni',0));
-%         tmp2(end)=[];
+        tmp2 = cell2mat(arrayfun(@(X) [num2str(round(WVCorr(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)./100) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp2(end)=[];
         tmp3 = cell2mat(arrayfun(@(X) [num2str(round(AmplitudeSim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)./100) ','],1:length(Pairs{pairid})-1,'Uni',0));
         tmp3(end)=[];
         tmp4 = cell2mat(arrayfun(@(X) [num2str(round(spatialdecaySim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)./100) ','],1:length(Pairs{pairid})-1,'Uni',0));
         tmp4(end)=[];
 
-        title(['Waveform Similarity=' tmp ', Ampl=' tmp3 ', decay='  tmp4])
+        title(['Waveform Similarity=' tmp ', Corr=' tmp2 ', Ampl=' tmp3 ', decay='  tmp4])
 
         subplot(3,3,6)
         xlabel('Time (min)')
