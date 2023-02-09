@@ -55,7 +55,7 @@ param.nChannels = length(param.channelpos)+1; %First assume there's a sync chann
 spikeWidth = param.spikeWidth; %83; % in sample space (time)
 % UseBombCelRawWav = param.UseBombCelRawWav; % If Bombcell was also applied on this dataset, it's faster to read in the raw waveforms extracted by Bombcell
 NewPeakLoc = floor(spikeWidth./2); % This is where all peaks will be aligned to!
-waveidx = NewPeakLoc-12:NewPeakLoc+12; % Force this analysis window
+waveidx = NewPeakLoc-7:NewPeakLoc+15; % Force this analysis window
 
 %% Extract all cluster info
 AllClusterIDs = clusinfo.cluster_id;
@@ -1310,7 +1310,7 @@ if MakePlotsOfPairs
 
             subplot(3,3,[2])
             hold on
-            takesamples = find(WaveIdx(uid,:,cv));
+            takesamples = waveidx;
             takesamples = unique(takesamples(~isnan(takesamples)));
             h(1) = plot(squeeze(ProjectedLocationPerTP(1,uid,takesamples,cv)),squeeze(ProjectedLocationPerTP(2,uid,takesamples,cv)),'-','color',cols(uidx,:));
             scatter(squeeze(ProjectedLocationPerTP(1,uid,takesamples,cv)),squeeze(ProjectedLocationPerTP(2,uid,takesamples,cv)),30,takesamples,'filled')
@@ -1393,6 +1393,7 @@ if MakePlotsOfPairs
             disp(ME)
             keyboard
         end
+        axis  square
         makepretty
         tmp = cell2mat(arrayfun(@(X) [num2str(round(LocDistSim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)./100) ','],1:length(Pairs{pairid})-1,'Uni',0));
         tmp(end)=[];
