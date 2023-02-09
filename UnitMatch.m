@@ -31,8 +31,8 @@ function  [UniqueID, MatchTable] = UnitMatch(clusinfo,param,sp)
 global stepsize
 stepsize = 0.01; % Of probability distribution
 MakePlotsOfPairs = 1; % Plots all pairs for inspection
-Scores2Include = {'AmplitudeSim','WavformSim','WVCorr','LocAngleSim','spatialdecaySim','LocDistSim'}; %
-% Scores2Include = {'WavformSim','WVCorr','LocAngleSim','spatialdecaySim','LocDistSim'}; %
+Scores2Include = {'AmplitudeSim','WavformSim','LocAngleSim','spatialdecaySim','LocDistSim'}; %
+% Scores2Include = {'AmplitudeSim','WavformMSE','WVCorr','LocAngleSim','spatialdecaySim','LocDistSim'}; %
 TakeChannelRadius = 75; %in micron around max channel
 maxdist = 500; % Maximum distance at which units are considered as potential matches
 binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
@@ -55,7 +55,7 @@ param.nChannels = length(param.channelpos)+1; %First assume there's a sync chann
 spikeWidth = param.spikeWidth; %83; % in sample space (time)
 % UseBombCelRawWav = param.UseBombCelRawWav; % If Bombcell was also applied on this dataset, it's faster to read in the raw waveforms extracted by Bombcell
 NewPeakLoc = floor(spikeWidth./2); % This is where all peaks will be aligned to!
-waveidx = NewPeakLoc-15:NewPeakLoc+15; % Force this analysis window
+waveidx = NewPeakLoc-12:NewPeakLoc+12; % Force this analysis window
 
 %% Extract all cluster info
 AllClusterIDs = clusinfo.cluster_id;
@@ -93,7 +93,7 @@ MaxChannel = nan(nclus,2); % Max channel first versus second half
 waveformduration = nan(nclus,2); % Waveformduration first versus second half
 Amplitude = nan(nclus,2); % Maximum (weighted) amplitude, first versus second half
 spatialdecay = nan(nclus,2); % how fast does the unit decay across space, first versus second half
-WaveIdx = nan(nclus,spikeWidth,2);
+WaveIdx = false(nclus,spikeWidth,2);
 %Calculate how many channels are likely to be included
 fakechannel = [channelpos(1,1) nanmean(channelpos(:,2))];
 ChanIdx = find(cell2mat(arrayfun(@(Y) norm(fakechannel-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<TakeChannelRadius); %Averaging over 10 channels helps with drift
@@ -130,11 +130,8 @@ for uid = 1:nclus
         if isempty(wvdurtmp)
             wvdurtmp = waveidx;
         end
-        % Peak Time - to be safe take derivatives and actual max
-        tmp1 = [nan; nan; diff(diff(ProjectedWaveform(wvdurtmp(1):wvdurtmp(end),uid,cv)))];
-        tmp2 = [nan; diff(ProjectedWaveform(wvdurtmp(1):wvdurtmp(end),uid,cv))];
-        tmp3 = ProjectedWaveform(wvdurtmp(1):wvdurtmp(end),uid,cv);
-        [~,PeakTime(uid,cv)] = nanmax(abs(nansum(cat(2,tmp1,tmp2,tmp3*2),2)));
+        % Peak Time - to be safe take a bit of smoothing
+        [~,PeakTime(uid,cv)] = nanmax(abs(smooth(ProjectedWaveform(wvdurtmp(1):wvdurtmp(end),uid,cv),2)));
         PeakTime(uid,cv) = PeakTime(uid,cv)+wvdurtmp(1)-1;
     end
     % Give each unit the best opportunity to correlate the waveform; cross
@@ -162,7 +159,7 @@ for uid = 1:nclus
                 spikeMap(1:-(PeakTime(uid,1)-NewPeakLoc),:,cv) = nan;
             else
                 ProjectedWaveform(spikeWidth-(PeakTime(uid,cv)-NewPeakLoc):spikeWidth,uid,cv) = nan;
-                spikeMap(spikeWidth-(PeakTime(uid,cv)-NewPeakLoc):spikeWidth,:,cv) = nan;
+                spikeMap(spikeWidth-(PeakTime(uid,1)-NewPeakLoc):spikeWidth,:,cv) = nan;
             end
         end
 
@@ -184,7 +181,7 @@ for uid = 1:nclus
         end
         % Mean Location per individual time point:
         ProjectedLocationPerTP(:,uid,wvdurtmp,cv) = cell2mat(arrayfun(@(tp) sum(repmat(abs(spikeMap(tp,ChanIdx,cv)),size(Locs,2),1).*Locs',2)./sum(repmat(abs(spikeMap(tp,ChanIdx,cv)),size(Locs,2),1),2),wvdurtmp','Uni',0));
-        WaveIdx(uid,1:length(wvdurtmp),cv) = wvdurtmp;
+        WaveIdx(uid,wvdurtmp,cv) = 1;
         % Save spikes for these channels
         %         MultiDimMatrix(wvdurtmp,1:length(ChanIdx),uid,cv) = nanmean(spikeMap(wvdurtmp,ChanIdx,wavidx),3);
 
@@ -214,7 +211,7 @@ PeakTimeSim(PeakTimeSim<0)=0;
 waveformTimePointSim = nan(nclus,nclus);
 for uid = 1:nclus
     for uid2 = 1:nclus
-        waveformTimePointSim(uid,uid2) = sum(ismember(WaveIdx(uid,:,1),WaveIdx(uid2,:,2)))./sum(~isnan(WaveIdx(uid,:,1)));
+        waveformTimePointSim(uid,uid2) = sum(ismember(find(WaveIdx(uid,:,1)),find(WaveIdx(uid2,:,2))))./sum((WaveIdx(uid,:,1)));
     end
 end
 
@@ -241,22 +238,33 @@ disp(['Calculating other metrics took ' num2str(round(toc(timercounter))) ' seco
 disp('Computing waveform similarity between pairs of units...')
 timercounter = tic;
 % Normalize between 0 and 1
-ProjectedWaveformNorm = ProjectedWaveform(35:70,:,:);
+% 1st cv
+x1 = ProjectedWaveform(waveidx,:,1);
+% x1(WaveIdx(:,:,1)'==0)=nan; 
+
+% 2nd cv
+x2 = ProjectedWaveform(waveidx,:,2);
+% x2(WaveIdx(:,:,2)'==0)=nan; 
+% Correlate
+WVCorr = corr(x1,x2,'rows','complete');
+% Make WVCorr a normal distribution
+WVCorr = atanh(WVCorr);
+WVCorr = (WVCorr-nanmin(WVCorr(:)))./(nanmax(WVCorr(~isinf(WVCorr(:))))-nanmin(WVCorr(:)));
+
+
+ProjectedWaveformNorm = cat(3,x1,x2);
 ProjectedWaveformNorm = (ProjectedWaveformNorm-nanmin(ProjectedWaveformNorm,[],1))./(nanmax(ProjectedWaveformNorm,[],1)-nanmin(ProjectedWaveformNorm,[],1));
 x1 = repmat(ProjectedWaveformNorm(:,:,1),[1 1 size(ProjectedWaveformNorm,2)]);
 x2 = permute(repmat(ProjectedWaveformNorm(:,:,2),[1 1 size(ProjectedWaveformNorm,2)]),[1 3 2]);
 RawWVMSE = squeeze(nanmean((x1 - x2).^2));
 
-WVCorr = corr(ProjectedWaveformNorm(:,:,1),ProjectedWaveformNorm(:,:,2));
-% Make WVCorr a normal distribution
-WVCorr = atanh(WVCorr);
-WVCorr = (WVCorr-nanmin(WVCorr(:)))./(nanmax(WVCorr(:))-nanmin(WVCorr(:)));
+
 
 % sort of Normalize distribution
 RawWVMSENorm = sqrt(RawWVMSE);
-WavformSim = (RawWVMSENorm-nanmin(RawWVMSENorm(:)))./(quantile(RawWVMSENorm(:),0.99)-nanmin(RawWVMSENorm(:)));
-WavformSim = 1-WavformSim;
-WavformSim(WavformSim<0) = 0;
+WavformMSE = (RawWVMSENorm-nanmin(RawWVMSENorm(:)))./(quantile(RawWVMSENorm(:),0.99)-nanmin(RawWVMSENorm(:)));
+WavformMSE = 1-WavformMSE;
+WavformMSE(WavformMSE<0) = 0;
 
 disp(['Calculating waveform similarity took ' num2str(round(toc(timercounter))) ' seconds for ' num2str(nclus) ' units'])
 
@@ -274,7 +282,7 @@ colorbar
 makepretty
 
 subplot(1,3,2)
-imagesc(WavformSim);
+imagesc(WavformMSE);
 title('Waveform mean squared errors')
 xlabel('Unit Y')
 ylabel('Unit Z')
@@ -285,8 +293,9 @@ colormap(flipud(gray))
 colorbar
 makepretty
 
+WavformSim = (WVCorr+WavformMSE)/2;
 subplot(1,3,3)
-imagesc((WVCorr+WavformSim)/2);
+imagesc(WavformSim);
 title('Average Waveform scores')
 xlabel('Unit Y')
 ylabel('Unit Z')
@@ -936,7 +945,7 @@ hold on
 arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
 arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
 colormap(flipud(gray))
-title('Match Probability>0.5')
+title(['Match Probability>' num2str(param.ProbabilityThreshold)])
 makepretty
 
 subplot(1,3,3)
@@ -947,7 +956,7 @@ hold on
 arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
 arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
 colormap(flipud(gray))
-title('final matches')
+title('Matching probability + rank')
 makepretty
 saveas(gcf,fullfile(SaveDir,'RankScoreVSProbability.fig'))
 saveas(gcf,fullfile(SaveDir,'RankScoreVSProbability.bmp'))
@@ -967,6 +976,7 @@ ylabel('Cross-correlation fingerprint')
 makepretty
 saveas(gcf,fullfile(SaveDir,'RankScoreVSProbabilityScatter.fig'))
 saveas(gcf,fullfile(SaveDir,'RankScoreVSProbabilityScatter.bmp'))
+
 %% Extract final pairs:
 label = MatchProbability>=param.ProbabilityThreshold;% | (MatchProbability>0.05 & RankScoreAll==1 & SigMask==1);
 % label = MatchProbability>=0.99 | (MatchProbability>=0.05 & RankScoreAll==1 & SigMask==1);
@@ -1198,7 +1208,7 @@ BestMdl.FalsePositiveEstimate = FPEst;
 BestMdl.FalseNegativeEstimate = FNEst;
 
 %% Save model and relevant information
-save(fullfile(SaveDir,'MatchingScores.mat'),'BestMdl','SessionSwitch','GoodRecSesID','AllClusterIDs','Good_Idx','WavformSim','WVCorr','LocationCombined','waveformTimePointSim','PeakTimeSim','spatialdecaySim','TotalScore','label','MatchProbability')
+save(fullfile(SaveDir,'MatchingScores.mat'),'BestMdl','SessionSwitch','GoodRecSesID','AllClusterIDs','Good_Idx','WavformMSE','WVCorr','LocationCombined','waveformTimePointSim','PeakTimeSim','spatialdecaySim','TotalScore','label','MatchProbability')
 save(fullfile(SaveDir,'UnitMatchModel.mat'),'BestMdl')
 
 % %% Average in 3rd dimension (halfs of a session)
@@ -1207,7 +1217,7 @@ save(fullfile(SaveDir,'UnitMatchModel.mat'),'BestMdl')
 % ProjectedLocationPerTP = nanmean(ProjectedLocationPerTP,4);
 
 %% Change these parameters to probabilities of being a match
-% Scores2Include = {'AmplitudeSim','WavformSim','WVCorr','LocAngleSim','spatialdecaySim','LocDistSim'}; %
+% Scores2Include = {'AmplitudeSim','WavformMSE','WVCorr','LocAngleSim','spatialdecaySim','LocDistSim'}; %
 % for pidx = 1:length(Scores2Include)
 %     eval(['tmp = ' Scores2Include{pidx} ';'])
 %     tmp = reshape(tmp,1,[]);
@@ -1282,7 +1292,7 @@ if MakePlotsOfPairs
 
             subplot(3,3,[2])
             hold on
-            takesamples = WaveIdx(uid,:,cv);
+            takesamples = find(WaveIdx(uid,:,cv));
             takesamples = unique(takesamples(~isnan(takesamples)));
             h(1) = plot(squeeze(ProjectedLocationPerTP(1,uid,takesamples,cv)),squeeze(ProjectedLocationPerTP(2,uid,takesamples,cv)),'-','color',cols(uidx,:));
             scatter(squeeze(ProjectedLocationPerTP(1,uid,takesamples,cv)),squeeze(ProjectedLocationPerTP(2,uid,takesamples,cv)),30,takesamples,'filled')
@@ -1382,7 +1392,7 @@ if MakePlotsOfPairs
 
         subplot(3,3,3)
         makepretty
-        tmp = cell2mat(arrayfun(@(X) [num2str(round(WavformSim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)./100) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp = cell2mat(arrayfun(@(X) [num2str(round(WavformMSE(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)./100) ','],1:length(Pairs{pairid})-1,'Uni',0));
         tmp(end)=[];
         tmp2 = cell2mat(arrayfun(@(X) [num2str(round(WVCorr(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)./100) ','],1:length(Pairs{pairid})-1,'Uni',0));
         tmp2(end)=[];
