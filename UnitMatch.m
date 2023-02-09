@@ -304,10 +304,11 @@ makepretty
 %% Get traces for fingerprint correlations
 disp('Computing neural traces...')
 timercounter = tic;
-edges = floor(min(sp.st))-binsz/2:binsz:ceil(max(sp.st))+binsz/2;
 Unit2Take = AllClusterIDs(Good_Idx);
 srAllDays = cell(1,ndays);
 for did = 1:ndays
+    edges = floor(min(sp.st(sp.RecSes == did)))-binsz/2:binsz:ceil(max(sp.st(sp.RecSes == did)))+binsz/2;
+
     Unit2TakeIdxAll = find(recsesAll(Good_Idx) == did);
     srAllDays{did} = nan(numel(Unit2TakeIdxAll),numel(edges)-1);
     for uid = 1:numel(Unit2TakeIdxAll)
@@ -572,8 +573,8 @@ while flag<2
     disp('Computing fingerprints correlations...')
     [~,sortid] = sort(cell2mat(arrayfun(@(X) TotalScore(Pairs(X,1),Pairs(X,2)),1:size(Pairs,1),'Uni',0)),'descend');
     Pairs = Pairs(sortid,:);
-    %     [FingerprintR,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCorrelationFingerPrint(srAllDays,Pairs,Unit2Take,recsesGood);
-    CrossCorrelationFingerPrint_BU
+    [FingerprintR,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCorrelationFingerPrint(srAllDays,Pairs,Unit2Take,recsesGood);
+%     CrossCorrelationFingerPrint_BU
 
     figure;
     h=scatter(TotalScore(:),FingerprintR(:),14,RankScoreAll(:),'filled','AlphaData',0.1);
@@ -585,7 +586,7 @@ while flag<2
 
     %% three ways to define candidate scores
     % Total score larger than threshold
-    CandidatePairs = TotalScore>ThrsOpt; % Add rankscore?
+    CandidatePairs = TotalScore>ThrsOpt & RankScoreAll==1 & SigMask == 1; % Add rankscore?
     %     CandidatePairs(tril(true(size(CandidatePairs))))=0;
     figure('name','Potential Matches')
     imagesc(CandidatePairs)
@@ -788,8 +789,8 @@ while flag<2 && runid<maxrun
         % Use a bunch of units with high total scores as reference population
         [PairScore,sortid] = sort(cell2mat(arrayfun(@(X) MatchProbability(Pairs(X,1),Pairs(X,2)),1:size(Pairs,1),'Uni',0)),'descend');
         Pairs = Pairs(sortid,:);
-        %        [FingerprintR,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCorrelationFingerPrint(srAllDays,Pairs,Unit2Take,recsesGood);
-        CrossCorrelationFingerPrint_BU
+        [FingerprintR,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCorrelationFingerPrint(srAllDays,Pairs,Unit2Take,recsesGood);
+%         CrossCorrelationFingerPrint_BU
 
         tmpf = triu(FingerprintR,1);
         tmpm = triu(MatchProbability,1);

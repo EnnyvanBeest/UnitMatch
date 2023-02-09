@@ -1,4 +1,4 @@
-function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelations] = rossCorrelationFingerPrint(srAllDays,Pairs,Unit2Take,recsesGood,plt)
+function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCorrelationFingerPrint(srAllDays,Pairs,Unit2Take,recsesGood,plt)
     %% This function will compute the cross-correlation fingerprint.
 
     if nargin<5
