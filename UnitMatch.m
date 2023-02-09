@@ -672,7 +672,10 @@ while flag<2 && runid<maxrun
         Tbl = array2table(reshape(Predictors,[],size(Predictors,3)),'VariableNames',Scores2Include); %All parameters
 
         if isfield(BestMdl,'Parameterkernels')
+            fprintf('Applying the Naive Bayes model...\n')
+            timercounter2 = tic;
             [label, posterior] = ApplyNaiveBayes(Tbl,BestMdl.Parameterkernels,[0 1],Priors);
+            fprintf('Done in %ds.\n', round(toc(timercounter2)))
         else
             [label, posterior, cost] = predict(BestMdl,Tbl);
         end
@@ -684,7 +687,10 @@ while flag<2 && runid<maxrun
        
         if MakeOwnNaiveBayes
             % Work in progress
+            fprintf('Creating the Naive Bayes model...\n')
+            timercounter2 = tic;
             [Parameterkernels,Performance] = CreateNaiveBayes(Tbl,label,Priors);
+            fprintf('Done in %ds.\n', round(toc(timercounter2)))
             if any(Performance'<MaxPerf)
                 flag = flag+1;
             else
@@ -692,7 +698,10 @@ while flag<2 && runid<maxrun
             end
             % Apply naive bays classifier
             Tbl = array2table(reshape(Predictors,[],size(Predictors,3)),'VariableNames',Scores2Include); %All parameters
+            fprintf('Applying the Naive Bayes model...\n')
+            timercounter2 = tic;
             [label, posterior] = ApplyNaiveBayes(Tbl,Parameterkernels,[0 1],Priors);
+            fprintf('Done in %ds.\n', round(toc(timercounter2)))
             saveas(gcf,fullfile(SaveDir,'ProbabilityDistribution.fig'))
             saveas(gcf,fullfile(SaveDir,'ProbabilityDistribution.bmp'))
         else % This uses matlab package. Warning: normal distributions assumed?
@@ -769,7 +778,7 @@ while flag<2 && runid<maxrun
 
         Pairs = cat(2,r,c);
         Pairs = sortrows(Pairs);
-        Pairs=unique(Pairs,'rows');
+        Pairs = unique(Pairs,'rows');
         %     Pairs(Pairs(:,1)==Pairs(:,2),:)=[];
         MatchProbability = reshape(posterior(:,2),size(Predictors,1),size(Predictors,2));
         %     figure; imagesc(label)
@@ -783,7 +792,7 @@ while flag<2 && runid<maxrun
         % Use a bunch of units with high total scores as reference population
         [PairScore,sortid] = sort(cell2mat(arrayfun(@(X) MatchProbability(Pairs(X,1),Pairs(X,2)),1:size(Pairs,1),'Uni',0)),'descend');
         Pairs = Pairs(sortid,:);
-                [FingerprintR,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCorrelationFingerPrint(srAllDays,Pairs,Unit2Take,recsesGood);
+        %        [FingerprintR,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCorrelationFingerPrint(srAllDays,Pairs,Unit2Take,recsesGood);
         CrossCorrelationFingerPrint_BU
 
         tmpf = triu(FingerprintR,1);
@@ -872,7 +881,10 @@ if isfield(BestMdl,'Parameterkernels')
         [Fakelabel, Fakeposterior,performance] = ApplyNaiveBayes(Tbl,ParameterkernelsPyKS,PyKSLabel(:),Priors);
         disp(['Correctly labelled ' num2str(round(performance(2)*1000)/10) '% of PyKS Matches and ' num2str(round(performance(1)*1000)/10) '% of PyKS non matches'])
     else
+        fprintf('Applying the Naive Bayes model...\n')
+        timercounter2 = tic;
         [label, posterior] = ApplyNaiveBayes(Tbl,BestMdl.Parameterkernels,[0 1],Priors);
+        fprintf('Done in %ds.\n', round(toc(timercounter2)))
     end
 else
     [label, posterior, cost] = predict(BestMdl,Tbl);
