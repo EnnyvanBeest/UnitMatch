@@ -14,7 +14,7 @@ global stepsize
 
 %% inatialization
 Cond = unique(label); %Number of conditions
-Edges = [0:stepsize:1];
+Edges = 0:stepsize:1;
 ScoreVector = Edges(1)+stepsize/2:stepsize:Edges(end)-stepsize/2;
 Parameterkernels = nan(length(ScoreVector),length(Scores2Include),length(Cond)); %These can be used as kernels in the Naive Bayes
 
@@ -22,7 +22,7 @@ Parameterkernels = nan(length(ScoreVector),length(Scores2Include),length(Cond));
 figure('name','UsedKernels')
 for scid=1:length(Scores2Include)
     % Get data
-    eval(['ScoresTmp = Tbl.' Scores2Include{scid} ';'])
+    ScoresTmp = Tbl.(Scores2Include{scid});
 
     if ismember(Scores2Include{scid},{'LocDistSim','spatialdecaySim'})
         Smoothtmp = SmoothSpatialFactor;
@@ -72,7 +72,8 @@ for cv = 1:ncross
 
     % Create probability distributions based on train data
     for scid=1:length(Scores2Include)
-        eval(['ScoresTmp = Tbl.' Scores2Include{scid} ';'])
+        ScoresTmp = Tbl.(Scores2Include{scid});
+        
         if strcmp(Scores2Include,'LocDistSim')
             Smoothtmp = SmoothSpatialFactor;
         else
