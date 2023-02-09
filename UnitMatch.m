@@ -176,11 +176,9 @@ for uid = 1:nclus
         % Full width half maximum
         wvdurtmp = find(sign(Peakval)*ProjectedWaveform(:,uid,cv)>0.5*sign(Peakval)*Peakval);
         waveformduration(uid,cv) = length(wvdurtmp);
-        if isempty(wvdurtmp)
-            wvdurtmp = waveidx';
-        end
+
         % Mean Location per individual time point:
-        ProjectedLocationPerTP(:,uid,wvdurtmp,cv) = cell2mat(arrayfun(@(tp) sum(repmat(abs(spikeMap(tp,ChanIdx,cv)),size(Locs,2),1).*Locs',2)./sum(repmat(abs(spikeMap(tp,ChanIdx,cv)),size(Locs,2),1),2),wvdurtmp','Uni',0));
+        ProjectedLocationPerTP(:,uid,waveidx,cv) = cell2mat(arrayfun(@(tp) sum(repmat(abs(spikeMap(tp,ChanIdx,cv)),size(Locs,2),1).*Locs',2)./sum(repmat(abs(spikeMap(tp,ChanIdx,cv)),size(Locs,2),1),2),waveidx,'Uni',0));
         WaveIdx(uid,wvdurtmp,cv) = 1;
         % Save spikes for these channels
         %         MultiDimMatrix(wvdurtmp,1:length(ChanIdx),uid,cv) = nanmean(spikeMap(wvdurtmp,ChanIdx,wavidx),3);
@@ -1238,8 +1236,13 @@ OriUniqueID = UniqueID; %need for plotting
 [PairID1,PairID2]=meshgrid(AllClusterIDs(Good_Idx));
 [recses1,recses2] = meshgrid(recsesAll(Good_Idx));
 MatchTable = table(PairID1(:),PairID2(:),recses1(:),recses2(:),MatchProbability(:),RankScoreAll(:),FingerprintR(:),TotalScore(:),'VariableNames',{'ID1','ID2','RecSes1','RecSes2','MatchProb','RankScore','FingerprintCor','TotalScore'});
+[~,sortidx] = sort(diag(MatchProbability(Pairs(:,1),Pairs(:,2))),'descend');
+Pairs = Pairs(sortidx,:);
 for id = 1:size(Pairs,1)
-    UniqueID(Good_Idx(Pairs(id,2))) = UniqueID(Good_Idx(Pairs(id,1)));
+    AllUID = find(UniqueID(Good_Idx)==UniqueID(Good_Idx(Pairs(id,1)))); %find already existing units with this UID
+    if all(MatchProbability(AllUID,Pairs(id,2))>param.ProbabilityThreshold) %only if all UID have a high enough probability with this second pair, we will include it to have the same UID
+        UniqueID(Good_Idx(Pairs(id,2))) = UniqueID(Good_Idx(Pairs(id,1)));    
+    end
 end
 
 % Pairs redefined:
@@ -1255,6 +1258,14 @@ end
 if MakePlotsOfPairs
     timercounter = tic;
     disp('Plotting pairs...')
+
+    % Calculations for ISI!
+    tmpst=sp.st;
+    maxtime = 0;
+    for did=1:ndays
+        tmpst(sp.RecSes==did)= tmpst(sp.RecSes==did)+maxtime;
+        maxtime = max(tmpst(sp.RecSes==did));
+    end
 
     if ~isdir(fullfile(SaveDir,'MatchFigures'))
         mkdir(fullfile(SaveDir,'MatchFigures'))
@@ -1420,8 +1431,7 @@ if MakePlotsOfPairs
 
         subplot(3,3,8)
         idx1=find(ismember(sp.spikeTemplates, AllClusterIDs(Good_Idx(Pairs{pairid}))) & ismember(sp.RecSes, GoodRecSesID(Pairs{pairid})));
-
-        isitot = diff(sort([sp.st(idx1)]));
+        isitot = diff(sort([tmpst(idx1)]));
         histogram(isitot,'FaceColor',[0 0 0])
         hold on
         line([1.5/1000 1.5/1000],get(gca,'ylim'),'color',[1 0 0],'LineStyle','--')
