@@ -122,7 +122,7 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCo
             end
 
             % Find SigMask
-            SigMask(clusIdxD1All,clusIdxD2All) = FingerprintR > quantile(FingerprintR,0.99,2);
+            SigMask(clusIdxD1All,clusIdxD2All) = FingerprintR >= quantile(FingerprintR,0.99,2);
         end
     end
 

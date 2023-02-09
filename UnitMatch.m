@@ -34,7 +34,7 @@ MakePlotsOfPairs = 1; % Plots all pairs for inspection
 % Scores2Include = {'AmplitudeSim','WavformSim','LocAngleSim','spatialdecaySim','LocDistSim'}; %
 Scores2Include = {'AmplitudeSim','WavformMSE','WVCorr','LocAngleSim','spatialdecaySim','LocDistSim'}; %
 TakeChannelRadius = 75; %in micron around max channel
-maxdist = 500; % Maximum distance at which units are considered as potential matches
+maxdist = 200; % Maximum distance at which units are considered as potential matches
 binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
 RemoveRawWavForms = 0; %Remove averaged waveforms again to save space --> Currently only two averages saved so shouldn't be a problem to keep it, normally speaking
 % Scores2Include = {'WavformSimilarity','LocationCombined','spatialdecayDiff','AmplitudeDiff'};%}
@@ -240,12 +240,11 @@ timercounter = tic;
 % 1st cv
 x1 = ProjectedWaveform(waveidx,:,1);
 % x1(WaveIdx(:,:,1)'==0)=nan; 
-
 % 2nd cv
 x2 = ProjectedWaveform(waveidx,:,2);
 % x2(WaveIdx(:,:,2)'==0)=nan; 
 % Correlate
-WVCorr = corr(x1,x2,'rows','complete');
+WVCorr = corr(x1,x2,'rows','pairwise');
 % Make WVCorr a normal distribution
 WVCorr = atanh(WVCorr);
 WVCorr = (WVCorr-nanmin(WVCorr(:)))./(nanmax(WVCorr(~isinf(WVCorr(:))))-nanmin(WVCorr(:)));
@@ -340,20 +339,24 @@ while flag<2
 
     disp('Computing location distances between pairs of units, per individual time point of the waveform...')
     % Difference in distance at different time points
-    x1 = repmat(squeeze(ProjectedLocationPerTP(:,:,:,1)),[1 1 1 size(ProjectedLocationPerTP,2)]);
-    x2 = permute(repmat(squeeze(ProjectedLocationPerTP(:,:,:,2)),[1 1 1 size(ProjectedLocationPerTP,2)]),[1 4 3 2]);
-    LocDistSign = sqrt(nansum((x1-x2).^2,1));
-    LocDistSim = squeeze(nanmean(LocDistSign,3));
+    x1 = repmat(squeeze(ProjectedLocationPerTP(:,:,waveidx,1)),[1 1 1 size(ProjectedLocationPerTP,2)]);
+    x2 = permute(repmat(squeeze(ProjectedLocationPerTP(:,:,waveidx,2)),[1 1 1 size(ProjectedLocationPerTP,2)]),[1 4 3 2]);
+    LocDistSign = squeeze(sqrt(nansum((x1-x2).^2,1)));
+    w = squeeze(~isnan(abs(x1(1,:,:,:)-x2(1,:,:,:))));
+    % Average location + variance in location (captures the trajectory of a waveform in space)
+    LocDistSim = squeeze(nanmean(LocDistSign,2)+nanstd(LocDistSign,[],2)./sqrt(nansum(w,2))); 
 
     disp('Computing location angle (direction) differences between pairs of units, per individual time point of the waveform...')
     % Difference in angle between two time points
-    x1 = ProjectedLocationPerTP(:,:,2:spikeWidth,:);
-    x2 = ProjectedLocationPerTP(:,:,1:spikeWidth-1,:);
+    x1 = ProjectedLocationPerTP(:,:,waveidx(2):waveidx(end),:);
+    x2 = ProjectedLocationPerTP(:,:,waveidx(1):waveidx(end-1),:);
     LocAngle = squeeze(atan(abs(x1(1,:,:,:)-x2(1,:,:,:))./abs(x1(2,:,:,:)-x2(2,:,:,:))));
     x1 = repmat(LocAngle(:,:,1),[1 1 nclus]);
-    x2 = permute(repmat(LocAngle(:,:,2),[1 1 nclus]),[3 2 1]); %   
+    x2 = permute(repmat(LocAngle(:,:,2),[1 1 nclus]),[3 2 1]); % 
+    % Actually just taking the weighted sum of angles is better?
     w = ~isnan(abs(x1-x2));
-    LocAngleSim = squeeze(circ_mean(abs(x1-x2),w,2));
+    LocAngleSim = sqrt(squeeze(nansum(abs(x1-x2),2)./nansum(w,2)));
+%     LocAngleSim = squeeze(circ_mean(abs(x1-x2),w,2));
 
     % Variance in error, corrected by average error. This captures whether
     % the trajectory is consistenly separate
@@ -586,7 +589,7 @@ while flag<2
 
     %% three ways to define candidate scores
     % Total score larger than threshold
-    CandidatePairs = TotalScore>ThrsOpt & RankScoreAll==1 & SigMask == 1; % Add rankscore?
+    CandidatePairs = TotalScore>ThrsOpt & RankScoreAll==1 & SigMask == 1; % 
     %     CandidatePairs(tril(true(size(CandidatePairs))))=0;
     figure('name','Potential Matches')
     imagesc(CandidatePairs)
@@ -634,9 +637,8 @@ end
 priorMatch = 1-(nclus*ndays)./(nclus*nclus); %Now use a slightly more lenient prior
 ThrsOpt = quantile(TotalScore(:),priorMatch);
 CandidatePairs = TotalScore>ThrsOpt & RankScoreAll==1 & SigMask==1;
- % Also assume kilosort does a good job
- CandidatePairs(logical(eye(size(CandidatePairs))))=1;
-% CandidatePairs(tril(true(size(CandidatePairs)),-1))=0;
+% Also assume kilosort does a good job ?
+CandidatePairs(logical(eye(size(CandidatePairs))))=1;
 [uid,uid2] = find(CandidatePairs);
 Pairs = cat(2,uid,uid2);
 Pairs = sortrows(Pairs);
@@ -1196,11 +1198,11 @@ disp(['Evaluating Naive Bayes...'])
 FNEst = (1-(sum(diag(MatchProbability)>param.ProbabilityThreshold)./nclus))*100;
 disp([num2str(round(sum(diag(MatchProbability)>param.ProbabilityThreshold)./nclus*100)) '% of units were matched with itself'])
 disp(['False negative estimate: ' num2str(round(FNEst*100)/100) '%'])
-
-lowselfscores = find(diag(MatchProbability<param.ProbabilityThreshold));
-if FNEst>5
+if FNEst>10
     keyboard
 end
+lowselfscores = find(diag(MatchProbability<param.ProbabilityThreshold));
+
 % Units off diagonal within a day are not matched by (Py)KS within a day. 
 FPEst=nan(1,ndays);
 for did = 1:ndays
