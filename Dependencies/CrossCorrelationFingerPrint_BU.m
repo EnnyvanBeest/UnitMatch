@@ -51,7 +51,6 @@ for did1 = 1:ndays
             title(['Second half of recording'])
             makepretty
 
-
             SessionCorrelations = nanmean(cat(3,SessionCorrelations',SessionCorrelations2'),3);
             AllSessionCorrelations{did1,did2} = SessionCorrelations;
 

@@ -258,8 +258,6 @@ x1 = repmat(ProjectedWaveformNorm(:,:,1),[1 1 size(ProjectedWaveformNorm,2)]);
 x2 = permute(repmat(ProjectedWaveformNorm(:,:,2),[1 1 size(ProjectedWaveformNorm,2)]),[1 3 2]);
 RawWVMSE = squeeze(nanmean((x1 - x2).^2));
 
-
-
 % sort of Normalize distribution
 RawWVMSENorm = sqrt(RawWVMSE);
 WavformMSE = (RawWVMSENorm-nanmin(RawWVMSENorm(:)))./(quantile(RawWVMSENorm(:),0.99)-nanmin(RawWVMSENorm(:)));
@@ -346,7 +344,7 @@ while flag<2
     % Difference in distance at different time points
     x1 = repmat(squeeze(ProjectedLocationPerTP(:,:,:,1)),[1 1 1 size(ProjectedLocationPerTP,2)]);
     x2 = permute(repmat(squeeze(ProjectedLocationPerTP(:,:,:,2)),[1 1 1 size(ProjectedLocationPerTP,2)]),[1 4 3 2]);
-    LocDistSign = sqrt(sum((x1-x2).^2,1));
+    LocDistSign = sqrt(nansum((x1-x2).^2,1));
     LocDistSim = squeeze(nanmean(LocDistSign,3));
 
     disp('Computing location angle (direction) differences between pairs of units, per individual time point of the waveform...')
@@ -355,10 +353,8 @@ while flag<2
     x2 = ProjectedLocationPerTP(:,:,1:spikeWidth-1,:);
     LocAngle = squeeze(atan(abs(x1(1,:,:,:)-x2(1,:,:,:))./abs(x1(2,:,:,:)-x2(2,:,:,:))));
     x1 = repmat(LocAngle(:,:,1),[1 1 nclus]);
-    x2 = permute(repmat(LocAngle(:,:,2),[1 1 nclus]),[3 2 1]);
-    w = ~isnan(x1+x2);
-    x1(~w) = 0;
-    x2(~w) = 0;
+    x2 = permute(repmat(LocAngle(:,:,2),[1 1 nclus]),[3 2 1]); % Don't think permutation is necessary here?
+    w = ~isnan(abs(x1-x2));
     LocAngleSim = squeeze(circ_mean(abs(x1-x2),w,2));
     LocAngleSim(squeeze(all(w==0,2))) = 1; % hack by CB. Not sure how to deal with that.
 
@@ -1328,7 +1324,7 @@ if MakePlotsOfPairs
             % Other axis
             [h1,edges,binsz]=histcounts(sp.spikeAmps(idx1));
             %Normalize between 0 and 1
-            h1 = ((h1-nanmin(h1))./(nanmax(h1)-nanmin(h1)))*10+xlims(2);
+            h1 = ((h1-nanmin(h1))./(nanmax(h1)-nanmin(h1)))*10+max(sp.st./60);
             plot(h1,edges(1:end-1)+addforamplitude,'-','color',cols(uidx,:));
             addforamplitude = addforamplitude+edges(end-1);
 
@@ -1392,16 +1388,16 @@ if MakePlotsOfPairs
 
         subplot(3,3,3)
         makepretty
-        tmp = cell2mat(arrayfun(@(X) [num2str(round(WavformMSE(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)./100) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp = cell2mat(arrayfun(@(X) [num2str(round(WavformSim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)./100) ','],1:length(Pairs{pairid})-1,'Uni',0));
         tmp(end)=[];
-        tmp2 = cell2mat(arrayfun(@(X) [num2str(round(WVCorr(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)./100) ','],1:length(Pairs{pairid})-1,'Uni',0));
-        tmp2(end)=[];
+%         tmp2 = cell2mat(arrayfun(@(X) [num2str(round(WVCorr(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)./100) ','],1:length(Pairs{pairid})-1,'Uni',0));
+%         tmp2(end)=[];
         tmp3 = cell2mat(arrayfun(@(X) [num2str(round(AmplitudeSim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)./100) ','],1:length(Pairs{pairid})-1,'Uni',0));
         tmp3(end)=[];
         tmp4 = cell2mat(arrayfun(@(X) [num2str(round(spatialdecaySim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)./100) ','],1:length(Pairs{pairid})-1,'Uni',0));
         tmp4(end)=[];
 
-        title(['Waveform Similarity=' tmp ', WVCorr=' tmp2 ', Ampl=' tmp3 ', decay='  tmp4])
+        title(['Waveform Similarity=' tmp ', Ampl=' tmp3 ', decay='  tmp4])
 
         subplot(3,3,6)
         xlabel('Time (min)')
