@@ -55,7 +55,9 @@ param.nChannels = length(param.channelpos)+1; %First assume there's a sync chann
 spikeWidth = param.spikeWidth; %83; % in sample space (time)
 % UseBombCelRawWav = param.UseBombCelRawWav; % If Bombcell was also applied on this dataset, it's faster to read in the raw waveforms extracted by Bombcell
 NewPeakLoc = floor(spikeWidth./2); % This is where all peaks will be aligned to!
-waveidx = NewPeakLoc-7:NewPeakLoc+15; % Force this analysis window
+% waveidx = NewPeakLoc-7:NewPeakLoc+16; % Force this analysis window
+waveidx = NewPeakLoc-7:NewPeakLoc+15; % Force this analysis window So far
+% best option
 
 %% Extract all cluster info
 AllClusterIDs = clusinfo.cluster_id;
@@ -349,12 +351,20 @@ while flag<2
     x1 = ProjectedLocationPerTP(:,:,waveidx(2):waveidx(end),:);
     x2 = ProjectedLocationPerTP(:,:,waveidx(1):waveidx(end-1),:);
     LocAngle = squeeze(atan(abs(x1(1,:,:,:)-x2(1,:,:,:))./abs(x1(2,:,:,:)-x2(2,:,:,:))));
-    x1 = repmat(LocAngle(:,:,1),[1 1 nclus]);
-    x2 = permute(repmat(LocAngle(:,:,2),[1 1 nclus]),[3 2 1]); % 
+
+    % Tried this out: Count the 'significant' waveform more; we're more certain about this trajectory than about parts of the waveform that are in the noise
+    %     y1 = repmat(WaveIdx(:,waveidx(2:end),1),[1 1 nclus])+1;
+    %     y2 = permute(repmat(WaveIdx(:,waveidx(2:end),2),[1 1 nclus]),[3 2 1])+1;
+    %     x1 = repmat(LocAngle(:,:,1),[1 1 nclus]).*y1;
+    %     x2 = permute(repmat(LocAngle(:,:,2),[1 1 nclus]),[3 2 1]).*y2; %
+    %     w = (y1+y2);
+    %     LocAngleSim = sqrt(squeeze(nansum(abs(x1-x2),2)));
+
     % Actually just taking the weighted sum of angles is better?
+    x1 = repmat(LocAngle(:,:,1),[1 1 nclus]);
+    x2 = permute(repmat(LocAngle(:,:,2),[1 1 nclus]),[3 2 1]); %
     w = ~isnan(abs(x1-x2));
     LocAngleSim = sqrt(squeeze(nansum(abs(x1-x2),2)./nansum(w,2)));
-%     LocAngleSim = squeeze(circ_mean(abs(x1-x2),w,2));
 
     % Variance in error, corrected by average error. This captures whether
     % the trajectory is consistenly separate
@@ -587,17 +597,9 @@ while flag<2
 
     %% three ways to define candidate scores
     % Total score larger than threshold
-    CandidatePairs = TotalScore>ThrsOpt & RankScoreAll==1 & SigMask == 1; % 
+    CandidatePairs = TotalScore>ThrsOpt & RankScoreAll == 1 & SigMask == 1; %
     %     CandidatePairs(tril(true(size(CandidatePairs))))=0;
-    figure('name','Potential Matches')
-    imagesc(CandidatePairs)
-    colormap(flipud(gray))
-    %     xlim([SessionSwitch nclus])
-    %     ylim([1 SessionSwitch-1])
-    xlabel('Units day 1')
-    ylabel('Units day 2')
-    title('Potential Matches')
-    makepretty
+   
 
     %% Calculate median drift on this population (between days)
     if ndays>1
@@ -634,9 +636,19 @@ end
 % distributions are just weird
 priorMatch = 1-(nclus*ndays)./(nclus*nclus); %Now use a slightly more lenient prior
 ThrsOpt = quantile(TotalScore(:),priorMatch);
-CandidatePairs = TotalScore>ThrsOpt & RankScoreAll==1 & SigMask==1;
+CandidatePairs = TotalScore>ThrsOpt & RankScoreAll == 1 & SigMask == 1; %Best results if all 3 are true
 % Also assume kilosort does a good job ?
 CandidatePairs(logical(eye(size(CandidatePairs))))=1;
+
+figure('name','Potential Matches')
+imagesc(CandidatePairs)
+colormap(flipud(gray))
+%     xlim([SessionSwitch nclus])
+%     ylim([1 SessionSwitch-1])
+xlabel('Units day 1')
+ylabel('Units day 2')
+title('Potential Matches')
+makepretty
 [uid,uid2] = find(CandidatePairs);
 Pairs = cat(2,uid,uid2);
 Pairs = sortrows(Pairs);
@@ -1240,8 +1252,10 @@ MatchTable = table(PairID1(:),PairID2(:),recses1(:),recses2(:),MatchProbability(
 Pairs = Pairs(sortidx,:);
 for id = 1:size(Pairs,1)
     AllUID = find(UniqueID(Good_Idx)==UniqueID(Good_Idx(Pairs(id,1)))); %find already existing units with this UID
-    if all(MatchProbability(AllUID,Pairs(id,2))>param.ProbabilityThreshold) %only if all UID have a high enough probability with this second pair, we will include it to have the same UID
-        UniqueID(Good_Idx(Pairs(id,2))) = UniqueID(Good_Idx(Pairs(id,1)));    
+    if all(MatchProbability(AllUID,Pairs(id,2))>param.ProbabilityThreshold | (MatchProbability(Pairs(id,2),AllUID)>param.ProbabilityThreshold)') %only if all UID have a high enough probability with this second pair, we will include it to have the same UID
+        UniqueID(Good_Idx(Pairs(id,2))) = UniqueID(Good_Idx(Pairs(id,1)));   
+    else
+        keyboard
     end
 end
 
