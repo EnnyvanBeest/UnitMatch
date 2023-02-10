@@ -669,10 +669,7 @@ while flag<2 && runid<maxrun
         Tbl = array2table(reshape(Predictors,[],size(Predictors,3)),'VariableNames',Scores2Include); %All parameters
 
         if isfield(BestMdl,'Parameterkernels')
-            fprintf('Applying the Naive Bayes model...\n')
-            timercounter2 = tic;
             [label, posterior] = ApplyNaiveBayes(Tbl,BestMdl.Parameterkernels,[0 1],Priors);
-            fprintf('Done in %ds.\n', round(toc(timercounter2)))
         else
             [label, posterior, cost] = predict(BestMdl,Tbl);
         end
@@ -695,10 +692,7 @@ while flag<2 && runid<maxrun
             end
             % Apply naive bays classifier
             Tbl = array2table(reshape(Predictors,[],size(Predictors,3)),'VariableNames',Scores2Include); %All parameters
-            fprintf('Applying the Naive Bayes model...\n')
-            timercounter2 = tic;
             [label, posterior] = ApplyNaiveBayes(Tbl,Parameterkernels,[0 1],Priors);
-            fprintf('Done in %ds.\n', round(toc(timercounter2)))
             saveas(gcf,fullfile(SaveDir,'ProbabilityDistribution.fig'))
             saveas(gcf,fullfile(SaveDir,'ProbabilityDistribution.bmp'))
         else % This uses matlab package. Warning: normal distributions assumed?
@@ -878,10 +872,7 @@ if isfield(BestMdl,'Parameterkernels')
         [Fakelabel, Fakeposterior,performance] = ApplyNaiveBayes(Tbl,ParameterkernelsPyKS,PyKSLabel(:),Priors);
         disp(['Correctly labelled ' num2str(round(performance(2)*1000)/10) '% of PyKS Matches and ' num2str(round(performance(1)*1000)/10) '% of PyKS non matches'])
     else
-        fprintf('Applying the Naive Bayes model...\n')
-        timercounter2 = tic;
         [label, posterior] = ApplyNaiveBayes(Tbl,BestMdl.Parameterkernels,[0 1],Priors);
-        fprintf('Done in %ds.\n', round(toc(timercounter2)))
     end
 else
     [label, posterior, cost] = predict(BestMdl,Tbl);
