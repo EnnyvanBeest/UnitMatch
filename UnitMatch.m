@@ -133,6 +133,8 @@ for uid = 1:nclus
         if isempty(wvdurtmp)
             wvdurtmp = waveidx;
         end
+        wvdurtmp(~ismember(wvdurtmp,waveidx)) = []; %okay over achiever, gonna cut you off there
+
         % Peak Time - to be safe take a bit of smoothing
         [~,PeakTime(uid,cv)] = nanmax(abs(smooth(ProjectedWaveform(wvdurtmp(1):wvdurtmp(end),uid,cv),2)));
         PeakTime(uid,cv) = PeakTime(uid,cv)+wvdurtmp(1)-1;
@@ -1260,10 +1262,17 @@ uId = unique(UniqueID(Good_Idx));
 Pairs = arrayfun(@(X) find(UniqueID(Good_Idx)==X),uId,'Uni',0);
 Pairs(cellfun(@length,Pairs)==1) = [];
 
-for id =1:length(lowselfscores)
+for id =1:length(lowselfscores) % Add these for plotting - inspection
     Pairs{end+1} = [lowselfscores(id) lowselfscores(id)];
 end
  
+if RunPyKSChronicStitched
+    for id = 1:size(OnlyDetectedByPyKS,1) % Add these for plotting - inspection
+        Pairs{end+1} = [OnlyDetectedByPyKS(id,1) OnlyDetectedByPyKS(id,2)];
+    end
+end
+
+
 %% Figures
 if MakePlotsOfPairs
     timercounter = tic;
