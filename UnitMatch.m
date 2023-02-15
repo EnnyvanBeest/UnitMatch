@@ -31,8 +31,9 @@ function  [UniqueID, MatchTable] = UnitMatch(clusinfo,param,sp)
 global stepsize
 stepsize = 0.01; % Of probability distribution
 MakePlotsOfPairs = 1; % Plots all pairs for inspection
-% Scores2Include = {'AmplitudeSim','WavformSim','LocAngleSim','spatialdecaySim','LocDistSim'}; %
-Scores2Include = {'AmplitudeSim','WavformMSE','WVCorr','LocAngleSim','spatialdecaySim','LocDistSim'}; %
+Scores2Include = {'AmplitudeSim','WavformMSE','LocTrajectorySim','spatialdecaySim','LocDistSim'}; %
+
+% Scores2Include = {'AmplitudeSim','WavformMSE','WVCorr','LocTrajectorySim','spatialdecaySim','LocDistSim'}; %
 TakeChannelRadius = 75; %in micron around max channel
 maxdist = 200; % Maximum distance at which units are considered as potential matches
 binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
@@ -176,11 +177,12 @@ for uid = 1:nclus
         Amplitude(uid,cv) = Peakval;
 
         % Full width half maximum
-        wvdurtmp = find(sign(Peakval)*ProjectedWaveform(:,uid,cv)>0.5*sign(Peakval)*Peakval);
+        wvdurtmp = find(sign(Peakval)*ProjectedWaveform(waveidx,uid,cv)>0.25*sign(Peakval)*Peakval);
+        wvdurtmp = wvdurtmp+waveidx(1)-1;
         waveformduration(uid,cv) = length(wvdurtmp);
 
         % Mean Location per individual time point:
-        ProjectedLocationPerTP(:,uid,waveidx,cv) = cell2mat(arrayfun(@(tp) sum(repmat(abs(spikeMap(tp,ChanIdx,cv)),size(Locs,2),1).*Locs',2)./sum(repmat(abs(spikeMap(tp,ChanIdx,cv)),size(Locs,2),1),2),waveidx,'Uni',0));
+        ProjectedLocationPerTP(:,uid,wvdurtmp,cv) = cell2mat(arrayfun(@(tp) sum(repmat(abs(spikeMap(tp,ChanIdx,cv)),size(Locs,2),1).*Locs',2)./sum(repmat(abs(spikeMap(tp,ChanIdx,cv)),size(Locs,2),1),2),wvdurtmp','Uni',0));
         WaveIdx(uid,wvdurtmp,cv) = 1;
         % Save spikes for these channels
         %         MultiDimMatrix(wvdurtmp,1:length(ChanIdx),uid,cv) = nanmean(spikeMap(wvdurtmp,ChanIdx,wavidx),3);
@@ -342,9 +344,16 @@ while flag<2
     x1 = repmat(squeeze(ProjectedLocationPerTP(:,:,waveidx,1)),[1 1 1 size(ProjectedLocationPerTP,2)]);
     x2 = permute(repmat(squeeze(ProjectedLocationPerTP(:,:,waveidx,2)),[1 1 1 size(ProjectedLocationPerTP,2)]),[1 4 3 2]);
     LocDistSign = squeeze(sqrt(nansum((x1-x2).^2,1)));
-    w = squeeze(~isnan(abs(x1(1,:,:,:)-x2(1,:,:,:))));
+    w = squeeze(isnan(abs(x1(1,:,:,:)-x2(1,:,:,:))));
+    LocDistSign(w) = nan;
     % Average location + variance in location (captures the trajectory of a waveform in space)
-    LocDistSim = squeeze(nanmean(LocDistSign,2)+nanstd(LocDistSign,[],2)./sqrt(nansum(w,2))); 
+    LocDistSim = squeeze(nanmean(LocDistSign,2)+nanstd(LocDistSign,[],2)./sqrt(nansum(~w,2))); 
+ 
+
+    % Variance in error, corrected by average error. This captures whether
+    % the trajectory is consistenly separate
+    MSELoc = squeeze(nanvar(LocDistSign,[],3)./nanmean(LocDistSign,3)+nanmean(LocDistSign,3));
+    LocDistSign = squeeze(nanvar(LocDistSign,[],2))./squeeze(sum(w,2)); % Variance in distance between the two traces
 
     disp('Computing location angle (direction) differences between pairs of units, per individual time point of the waveform...')
     % Difference in angle between two time points
@@ -365,11 +374,7 @@ while flag<2
     x2 = permute(repmat(LocAngle(:,:,2),[1 1 nclus]),[3 2 1]); %
     w = ~isnan(abs(x1-x2));
     LocAngleSim = sqrt(squeeze(nansum(abs(x1-x2),2)./nansum(w,2)));
-
-    % Variance in error, corrected by average error. This captures whether
-    % the trajectory is consistenly separate
-    MSELoc = squeeze(nanvar(LocDistSign,[],3)./nanmean(LocDistSign,3)+nanmean(LocDistSign,3));
-
+ 
     % Normalize each of them from 0 to 1, 1 being the 'best'
     % If distance > maxdist micron it will never be the same unit:
     LocDistSim = 1-((LocDistSim-nanmin(LocDistSim(:)))./(maxdist-nanmin(LocDistSim(:)))); %Average difference
@@ -378,7 +383,10 @@ while flag<2
     LocDist(LocDist<0)=0;
     MSELoc = 1-((MSELoc-nanmin(MSELoc(:)))./(nanmax(MSELoc(:))-nanmin(MSELoc(:))));
     LocAngleSim = 1-((LocAngleSim-nanmin(LocAngleSim(:)))./(nanmax(LocAngleSim(:))-nanmin(LocAngleSim(:))));
-
+    LocDistSign = 1-((LocDistSign-nanmin(LocDistSign(:)))./(quantile(LocDistSign(:),0.99)-nanmin(LocDistSign(:))));
+    LocDistSign(LocDistSign<0)=0;
+    LocTrajectorySim = (LocAngleSim+LocDistSign)./2; % Trajectory Similarity is sum of distance + sum of angles
+    LocTrajectorySim = (LocTrajectorySim-nanmin(LocTrajectorySim(:))./(nanmax(LocTrajectorySim(:))-nanmin(LocTrajectorySim(:))));
     %
     figure('name','Distance Measures')
     subplot(4,2,1)
@@ -431,8 +439,8 @@ while flag<2
     makepretty
 
     subplot(4,2,7)
-    imagesc(LocAngleSim);
-    title('circular mean Angle difference')
+    imagesc(LocTrajectorySim);
+    title('Mean trajectory difference')
     xlabel('Unit_i')
     ylabel('Unit_j')
     hold on
@@ -442,11 +450,11 @@ while flag<2
     colorbar
     makepretty
     subplot(4,2,8)
-    h=histogram(LocAngleSim(:));
+    h=histogram(LocTrajectorySim(:));
     xlabel('Score')
     makepretty
     LocDistSim(isnan(LocDistSim))=0;
-    LocationCombined = nanmean(cat(3,LocDistSim,LocAngleSim),3);
+    LocationCombined = nanmean(cat(3,LocDistSim,LocTrajectorySim),3);
     disp(['Extracting projected location took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])
 
     %% These are the parameters to include:
@@ -1225,7 +1233,6 @@ save(fullfile(SaveDir,'UnitMatchModel.mat'),'BestMdl')
 % ProjectedLocationPerTP = nanmean(ProjectedLocationPerTP,4);
 
 %% Change these parameters to probabilities of being a match
-% Scores2Include = {'AmplitudeSim','WavformMSE','WVCorr','LocAngleSim','spatialdecaySim','LocDistSim'}; %
 % for pidx = 1:length(Scores2Include)
 %     eval(['tmp = ' Scores2Include{pidx} ';'])
 %     tmp = reshape(tmp,1,[]);
@@ -1245,8 +1252,6 @@ for id = 1:size(Pairs,1)
     AllUID = find(UniqueID(Good_Idx)==UniqueID(Good_Idx(Pairs(id,1)))); %find already existing units with this UID
     if all(MatchProbability(AllUID,Pairs(id,2))>param.ProbabilityThreshold | (MatchProbability(Pairs(id,2),AllUID)>param.ProbabilityThreshold)') %only if all UID have a high enough probability with this second pair, we will include it to have the same UID
         UniqueID(Good_Idx(Pairs(id,2))) = UniqueID(Good_Idx(Pairs(id,1)));   
-    else
-        keyboard
     end
 end
 
@@ -1402,7 +1407,7 @@ if MakePlotsOfPairs
         makepretty
         tmp = cell2mat(arrayfun(@(X) [num2str(round(LocDistSim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)./100) ','],1:length(Pairs{pairid})-1,'Uni',0));
         tmp(end)=[];
-        tmp2 = cell2mat(arrayfun(@(X) [num2str(round(LocAngleSim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)./100) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp2 = cell2mat(arrayfun(@(X) [num2str(round(LocTrajectorySim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)./100) ','],1:length(Pairs{pairid})-1,'Uni',0));
         tmp2(end)=[];
         title(['Distance: ' tmp ', angle: ' tmp2])
 
