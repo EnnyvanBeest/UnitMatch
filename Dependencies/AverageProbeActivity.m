@@ -274,7 +274,7 @@ for midx = length(MiceOpt)
                 clear params
                 params.loadPCs=true;
                 params.thisdate = thisdate;
-                PrepareClusInfo
+                [clusinfo,sp] = PrepareClusInfo(dir(myKsDir),PrepareClusInfoparams);
 
                 GoodUnits{midx}{didx}{probeid} = clusinfo;
                 if ~any(Good_ID)

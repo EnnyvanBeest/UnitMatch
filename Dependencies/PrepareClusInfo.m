@@ -302,7 +302,7 @@ for subsesid=1:length(KiloSortPaths)
             qMetricsExist = ~isempty(dir(fullfile(savePath, '**', 'templates._bc_qMetrics.parquet'))); % ~isempty(dir(fullfile(savePath, 'qMetric*.mat'))) not used anymore?
             idx = sp{countid}.SessionID==id;
             InspectionFlag = 0;
-            if isempty(qMetricsExist) || Params.RedoQM
+            if ~qMetricsExist || Params.RedoQM
                 % First check if we want to use python for compressed data. If not, uncompress data first
                 if any(strfind(rawD(id).name,'cbin')) && Params.DecompressLocal
                     % detect whether data is compressed, decompress locally if necessary
