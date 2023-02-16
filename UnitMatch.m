@@ -46,12 +46,15 @@ drawmax = inf; % Maximum number of drawed matches (otherwise it takes forever!)
 VisibleSetting = 'off'; %Do we want to see the figures being plot online?
 
 %% Read in from param
-channelpos = param.channelpos;
+Allchannelpos = param.channelpos;
+if ~iscell(Allchannelpos)
+    Allchannelpos = {Allchannelpos};
+end
 RunPyKSChronicStitched = param.RunPyKSChronicStitched;
 SaveDir = param.SaveDir;
 % AllDecompPaths = param.AllDecompPaths;
 % AllRawPaths = param.AllRawPaths;
-param.nChannels = length(param.channelpos)+1; %First assume there's a sync channel as well.
+param.nChannels = length(Allchannelpos{1})+1; %First assume there's a sync channel as well.
 % sampleamount = param.sampleamount; %500; % Nr. waveforms to include
 spikeWidth = param.spikeWidth; %83; % in sample space (time)
 % UseBombCelRawWav = param.UseBombCelRawWav; % If Bombcell was also applied on this dataset, it's faster to read in the raw waveforms extracted by Bombcell
@@ -98,9 +101,9 @@ Amplitude = nan(nclus,2); % Maximum (weighted) amplitude, first versus second ha
 spatialdecay = nan(nclus,2); % how fast does the unit decay across space, first versus second half
 WaveIdx = false(nclus,spikeWidth,2);
 %Calculate how many channels are likely to be included
-fakechannel = [channelpos(1,1) nanmean(channelpos(:,2))];
-ChanIdx = find(cell2mat(arrayfun(@(Y) norm(fakechannel-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<TakeChannelRadius); %Averaging over 10 channels helps with drift
-% MultiDimMatrix = nan(spikeWidth,length(ChanIdx),nclus,2); % number time points (max), number of channels (max?), per cluster and cross-validated
+% fakechannel = [channelpos{1}(1,1) nanmean(channelpos{1}(:,2))];
+% ChanIdx = find(cell2mat(arrayfun(@(Y) norm(fakechannel-channelpos{1}(Y,:)),1:size(channelpos{1},1),'UniformOutput',0))<TakeChannelRadius); %Averaging over 10 channels helps with drift
+% % MultiDimMatrix = nan(spikeWidth,length(ChanIdx),nclus,2); % number time points (max), number of channels (max?), per cluster and cross-validated
 
 % Take geographically close channels (within 50 microns!), not just index!
 timercounter = tic;
@@ -108,6 +111,7 @@ fprintf(1,'Extracting raw waveforms. Progress: %3d%%',0)
 for uid = 1:nclus
     fprintf(1,'\b\b\b\b%3.0f%%',uid/nclus*100)
     load(fullfile(SaveDir,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']))
+    channelpos = Allchannelpos{recsesGood(uid)};
 
     % Extract channel positions that are relevant and extract mean location
     [~,MaxChanneltmp] = nanmax(nanmax(abs(nanmean(spikeMap(35:70,:,:),3)),[],1));
@@ -196,7 +200,6 @@ for uid = 1:nclus
 end
 fprintf('\n')
 disp(['Extracting raw waveforms and parameters took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])
-
 %% Metrics
 % PeakTime = nan(nclus,2); % Peak time first versus second half
 % MaxChannel = nan(nclus,2); % Max channel first versus second half
@@ -321,17 +324,19 @@ end
 disp(['Calculating neural traces took ' num2str(round(toc(timercounter))) ' seconds for ' num2str(nclus) ' units'])
 
 %% Location differences between pairs of units: - This is done twice to account for large drift between sessions
+channelpos_AllCat = unique(cat(1,Allchannelpos{:}),'rows');
+
 flag=0;
 while flag<2
     figure('name','Projection locations all units')
-    scatter(channelpos(:,1),channelpos(:,2),10,[0 0 0],'filled')
+    scatter(channelpos_AllCat(:,1),channelpos_AllCat(:,2),10,[0 0 0],'filled')
     hold on
     scatter(nanmean(ProjectedLocation(1,:,:),3),nanmean(ProjectedLocation(2,:,:),3),10,GoodRecSesID)
     colormap jet
     makepretty
     xlabel('XPos (um)')
     ylabel('YPos (um)')
-    xlim([min(channelpos(:,1))-50 max(channelpos(:,1))+50])
+    xlim([min(channelpos_AllCat(:,1))-50 max(channelpos_AllCat(:,1))+50])
     drawnow
     saveas(gcf,fullfile(SaveDir,'ProjectedLocation.fig'))
     saveas(gcf,fullfile(SaveDir,'ProjectedLocation.bmp'))
@@ -354,7 +359,7 @@ while flag<2
 
     % Variance in error, corrected by average error. This captures whether
     % the trajectory is consistenly separate
-    MSELoc = squeeze(nanvar(LocDistSign,[],3)./nanmean(LocDistSign,3)+nanmean(LocDistSign,3));
+    MSELoc = squeeze(nanvar(LocDistSign,[],2)./nanmean(LocDistSign,2)+nanmean(LocDistSign,2));
     LocDistSign = squeeze(nanvar(LocDistSign,[],2))./squeeze(sum(w,2)); % Variance in distance between the two traces
 
     disp('Computing location angle (direction) differences between pairs of units, per individual time point of the waveform...')
@@ -981,11 +986,10 @@ saveas(gcf,fullfile(SaveDir,'RankScoreVSProbability.bmp'))
 
 tmpf = triu(FingerprintR);
 tmpm = triu(MatchProbability);
+tmpr = triu(RankScoreAll);
+tmpr = tmpr(tmpf~=0);
 tmpm = tmpm(tmpf~=0);
 tmpf = tmpf(tmpf~=0);
-tmpr = triu(RankScoreAll);
-tmpr = tmpr(tmpr~=0);
-
 figure;
 scatter(tmpm,tmpf,14,tmpr,'filled')
 colormap(cat(1,[0 0 0],winter))
@@ -1312,6 +1316,8 @@ if MakePlotsOfPairs
                 cv=2;
             end
             uid = Pairs{pairid}(uidx);
+            channelpos = Allchannelpos{recsesGood(uid)};
+
 
             % Load raw data
             SM1=load(fullfile(SaveDir,'UnitMatchWaveforms',['Unit' num2str(OriUniqueID(Good_Idx(uid))) '_RawSpikes.mat']));

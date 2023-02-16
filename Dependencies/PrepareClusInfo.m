@@ -75,6 +75,7 @@ channel = [];
 Shank=[];
 recses = [];
 AllKiloSortPaths = [];
+AllChannelPos = cell(1,0);
 countid=1;
 % figure;
 cols = jet(length(KiloSortPaths));
@@ -168,7 +169,6 @@ for subsesid=1:length(KiloSortPaths)
     %% Bombcell parameters
     % clear paramBC
     paramBC = bc_qualityParamValuesForUnitMatch(dir(strrep(fullfile(rawD(1).folder,rawD(1).name),'cbin','meta')),fullfile(Params.tmpdatafolder,strrep(rawD(1).name,'cbin','bin')));
-    paramBC.reextractRaw = 1;
 
     %% Load Cluster Info
     myClusFile = dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'cluster_info.tsv')); % If you did phy (manual curation) we will find this one... We can trust you, right?
@@ -403,6 +403,8 @@ for subsesid=1:length(KiloSortPaths)
         recsesAll = cat(1,recsesAll(:),repmat(addthis+1,1,length(Good_IDtmp))');
     end
     sp{countid}.RecSes = sp{countid}.SessionID+countid-1; %Keep track of recording session, as cluster IDs are not unique across sessions
+    AllChannelPos{countid} = channelpos;
+
     countid=countid+1;
     close all
 
@@ -457,7 +459,7 @@ UMparam.sampleamount = paramBC.nRawSpikesToExtract; %500; % Nr. waveforms to inc
 UMparam.spikeWidth =paramBC.spikeWidth; %82; % in sample space (time)
 UMparam.UseBombCelRawWav = Params.RunQualityMetrics; % 1 by default
 UMparam.KSDir = AllKiloSortPaths;
-UMparam.channelpos = channelpos;
+UMparam.channelpos = AllChannelPos;
 UMparam.AllRawPaths = RawDataPaths;
 UMparam.AllDecompPaths = arrayfun(@(X) fullfile(Params.tmpdatafolder,strrep(RawDataPaths(X).name,'cbin','bin')),1:length(RawDataPaths),'Uni',0);
 UMparam.RedoExtraction = 1;

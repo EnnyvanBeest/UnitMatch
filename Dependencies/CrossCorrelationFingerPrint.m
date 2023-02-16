@@ -41,9 +41,11 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCo
     end
 
     %% Computes the fingerprint correlations and rank across days
-
     for did1 = 1:ndays
         for did2 = 1:ndays
+            % Get the indices
+            clusIdxD1All = SessionSwitch(did1):SessionSwitch(did1+1)-1;
+            clusIdxD2All = SessionSwitch(did2):SessionSwitch(did2+1)-1;
             if did2==did1
                 % Within day, compute correlations across the 2 folds
 
@@ -102,14 +104,15 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCo
                 end
 
                 % Get the correlation of the fingerprints
-                FingerprintR = corr(SessionCorrelation_Pair{1},SessionCorrelation_Pair{2},'rows','pairwise');
+                if isempty(SessionCorrelation_Pair{1}) || isempty(SessionCorrelation_Pair{2})
+                    FingerprintR = zeros(length(clusIdxD1All),length(clusIdxD2All));
+                else
+                    FingerprintR = corr(SessionCorrelation_Pair{1},SessionCorrelation_Pair{2},'rows','pairwise');
+                end
 
                 AllSessionCorrelations{did1,did2} = cat(2,SessionCorrelation_Pair{:})';
             end
 
-            % Get the indices
-            clusIdxD1All = SessionSwitch(did1):SessionSwitch(did1+1)-1;
-            clusIdxD2All = SessionSwitch(did2):SessionSwitch(did2+1)-1;
 
             % Save Fingerprint correlations
             FingerprintRAll(clusIdxD1All,clusIdxD2All) = FingerprintR;

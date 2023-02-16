@@ -7,8 +7,25 @@ scatter(sp.st,sp.spikeDepths,1,[0 0 0],'filled')
 title('Spikes with noise')
 hold on
 
+%
+% First remove general noise
+binsz = 0.001;
+edges = [min(sp.st)-binsz/2:binsz:max(sp.st)+binsz/2];
+timevec = [min(sp.st):binsz:max(sp.st)];
+
+depthstep = 25; %um
+depthedges = [min(sp.spikeDepths)-depthstep/2:depthstep:max(sp.spikeDepths)+depthstep/2];
+tmpact = arrayfun(@(X) histcounts(sp.st(sp.spikeDepths>depthedges(X)&sp.spikeDepths<depthedges(X+1)),edges),1:length(depthedges)-1,'UniformOutput',0);
+tmpact = cat(1,tmpact{:});
+tmpact = (tmpact-nanmean(tmpact,2))./nanstd(tmpact,[],2); %Z-score
+tpidx = find(sum(tmpact>3,1)>0.5*length(depthedges)-1);
+
+% Remove these timepoints
+rmidx = arrayfun(@(X) find(sp.st>timevec(X)-binsz/2&sp.st<timevec(X)+binsz/2),tpidx,'UniformOutput',0);
+rmidx = cat(1,rmidx{:});
+
+% Now remove noisy spikes of individual units
 UniqClus = unique(sp.spikeTemplates);
-rmidx = [];
 PercRemoved = nan(1,length(UniqClus));
 for uid = 1:length(UniqClus)
     tmpfind = find(sp.spikeAmps(sp.spikeTemplates==UniqClus(uid))>quantile(sp.spikeAmps(sp.spikeTemplates==UniqClus(uid)),0.75)+1.5*(quantile(sp.spikeAmps(sp.spikeTemplates==UniqClus(uid)),0.75)-quantile(sp.spikeAmps(sp.spikeTemplates==UniqClus(uid)),0.25)));

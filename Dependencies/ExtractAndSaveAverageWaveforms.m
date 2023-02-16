@@ -5,7 +5,6 @@ function ExtractAndSaveAverageWaveforms(clusinfo,param,sp)
 RedoExtraction = param.RedoExtraction; % Raw waveform and parameter extraction
 AllDecompPaths = param.AllDecompPaths;
 AllRawPaths = param.AllRawPaths;
-param.nChannels = length(param.channelpos)+1; %First assume there's a sync channel as well.
 sampleamount = param.sampleamount; %500; % Nr. waveforms to include
 spikeWidth = param.spikeWidth; %83; % in sample space (time)
 halfWidth = floor(spikeWidth/2);
