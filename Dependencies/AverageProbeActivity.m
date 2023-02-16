@@ -73,173 +73,191 @@ for midx = length(MiceOpt)
                 end
             end
 
-            for IMROID = 1:length(subsesoptGroups)
+            if PrepareClusInfoparams.separateIMRO
+                for IMROID = 1:length(subsesoptGroups)
+                    %% Create saving directoryed
+                    clear params
+                    thisIMRO = IMROTableOpt{IMROID};
+                    thisdate = [];
+                    if ~exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,thisIMRO))
+                        mkdir(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,thisIMRO))
+                    end
+                    PrepareClusInfoparams.SaveDir = fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,thisIMRO);
+
+                    %% Get cluster information
+                    [clusinfo,sp] = PrepareClusInfo(subsesoptAll(subsesoptGroups{IMROID}),PrepareClusInfoparams);
+
+                    %% Save out
+                    GoodUnits{midx}{probeid}{IMROID} = clusinfo;
+                end
+            else
                 %% Create saving directoryed
                 clear params
-                thisIMRO = IMROTableOpt{IMROID};
+                thisIMRO = '';
                 thisdate = [];
                 if ~exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,thisIMRO))
                     mkdir(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,thisIMRO))
                 end
                 PrepareClusInfoparams.SaveDir = fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,thisIMRO);
 
-                %% Get cluster information                
-                [clusinfo,sp] = PrepareClusInfo(subsesoptAll(subsesoptGroups{IMROID}),PrepareClusInfoparams);
-                
+                %% Get cluster information
+                [clusinfo,sp] = PrepareClusInfo(subsesoptAll,PrepareClusInfoparams);
+
                 %% Save out
                 GoodUnits{midx}{probeid}{IMROID} = clusinfo;
 
-                % This extracts the parameters within clusinfo and sp
-                % struct for further analysis
-                ExtractFields({sp,clusinfo})
-                spikeShank = nan(length(clu),1);
-                ShankOpt = unique(Shank);
-                for shid = 1:length(ShankOpt)
-                    spikeShank(ismember(clu,cluster_id(Shank==ShankOpt(shid)))&ismember(RecSes,RecSesID(Shank==ShankOpt(shid)))) = ShankOpt(shid);
+
+            end
+            % This extracts the parameters within clusinfo and sp
+            % struct for further analysis
+            ExtractFields({sp,clusinfo})
+            spikeShank = nan(length(clu),1);
+            ShankOpt = unique(Shank);
+            for shid = 1:length(ShankOpt)
+                spikeShank(ismember(clu,cluster_id(Shank==ShankOpt(shid)))&ismember(RecSes,RecSesID(Shank==ShankOpt(shid)))) = ShankOpt(shid);
+            end
+            %% Show Activity on probe
+            depthbins = min(depth):100:max(depth);
+            depthavg = min(depth)+50:100:max(depth)-50;
+            spShDepth  = nan(length(depthbins)-1,length(ShankOpt));
+            for shid = 1:length(ShankOpt)
+                % Clusters on this shank
+                parfor deptid=1:length(depthbins)-1
+                    tmpclu = clu(ismember(spikeShank,ShankOpt(shid))& spikeDepths>=depthbins(deptid)&spikeDepths<=depthbins(deptid+1));
+
+                    tmpst = st(ismember(spikeShank,ShankOpt(shid))& spikeDepths>=depthbins(deptid)&spikeDepths<=depthbins(deptid+1));
+
+                    spShDepth(deptid,shid) = nanmean(histcounts(tmpst,'BinWidth',1))./length(unique(tmpclu));
+
                 end
-                %% Show Activity on probe
-                depthbins = min(depth):100:max(depth);
-                depthavg = min(depth)+50:100:max(depth)-50;
-                spShDepth  = nan(length(depthbins)-1,length(ShankOpt));
-                for shid = 1:length(ShankOpt)
-                    % Clusters on this shank
-                    parfor deptid=1:length(depthbins)-1
-                        tmpclu = clu(ismember(spikeShank,ShankOpt(shid))& spikeDepths>=depthbins(deptid)&spikeDepths<=depthbins(deptid+1));
+            end
 
-                        tmpst = st(ismember(spikeShank,ShankOpt(shid))& spikeDepths>=depthbins(deptid)&spikeDepths<=depthbins(deptid+1));
-
-                        spShDepth(deptid,shid) = nanmean(histcounts(tmpst,'BinWidth',1))./length(unique(tmpclu));
-
-                    end
-                end
-
-                if plotUnitActivity
-                    figure('name',[MiceOpt{midx} ' Activity Per Shank'])
-                    imagesc(ShankOpt,depthavg,spShDepth,[quantile(spShDepth(:),0.05) quantile(spShDepth(:),0.95)])
-                    set(gca,'YDir','normal')
-                    colormap hot
-                    h=colorbar;
-                    h.Label.String = 'Spikes/Sec';
-                    xlabel('Shank')
-                    ylabel('Depth (micron)')
-                end
-                %% Get multiunit correlation - Copied from Petersen github
-                goodonly=0
-                if goodonly
-                    spikeID = ismember(clu,Good_ID);
-                else
+            if plotUnitActivity
+                figure('name',[MiceOpt{midx} ' Activity Per Shank'])
+                imagesc(ShankOpt,depthavg,spShDepth,[quantile(spShDepth(:),0.05) quantile(spShDepth(:),0.95)])
+                set(gca,'YDir','normal')
+                colormap hot
+                h=colorbar;
+                h.Label.String = 'Spikes/Sec';
+                xlabel('Shank')
+                ylabel('Depth (micron)')
+            end
+            %% Get multiunit correlation - Copied from Petersen github
+            goodonly=0
+            if goodonly
+                spikeID = ismember(clu,Good_ID);
+            else
+                spikeID = true(length(clu),1);
+                try
+                    % Some form of quality control
+                    spikeID(ismember(clu,cluster_id(clusinfo.n_spikes<=quantile(clusinfo.n_spikes,0.01))))=0; %too little spikes
+                    spikeID(ismember(clu,cluster_id(clusinfo.n_spikes>=quantile(clusinfo.n_spikes,0.99))))=0; %too many spikes
+                    spikeID(ismember(clu,cluster_id(clusinfo.amp>=quantile(clusinfo.amp,0.99))))=0; %ridiculous amplitudes
+                    spikeID(ismember(clu,cluster_id(clusinfo.fr>=quantile(clusinfo.fr,0.99))))=0; %ridiculous firing rates
+                    spikeID(ismember(clu,cluster_id(clusinfo.ContamPct>=quantile(clusinfo.ContamPct,0.99))))=0; %ridiculous Contamination percentage
+                    spikeID(ismember(clu,cluster_id(ismember(cellstr(Label),'noise'))))=0; %noise should not count, only MUA and good unit
+                catch
+                    disp('This is non curated data, using all units from kilosort output')
                     spikeID = true(length(clu),1);
-                    try
-                        % Some form of quality control
-                        spikeID(ismember(clu,cluster_id(clusinfo.n_spikes<=quantile(clusinfo.n_spikes,0.01))))=0; %too little spikes
-                        spikeID(ismember(clu,cluster_id(clusinfo.n_spikes>=quantile(clusinfo.n_spikes,0.99))))=0; %too many spikes
-                        spikeID(ismember(clu,cluster_id(clusinfo.amp>=quantile(clusinfo.amp,0.99))))=0; %ridiculous amplitudes
-                        spikeID(ismember(clu,cluster_id(clusinfo.fr>=quantile(clusinfo.fr,0.99))))=0; %ridiculous firing rates
-                        spikeID(ismember(clu,cluster_id(clusinfo.ContamPct>=quantile(clusinfo.ContamPct,0.99))))=0; %ridiculous Contamination percentage
-                        spikeID(ismember(clu,cluster_id(ismember(cellstr(Label),'noise'))))=0; %noise should not count, only MUA and good unit
-                    catch
-                        disp('This is non curated data, using all units from kilosort output')
-                        spikeID = true(length(clu),1);
-                    end
                 end
-                n_corr_groups = 80;
-                startpoint =  min(depth);
-                endpoint = max(depth);
-                depth_group_edges = linspace(startpoint,endpoint,n_corr_groups+1);
-                depth_group = discretize(spikeDepths,depth_group_edges);
-                depth_group_centers = depth_group_edges(1:end-1)+(diff(depth_group_edges)/2);
-                unique_depths = 1:length(depth_group_edges)-1;
+            end
+            n_corr_groups = 80;
+            startpoint =  min(depth);
+            endpoint = max(depth);
+            depth_group_edges = linspace(startpoint,endpoint,n_corr_groups+1);
+            depth_group = discretize(spikeDepths,depth_group_edges);
+            depth_group_centers = depth_group_edges(1:end-1)+(diff(depth_group_edges)/2);
+            unique_depths = 1:length(depth_group_edges)-1;
 
-                spike_binning = 1; % seconds
-                corr_edges = nanmin(st(spikeID)):spike_binning:nanmax(st(spikeID));
-                corr_centers = corr_edges(1:end-1) + diff(corr_edges);
+            spike_binning = 1; % seconds
+            corr_edges = nanmin(st(spikeID)):spike_binning:nanmax(st(spikeID));
+            corr_centers = corr_edges(1:end-1) + diff(corr_edges);
 
-                nshanks = length(ShankOpt);
-                mua_corr = cell(1,nshanks);
-                for shid = 1:nshanks
-                    binned_spikes_depth = zeros(length(unique_depths),length(corr_edges)-1);
-                    parfor curr_depth = 1:length(unique_depths)
-                        binned_spikes_depth(curr_depth,:) = histcounts(st(spikeID& depth_group == unique_depths(curr_depth) & spikeShank==ShankOpt(shid)), corr_edges);
-                    end
-                    %     % Z-score
-                    %     binned_spikes_depth = (binned_spikes_depth - nanmean(binned_spikes_depth(:)))./nanstd(binned_spikes_depth(:));
-
-                    binned_spikes_depth(:,nansum(binned_spikes_depth,1)>quantile(nansum(binned_spikes_depth,1),0.95))=0;
-                    mua_corr{shid} = smooth2a(corrcoef(binned_spikes_depth'),3);
+            nshanks = length(ShankOpt);
+            mua_corr = cell(1,nshanks);
+            for shid = 1:nshanks
+                binned_spikes_depth = zeros(length(unique_depths),length(corr_edges)-1);
+                parfor curr_depth = 1:length(unique_depths)
+                    binned_spikes_depth(curr_depth,:) = histcounts(st(spikeID& depth_group == unique_depths(curr_depth) & spikeShank==ShankOpt(shid)), corr_edges);
                 end
-                mua_corr = cat(3,mua_corr{:});
-                mua_corr = reshape(mua_corr,size(mua_corr,1),[]);
-                limup = [quantile(mua_corr(:),0.1) quantile(mua_corr(:),0.95)];
-                % Plot multiunit correlation
-                figure
-                multiunit_ax = subplot(3,9,[1:5,10:14,19:23]);
-                h=imagesc(1:length(depth_group_centers)*nshanks,depth_group_centers,mua_corr,limup);
-                caxis([0,max(mua_corr(mua_corr~=1))]); colormap(hot);
-                set(h,'Alphadata',~isnan(mua_corr))
-                set(gca,'Color',[0.5 0.5 0.5])
-                hold on
-                for shid = 1:nshanks
-                    line([size(mua_corr,1)*shid size(mua_corr,1)*shid],[startpoint endpoint],'color',[0.4 0.6 0],'LineStyle','--','LineWidth',3)
+                %     % Z-score
+                %     binned_spikes_depth = (binned_spikes_depth - nanmean(binned_spikes_depth(:)))./nanstd(binned_spikes_depth(:));
+
+                binned_spikes_depth(:,nansum(binned_spikes_depth,1)>quantile(nansum(binned_spikes_depth,1),0.95))=0;
+                mua_corr{shid} = smooth2a(corrcoef(binned_spikes_depth'),3);
+            end
+            mua_corr = cat(3,mua_corr{:});
+            mua_corr = reshape(mua_corr,size(mua_corr,1),[]);
+            limup = [quantile(mua_corr(:),0.1) quantile(mua_corr(:),0.95)];
+            % Plot multiunit correlation
+            figure
+            multiunit_ax = subplot(3,9,[1:5,10:14,19:23]);
+            h=imagesc(1:length(depth_group_centers)*nshanks,depth_group_centers,mua_corr,limup);
+            caxis([0,max(mua_corr(mua_corr~=1))]); colormap(hot);
+            set(h,'Alphadata',~isnan(mua_corr))
+            set(gca,'Color',[0.5 0.5 0.5])
+            hold on
+            for shid = 1:nshanks
+                line([size(mua_corr,1)*shid size(mua_corr,1)*shid],[startpoint endpoint],'color',[0.4 0.6 0],'LineStyle','--','LineWidth',3)
+            end
+            ylim([startpoint,endpoint]);
+            xlim([1,length(depth_group_centers)*nshanks]);
+            set(gca,'XTickLabel','')
+            DChannels = endpoint-startpoint;
+
+
+            set(multiunit_ax,'YDir','normal');
+            title('MUA correlation');
+            xlabel(multiunit_ax,'Multiunit depth X Probe');
+            ylabel(multiunit_ax,'Multiunit depth');
+
+            %% LFP
+            if PlotLFP
+                myLFDir = fullfile(DataDir{DataDir2Use(midx)},MiceOpt{midx},'*','ephys');
+                lfpD = dir(fullfile(myLFDir,'*','*','*.ap.*bin')); % ap file from spikeGLX specifically
+                if isempty(lfpD)
+                    disp('No LFP data found')
+                elseif length(lfpD)>length(subksdirs)
+                    disp('Just take data from the last recording')
+                    lfpD = lfpD(end);
+                elseif length(lfpD)<length(subksdirs)
+                    disp('Should be a different amount of probes?')
+                    keyboard
+                else
+                    lfpD = lfpD(probeid);
                 end
-                ylim([startpoint,endpoint]);
-                xlim([1,length(depth_group_centers)*nshanks]);
-                set(gca,'XTickLabel','')
-                DChannels = endpoint-startpoint;
+                freqBands = {[1.5 4], [4 12], [12 20], [20 30], [25 100],[150 200]};
+                FreqNames = {'Delta','Theta','Alpha','Beta','Gamma','Ripples'};
+                [lfpByChannel, allPowerEst, F, allPowerVar] = lfpBandPowerNP2(fullfile(lfpD.folder,lfpD.name),freqBands);
+                LFP_On=1;
+                %normalize LFP per frequency
+                lfpByChannel = (lfpByChannel-nanmean(lfpByChannel,1))./nanstd(lfpByChannel,[],1);
+                if size(channelpos,1)>size(lfpByChannel,1)
+                    channelpos = channelpostmp; %Take channel opt from last session
+                end
+
+                %Channel to depth/xpos:
+                xposopt = unique(floor(channelpos(:,1)./100).*100);
+                yposopt = unique(round(channelpos(:,2)./100).*100);
+
+                PwPerSh=arrayfun(@(Y) arrayfun(@(X) squeeze(nanmean(lfpByChannel((round(channelpos(:,1)./100).*100==X&round(channelpos(:,2)./100).*100==Y),:),1)),xposopt,'UniformOutput',0),yposopt,'UniformOutput',0);
+                PwPerSh = cat(2,PwPerSh{:});
+                PwPerSh = cat(2,PwPerSh{:});
+                PwPerSh = reshape(PwPerSh,length(freqBands),length(xposopt),length(yposopt));
 
 
-                set(multiunit_ax,'YDir','normal');
-                title('MUA correlation');
-                xlabel(multiunit_ax,'Multiunit depth X Probe');
-                ylabel(multiunit_ax,'Multiunit depth');
+                figure('name',['LFP ' MiceOpt{midx} ' ' thisdate])
+                for shid = 1:length(ShankOpt)
+                    subplot(1,length(ShankOpt),shid)
+                    imagesc([],yposopt,squeeze(PwPerSh(:,shid,:))');
+                    set(gca,'ydir','normal')
+                    ylabel('Micron from tip')
+                    xlabel('frequency')
+                    colormap hot
+                    title(['Shank ' num2str(ShankOpt(shid))])
+                    set(gca,'XTick',1:length(FreqNames),'XTickLabel',FreqNames','XTickLabelRotation',45)
+                    %                     title(sprintf('%d to %d Hz',round(freqBand{shid}(1)),round(freqBand{shid}(2))))
 
-                %% LFP
-                if PlotLFP
-                    myLFDir = fullfile(DataDir{DataDir2Use(midx)},MiceOpt{midx},'*','ephys');
-                    lfpD = dir(fullfile(myLFDir,'*','*','*.ap.*bin')); % ap file from spikeGLX specifically
-                    if isempty(lfpD)
-                        disp('No LFP data found')
-                    elseif length(lfpD)>length(subksdirs)
-                        disp('Just take data from the last recording')
-                        lfpD = lfpD(end);
-                    elseif length(lfpD)<length(subksdirs)
-                        disp('Should be a different amount of probes?')
-                        keyboard
-                    else
-                        lfpD = lfpD(probeid);
-                    end
-                    freqBands = {[1.5 4], [4 12], [12 20], [20 30], [25 100],[150 200]};
-                    FreqNames = {'Delta','Theta','Alpha','Beta','Gamma','Ripples'};
-                    [lfpByChannel, allPowerEst, F, allPowerVar] = lfpBandPowerNP2(fullfile(lfpD.folder,lfpD.name),freqBands);
-                    LFP_On=1;
-                    %normalize LFP per frequency
-                    lfpByChannel = (lfpByChannel-nanmean(lfpByChannel,1))./nanstd(lfpByChannel,[],1);
-                    if size(channelpos,1)>size(lfpByChannel,1)
-                        channelpos = channelpostmp; %Take channel opt from last session
-                    end
-
-                    %Channel to depth/xpos:
-                    xposopt = unique(floor(channelpos(:,1)./100).*100);
-                    yposopt = unique(round(channelpos(:,2)./100).*100);
-
-                    PwPerSh=arrayfun(@(Y) arrayfun(@(X) squeeze(nanmean(lfpByChannel((round(channelpos(:,1)./100).*100==X&round(channelpos(:,2)./100).*100==Y),:),1)),xposopt,'UniformOutput',0),yposopt,'UniformOutput',0);
-                    PwPerSh = cat(2,PwPerSh{:});
-                    PwPerSh = cat(2,PwPerSh{:});
-                    PwPerSh = reshape(PwPerSh,length(freqBands),length(xposopt),length(yposopt));
-
-
-                    figure('name',['LFP ' MiceOpt{midx} ' ' thisdate])
-                    for shid = 1:length(ShankOpt)
-                        subplot(1,length(ShankOpt),shid)
-                        imagesc([],yposopt,squeeze(PwPerSh(:,shid,:))');
-                        set(gca,'ydir','normal')
-                        ylabel('Micron from tip')
-                        xlabel('frequency')
-                        colormap hot
-                        title(['Shank ' num2str(ShankOpt(shid))])
-                        set(gca,'XTick',1:length(FreqNames),'XTickLabel',FreqNames','XTickLabelRotation',45)
-                        %                     title(sprintf('%d to %d Hz',round(freqBand{shid}(1)),round(freqBand{shid}(2))))
-
-                    end
                 end
             end
         end
@@ -268,15 +286,23 @@ for midx = length(MiceOpt)
                 %Saving directory
                 thisprobe = subksdirs(probeid).name
 
-
-
                 %% Get cluster information
                 clear params
-                params.loadPCs=true;
-                params.thisdate = thisdate;
-                [clusinfo,sp] = PrepareClusInfo(dir(myKsDir),PrepareClusInfoparams);
+                PrepareClusInfoparams.thisdate = thisdate;
+                PrepareClusInfoparams.SaveDir = fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe);
 
+                [clusinfo,sp] = PrepareClusInfo(subksdirs(probeid),PrepareClusInfoparams);
                 GoodUnits{midx}{didx}{probeid} = clusinfo;
+
+                % This extracts the parameters within clusinfo and sp
+                % struct for further analysis
+                ExtractFields({sp,clusinfo})
+                spikeShank = nan(length(clu),1);
+                ShankOpt = unique(Shank);
+                for shid = 1:length(ShankOpt)
+                    spikeShank(ismember(clu,cluster_id(Shank==ShankOpt(shid)))&ismember(RecSes,RecSesID(Shank==ShankOpt(shid)))) = ShankOpt(shid);
+                end
+
                 if ~any(Good_ID)
                     disp('No Good units found.. continue')
                     continue
@@ -284,7 +310,7 @@ for midx = length(MiceOpt)
 
                 % Show probe recording per location
                 figure('name',[MiceOpt{midx} ' ' thisdate ' ' thisprobe ' Recording Per Shank'])
-                scatter(Shank,depth,8,recses);
+                scatter(Shank,depth,8,RecSesID);
 
                 myLFDir = fullfile(DataDir{DataDir2Use(midx)},MiceOpt{midx},thisdate,'ephys');
                 lfpD = dir(fullfile(myLFDir,'*','*','*.lf.*bin')); % ap file from spikeGLX specifically
@@ -651,7 +677,7 @@ for midx = length(MiceOpt)
         countday = countday+1;
     end
     ylim([0 max(get(gca,'ylim'))+300])
-%     xlim([0.5 countday-0.5])
+    %     xlim([0.5 countday-0.5])
     xlabel('Recording/Shank')
     ylabel('Depth from probetip')
     title(['Good Units Across Days/Shank ' MiceOpt{midx}])
