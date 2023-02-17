@@ -27,6 +27,13 @@ function [clusinfo,sp] = PrepareClusInfo(KiloSortPaths,Params,RawDataPaths)
 % optionally Quality and Matches (oversplits/matches across recordings) are identified
 % Sp: Struct with spike information for all recordings
 
+%% Load existing?
+if exist(fullfile(Params.SaveDir,'PreparedData.mat')) && ~Params.RedoQM && ~Params.RedoUnitMatch
+    disp(['Found existing data in ' Params.SaveDir ', loading...'])
+    load(fullfile(Params.SaveDir,'PreparedData.mat'))
+    return
+end
+
 %% Check inputs
 if ~isstruct(KiloSortPaths) || ~isfield(KiloSortPaths(1),'name') || ~isfield(KiloSortPaths(1),'folder')
     error('This is not a directory... give correct input please')
@@ -505,10 +512,17 @@ if Params.UnitMatch
         clusinfo.MatchTable = MatchTable;
         save(fullfile(UMparam.SaveDir,'UnitMatch.mat'),'UniqueID','MatchTable','UMparam')
     end
+    % Save out sp unique cluster
+    keyboard
+    sp
 elseif DecompressionFlag % You might want to at least save out averaged waveforms for every session to get back to later, if they were saved out by bomcell
     % Extract average waveforms
     ExtractAndSaveAverageWaveforms(clusinfo,UMparam,sp)
 end
+
+%% Save
+disp(['Saving cluster and spike information in ' Params.SaveDir])
+save(fullfile(Params.SaveDir,'PreparedData.mat'),'clusinfo','sp','Params','-v7.3')
 
 %% Remove temporary files
 if 0%Params.DecompressLocal && DecompressionFlag

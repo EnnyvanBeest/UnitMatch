@@ -297,12 +297,7 @@ for midx = length(MiceOpt)
                 % This extracts the parameters within clusinfo and sp
                 % struct for further analysis
                 ExtractFields({sp,clusinfo})
-                spikeShank = nan(length(clu),1);
-                ShankOpt = unique(Shank);
-                for shid = 1:length(ShankOpt)
-                    spikeShank(ismember(clu,cluster_id(Shank==ShankOpt(shid)))&ismember(RecSes,RecSesID(Shank==ShankOpt(shid)))) = ShankOpt(shid);
-                end
-
+             
                 if ~any(Good_ID)
                     disp('No Good units found.. continue')
                     continue

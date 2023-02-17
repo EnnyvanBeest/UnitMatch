@@ -1190,22 +1190,6 @@ ylabel('Unit_j')
 zlabel('Counts')
 title('Identified Matches')
 
-%% ISI violations (for over splits matching)
-ISIViolationsScore = nan(1,size(Pairs,1));
-fprintf(1,'Computing functional properties similarity. Progress: %3d%%',0)
-for pairid= 1:size(Pairs,1)
-    if GoodRecSesID(Pairs(pairid,1)) == GoodRecSesID(Pairs(pairid,2))
-        idx1 = sp.spikeTemplates == AllClusterIDs(Good_Idx(Pairs(pairid,1)))&sp.RecSes == GoodRecSesID(Pairs(pairid,1));
-        idx2 = sp.spikeTemplates == AllClusterIDs(Good_Idx(Pairs(pairid,2)))&sp.RecSes == GoodRecSesID(Pairs(pairid,2));
-        DifScore = diff(sort([sp.st(idx1); sp.st(idx2)]));
-        ISIViolationsScore(pairid) = sum(DifScore.*1000<1.5)./length(DifScore);
-        fprintf(1,'\b\b\b\b%3.0f%%',pairid/size(Pairs,1)*100)
-    end
-end
-fprintf('\n')
-disp(['Removing ' num2str(sum(ISIViolationsScore>0.05)) ' matched oversplits, as merging them will violate ISI >5% of the time'])
-Pairs(ISIViolationsScore>0.05,:)=[];
-
 %% Some evaluation:
 % Units on the diagonal are matched by (Py)KS within a day. Very likely to
 % be correct:
@@ -1214,7 +1198,7 @@ FNEst = (1-(sum(diag(MatchProbability)>param.ProbabilityThreshold)./nclus))*100;
 disp([num2str(round(sum(diag(MatchProbability)>param.ProbabilityThreshold)./nclus*100)) '% of units were matched with itself'])
 disp(['False negative estimate: ' num2str(round(FNEst*100)/100) '%'])
 if FNEst>10
-    keyboard
+    warning('Warning, false negatives very high!')
 end
 lowselfscores = find(diag(MatchProbability<param.ProbabilityThreshold));
 
@@ -1233,11 +1217,6 @@ BestMdl.FalseNegativeEstimate = FNEst;
 save(fullfile(SaveDir,'MatchingScores.mat'),'BestMdl','SessionSwitch','GoodRecSesID','AllClusterIDs','Good_Idx','WavformMSE','WVCorr','LocationCombined','waveformTimePointSim','PeakTimeSim','spatialdecaySim','TotalScore','label','MatchProbability')
 save(fullfile(SaveDir,'UnitMatchModel.mat'),'BestMdl')
 
-% %% Average in 3rd dimension (halfs of a session)
-% ProjectedWaveform = nanmean(ProjectedWaveform,3); %Average over first and second half of session
-% ProjectedLocation = nanmean(ProjectedLocation,3);
-% ProjectedLocationPerTP = nanmean(ProjectedLocationPerTP,4);
-
 %% Change these parameters to probabilities of being a match
 % for pidx = 1:length(Scores2Include)
 %     eval(['tmp = ' Scores2Include{pidx} ';'])
@@ -1247,38 +1226,29 @@ save(fullfile(SaveDir,'UnitMatchModel.mat'),'BestMdl')
 %     eval([Scores2Include{pidx} '= reshape(tmp,nclus,nclus);'])
 %
 % end
+
 %% Assign same Unique ID
 OriUniqueID = UniqueID; %need for plotting
 [PairID1,PairID2]=meshgrid(AllClusterIDs(Good_Idx));
 [recses1,recses2] = meshgrid(recsesAll(Good_Idx));
 MatchTable = table(PairID1(:),PairID2(:),recses1(:),recses2(:),MatchProbability(:),RankScoreAll(:),FingerprintR(:),TotalScore(:),'VariableNames',{'ID1','ID2','RecSes1','RecSes2','MatchProb','RankScore','FingerprintCor','TotalScore'});
-[~,sortidx] = sort(diag(MatchProbability(Pairs(:,1),Pairs(:,2))),'descend');
-Pairs = Pairs(sortidx,:);
-for id = 1:size(Pairs,1)
-    AllUID = find(UniqueID(Good_Idx)==UniqueID(Good_Idx(Pairs(id,1)))); %find already existing units with this UID
-    if all(MatchProbability(AllUID,Pairs(id,2))>param.ProbabilityThreshold | (MatchProbability(Pairs(id,2),AllUID)>param.ProbabilityThreshold)') %only if all UID have a high enough probability with this second pair, we will include it to have the same UID
-        UniqueID(Good_Idx(Pairs(id,2))) = UniqueID(Good_Idx(Pairs(id,1)));   
-    end
-end
-
-% Pairs redefined:
-uId = unique(UniqueID(Good_Idx));
-Pairs = arrayfun(@(X) find(UniqueID(Good_Idx)==X),uId,'Uni',0);
-Pairs(cellfun(@length,Pairs)==1) = [];
-
-for id =1:length(lowselfscores) % Add these for plotting - inspection
-    Pairs{end+1} = [lowselfscores(id) lowselfscores(id)];
-end
- 
-if RunPyKSChronicStitched
-    for id = 1:size(OnlyDetectedByPyKS,1) % Add these for plotting - inspection
-        Pairs{end+1} = [OnlyDetectedByPyKS(id,1) OnlyDetectedByPyKS(id,2)];
-    end
-end
-
+UniqueID = AssignUniqueID(MatchTable,clusinfo,sp,param);
 
 %% Figures
 if MakePlotsOfPairs
+    % Pairs redefined:
+    uId = unique(UniqueID(Good_Idx));
+    Pairs = arrayfun(@(X) find(UniqueID(Good_Idx)==X),uId,'Uni',0);
+    Pairs(cellfun(@length,Pairs)==1) = [];
+    for id =1:length(lowselfscores) % Add these for plotting - inspection
+        Pairs{end+1} = [lowselfscores(id) lowselfscores(id)];
+    end
+
+    if RunPyKSChronicStitched
+        for id = 1:size(OnlyDetectedByPyKS,1) % Add these for plotting - inspection
+            Pairs{end+1} = [OnlyDetectedByPyKS(id,1) OnlyDetectedByPyKS(id,2)];
+        end
+    end
     timercounter = tic;
     disp('Plotting pairs...')
 
@@ -1520,7 +1490,7 @@ if MakePlotsOfPairs
         delete(tmpfig)
     end
 
-    disp(['Plotting pairs took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])
+    disp(['Plotting pairs took ' num2str(round(toc(timercounter)./60)) ' minutes for ' num2str(nclus) ' units'])
 end
 
 %% Clean up
