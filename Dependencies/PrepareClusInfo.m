@@ -513,8 +513,11 @@ if Params.UnitMatch
         save(fullfile(UMparam.SaveDir,'UnitMatch.mat'),'UniqueID','MatchTable','UMparam')
     end
     % Save out sp unique cluster
-    keyboard
-    sp
+    nclus = length(clusinfo.cluster_id);
+    sp.UniqClu = sp.clu;
+    for clusid=1:nclus
+        sp.UniqClu(sp.clu==clusinfo.cluster_id(clusid) & sp.RecSes==clusinfo.RecSesID(clusid)) = clusinfo.UniqueID(clusid);
+    end
 elseif DecompressionFlag % You might want to at least save out averaged waveforms for every session to get back to later, if they were saved out by bomcell
     % Extract average waveforms
     ExtractAndSaveAverageWaveforms(clusinfo,UMparam,sp)

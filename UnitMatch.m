@@ -1218,14 +1218,10 @@ save(fullfile(SaveDir,'MatchingScores.mat'),'BestMdl','SessionSwitch','GoodRecSe
 save(fullfile(SaveDir,'UnitMatchModel.mat'),'BestMdl')
 
 %% Change these parameters to probabilities of being a match
-% for pidx = 1:length(Scores2Include)
-%     eval(['tmp = ' Scores2Include{pidx} ';'])
-%     tmp = reshape(tmp,1,[]);
-%     [~,minidx] = min(abs(tmp- BestMdl.ScoreVector'));
-%     tmp = (BestMdl.Parameterkernels(minidx,strcmp(BestMdl.VariableNames,Scores2Include{pidx}),2).*Priors(2))./(BestMdl.Parameterkernels(minidx,strcmp(BestMdl.VariableNames,Scores2Include{pidx}),2)./nansum(BestMdl.Parameterkernels(:,strcmp(BestMdl.VariableNames,Scores2Include{pidx}),2)));
-%     eval([Scores2Include{pidx} '= reshape(tmp,nclus,nclus);'])
-%
-% end
+for pidx = 1:length(Scores2Include)
+    [~,IndividualScoreprobability, ~]=ApplyNaiveBayes(Tbl(:,pidx),Parameterkernels(:,pidx,:),Priors);
+    eval([Scores2Include{pidx} ' = reshape(IndividualScoreprobability(:,2),nclus,nclus).*100;'])
+end
 
 %% Assign same Unique ID
 OriUniqueID = UniqueID; %need for plotting
@@ -1298,9 +1294,9 @@ if MakePlotsOfPairs
             ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChannel(uid,cv),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<TakeChannelRadius); %Averaging over 10 channels helps with drift
             Locs = channelpos(ChanIdx,:);
             for id = 1:length(Locs)
-                plot(Locs(id,1)*5+[1:size(SM1,1)],Locs(id,2)*10+SM1(:,ChanIdx(id),cv),'-','color',cols(uidx,:),'LineWidth',1)
+                plot(Locs(id,1)*10+[1:size(SM1,1)],Locs(id,2)*10+SM1(:,ChanIdx(id),cv),'-','color',cols(uidx,:),'LineWidth',1)
             end
-            hleg(uidx) = plot(ProjectedLocation(1,uid,cv)*5+[1:size(SM1,1)],ProjectedLocation(2,uid,cv)*10+ProjectedWaveform(:,uid,cv),'--','color',cols(uidx,:),'LineWidth',2);
+            hleg(uidx) = plot(ProjectedLocation(1,uid,cv)*10+[1:size(SM1,1)],ProjectedLocation(2,uid,cv)*10+ProjectedWaveform(:,uid,cv),'--','color',cols(uidx,:),'LineWidth',2);
 
 
             subplot(3,3,[2])
@@ -1361,7 +1357,7 @@ if MakePlotsOfPairs
         subplot(3,3,[1,4])
         subplot
         makepretty
-        set(gca,'xticklabel',arrayfun(@(X) num2str(X./5),cellfun(@(X) str2num(X),get(gca,'xticklabel')),'UniformOutput',0))
+        set(gca,'xtick',get(gca,'xtick'),'xticklabel',arrayfun(@(X) num2str(X./10),cellfun(@(X) str2num(X),get(gca,'xticklabel')),'UniformOutput',0))
         set(gca,'yticklabel',arrayfun(@(X) num2str(X./10),cellfun(@(X) str2num(X),get(gca,'yticklabel')),'UniformOutput',0))
         xlabel('Xpos (um)')
         ylabel('Ypos (um)')
@@ -1380,6 +1376,7 @@ if MakePlotsOfPairs
         xdif = diff(get(gca,'xlim'));
         stretch = (ydif-xdif)./2;
         set(gca,'xlim',[min(get(gca,'xlim')) - stretch, max(get(gca,'xlim')) + stretch])
+        axis square
         %     legend([h(1),h(2)],{['Unit ' num2str(uid)],['Unit ' num2str(uid2)]})
         hc= colorbar;
         try
@@ -1414,6 +1411,7 @@ if MakePlotsOfPairs
         tmp3(end)=[];
         tmp4 = cell2mat(arrayfun(@(X) [num2str(round(spatialdecaySim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)./100) ','],1:length(Pairs{pairid})-1,'Uni',0));
         tmp4(end)=[];
+        axis square
 
         title(['Waveform Similarity=' tmp ', Corr=' tmp2 ', Ampl=' tmp3 ', decay='  tmp4])
 
