@@ -328,6 +328,7 @@ for midx = length(MiceOpt)
                 %% Show Activity on probe
                 depthbins = min(clusinfo.depth):100:max(clusinfo.depth);
                 depthavg = min(clusinfo.depth)+50:100:max(clusinfo.depth)-50;
+                ShankOpt = unique(spikeShank);
                 spShDepth  = nan(length(depthbins)-1,length(ShankOpt));
                 for shid = 1:length(ShankOpt)
 

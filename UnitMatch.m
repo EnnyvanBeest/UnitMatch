@@ -183,12 +183,12 @@ for uid = 1:nclus
         Amplitude(uid,cv) = Peakval;
 
         % Full width half maximum
-        wvdurtmp = find(sign(Peakval)*ProjectedWaveform(waveidx,uid,cv)>0.25*sign(Peakval)*Peakval);
-        wvdurtmp = wvdurtmp+waveidx(1)-1;
+        wvdurtmp = find(abs(sign(Peakval)*ProjectedWaveform(waveidx,uid,cv))>0.25*sign(Peakval)*Peakval);
+        wvdurtmp = [wvdurtmp(1):wvdurtmp(end)]+waveidx(1)-1;
         waveformduration(uid,cv) = length(wvdurtmp);
 
         % Mean Location per individual time point:
-        ProjectedLocationPerTP(:,uid,wvdurtmp,cv) = cell2mat(arrayfun(@(tp) sum(repmat(abs(spikeMap(tp,ChanIdx,cv)),size(Locs,2),1).*Locs',2)./sum(repmat(abs(spikeMap(tp,ChanIdx,cv)),size(Locs,2),1),2),wvdurtmp','Uni',0));
+        ProjectedLocationPerTP(:,uid,wvdurtmp,cv) = cell2mat(arrayfun(@(tp) sum(repmat(abs(spikeMap(tp,ChanIdx,cv)),size(Locs,2),1).*Locs',2)./sum(repmat(abs(spikeMap(tp,ChanIdx,cv)),size(Locs,2),1),2),wvdurtmp,'Uni',0));
         WaveIdx(uid,wvdurtmp,cv) = 1;
         % Save spikes for these channels
         %         MultiDimMatrix(wvdurtmp,1:length(ChanIdx),uid,cv) = nanmean(spikeMap(wvdurtmp,ChanIdx,wavidx),3);
@@ -352,7 +352,7 @@ while flag<2
     x2 = permute(repmat(squeeze(ProjectedLocationPerTP(:,:,waveidx,2)),[1 1 1 size(ProjectedLocationPerTP,2)]),[1 4 3 2]);
     LocDistSign = squeeze(sqrt(nansum((x1-x2).^2,1)));
     w = squeeze(isnan(abs(x1(1,:,:,:)-x2(1,:,:,:))));
-    LocDistSign(w) = nan;
+%     LocDistSign(w) = nan;
     % Average location + variance in location (captures the trajectory of a waveform in space)
     LocDistSim = squeeze(nanmean(LocDistSign,2)+nanstd(LocDistSign,[],2)./sqrt(nansum(~w,2))); 
  
@@ -360,7 +360,7 @@ while flag<2
     % Variance in error, corrected by average error. This captures whether
     % the trajectory is consistenly separate
     MSELoc = squeeze(nanvar(LocDistSign,[],2)./nanmean(LocDistSign,2)+nanmean(LocDistSign,2));
-    LocDistSign = squeeze(nanvar(LocDistSign,[],2))./squeeze(sum(w,2)); % Variance in distance between the two traces
+    LocDistSign = squeeze(nanvar(LocDistSign,[],2))./sqrt(squeeze(sum(w,2))); % Variance in distance between the two traces
 
     disp('Computing location angle (direction) differences between pairs of units, per individual time point of the waveform...')
     % Difference in angle between two time points
@@ -390,7 +390,7 @@ while flag<2
     LocDist(LocDist<0)=0;
     MSELoc = 1-((MSELoc-nanmin(MSELoc(:)))./(nanmax(MSELoc(:))-nanmin(MSELoc(:))));
     LocAngleSim = 1-((LocAngleSim-nanmin(LocAngleSim(:)))./(nanmax(LocAngleSim(:))-nanmin(LocAngleSim(:))));
-    LocDistSign = 1-((LocDistSign-nanmin(LocDistSign(:)))./(quantile(LocDistSign(:),0.99)-nanmin(LocDistSign(:))));
+    LocDistSign = 1-((LocDistSign-nanmin(LocDistSign(:)))./(quantile(LocDistSign(~isinf(LocDistSign)),0.99)-nanmin(LocDistSign(:))));
     LocDistSign(LocDistSign<0)=0;
     LocTrajectorySim = (LocAngleSim+LocDistSign)./2; % Trajectory Similarity is sum of distance + sum of angles
     LocTrajectorySim = (LocTrajectorySim-nanmin(LocTrajectorySim(:))./(nanmax(LocTrajectorySim(:))-nanmin(LocTrajectorySim(:))));
@@ -1227,7 +1227,9 @@ end
 OriUniqueID = UniqueID; %need for plotting
 [PairID1,PairID2]=meshgrid(AllClusterIDs(Good_Idx));
 [recses1,recses2] = meshgrid(recsesAll(Good_Idx));
-MatchTable = table(PairID1(:),PairID2(:),recses1(:),recses2(:),MatchProbability(:),RankScoreAll(:),FingerprintR(:),TotalScore(:),'VariableNames',{'ID1','ID2','RecSes1','RecSes2','MatchProb','RankScore','FingerprintCor','TotalScore'});
+[PairID3,PairID4]=meshgrid(OriUniqueID(Good_Idx));
+
+MatchTable = table(PairID1(:),PairID2(:),recses1(:),recses2(:),PairID3(:),PairID4(:),MatchProbability(:),RankScoreAll(:),FingerprintR(:),TotalScore(:),'VariableNames',{'ID1','ID2','RecSes1','RecSes2','UID1','UID2','MatchProb','RankScore','FingerprintCor','TotalScore'});
 UniqueID = AssignUniqueID(MatchTable,clusinfo,sp,param);
 
 %% Figures

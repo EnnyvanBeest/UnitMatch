@@ -31,6 +31,13 @@ function [clusinfo,sp] = PrepareClusInfo(KiloSortPaths,Params,RawDataPaths)
 if exist(fullfile(Params.SaveDir,'PreparedData.mat')) && ~Params.RedoQM && ~Params.RedoUnitMatch
     disp(['Found existing data in ' Params.SaveDir ', loading...'])
     load(fullfile(Params.SaveDir,'PreparedData.mat'))
+
+    % Use UnitMatch Output if available
+    if Params.UnitMatch
+        disp('Using UnitMatch Clusters!')
+        sp.clu = sp.UniqClu; %Temporary replace for rest of code
+        clusinfo.cluster_id = clusinfo.UniqueID;
+    end
     return
 end
 
@@ -457,6 +464,10 @@ sp = spnew;
 sp.sample_rate = sp.sample_rate(1);
 clear spnew
 
+if ~any(Good_ID)
+    disp('No good units.. skip')
+    return
+end
 %% UnitMatch Parameters
 UMparam.RunPyKSChronicStitched = Params.RunPyKSChronicStitched;
 UMparam.SaveDir = fullfile(Params.SaveDir);
@@ -527,6 +538,12 @@ end
 disp(['Saving cluster and spike information in ' Params.SaveDir])
 save(fullfile(Params.SaveDir,'PreparedData.mat'),'clusinfo','sp','Params','-v7.3')
 
+%% Use UnitMatch Output if available
+if Params.UnitMatch
+    disp('Using UnitMatch Clusters!')
+    sp.clu = sp.UniqClu; %Temporary replace for rest of code
+    clusinfo.cluster_id = clusinfo.UniqueID;
+end
 %% Remove temporary files
 if 0%Params.DecompressLocal && DecompressionFlag
     clear memMapData
