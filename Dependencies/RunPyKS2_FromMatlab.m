@@ -298,6 +298,8 @@ for midx = 1:length(MiceOpt)
                     end
 
                     % change dat_path in params file
+                    disp('This is doing something weird.. fix')
+                    keyboard
                     paramsfile = dir(fullfile(myKsDir,ProbeName,Sesinfo,'params.py'));
                     fid =fopen(fullfile(paramsfile.folder,paramsfile.name));
                     C=textscan(fid,'%s','delimiter','\n');

@@ -104,7 +104,7 @@ for midx = length(MiceOpt)
                 [clusinfo,sp] = PrepareClusInfo(subsesoptAll,PrepareClusInfoparams);
 
                 %% Save out
-                GoodUnits{midx}{probeid}{IMROID} = clusinfo;
+                GoodUnits{midx}{probeid} = clusinfo;
 
 
             end
@@ -656,6 +656,9 @@ for midx = length(MiceOpt)
             continue
         end
         nprobe = length(tmpCell);
+        if ~iscell(tmpCell)
+            tmpCell = {tmpCell};
+        end
         for pidx = 1:nprobe
             tmpUnits = tmpCell{pidx};
             depthGU = tmpUnits.depth(logical(tmpUnits.Good_ID));
