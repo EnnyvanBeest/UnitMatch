@@ -31,7 +31,7 @@ function  [UniqueID, MatchTable] = UnitMatch(clusinfo,param,sp)
 global stepsize
 stepsize = 0.01; % Of probability distribution
 MakePlotsOfPairs = 1; % Plots all pairs for inspection
-Scores2Include = {'AmplitudeSim','WavformMSE','LocTrajectorySim','spatialdecaySim','LocDistSim'}; %
+Scores2Include = {'AmplitudeSim','WavformSim','LocTrajectorySim','spatialdecaySim','LocDistSim'}; %
 
 % Scores2Include = {'AmplitudeSim','WavformMSE','WVCorr','LocTrajectorySim','spatialdecaySim','LocDistSim'}; %
 TakeChannelRadius = 75; %in micron around max channel
@@ -354,7 +354,7 @@ while flag<2
     w = squeeze(isnan(abs(x1(1,:,:,:)-x2(1,:,:,:))));
 %     LocDistSign(w) = nan;
     % Average location + variance in location (captures the trajectory of a waveform in space)
-    LocDistSim = squeeze(nanmean(LocDistSign,2)+nanstd(LocDistSign,[],2)./sqrt(nansum(~w,2))); 
+    LocDistSim = squeeze(nanmean(LocDistSign,2)+nanvar(LocDistSign,[],2)); 
  
 
     % Variance in error, corrected by average error. This captures whether
@@ -1231,7 +1231,10 @@ OriUniqueID = UniqueID; %need for plotting
 
 MatchTable = table(PairID1(:),PairID2(:),recses1(:),recses2(:),PairID3(:),PairID4(:),MatchProbability(:),RankScoreAll(:),FingerprintR(:),TotalScore(:),'VariableNames',{'ID1','ID2','RecSes1','RecSes2','UID1','UID2','MatchProb','RankScore','FingerprintCor','TotalScore'});
 UniqueID = AssignUniqueID(MatchTable,clusinfo,sp,param);
-
+% Add Scores2Include to MatchTable
+for sid = 1:length(Scores2Include)
+    eval(['MatchTable.' Scores2Include{sid} ' = ' Scores2Include{sid} '(:);'])
+end
 %% Figures
 if MakePlotsOfPairs
     % Pairs redefined:
