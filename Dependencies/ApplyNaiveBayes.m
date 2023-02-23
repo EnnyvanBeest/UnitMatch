@@ -15,13 +15,14 @@ function [label,probability, Performance]=ApplyNaiveBayes(Tbl,Parameterkernels,l
     % distributions)
     %% User input. Better not changed unless you do it everywhere
     global stepsize
+    nPairs = size(Tbl,1);
     
     %% Initialize
     Edges = 0:stepsize:1;
     ScoreVector = Edges(1)+stepsize/2:stepsize:Edges(end)-stepsize/2;
     
     % Input:
-    if length(label)==size(Tbl,1)
+    if length(label)==nPairs
         Cond = unique(label);
         GivePerformance=1;
     elseif length(label)==length(unique(label))
@@ -42,12 +43,20 @@ function [label,probability, Performance]=ApplyNaiveBayes(Tbl,Parameterkernels,l
     %% p(X|Ck) Likelihood
     % Find index for every observation in scorevector to assign correct
     % probability
-    x1 = repmat(table2array(Tbl), [1 1 numel(ScoreVector)]);
-    x2 = repmat(permute(ScoreVector, [1 3 2]), [size(x1,1), size(x1,2), 1]);
-    [~,minidx] = min(abs(x1-x2),[],3);
+    chunkSize = 1e6;
+    nChunk = 1;
+    minidx = nan(size(Tbl));
+    while nChunk*chunkSize < nPairs + chunkSize
+        idx = (nChunk-1)*chunkSize+1:min((nChunk-1)*chunkSize+chunkSize,nPairs);
+        x1 = repmat(table2array(Tbl(idx,:)), [1 1 numel(ScoreVector)]);
+        x2 = repmat(permute(ScoreVector, [1 3 2]), [size(x1,1), size(x1,2), 1]);
+        [~,minidx(idx,:)] = min(abs(x1-x2),[],3);
+        clear x1 x2
+        nChunk = nChunk + 1;
+    end
 
     % likelihood is the product of all probabilities given a certain condition
-    likelihood = nan(size(Tbl,1),length(Cond));
+    likelihood = nan(nPairs,length(Cond));
     for Ck = 1:length(Cond)
         % Probability of observation given a given class
         tmpp = nan(size(minidx));
@@ -58,13 +67,10 @@ function [label,probability, Performance]=ApplyNaiveBayes(Tbl,Parameterkernels,l
         likelihood(:,Ck) = prod(tmpp,2);
     end
     
-    %% evidence p(x)
-    Evidence = nansum((Prior.*likelihood),2);
-    
     %% Probability
-    probability = nan(size(Tbl,1),2);
+    probability = nan(nPairs,2);
     for Ck=1:length(Cond)
-        probability(:,Ck) = (Prior(Ck).*likelihood(:,Ck))./Evidence;
+        probability(:,Ck) = (Prior(Ck).*likelihood(:,Ck))./nansum((Prior.*likelihood),2);
     end
     if GivePerformance
         originallabel = label;
