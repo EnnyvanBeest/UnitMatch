@@ -184,8 +184,12 @@ for uid = 1:nclus
 
         % Full width half maximum
         wvdurtmp = find(abs(sign(Peakval)*ProjectedWaveform(waveidx,uid,cv))>0.25*sign(Peakval)*Peakval);
-        wvdurtmp = [wvdurtmp(1):wvdurtmp(end)]+waveidx(1)-1;
-        waveformduration(uid,cv) = length(wvdurtmp);
+        if ~isempty(wvdurtmp)
+            wvdurtmp = [wvdurtmp(1):wvdurtmp(end)]+waveidx(1)-1;
+            waveformduration(uid,cv) = length(wvdurtmp);
+        else
+            waveformduration(uid,cv) = nan;
+        end
 
         % Mean Location per individual time point:
         ProjectedLocationPerTP(:,uid,wvdurtmp,cv) = cell2mat(arrayfun(@(tp) sum(repmat(abs(spikeMap(tp,ChanIdx,cv)),size(Locs,2),1).*Locs',2)./sum(repmat(abs(spikeMap(tp,ChanIdx,cv)),size(Locs,2),1),2),wvdurtmp,'Uni',0));
