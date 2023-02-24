@@ -106,7 +106,7 @@ for uid = 1:nclus
             else
                 wavidx = floor(nwavs/2+1:nwavs);
             end
-            spikeMapAvg(:,:,cv) = nanmean(spikeMap(:,:,wavidx),3);
+            spikeMapAvg(:,:,cv) = nanmedian(spikeMap(:,:,wavidx),3);
         end
         spikeMap = spikeMapAvg;
         clear spikeMapAvg
