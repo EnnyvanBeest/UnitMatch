@@ -138,6 +138,10 @@ for uid = 1:nclus
             wvdurtmp = waveidx;
         end
         wvdurtmp(~ismember(wvdurtmp,waveidx)) = []; %okay over achiever, gonna cut you off there
+        if isempty(wvdurtmp)
+            % May again be empty
+            wvdurtmp = waveidx;
+        end
 
         % Peak Time - to be safe take a bit of smoothing
         [~,PeakTime(uid,cv)] = nanmax(abs(smooth(ProjectedWaveform(wvdurtmp(1):wvdurtmp(end),uid,cv),2)));
