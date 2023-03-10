@@ -536,6 +536,9 @@ end
 
 %% Save
 disp(['Saving cluster and spike information in ' Params.SaveDir])
+if ~isfolder(fullfile(Params.SaveDir))
+    mkdir(fullfile(Params.SaveDir))
+end
 save(fullfile(Params.SaveDir,'PreparedData.mat'),'clusinfo','sp','Params','-v7.3')
 
 %% Use UnitMatch Output if available

@@ -15,10 +15,10 @@ plotUnitActivity = 0;
 GoodUnits = cell(1,length(MiceOpt));
 for midx = length(MiceOpt)
     myKsDir = fullfile(KilosortDir,MiceOpt{midx});
-    if strcmp(RecordingType,'Chronic')  % These are my chronic mice, one dataset per mouse
+    if strcmp(RecordingType{midx},'Chronic')  % These are my chronic mice, one dataset per mouse
         %% Loading data from kilosort/phy easily
         myKsDir = fullfile(KilosortDir,MiceOpt{midx});
-        subksdirs = dir(fullfile(myKsDir,'Chronic','Probe*')); %This changed because now I suddenly had 2 probes per recording
+        subksdirs = dir(fullfile(myKsDir,'**','Probe*')); %This changed because now I suddenly had 2 probes per recording
         if length(subksdirs)<1
             clear subksdirs
             subksdirs.folder = myKsDir; %Should be a struct array
@@ -28,7 +28,7 @@ for midx = length(MiceOpt)
         ProbeOpt = (unique({subksdirs(:).name}));
         for probeid = 1:length(ProbeOpt)
             %Saving directory
-            thisprobe =  ProbeOpt{probeid}
+            thisprobe = ProbeOpt{probeid}
             myKsDir = fullfile(KilosortDir,MiceOpt{midx},'*',thisprobe);
             % Check for multiple subfolders?
             subsesopt = dir(myKsDir);
