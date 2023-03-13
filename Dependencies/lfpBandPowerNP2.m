@@ -88,7 +88,10 @@ for n = 1:nClips
         end
 %         hold off
     end
-    dataArray = arrayfun(@(ch) DownsampleAvg(dataArray(ch,:),SampRate(meta)./FreqNeeded),1:nChansInFile,'UniformOutput',0);
+    if size(dataArray,2)==nChansInFile
+        dataArray=dataArray';
+    end
+    dataArray = arrayfun(@(ch) DownsampleAvg(dataArray(ch,:),int8(SampRate(meta)./FreqNeeded)),1:nChansInFile,'UniformOutput',0);
     dataArray = cat(1,dataArray{:});
     
     %Mean subtract
