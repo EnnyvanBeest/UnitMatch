@@ -593,12 +593,7 @@ sp.UniqClu = sp.clu;
 for clusid=1:nclus
     sp.UniqClu(sp.clu==clusinfo.cluster_id(clusid) & sp.RecSes==clusinfo.RecSesID(clusid)) = clusinfo.UniqueID(clusid);
 end
-%% Use UnitMatch Output if available
-if Params.UnitMatch
-    disp('Using UnitMatch Clusters!')
-    sp.clu = sp.UniqClu; %Temporary replace for rest of code
-    clusinfo.cluster_id = clusinfo.UniqueID;
-end
+
 %% Remove temporary files
 if 0%Params.DecompressLocal && DecompressionFlag
     clear memMapData

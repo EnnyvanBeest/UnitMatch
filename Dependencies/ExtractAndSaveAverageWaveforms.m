@@ -43,61 +43,62 @@ end
 Currentlyloaded = 0;
 for uid = 1:nclus
     fprintf(1,'\b\b\b\b%3.0f%%',uid/nclus*100)
-    if UseBombCelRawWav
-        tmppath = dir(fullfile(param.KSDir(GoodRecSesID(uid)).folder,param.KSDir(GoodRecSesID(uid)).name,'**','RawWaveforms*'));
-        if length(tmppath)>1
-            % Probably stitched:
-            tmppath = tmppath(GoodRecSesID(uid));
-        end
-        Path4UnitNPY{uid} = fullfile(tmppath.folder,tmppath.name,['Unit' num2str(UniqueID(Good_Idx(uid))-OriSessionSwitch(GoodRecSesID(uid))+1) '_RawSpikes.npy']);
+    tmppath = dir(fullfile(param.KSDir(GoodRecSesID(uid)).folder,param.KSDir(GoodRecSesID(uid)).name,'**','RawWaveforms*'));
+    if length(tmppath)>1
+        % Probably stitched:
+        tmppath = tmppath(GoodRecSesID(uid));
+    end
+    Path4UnitNPY{uid} = fullfile(tmppath.folder,tmppath.name,['Unit' num2str(UniqueID(Good_Idx(uid))-OriSessionSwitch(GoodRecSesID(uid))+1) '_RawSpikes.npy']);
+
+    if exist(Path4UnitNPY{uid}) && ~RedoExtraction
+        continue
     else
-        keyboard %  THis needs to change to Bombcell format!!
         pathparts = strsplit(AllDecompPaths{GoodRecSesID(uid)},'\');
         rawdatapath = dir(fullfile('\\',pathparts{1:end-1}));
         if isempty(rawdatapath)
             rawdatapath = dir(fullfile(pathparts{1:end-1}));
         end
-        if exist(fullfile(SaveDir,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat'])) && ~RedoExtraction
-            continue
-        else
-            if ~(GoodRecSesID(uid) == Currentlyloaded) % Only load new memmap if not already loaded
-                % Map the data
-                clear memMapData
-                spikeFile = dir(AllDecompPaths{GoodRecSesID(uid)});
-                try %hacky way of figuring out if sync channel present or not
-                    n_samples = spikeFile.bytes / (param.nChannels * dataTypeNBytes);
-                    nChannels = param.nChannels - 1; % Last channel is sync, ignore for now
-                    ap_data = memmapfile(AllDecompPaths{GoodRecSesID(uid)}, 'Format', {'int16', [param.nChannels, n_samples], 'data'});
-                catch
-                    nChannels = param.nChannels - 1;
-                    n_samples = spikeFile.bytes / (nChannels * dataTypeNBytes);
                     ap_data = memmapfile(AllDecompPaths{GoodRecSesID(uid)}, 'Format', {'int16', [nChannels, n_samples], 'data'});
-                end
-                memMapData = ap_data.Data.data;
-                Currentlyloaded = GoodRecSesID(uid);
+        if ~(GoodRecSesID(uid) == Currentlyloaded) % Only load new memmap if not already loaded
+            % Map the data
+            clear memMapData
+            spikeFile = dir(AllDecompPaths{GoodRecSesID(uid)});
+            try %hacky way of figuring out if sync channel present or not
+                n_samples = spikeFile.bytes / (param.nChannels * dataTypeNBytes);
+                nChannels = param.nChannels - 1; % Last channel is sync, ignore for now
+                ap_data = memmapfile(AllDecompPaths{GoodRecSesID(uid)}, 'Format', {'int16', [param.nChannels, n_samples], 'data'});
+            catch
+                nChannels = param.nChannels - 1;
+                n_samples = spikeFile.bytes / (nChannels * dataTypeNBytes);
+                ap_data = memmapfile(AllDecompPaths{GoodRecSesID(uid)}, 'Format', {'int16', [nChannels, n_samples], 'data'});
             end
+            memMapData = ap_data.Data.data;
+            Currentlyloaded = GoodRecSesID(uid);
+        end
 
-            %load sp
-            keyboard
-            % Spike samples
-            idx1=(sp.st(sp.spikeTemplates == AllClusterIDs(Good_Idx(uid)) & sp.RecSes == GoodRecSesID(uid)).*round(sp.sample_rate));  % Spike times in samples;
+        %load sp
+        tmppath = strsplit(Path4UnitNPY{uid} ,'RawWaveforms');
+        tmp = matfile(fullfile(tmppath{1},'PreparedData.mat'));
+        sp = tmp.sp;
 
-            %Extract raw waveforms on the fly - % Unit uid
-            try
-                spikeIndicestmp = sort(datasample(idx1,sampleamount,'replace',false));
-            catch ME
-                spikeIndicestmp = idx1;
-            end
-            spikeMap = nan(spikeWidth,nChannels,sampleamount);
-            for iSpike = 1:length(spikeIndicestmp)
-                thisSpikeIdx = int32(spikeIndicestmp(iSpike));
-                if thisSpikeIdx > halfWidth && (thisSpikeIdx + halfWidth) < size(memMapData,2) % check that it's not out of bounds
-                    tmp = smoothdata(double(memMapData(1:nChannels,thisSpikeIdx-halfWidth:thisSpikeIdx+halfWidth)),2,'gaussian',5);
-                    tmp = (tmp - mean(tmp(:,1:20),2))';
-                    tmp(:,end+1:nChannels) = nan(size(tmp,1),nChannels-size(tmp,2));
-                    % Subtract first 10 samples to level spikes
-                    spikeMap(:,:,iSpike) = tmp;
-                end
+        % Spike samples
+        idx1=(sp.st(sp.spikeTemplates == AllClusterIDs(Good_Idx(uid))).*round(sp.sample_rate));  % Spike times in samples;
+
+        %Extract raw waveforms on the fly - % Unit uid
+        try
+            spikeIndicestmp = sort(datasample(idx1,sampleamount,'replace',false));
+        catch ME
+            spikeIndicestmp = idx1;
+        end
+        spikeMap = nan(spikeWidth,nChannels,sampleamount);
+        for iSpike = 1:length(spikeIndicestmp)
+            thisSpikeIdx = int32(spikeIndicestmp(iSpike));
+            if thisSpikeIdx > halfWidth && (thisSpikeIdx + halfWidth) < size(memMapData,2) % check that it's not out of bounds
+                tmp = smoothdata(double(memMapData(1:nChannels,thisSpikeIdx-halfWidth:thisSpikeIdx+halfWidth)),2,'gaussian',5);
+                tmp = (tmp - mean(tmp(:,1:20),2))';
+                tmp(:,end+1:nChannels) = nan(size(tmp,1),nChannels-size(tmp,2));
+                % Subtract first 10 samples to level spikes
+                spikeMap(:,:,iSpike) = tmp(1:spikeWidth,:);
             end
         end
         %Actual number of wavefroms
@@ -112,8 +113,9 @@ for uid = 1:nclus
         end
         spikeMap = spikeMapAvg;
         clear spikeMapAvg
-    end
+        writeNPY(spikeMap, Path4UnitNPY{uid})
 
+    end
 end
 
 

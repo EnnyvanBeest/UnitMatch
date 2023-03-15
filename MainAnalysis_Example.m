@@ -24,7 +24,7 @@ PrepareClusInfoparams.RunPyKSChronicStitched = 0; % if 1, run PyKS chronic recor
 PrepareClusInfoparams.CopyToTmpFirst = 1; % If 1, copy data to local first, don't run from server (= advised!)
 PrepareClusInfoparams.DecompressLocal = 1; % If 1, uncompress data first if it's currently compressed (= necessary for unitmatch and faster for QualityMetrics))
 PrepareClusInfoparams.RedoQM = 0; %if 1, redo quality metrics if it already exists
-PrepareClusInfoparams.RunQualityMetrics = 1; % If 1, Run the quality metrics (Bombcell @JulieFabre)
+PrepareClusInfoparams.RunQualityMetrics = 0; % If 1, Run the quality metrics (Bombcell @JulieFabre)
 PrepareClusInfoparams.loadPCs=1; % Do we need the PCs for data analysis (YES IF QM!)? If not you save a lot of time keeping this at 0
 PrepareClusInfoparams.InspectQualityMetrics=0; % If 1, Inspect the quality matrix/data set using the GUI (manual inspection)
 PrepareClusInfoparams.UnitMatch = 1; % If 1, find identical units across sessions or oversplits
