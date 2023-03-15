@@ -1,4 +1,4 @@
-function ExtractAndSaveAverageWaveforms(clusinfo,param,sp)
+function Path4UnitNPY = ExtractAndSaveAverageWaveforms(clusinfo,param)
 %% Called by UnitMatch, but can also be used on its own to save two averaged waveforms per unit per session
 
 %% Read in from param
@@ -26,6 +26,9 @@ OriSessionSwitch = [OriSessionSwitch nclus+1];
 %% Actual extraction
 dataTypeNBytes = numel(typecast(cast(0, 'uint16'), 'uint8')); % Define datatype
 
+% Initialize
+Path4UnitNPY = cell(1,nclus);
+
 timercounter = tic;
 fprintf(1,'Extracting raw waveforms. Progress: %3d%%',0)
 pathparts = strsplit(AllDecompPaths{GoodRecSesID(1)},'\');
@@ -41,17 +44,14 @@ Currentlyloaded = 0;
 for uid = 1:nclus
     fprintf(1,'\b\b\b\b%3.0f%%',uid/nclus*100)
     if UseBombCelRawWav
-        if exist(fullfile(SaveDir,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat'])) && ~RedoExtraction
-            continue
-        else
-            tmppath = dir(fullfile(param.KSDir(GoodRecSesID(uid)).folder,param.KSDir(GoodRecSesID(uid)).name,'**','RawWaveforms*'));
-            if length(tmppath)>1
-                % Probably stitched:
-                tmppath = tmppath(GoodRecSesID(uid));
-            end
-            spikeMap = readNPY(fullfile(tmppath.folder,tmppath.name,['Unit' num2str(UniqueID(Good_Idx(uid))-OriSessionSwitch(GoodRecSesID(uid))+1) '_RawSpikes.npy']));            
+        tmppath = dir(fullfile(param.KSDir(GoodRecSesID(uid)).folder,param.KSDir(GoodRecSesID(uid)).name,'**','RawWaveforms*'));
+        if length(tmppath)>1
+            % Probably stitched:
+            tmppath = tmppath(GoodRecSesID(uid));
         end
+        Path4UnitNPY{uid} = fullfile(tmppath.folder,tmppath.name,['Unit' num2str(UniqueID(Good_Idx(uid))-OriSessionSwitch(GoodRecSesID(uid))+1) '_RawSpikes.npy']);
     else
+        keyboard %  THis needs to change to Bombcell format!!
         pathparts = strsplit(AllDecompPaths{GoodRecSesID(uid)},'\');
         rawdatapath = dir(fullfile('\\',pathparts{1:end-1}));
         if isempty(rawdatapath)
@@ -77,6 +77,8 @@ for uid = 1:nclus
                 Currentlyloaded = GoodRecSesID(uid);
             end
 
+            %load sp
+            keyboard
             % Spike samples
             idx1=(sp.st(sp.spikeTemplates == AllClusterIDs(Good_Idx(uid)) & sp.RecSes == GoodRecSesID(uid)).*round(sp.sample_rate));  % Spike times in samples;
 
@@ -112,14 +114,6 @@ for uid = 1:nclus
         clear spikeMapAvg
     end
 
-    % Detrending
-    spikeMap = permute(spikeMap,[2,1,3]); %detrend works over columns
-    spikeMap = detrend(spikeMap,1); % Detrend (linearly) to be on the safe side. OVER TIME!
-    spikeMap = permute(spikeMap,[2,1,3]);  % Put back in order
-    if ~exist(fullfile(SaveDir,'UnitMatchWaveforms'))
-        mkdir(fullfile(SaveDir,'UnitMatchWaveforms'))
-    end
-    save(fullfile(SaveDir,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(uid))) '_RawSpikes.mat']),'spikeMap')
 end
 
 

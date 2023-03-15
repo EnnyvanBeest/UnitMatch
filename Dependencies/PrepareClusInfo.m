@@ -27,19 +27,6 @@ function [clusinfo,sp] = PrepareClusInfo(KiloSortPaths,Params,RawDataPaths)
 % optionally Quality and Matches (oversplits/matches across recordings) are identified
 % Sp: Struct with spike information for all recordings
 
-%% Load existing?
-if exist(fullfile(Params.SaveDir,'PreparedData.mat')) && ~Params.RedoQM && ~Params.RedoUnitMatch
-    disp(['Found existing data in ' Params.SaveDir ', loading...'])
-    load(fullfile(Params.SaveDir,'PreparedData.mat'))
-
-    % Use UnitMatch Output if available
-    if Params.UnitMatch
-        disp('Using UnitMatch Clusters!')
-        sp.clu = sp.UniqClu; %Temporary replace for rest of code
-        clusinfo.cluster_id = clusinfo.UniqueID;
-    end
-    return
-end
 
 %% Check inputs
 if ~isstruct(KiloSortPaths) || ~isfield(KiloSortPaths(1),'name') || ~isfield(KiloSortPaths(1),'folder')
@@ -76,18 +63,9 @@ catch ME
 end
 
 %% Initialize everything
-AllUniqueTemplates = [];
-recsesAll = [];
-sp = cell(1,0);
 channelmap=[];
 channelpos = [];
-cluster_id = [];
-Label = [];
-Good_ID = [];
-depth = [];
-channel = [];
-Shank=[];
-recses = [];
+
 AllKiloSortPaths = [];
 AllChannelPos = cell(1,0);
 countid=1;
@@ -97,35 +75,18 @@ for subsesid=1:length(KiloSortPaths)
     if isempty(dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'*.npy')))
         continue
     end
+    %% initialize for new round
+    Good_ID = [];
+    Shank=[];
+    recsesAll = [];
+    channel = [];
+    Label = [];
+    depth = [];
+    AllUniqueTemplates = [];
+    cluster_id = [];
+    recses = [];
 
-    thissubses = str2num(KiloSortPaths(subsesid).name);
-    if isempty(thissubses)
-        thissubses=1;
-    end
-    %     if isempty(thisdate)
-    %         thisdatenow = strsplit(KiloSortPaths(subsesid).folder,'\');
-    %         thisdatenow = thisdatenow{end-1};
-    %     else
-    %         thisdatenow = thisdate;
-    %     end
-    %% Load Spike Data
-    sp{countid} = loadKSdir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name),Params); % Load Spikes with PCs
-    [sp{countid}.spikeAmps, sp{countid}.spikeDepths, sp{countid}.templateDepths, sp{countid}.templateXpos, sp{countid}.tempAmps, sp{countid}.tempsUnW, sp{countid}.templateDuration, sp{countid}.waveforms] = templatePositionsAmplitudes(sp{countid}.temps, sp{countid}.winv, sp{countid}.ycoords, sp{countid}.xcoords, sp{countid}.spikeTemplates, sp{countid}.tempScalingAmps); %from the spikes toolbox
-
-    %% Remove noise; spikes across all channels'
-    sp{countid} = RemoveNoiseAmplitudeBased(sp{countid});
-
-    %% Channel data
-    myClusFile = dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'channel_map.npy'));
-    channelmaptmp = readNPY(fullfile(myClusFile(1).folder,myClusFile(1).name));
-
-    myClusFile = dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'channel_positions.npy'));
-    channelpostmp = readNPY(fullfile(myClusFile(1).folder,myClusFile(1).name));
-    if length(channelmaptmp)<length(channelpostmp)
-        channelmaptmp(end+1:length(channelpostmp))=length(channelmaptmp):length(channelpostmp)-1;
-    end
-
-    %% Is it correct channelpos though...? Check using raw data
+    %% save data paths information
     if Params.RunPyKSChronicStitched %CALL THIS STITCHED --> Only works when using RunPyKS2_FromMatlab as well from this toolbox
         if UseParamsKS
             try
@@ -150,7 +111,7 @@ for subsesid=1:length(KiloSortPaths)
         else
             rawD = dir(fullfile(RawDataPaths(subsesid).folder,RawDataPaths(subsesid).name));
         end
-       
+
         RawDataPaths = rawD;
         AllKiloSortPaths = [AllKiloSortPaths repmat(KiloSortPaths(subsesid),1,length(rawD))];
     else
@@ -178,7 +139,54 @@ for subsesid=1:length(KiloSortPaths)
         end
         AllKiloSortPaths = [AllKiloSortPaths KiloSortPaths(subsesid)];
     end
+    DecompressionFlag = 0;
+
+    %% Channel data
+    myClusFile = dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'channel_map.npy'));
+    channelmaptmp = readNPY(fullfile(myClusFile(1).folder,myClusFile(1).name));
+
+    myClusFile = dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'channel_positions.npy'));
+    channelpostmp = readNPY(fullfile(myClusFile(1).folder,myClusFile(1).name));
+    if length(channelmaptmp)<length(channelpostmp)
+        channelmaptmp(end+1:length(channelpostmp))=length(channelmaptmp):length(channelpostmp)-1;
+    end
+
+    %% Is it correct channelpos though...? Check using raw data
     channelpostmpconv = ChannelIMROConversion(rawD(1).folder,1); % For conversion when not automatically done
+    AllChannelPos{countid} = channelpostmpconv;
+
+    %% Load existing?
+    if exist(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'PreparedData.mat')) && ~Params.RedoQM
+        disp(['Found existing data in ' Params.SaveDir ', Using this...'])
+        %         load(fullfile(Params.SaveDir,'PreparedData.mat'))
+
+        % Use UnitMatch Output if available
+        %         if Params.UnitMatch
+        %             disp('Using UnitMatch Clusters!')
+        %             sp.clu = sp.UniqClu; %Temporary replace for rest of code
+        %             clusinfo.cluster_id = clusinfo.UniqueID;
+        %         end
+        countid=countid+1;
+        continue
+    end
+
+    thissubses = str2num(KiloSortPaths(subsesid).name);
+    if isempty(thissubses)
+        thissubses=1;
+    end
+    %     if isempty(thisdate)
+    %         thisdatenow = strsplit(KiloSortPaths(subsesid).folder,'\');
+    %         thisdatenow = thisdatenow{end-1};
+    %     else
+    %         thisdatenow = thisdate;
+    %     end
+    %% Load Spike Data
+    sp = loadKSdir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name),Params); % Load Spikes with PCs
+    [sp.spikeAmps, sp.spikeDepths, sp.templateDepths, sp.templateXpos, sp.tempAmps, sp.tempsUnW, sp.templateDuration, sp.waveforms] = templatePositionsAmplitudes(sp.temps, sp.winv, sp.ycoords, sp.xcoords, sp.spikeTemplates, sp.tempScalingAmps); %from the spikes toolbox
+
+    %% Remove noise; spikes across all channels'
+    sp = RemoveNoiseAmplitudeBased(sp);
+
 
     %% Bombcell parameters
     % clear paramBC
@@ -193,7 +201,7 @@ for subsesid=1:length(KiloSortPaths)
         clusinfo = tdfread(fullfile(myClusFile(1).folder,myClusFile(1).name));
         % Convert sp data to correct cluster according to phy (clu and
         % template are not necessarily the same after phy)
-        [clusinfo,sp{countid}] = ConvertTemplatesAfterPhy(clusinfo,sp{countid});
+        [clusinfo,sp] = ConvertTemplatesAfterPhy(clusinfo,sp);
 
         clusidtmp = clusinfo.cluster_id;
         cluster_id = cat(1,cluster_id,clusinfo.cluster_id);
@@ -201,7 +209,7 @@ for subsesid=1:length(KiloSortPaths)
         KSLabelfile = tdfread(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'cluster_KSLabel.tsv'));
         tmpLabel(ismember(clusinfo.cluster_id,KSLabelfile.cluster_id)) = KSLabelfile.KSLabel(ismember(KSLabelfile.cluster_id,clusinfo.cluster_id));
         Label = [Label,tmpLabel];
-        totSpkNum = histc(sp{countid}.clu,sp{countid}.cids);
+        totSpkNum = histc(sp.clu,sp.cids);
         Good_IDtmp = ismember(tmpLabel,'g') & totSpkNum'>paramBC.minNumSpikes; %Identify good clusters
 
         % Find depth and channel
@@ -210,8 +218,8 @@ for subsesid=1:length(KiloSortPaths)
         channeltmp = nan(length(clusinfo.cluster_id),1);
         for clusid=1:length(depthtmp)
             % Depth according to PyKS2 output
-            depthtmp(clusid)=round(sp{countid}.templateDepths(clusid));%round(nanmean(sp{countid}.spikeDepths(find(sp{countid}.clu==clusid-1))));
-            xtmp(clusid)=sp{countid}.templateXpos(clusid);
+            depthtmp(clusid)=round(sp.templateDepths(clusid));%round(nanmean(sp.spikeDepths(find(sp.clu==clusid-1))));
+            xtmp(clusid)=sp.templateXpos(clusid);
             [~,minidx] = min(cell2mat(arrayfun(@(X) pdist(cat(1,channelpostmp(X,:),[xtmp(clusid),depthtmp(clusid)]),'euclidean'),1:size(channelpostmp,1),'UniformOutput',0)));
             try
                 channeltmp(clusid) = channelmaptmp(minidx);
@@ -222,7 +230,7 @@ for subsesid=1:length(KiloSortPaths)
                 depthtmp(clusid) = channelpostmpconv(minidx-1,2);
                 xtmp(clusid) = channelpostmpconv(minidx-1,1);
             end
-            sp{countid}.spikeDepths(ismember(sp{countid}.clu,clusidtmp(clusid))) = depthtmp(clusid);
+            sp.spikeDepths(ismember(sp.clu,clusidtmp(clusid))) = depthtmp(clusid);
 
         end
         depth = cat(1,depth, depthtmp);
@@ -235,7 +243,7 @@ for subsesid=1:length(KiloSortPaths)
         clusinfo = tdfread(fullfile(myClusFile(1).folder,myClusFile(1).name));
         % Convert sp data to correct cluster according to phy (clu and
         % template are not necessarily the same after phy)
-        [clusinfo,sp{countid}] = ConvertTemplatesAfterPhy(clusinfo,sp{countid});
+        [clusinfo,sp] = ConvertTemplatesAfterPhy(clusinfo,sp);
 
         curratedflag=1;
         if isfield(clusinfo,'id')
@@ -257,8 +265,8 @@ for subsesid=1:length(KiloSortPaths)
         channeltmp = nan(length(clusidtmp),1);
         for clusid=1:length(depthtmp)
             % Depth according to PyKS2 output
-            depthtmp(clusid)=round(sp{countid}.templateDepths(clusid));%round(nanmean(sp{countid}.spikeDepths(find(sp{countid}.clu==clusid-1))));
-            xtmp(clusid)=sp{countid}.templateXpos(clusid);
+            depthtmp(clusid)=round(sp.templateDepths(clusid));%round(nanmean(sp.spikeDepths(find(sp.clu==clusid-1))));
+            xtmp(clusid)=sp.templateXpos(clusid);
             [~,minidx] = min(cell2mat(arrayfun(@(X) pdist(cat(1,channelpostmp(X,:),[xtmp(clusid),depthtmp(clusid)]),'euclidean'),1:size(channelpostmp,1),'UniformOutput',0)));
             try
                 channeltmp(clusid) = channelmaptmp(minidx);
@@ -269,7 +277,7 @@ for subsesid=1:length(KiloSortPaths)
                 depthtmp(clusid) = channelpostmpconv(minidx-1,2);
                 xtmp(clusid) = channelpostmpconv(minidx-1,1);
             end
-            sp{countid}.spikeDepths(ismember(sp{countid}.clu,clusidtmp(clusid))) = depthtmp(clusid);
+            sp.spikeDepths(ismember(sp.clu,clusidtmp(clusid))) = depthtmp(clusid);
 
         end
 
@@ -298,7 +306,6 @@ for subsesid=1:length(KiloSortPaths)
     %     scatter(xtmp,depthtmp,10,cols(countid,:))
     %     hold on
     %     drawnow
-    DecompressionFlag = 0;
 
     if Params.RunQualityMetrics
         theseuniqueTemplates = [];
@@ -314,7 +321,7 @@ for subsesid=1:length(KiloSortPaths)
                 savePath =myClusFile(1).folder;
             end
             qMetricsExist = ~isempty(dir(fullfile(savePath, '**', 'templates._bc_qMetrics.parquet'))); % ~isempty(dir(fullfile(savePath, 'qMetric*.mat'))) not used anymore?
-            idx = sp{countid}.SessionID==id;
+            idx = sp.SessionID==id;
             InspectionFlag = 0;
             if ~qMetricsExist || Params.RedoQM
                 % First check if we want to use python for compressed data. If not, uncompress data first
@@ -335,10 +342,10 @@ for subsesid=1:length(KiloSortPaths)
                 paramBC.rawFile = fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin'));
                 paramBC.ephysMetaFile = (strrep(fullfile(Params.tmpdatafolder,rawD(id).name),'cbin','meta'));
 
-                %             idx = ismember(sp{countid}.spikeTemplates,clusidtmp(Good_IDtmp)); %Only include good units
+                %             idx = ismember(sp.spikeTemplates,clusidtmp(Good_IDtmp)); %Only include good units
                 %careful; spikeSites zero indexed
-                [qMetric, unitType] = bc_runAllQualityMetrics(paramBC, sp{countid}.st(idx)*sp{countid}.sample_rate, sp{countid}.spikeTemplates(idx)+1, ...
-                    sp{countid}.temps, sp{countid}.tempScalingAmps(idx),sp{countid}.pcFeat(idx,:,:),sp{countid}.pcFeatInd+1,channelpostmp, savePath); % Be careful, bombcell needs 1-indexed!
+                [qMetric, unitType] = bc_runAllQualityMetrics(paramBC, sp.st(idx)*sp.sample_rate, sp.spikeTemplates(idx)+1, ...
+                    sp.temps, sp.tempScalingAmps(idx),sp.pcFeat(idx,:,:),sp.pcFeatInd+1,channelpostmp, savePath); % Be careful, bombcell needs 1-indexed!
 
             else
                 paramBC.rawFile = fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin'));
@@ -363,7 +370,7 @@ for subsesid=1:length(KiloSortPaths)
                 %                 load(fullfile(savePath, 'qMetric.mat'))
             end
             unitTypeAcrossRec{id} = unitType;
-            theseuniqueTemplates{id} = unique(sp{countid}.spikeTemplates(idx));
+            theseuniqueTemplates{id} = unique(sp.spikeTemplates(idx));
 
             if InspectionFlag % Doesn't currently work: Julie will update bombcell
                 bc_loadMetricsForGUI
@@ -403,7 +410,7 @@ for subsesid=1:length(KiloSortPaths)
         AllUniqueTemplates = cat(1,AllUniqueTemplates(:),cat(1,theseuniqueTemplates{:}));
 
     else
-        AllUniqueTemplates = cat(1,AllUniqueTemplates,unique(sp{countid}.spikeTemplates));
+        AllUniqueTemplates = cat(1,AllUniqueTemplates,unique(sp.spikeTemplates));
         %         NoiseUnit = false(size(Good_IDtmp));
     end
     addthis = nanmax(recsesAll);
@@ -416,64 +423,81 @@ for subsesid=1:length(KiloSortPaths)
     else
         recsesAll = cat(1,recsesAll(:),repmat(addthis+1,1,length(Good_IDtmp))');
     end
-    sp{countid}.RecSes = sp{countid}.SessionID+countid-1; %Keep track of recording session, as cluster IDs are not unique across sessions
-    AllChannelPos{countid} = channelpos;
+    sp.RecSes = sp.SessionID+countid-1; %Keep track of recording session, as cluster IDs are not unique across sessions
+
+    %% Save out sp and clusinfo for this session in the correct folder
+    ShankOpt = unique(Shank);
+    ShankID = nan(size(Shank));
+    for shankid = 1:length(ShankOpt)
+        ShankID(Shank==ShankOpt(shankid))=shankid;
+    end
+    clusinfo.Shank = Shank;
+    clusinfo.ShankID = ShankID;
+    clusinfo.RecSesID = recsesAll;
+    clusinfo.ch = channel;
+    clusinfo.depth = depth;
+    clusinfo.cluster_id = AllUniqueTemplates;
+    clusinfo.group = Label;
+    clusinfo.Good_ID = Good_ID;
+    % clusinfo.Noise_ID = NoiseUnit;
+
+    sp.sample_rate = sp.sample_rate(1);
+    save(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'PreparedData.mat'),'clusinfo','sp','Params','-v7.3')
 
     countid=countid+1;
     close all
 end
 
-%% Add all spikedata in one spikes struct - can be used for further analysis
-sp = [sp{:}];
-spnew = struct;
+%% Here we're going to actually load in all the sessions requested - only clusinfo to save memory for unitmatch
+clusinfo = cell(1,length(KiloSortPaths));
+countid=1;
+for subsesid=1:length(KiloSortPaths)
+    if isempty(dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'*.npy')))
+        continue
+    end
+   
+    disp(['Loading data for ' KiloSortPaths(subsesid).folder '\' KiloSortPaths(subsesid).name])
+    tmp = matfile(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'PreparedData.mat'));
+    clusinfo{subsesid} = tmp.clusinfo;
+    % Replace recsesid with subsesid
+    clusinfo{subsesid}.RecSesID = repmat(countid,size(clusinfo{subsesid}.RecSesID));
+    countid=countid+1;
+end
 
-fields = fieldnames(sp(1));
+% Add all cluster information in one 'cluster' struct - can be used for further analysis
+clusinfo = [clusinfo{:}];
+clusinfoNew = struct;
+fields = fieldnames(clusinfo(1));
 for fieldid=1:length(fields)
     try
-        eval(['spnew.' fields{fieldid} '= cat(1,sp(:).' fields{fieldid} ');'])
+        eval(['clusinfoNew.' fields{fieldid} '= cat(1,clusinfo(:).' fields{fieldid} ');'])
     catch ME
-        if strcmp(ME.message,'Out of memory.')
-            eval(['spnew.' fields{fieldid} ' = sp(1).' fields{fieldid} ';'])
-            for tmpid = 2:length(sp)
-                eval(['spnew.' fields{fieldid} ' = cat(1,spnew.' fields{fieldid} ', sp(tmpid).' fields{fieldid} ');'])
-            end
-        else
-            eval(['spnew.' fields{fieldid} '= cat(2,sp(:).' fields{fieldid} ');'])
+        try
+            eval(['clusinfoNew.' fields{fieldid} '= cat(2,clusinfo(:).' fields{fieldid} ');'])
+        catch ME
+            keyboard
         end
     end
 end
+clusinfo = clusinfoNew;
+clear clusinfoNew
 
-%% Add all cluster information in one 'cluster' struct - can be used for further analysis
-ShankOpt = unique(Shank);
-ShankID = nan(size(Shank));
-for shankid = 1:length(ShankOpt)
-    ShankID(Shank==ShankOpt(shankid))=shankid;
-end
-clusinfo.Shank = Shank;
-clusinfo.ShankID = ShankID;
-clusinfo.RecSesID = recsesAll;
-clusinfo.ch = channel;
-clusinfo.depth = depth;
-clusinfo.cluster_id = AllUniqueTemplates;
-clusinfo.group = Label;
-clusinfo.Good_ID = Good_ID;
-% clusinfo.Noise_ID = NoiseUnit;
-
-sp = spnew;
-sp.sample_rate = sp.sample_rate(1);
-clear spnew
-
-if ~any(Good_ID)
-    disp('No good units.. skip')
-    return
-end
 %% UnitMatch Parameters
+% Use some bombcell parameters
+if Params.RunQualityMetrics
+    paramBC = bc_qualityParamValuesForUnitMatch;
+    UMparam.sampleamount = paramBC.nRawSpikesToExtract; %500; % Nr. waveforms to include
+    UMparam.spikeWidth =paramBC.spikeWidth; %82; % in sample space (time)
+else
+    UMparam.sampleamount = 200; %500; % Nr. waveforms to include
+    UMparam.spikeWidth = 82; %82; % in sample space (time)
+end
+
 UMparam.RunPyKSChronicStitched = Params.RunPyKSChronicStitched;
 UMparam.SaveDir = fullfile(Params.SaveDir);
 UMparam.ACGbinSize =  0.001;%paramBC.ACGbinSize;
 UMparam.ACGduration = 1;%paramBC.ACGduration;
-UMparam.sampleamount = paramBC.nRawSpikesToExtract; %500; % Nr. waveforms to include
-UMparam.spikeWidth =paramBC.spikeWidth; %82; % in sample space (time)
+
 UMparam.UseBombCelRawWav = Params.RunQualityMetrics; % 1 by default
 UMparam.KSDir = AllKiloSortPaths;
 UMparam.channelpos = AllChannelPos;
@@ -515,29 +539,60 @@ if Params.UnitMatch
         end
 
         % Run UnitMatch
-        [UniqueID, MatchTable] = UnitMatch(clusinfo,UMparam,sp);
+        [UniqueID, MatchTable, WaveformInfo, AllSessionCorrelations] = UnitMatch(clusinfo,UMparam);
         clusinfo.UniqueID = UniqueID;
         clusinfo.MatchTable = MatchTable;
-        save(fullfile(UMparam.SaveDir,'UnitMatch.mat'),'UniqueID','MatchTable','UMparam')
-    end
-    % Save out sp unique cluster
-    nclus = length(clusinfo.cluster_id);
-    sp.UniqClu = sp.clu;
-    for clusid=1:nclus
-        sp.UniqClu(sp.clu==clusinfo.cluster_id(clusid) & sp.RecSes==clusinfo.RecSesID(clusid)) = clusinfo.UniqueID(clusid);
+        save(fullfile(UMparam.SaveDir,'UnitMatch.mat'),'UniqueID','MatchTable','WaveformInfo','AllSessionCorrelations','UMparam')
     end
 elseif DecompressionFlag % You might want to at least save out averaged waveforms for every session to get back to later, if they were saved out by bomcell
     % Extract average waveforms
-    ExtractAndSaveAverageWaveforms(clusinfo,UMparam,sp)
+    ExtractAndSaveAverageWaveforms(clusinfo,UMparam)
 end
 
-%% Save
-disp(['Saving cluster and spike information in ' Params.SaveDir])
-if ~isfolder(fullfile(Params.SaveDir))
-    mkdir(fullfile(Params.SaveDir))
+%% Here we're going to actually load in all the sessions requested - sp
+sp = cell(1,length(KiloSortPaths));
+countid=1;
+for subsesid=1:length(KiloSortPaths)
+    if isempty(dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'*.npy')))
+        continue
+    end
+   
+    disp(['Loading data for ' KiloSortPaths(subsesid).folder '\' KiloSortPaths(subsesid).name])
+    tmp = matfile(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'PreparedData.mat'));
+    sp{subsesid} = tmp.sp;
+    % Replace recsesid with subsesid
+    sp{subsesid}.RecSes = repmat(countid,size(sp{subsesid}.RecSes));
+    countid=countid+1;
 end
-save(fullfile(Params.SaveDir,'PreparedData.mat'),'clusinfo','sp','Params','-v7.3')
+% Add all spikedata in one spikes struct - can be used for further analysis
+sp = [sp{:}];
+spnew = struct;
 
+fields = fieldnames(sp(1));
+for fieldid=1:length(fields)
+    try
+        eval(['spnew.' fields{fieldid} '= cat(1,sp(:).' fields{fieldid} ');'])
+    catch ME
+        if strcmp(ME.message,'Out of memory.')
+            eval(['spnew.' fields{fieldid} ' = sp(1).' fields{fieldid} ';'])
+            for tmpid = 2:length(sp)
+                eval(['spnew.' fields{fieldid} ' = cat(1,spnew.' fields{fieldid} ', sp(tmpid).' fields{fieldid} ');'])
+            end
+        else
+            eval(['spnew.' fields{fieldid} '= cat(2,sp(:).' fields{fieldid} ');'])
+        end
+    end
+end
+sp = spnew;
+sp.sample_rate = sp.sample_rate(1);
+clear spnew
+
+% Save out sp unique cluster
+nclus = length(clusinfo.cluster_id);
+sp.UniqClu = sp.clu;
+for clusid=1:nclus
+    sp.UniqClu(sp.clu==clusinfo.cluster_id(clusid) & sp.RecSes==clusinfo.RecSesID(clusid)) = clusinfo.UniqueID(clusid);
+end
 %% Use UnitMatch Output if available
 if Params.UnitMatch
     disp('Using UnitMatch Clusters!')
