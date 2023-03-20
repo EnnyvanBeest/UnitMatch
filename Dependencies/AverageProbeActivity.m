@@ -29,26 +29,23 @@ for midx = length(MiceOpt)
         for probeid = 1:length(ProbeOpt)
             %Saving directory
             thisprobe = ProbeOpt{probeid}
-            myKsDir = fullfile(KilosortDir,MiceOpt{midx},'*',thisprobe);
+            subsesopt = dir(fullfile(KilosortDir,MiceOpt{midx},'**',thisprobe,'**','channel_positions.npy'));
             % Check for multiple subfolders?
-            subsesopt = dir(myKsDir);
-            subsesopt(~[subsesopt.isdir])=[];
-            subsesopt(ismember({subsesopt(:).name},{'..','.phy'}))=[];
-
+            subsesopt=arrayfun(@(X) subsesopt(X).folder,1:length(subsesopt),'Uni',0);
             if strcmp(RecordingType{midx},'Chronic')
                 if ~PrepareClusInfoparams.RunPyKSChronicStitched %MatchUnitsAcrossDays
                     disp('Unit matching in Matlab')
-                    subsesopt(cell2mat(cellfun(@(X) any(strfind(X,'Chronic')),{subsesopt(:).folder},'UniformOutput',0))) = []; %Use separate days and match units via matlab script
+                    subsesopt(cell2mat(cellfun(@(X) any(strfind(X,'Chronic')),subsesopt,'UniformOutput',0))) = []; %Use separate days and match units via matlab script
                 else
                     disp('Using chronic pyks option')
-                    subsesopt = subsesopt(cell2mat(cellfun(@(X) any(strfind(X,'Chronic')),{subsesopt(:).folder},'UniformOutput',0))); %Use chronic output from pyks
+                    subsesopt = subsesopt(cell2mat(cellfun(@(X) any(strfind(X,'Chronic')),subsesopt,'UniformOutput',0))); %Use chronic output from pyks
                 end
             end
 
             % Copy file and then run pykilosort on it
             channelposition = cell(1,length(subsesopt));
             for id = 1:length(subsesopt)
-                tmpfile = dir(fullfile(subsesopt(id).folder,subsesopt(id).name,'channel_positions.npy'));
+                tmpfile = dir(fullfile(subsesopt{id},'channel_positions.npy'));
                 if isempty(tmpfile)
                     continue
                 end
@@ -82,9 +79,9 @@ for midx = length(MiceOpt)
                     if ~exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,thisIMRO))
                         mkdir(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,thisIMRO))
                     end
-                    PrepareClusInfoparams.SaveDir = fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,thisIMRO);
 
                     %% Get cluster information
+                    PrepareClusInfoparams.SaveDir = fullfile(SaveDir,MiceOpt{midx});
                     [clusinfo,sp] = PrepareClusInfo(subsesoptAll(subsesoptGroups{IMROID}),PrepareClusInfoparams);
 
                     %% Save out
@@ -98,7 +95,7 @@ for midx = length(MiceOpt)
                 if ~exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,thisIMRO))
                     mkdir(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,thisIMRO))
                 end
-                PrepareClusInfoparams.SaveDir = fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,thisIMRO);
+                PrepareClusInfoparams.SaveDir = fullfile(SaveDir,MiceOpt{midx});
 
                 %% Get cluster information
                 [clusinfo,sp] = PrepareClusInfo(subsesoptAll,PrepareClusInfoparams);

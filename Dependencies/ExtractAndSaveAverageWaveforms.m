@@ -43,7 +43,7 @@ end
 Currentlyloaded = 0;
 for uid = 1:nclus
     fprintf(1,'\b\b\b\b%3.0f%%',uid/nclus*100)
-    tmppath = dir(fullfile(param.KSDir(GoodRecSesID(uid)).folder,param.KSDir(GoodRecSesID(uid)).name,'**','RawWaveforms*'));
+    tmppath = dir(fullfile(param.KSDir{GoodRecSesID(uid)},'**','RawWaveforms*'));
     if length(tmppath)>1
         % Probably stitched:
         tmppath = tmppath(GoodRecSesID(uid));
@@ -58,7 +58,6 @@ for uid = 1:nclus
         if isempty(rawdatapath)
             rawdatapath = dir(fullfile(pathparts{1:end-1}));
         end
-                    ap_data = memmapfile(AllDecompPaths{GoodRecSesID(uid)}, 'Format', {'int16', [nChannels, n_samples], 'data'});
         if ~(GoodRecSesID(uid) == Currentlyloaded) % Only load new memmap if not already loaded
             % Map the data
             clear memMapData

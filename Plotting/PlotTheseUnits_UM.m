@@ -15,7 +15,7 @@ disp('Loading spike information...')
 ndays = length(param.KSDir);
 sp = cell(1,ndays);
 for did = 1:ndays
-    tmp = matfile(fullfile(param.KSDir(did).folder,param.KSDir(did).name,'PreparedData.mat'));
+    tmp = matfile(fullfile(param.KSDir{did},'PreparedData.mat'));
     sptmp = tmp.sp;
     clear tmp
 
@@ -102,7 +102,7 @@ for pairid=1:length(Pairs)
         uid = Pairs{pairid}(uidx);
         channelpos = Allchannelpos{recsesGood(uid)};
         % Load raw data
-        spikeMap = readNPY(fullfile(param.KSDir(recsesGood(uid)).folder,param.KSDir(recsesGood(uid)).name,'RawWaveforms',['Unit' num2str(OriUniqueID(uid)) '_RawSpikes.npy']));
+        spikeMap = readNPY(fullfile(param.KSDir{recsesGood(uid)},'RawWaveforms',['Unit' num2str(OriUniqueID(uid)) '_RawSpikes.npy']));
         % Detrending
         spikeMap = permute(spikeMap,[2,1,3]); %detrend works over columns
         spikeMap = detrend(spikeMap,1); % Detrend (linearly) to be on the safe side. OVER TIME!

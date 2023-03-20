@@ -9,7 +9,7 @@ storevideopath=fullfile(tmpdatafolder,'Videos');
 HistoFolder = 'E:\Data\Histology'; % Necessary when aligning to histology
 
 %% Information on experiments
-MiceOpt = {'AL032'}; %CB016 %AL032 'AV008'Add all mice you want to analyse
+MiceOpt = {'EB027'}; %CB016 %AL032 'AV008'Add all mice you want to analyse
 nidq_sync_used = zeros(1,length(MiceOpt)); % Was an external nidq used for syncing (typically sync feeds directly into IMEC)
 nidq_sync_used(ismember(MiceOpt,{'EB001','CB007','CB008'}))=1; % Except for these mice...
 DataDir2Use = repmat(1,[1,length(MiceOpt)]); % In case you have multiple DataDir, index which directory is used for each mouse
@@ -24,14 +24,15 @@ PrepareClusInfoparams.RunPyKSChronicStitched = 0; % if 1, run PyKS chronic recor
 PrepareClusInfoparams.CopyToTmpFirst = 1; % If 1, copy data to local first, don't run from server (= advised!)
 PrepareClusInfoparams.DecompressLocal = 1; % If 1, uncompress data first if it's currently compressed (= necessary for unitmatch and faster for QualityMetrics))
 PrepareClusInfoparams.RedoQM = 0; %if 1, redo quality metrics if it already exists
-PrepareClusInfoparams.RunQualityMetrics = 0; % If 1, Run the quality metrics (Bombcell @JulieFabre)
+PrepareClusInfoparams.RunQualityMetrics = 1; % If 1, Run the quality metrics (Bombcell @JulieFabre)
 PrepareClusInfoparams.loadPCs=1; % Do we need the PCs for data analysis (YES IF QM!)? If not you save a lot of time keeping this at 0
 PrepareClusInfoparams.InspectQualityMetrics=0; % If 1, Inspect the quality matrix/data set using the GUI (manual inspection)
-PrepareClusInfoparams.UnitMatch = 1; % If 1, find identical units across sessions or oversplits
-PrepareClusInfoparams.RedoUnitMatch = 1; % if 1, Redo unitmatch
+PrepareClusInfoparams.UnitMatch = 0; % If 1, find identical units across sessions or oversplits
+PrepareClusInfoparams.RedoUnitMatch = 0; % if 1, Redo unitmatch
 PrepareClusInfoparams.SaveDir = SaveDir; % Save results here
 PrepareClusInfoparams.tmpdatafolder = tmpdatafolder; % use this as a local directory (should be large enough to handle all sessions you want to combine)
 PrepareClusInfoparams.separateIMRO = 0; % Run for every IMRO separately (for memory reasons this might be a good idea)
+PrepareClusInfoparams.ReLoadAlways = 0; % If 1, SP & Clusinfo are always loaded from KS output
 %% Parameters for further analysis
 maxsessnr = 2; %max nr. sessions on a day (doesn't need to be accurate)
 MinDist2Include = 85; %Including only trials in which mouse reached at least xcm for some statistics (past all stimuli?)
@@ -64,5 +65,8 @@ end
 %% PyKS - run pykilosort from Matlab/Python integration
 RunPyKS2_FromMatlab
 
-%% Average Probe Activity - example script which shows how you can use prepareclusinfo & UnitMatch in data analysis
+%% Runs unitmatch across all data from a mouse to generate a table
+RunUnitMatchAllDataPerMouse
+
+%% Average Probe Activity - example script showing datapoints per day/probe/location
 AverageProbeActivity

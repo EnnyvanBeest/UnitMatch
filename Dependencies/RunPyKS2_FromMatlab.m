@@ -298,8 +298,6 @@ for midx = 1:length(MiceOpt)
                     end
 
                     % change dat_path in params file
-                    disp('This is doing something weird.. fix')
-                    keyboard
                     paramsfile = dir(fullfile(myKsDir,ProbeName,Sesinfo,'params.py'));
                     fid =fopen(fullfile(paramsfile.folder,paramsfile.name));
                     C=textscan(fid,'%s','delimiter','\n');
@@ -308,7 +306,7 @@ for midx = 1:length(MiceOpt)
 
                     tmp = regexp(C{1}{idx},'='); %Find =
                     C{1}{idx}(tmp+1:end) = []; %Remove current paths
-                    C{1}{idx} = strcat(C{1}{idx}, ['r"' strrep(fullfile(tmpfile.folder,tmpfile.name),'\','/') '"'])
+                    C{1}{idx} = strcat(C{1}{idx}, ['r"' strrep(fullfile(tmpfile(sesid).folder,tmpfile(sesid).name),'\','/') '"'])
 
                     % Rename old params
                     movefile(fullfile(myKsDir,ProbeName,Sesinfo,'params.py'),fullfile(myKsDir,ProbeName,Sesinfo,'paramsOri.py'))

@@ -29,8 +29,8 @@ function [clusinfo,sp] = PrepareClusInfo(KiloSortPaths,Params,RawDataPaths)
 
 
 %% Check inputs
-if ~isstruct(KiloSortPaths) || ~isfield(KiloSortPaths(1),'name') || ~isfield(KiloSortPaths(1),'folder')
-    error('This is not a directory... give correct input please')
+if ~iscell(KiloSortPaths) %isstruct(KiloSortPaths) || isfield(KiloSortPaths(1),'name') || isfield(KiloSortPaths(1),'folder')
+    error('This is not a cell... give correct input please')
 end
 
 try
@@ -66,13 +66,13 @@ end
 channelmap=[];
 channelpos = [];
 
-AllKiloSortPaths = [];
+AllKiloSortPaths = cell(1,0);
 AllChannelPos = cell(1,0);
 countid=1;
 % figure;
 cols = jet(length(KiloSortPaths));
 for subsesid=1:length(KiloSortPaths)
-    if isempty(dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'*.npy')))
+    if isempty(dir(fullfile(KiloSortPaths{subsesid},'*.npy')))
         continue
     end
     %% initialize for new round
@@ -90,7 +90,7 @@ for subsesid=1:length(KiloSortPaths)
     if Params.RunPyKSChronicStitched %CALL THIS STITCHED --> Only works when using RunPyKS2_FromMatlab as well from this toolbox
         if UseParamsKS
             try
-                spikeStruct = loadParamsPy(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'params.py'));
+                spikeStruct = loadParamsPy(fullfile(KiloSortPaths{subsesid},'params.py'));
                 rawD = spikeStruct.dat_path;
                 rawD = strsplit(rawD,',');
                 for rid=1:length(rawD)
@@ -103,7 +103,7 @@ for subsesid=1:length(KiloSortPaths)
                 end
                 rawD = cat(2,rawD{:});
             catch
-                sessionsIncluded = dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'SessionsIncluded.mat'));
+                sessionsIncluded = dir(fullfile(KiloSortPaths{subsesid},'SessionsIncluded.mat'));
                 sessionsIncluded = load(fullfile(sessionsIncluded.folder,sessionsIncluded.name));
                 rawD = arrayfun(@(X) dir(sessionsIncluded.ThesePaths{X}),1:length(sessionsIncluded.ThesePaths),'UniformOutput',0);
                 rawD = cat(2,rawD{:});
@@ -113,10 +113,10 @@ for subsesid=1:length(KiloSortPaths)
         end
 
         RawDataPaths = rawD;
-        AllKiloSortPaths = [AllKiloSortPaths repmat(KiloSortPaths(subsesid),1,length(rawD))];
+        AllKiloSortPaths = {AllKiloSortPaths{:} repmat(KiloSortPaths{subsesid},1,length(rawD))};
     else
         if UseParamsKS
-            spikeStruct = loadParamsPy(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'params.py'));
+            spikeStruct = loadParamsPy(fullfile(KiloSortPaths{subsesid},'params.py'));
             rawD = spikeStruct.dat_path;
             rawD = rawD(strfind(rawD,'"')+1:end);
             rawD = rawD(1:strfind(rawD,'"')-1);
@@ -137,15 +137,15 @@ for subsesid=1:length(KiloSortPaths)
         else
             rawD = dir(fullfile(RawDataPaths(subsesid).folder,RawDataPaths(subsesid).name));
         end
-        AllKiloSortPaths = [AllKiloSortPaths KiloSortPaths(subsesid)];
+        AllKiloSortPaths = {AllKiloSortPaths{:} KiloSortPaths{subsesid}};
     end
     DecompressionFlag = 0;
 
     %% Channel data
-    myClusFile = dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'channel_map.npy'));
+    myClusFile = dir(fullfile(KiloSortPaths{subsesid},'channel_map.npy'));
     channelmaptmp = readNPY(fullfile(myClusFile(1).folder,myClusFile(1).name));
 
-    myClusFile = dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'channel_positions.npy'));
+    myClusFile = dir(fullfile(KiloSortPaths{subsesid},'channel_positions.npy'));
     channelpostmp = readNPY(fullfile(myClusFile(1).folder,myClusFile(1).name));
     if length(channelmaptmp)<length(channelpostmp)
         channelmaptmp(end+1:length(channelpostmp))=length(channelmaptmp):length(channelpostmp)-1;
@@ -156,32 +156,30 @@ for subsesid=1:length(KiloSortPaths)
     AllChannelPos{countid} = channelpostmpconv;
 
     %% Load existing?
-    if exist(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'PreparedData.mat')) && ~Params.RedoQM
-        disp(['Found existing data in ' Params.SaveDir ', Using this...'])
-        %         load(fullfile(Params.SaveDir,'PreparedData.mat'))
+    if exist(fullfile(KiloSortPaths{subsesid},'PreparedData.mat')) && ~Params.RedoQM && ~Params.ReLoadAlways
+        % Check if parameters are the same, of not we have to redo it
+        % anyway
+        tmpparam = matfile(fullfile(KiloSortPaths{subsesid},'PreparedData.mat'));
+        tmpparam = tmpparam.Params;
 
-        % Use UnitMatch Output if available
-        %         if Params.UnitMatch
-        %             disp('Using UnitMatch Clusters!')
-        %             sp.clu = sp.UniqClu; %Temporary replace for rest of code
-        %             clusinfo.cluster_id = clusinfo.UniqueID;
-        %         end
-        countid=countid+1;
-        continue
+        if tmpparam.RunQualityMetrics == Params.RunQualityMetrics && tmpparam.RunPyKSChronicStitched==Params.RunPyKSChronicStitched &&...
+                tmpparam.separateIMRO == Params.separateIMRO
+            disp(['Found existing data in ' KiloSortPaths{subsesid} ', Using this...'])
+            %         load(fullfile(Params.SaveDir,'PreparedData.mat'))
+
+            % Use UnitMatch Output if available
+            %         if Params.UnitMatch
+            %             disp('Using UnitMatch Clusters!')
+            %             sp.clu = sp.UniqClu; %Temporary replace for rest of code
+            %             clusinfo.cluster_id = clusinfo.UniqueID;
+            %         end
+            countid=countid+1;
+            continue
+        end
     end
 
-    thissubses = str2num(KiloSortPaths(subsesid).name);
-    if isempty(thissubses)
-        thissubses=1;
-    end
-    %     if isempty(thisdate)
-    %         thisdatenow = strsplit(KiloSortPaths(subsesid).folder,'\');
-    %         thisdatenow = thisdatenow{end-1};
-    %     else
-    %         thisdatenow = thisdate;
-    %     end
     %% Load Spike Data
-    sp = loadKSdir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name),Params); % Load Spikes with PCs
+    sp = loadKSdir(fullfile(KiloSortPaths{subsesid}),Params); % Load Spikes with PCs
     [sp.spikeAmps, sp.spikeDepths, sp.templateDepths, sp.templateXpos, sp.tempAmps, sp.tempsUnW, sp.templateDuration, sp.waveforms] = templatePositionsAmplitudes(sp.temps, sp.winv, sp.ycoords, sp.xcoords, sp.spikeTemplates, sp.tempScalingAmps); %from the spikes toolbox
 
     %% Remove noise; spikes across all channels'
@@ -193,11 +191,11 @@ for subsesid=1:length(KiloSortPaths)
     paramBC = bc_qualityParamValuesForUnitMatch(dir(strrep(fullfile(rawD(1).folder,rawD(1).name),'cbin','meta')),fullfile(Params.tmpdatafolder,strrep(rawD(1).name,'cbin','bin')));
 
     %% Load Cluster Info
-    myClusFile = dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'cluster_info.tsv')); % If you did phy (manual curation) we will find this one... We can trust you, right?
+    myClusFile = dir(fullfile(KiloSortPaths{subsesid},'cluster_info.tsv')); % If you did phy (manual curation) we will find this one... We can trust you, right?
     if isempty(myClusFile)
         disp('This data is not curated with phy! Hopefully you''re using automated quality metrics to find good units!')
         curratedflag=0;
-        myClusFile = dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'cluster_group.tsv'));
+        myClusFile = dir(fullfile(KiloSortPaths{subsesid},'cluster_group.tsv'));
         clusinfo = tdfread(fullfile(myClusFile(1).folder,myClusFile(1).name));
         % Convert sp data to correct cluster according to phy (clu and
         % template are not necessarily the same after phy)
@@ -206,7 +204,7 @@ for subsesid=1:length(KiloSortPaths)
         clusidtmp = clusinfo.cluster_id;
         cluster_id = cat(1,cluster_id,clusinfo.cluster_id);
         tmpLabel = char(length(clusinfo.cluster_id));
-        KSLabelfile = tdfread(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'cluster_KSLabel.tsv'));
+        KSLabelfile = tdfread(fullfile(KiloSortPaths{subsesid},'cluster_KSLabel.tsv'));
         tmpLabel(ismember(clusinfo.cluster_id,KSLabelfile.cluster_id)) = KSLabelfile.KSLabel(ismember(KSLabelfile.cluster_id,clusinfo.cluster_id));
         Label = [Label,tmpLabel];
         totSpkNum = histc(sp.clu,sp.cids);
@@ -239,7 +237,7 @@ for subsesid=1:length(KiloSortPaths)
     else
         disp('You did manual curation. You champion. If you have not enough time, maybe consider some automated algorithm...')
         CurationDone = 1;
-        save(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'CuratedResults.mat'),'CurationDone')
+        save(fullfile(KiloSortPaths{subsesid},'CuratedResults.mat'),'CurationDone')
         clusinfo = tdfread(fullfile(myClusFile(1).folder,myClusFile(1).name));
         % Convert sp data to correct cluster according to phy (clu and
         % template are not necessarily the same after phy)
@@ -411,6 +409,8 @@ for subsesid=1:length(KiloSortPaths)
 
     else
         AllUniqueTemplates = cat(1,AllUniqueTemplates,unique(sp.spikeTemplates));
+        Good_ID = [Good_ID,Good_IDtmp]; %Identify good clusters
+
         %         NoiseUnit = false(size(Good_IDtmp));
     end
     addthis = nanmax(recsesAll);
@@ -442,7 +442,7 @@ for subsesid=1:length(KiloSortPaths)
     % clusinfo.Noise_ID = NoiseUnit;
 
     sp.sample_rate = sp.sample_rate(1);
-    save(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'PreparedData.mat'),'clusinfo','sp','Params','-v7.3')
+    save(fullfile(KiloSortPaths{subsesid},'PreparedData.mat'),'clusinfo','sp','Params','-v7.3')
 
     countid=countid+1;
     close all
@@ -452,12 +452,12 @@ end
 clusinfo = cell(1,length(KiloSortPaths));
 countid=1;
 for subsesid=1:length(KiloSortPaths)
-    if isempty(dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'*.npy')))
+    if isempty(dir(fullfile(KiloSortPaths{subsesid},'*.npy')))
         continue
     end
    
-    disp(['Loading data for ' KiloSortPaths(subsesid).folder '\' KiloSortPaths(subsesid).name])
-    tmp = matfile(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'PreparedData.mat'));
+    disp(['Loading clusinfo for ' KiloSortPaths{subsesid}])
+    tmp = matfile(fullfile(KiloSortPaths{subsesid},'PreparedData.mat'));
     clusinfo{subsesid} = tmp.clusinfo;
     % Replace recsesid with subsesid
     clusinfo{subsesid}.RecSesID = repmat(countid,size(clusinfo{subsesid}.RecSesID));
@@ -494,7 +494,10 @@ else
 end
 
 UMparam.RunPyKSChronicStitched = Params.RunPyKSChronicStitched;
-UMparam.SaveDir = fullfile(Params.SaveDir);
+UMparam.SaveDir = fullfile(Params.SaveDir,'UnitMatch');
+if ~isdir(UMparam.SaveDir)
+    mkdir(UMparam.SaveDir)
+end
 UMparam.ACGbinSize =  0.001;%paramBC.ACGbinSize;
 UMparam.ACGduration = 1;%paramBC.ACGduration;
 
@@ -503,7 +506,7 @@ UMparam.KSDir = AllKiloSortPaths;
 UMparam.channelpos = AllChannelPos;
 UMparam.AllRawPaths = RawDataPaths;
 UMparam.AllDecompPaths = arrayfun(@(X) fullfile(Params.tmpdatafolder,strrep(RawDataPaths(X).name,'cbin','bin')),1:length(RawDataPaths),'Uni',0);
-UMparam.RedoExtraction = 1;
+UMparam.RedoExtraction = 0; % Only necessary if KS was redone!
 UMparam.ProbabilityThreshold = 0.5;
 
 if Params.UnitMatch
@@ -553,12 +556,12 @@ end
 sp = cell(1,length(KiloSortPaths));
 countid=1;
 for subsesid=1:length(KiloSortPaths)
-    if isempty(dir(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'*.npy')))
+    if isempty(dir(fullfile(KiloSortPaths{subsesid},'*.npy')))
         continue
     end
    
-    disp(['Loading data for ' KiloSortPaths(subsesid).folder '\' KiloSortPaths(subsesid).name])
-    tmp = matfile(fullfile(KiloSortPaths(subsesid).folder,KiloSortPaths(subsesid).name,'PreparedData.mat'));
+    disp(['Loading spike data for ' KiloSortPaths{subsesid}])
+    tmp = matfile(fullfile(KiloSortPaths{subsesid},'PreparedData.mat'));
     sp{subsesid} = tmp.sp;
     % Replace recsesid with subsesid
     sp{subsesid}.RecSes = repmat(countid,size(sp{subsesid}.RecSes));
@@ -590,10 +593,11 @@ clear spnew
 % Save out sp unique cluster
 nclus = length(clusinfo.cluster_id);
 sp.UniqClu = sp.clu;
-for clusid=1:nclus
-    sp.UniqClu(sp.clu==clusinfo.cluster_id(clusid) & sp.RecSes==clusinfo.RecSesID(clusid)) = clusinfo.UniqueID(clusid);
+if Params.UnitMatch
+    for clusid=1:nclus
+        sp.UniqClu(sp.clu==clusinfo.cluster_id(clusid) & sp.RecSes==clusinfo.RecSesID(clusid)) = clusinfo.UniqueID(clusid);
+    end
 end
-
 %% Remove temporary files
 if 0%Params.DecompressLocal && DecompressionFlag
     clear memMapData
