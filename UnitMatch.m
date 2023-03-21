@@ -1,4 +1,4 @@
-function  [UniqueID, MatchTable, WaveformInfo, AllSessionCorrelations] = UnitMatch(clusinfo,param)
+function  [UniqueIDConversion, MatchTable, WaveformInfo, AllSessionCorrelations] = UnitMatch(clusinfo,param)
 %% Match units on neurophysiological evidence
 % Input:
 % - clusinfo (this is phy output, see also prepareinfo/spikes toolbox)
@@ -32,7 +32,7 @@ function  [UniqueID, MatchTable, WaveformInfo, AllSessionCorrelations] = UnitMat
 %% Parameters - tested on these values, but feel free to try others
 global stepsize
 stepsize = 0.01; % Of probability distribution
-MakePlotsOfPairs = 1; % Plots all pairs for inspection
+MakePlotsOfPairs = 1; % Plots pairs for inspection
 Scores2Include = {'AmplitudeSim','WavformSim','LocTrajectorySim','spatialdecaySim','LocDistSim'}; %
 
 % Scores2Include = {'AmplitudeSim','WavformMSE','WVCorr','LocTrajectorySim','spatialdecaySim','LocDistSim'}; %
@@ -67,10 +67,10 @@ waveidx = NewPeakLoc-7:NewPeakLoc+15; % Force this analysis window So far
 param.TakeChannelRadius = TakeChannelRadius;
 param.waveidx = waveidx;
 %% Extract all cluster info
-AllClusterIDs = clusinfo.cluster_id;
+OriginalClusterIDs = clusinfo.cluster_id;
 % nses = length(AllDecompPaths);
 % OriginalClusID = AllClusterIDs; % Original cluster ID assigned by KS
-UniqueID = 1:length(AllClusterIDs); % Initial assumption: All clusters are unique
+UniqueID = 1:length(OriginalClusterIDs); % Initial assumption: All clusters are unique
 Good_Idx = find(clusinfo.Good_ID); %Only care about good units at this point
 GoodRecSesID = clusinfo.RecSesID(Good_Idx);
 
@@ -329,7 +329,7 @@ makepretty
 %% Get traces for fingerprint correlations
 disp('Computing neural traces...')
 timercounter = tic;
-Unit2Take = AllClusterIDs(Good_Idx);
+Unit2Take = OriginalClusterIDs(Good_Idx);
 srAllDays = cell(1,ndays);
 for did = 1:ndays
     Unit2TakeIdxAll = find(recsesAll(Good_Idx) == did);
@@ -874,7 +874,7 @@ PyKSLabel = [];
 PairsPyKS = [];
 if RunPyKSChronicStitched
     for uid = 1:nclus
-        pairstmp = find(AllClusterIDs(Good_Idx)==AllClusterIDs(Good_Idx(uid)))';
+        pairstmp = find(OriginalClusterIDs(Good_Idx)==OriginalClusterIDs(Good_Idx(uid)))';
         if length(pairstmp)>1
             PairsPyKS = cat(1,PairsPyKS,pairstmp);
         end
@@ -1244,7 +1244,7 @@ BestMdl.FalsePositiveEstimate = FPEst;
 BestMdl.FalseNegativeEstimate = FNEst;
 
 %% Save model and relevant information
-save(fullfile(SaveDir,'MatchingScores.mat'),'BestMdl','SessionSwitch','GoodRecSesID','AllClusterIDs','Good_Idx','WavformMSE','WVCorr','LocationCombined','waveformTimePointSim','PeakTimeSim','spatialdecaySim','TotalScore','label','MatchProbability')
+save(fullfile(SaveDir,'MatchingScores.mat'),'BestMdl','SessionSwitch','GoodRecSesID','OriginalClusterIDs','Good_Idx','WavformMSE','WVCorr','LocationCombined','waveformTimePointSim','PeakTimeSim','spatialdecaySim','TotalScore','label','MatchProbability')
 save(fullfile(SaveDir,'UnitMatchModel.mat'),'BestMdl')
 
 %% Change these parameters to probabilities of being a match
@@ -1255,7 +1255,7 @@ end
 
 %% Assign same Unique ID
 OriUniqueID = UniqueID; %need for plotting
-[PairID1,PairID2]=meshgrid(AllClusterIDs(Good_Idx));
+[PairID1,PairID2]=meshgrid(OriginalClusterIDs(Good_Idx));
 [recses1,recses2] = meshgrid(recsesAll(Good_Idx));
 [PairID3,PairID4]=meshgrid(OriUniqueID(Good_Idx));
 
@@ -1271,6 +1271,11 @@ WaveformInfo.MaxChannel = MaxChannel;
 WaveformInfo.ProjectedLocation = ProjectedLocation;
 WaveformInfo.ProjectedWaveform = ProjectedWaveform;
 WaveformInfo.ProjectedLocationPerTP = ProjectedLocationPerTP;
+
+%% Save out UniqueID conversion
+UniqueIDConversion.UniqueID = UniqueID;
+UniqueIDConversion.OriginalClusID = OriginalClusterIDs;
+UniqueIDConversion.recsesAll = recsesAll;
 
 %% Figures
 if MakePlotsOfPairs
