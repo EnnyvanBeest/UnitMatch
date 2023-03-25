@@ -442,6 +442,18 @@ for subsesid=1:length(KiloSortPaths)
     % clusinfo.Noise_ID = NoiseUnit;
 
     sp.sample_rate = sp.sample_rate(1);
+
+    % Clean up unnecessary information in sp
+    sp = rmfield(sp,'tempScalingAmps');
+    sp = rmfield(sp,'temps');
+    sp = rmfield(sp,'winv');
+    sp = rmfield(sp,'pcFeat');
+    sp = rmfield(sp,'pcFeatInd');
+    sp = rmfield(sp,'tempAmps');
+    sp = rmfield(sp,'tempsUnW');
+    sp = rmfield(sp,'templateDuration');
+    sp = rmfield(sp,'waveforms');
+
     save(fullfile(KiloSortPaths{subsesid},'PreparedData.mat'),'clusinfo','sp','Params','-v7.3')
 
     countid=countid+1;

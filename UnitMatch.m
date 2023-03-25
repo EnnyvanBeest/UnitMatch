@@ -642,9 +642,7 @@ while flag<2
 
     %% three ways to define candidate scores
     % Total score larger than threshold
-    CandidatePairs = TotalScore>ThrsOpt & RankScoreAll == 1 & SigMask == 1; %
-    %     CandidatePairs(tril(true(size(CandidatePairs))))=0;
-   
+    CandidatePairs = TotalScore>ThrsOpt & RankScoreAll == 1 & SigMask == 1; %  
 
     %% Calculate median drift on this population (between days)
     if ndays>1

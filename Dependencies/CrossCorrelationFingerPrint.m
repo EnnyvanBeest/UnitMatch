@@ -6,7 +6,6 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCo
     end
 
     %% Parameters
-
     nclus = numel(Unit2Take);
     ndays = numel(srAllDays);
     SessionSwitch = [1 1+cumsum(cell2mat(cellfun(@(x) size(x,1), srAllDays, 'uni', 0)))];
@@ -16,8 +15,7 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCo
     SigMask = zeros(nclus,nclus);
     RankScoreAll = nan(nclus,nclus);
     
-    %% Computes all the cross-correlation matrices
-    
+    %% Computes all the cross-correlation matrices    
     SessionCorrelations_fold1 = cell(1,ndays);
     SessionCorrelations_fold2 = cell(1,ndays);
     SessionCorrelations_perDay = cell(1,ndays);
@@ -130,7 +128,6 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCo
     end
 
     %% Plots
-
     if plt
 
         %% Plot the correlation matrices
