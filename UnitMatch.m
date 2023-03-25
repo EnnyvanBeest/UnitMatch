@@ -38,7 +38,6 @@ Scores2Include = {'AmplitudeSim','WavformSim','LocTrajectorySim','spatialdecaySi
 % Scores2Include = {'AmplitudeSim','WavformMSE','WVCorr','LocTrajectorySim','spatialdecaySim','LocDistSim'}; %
 TakeChannelRadius = 75; %in micron around max channel
 maxdist = 200; % Maximum distance at which units are considered as potential matches
-binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
 RemoveRawWavForms = 0; %Remove averaged waveforms again to save space --> Currently only two averages saved so shouldn't be a problem to keep it, normally speaking
 % Scores2Include = {'WavformSimilarity','LocationCombined','spatialdecayDiff','AmplitudeDiff'};%}
 MakeOwnNaiveBayes = 1; % if 0, use standard matlab version, which assumes normal distributions --> not recommended
@@ -326,33 +325,16 @@ colormap(flipud(gray))
 colorbar
 makepretty
 
-%% Get traces for fingerprint correlations
-disp('Computing neural traces...')
-timercounter = tic;
-Unit2Take = OriginalClusterIDs(Good_Idx);
-srAllDays = cell(1,ndays);
+%% Get correlation matrics for fingerprint correlations
+sessionCorrelationsAll = cell(1,ndays);
 for did = 1:ndays
-    Unit2TakeIdxAll = find(recsesAll(Good_Idx) == did);
 
     % Load sp for correct day
     tmppath = strsplit(Path4UnitNPY{Unit2TakeIdxAll(1)},'RawWaveforms');
     tmp = matfile(fullfile(tmppath{1},'PreparedData.mat'));
-    sp = tmp.sp;
-    
-    % Define edges for this dataset
-    edges = floor(min(sp.st))-binsz/2:binsz:ceil(max(sp.st))+binsz/2;
-
-    % bin data to create PSTH
-    srAllDays{did} = nan(numel(Unit2TakeIdxAll),numel(edges)-1);
-    for uid = 1:numel(Unit2TakeIdxAll)
-        srAllDays{did}(uid,:) =  histcounts(sp.st(sp.spikeTemplates == Unit2Take(Unit2TakeIdxAll(uid))),edges);
-    end
+    sessionCorrelationsAll{did} = tmp.sessionCorrelations;
 end
-disp(['Calculating neural traces took ' num2str(round(toc(timercounter))) ' seconds for ' num2str(nclus) ' units'])
 
-% clear variables to save space
-clear tmp
-clear sp
 %% Location differences between pairs of units: - This is done twice to account for large drift between sessions
 channelpos_AllCat = unique(cat(1,Allchannelpos{:}),'rows');
 
@@ -629,7 +611,7 @@ while flag<2
     disp('Computing fingerprints correlations...')
     [~,sortid] = sort(cell2mat(arrayfun(@(X) TotalScore(Pairs(X,1),Pairs(X,2)),1:size(Pairs,1),'Uni',0)),'descend');
     Pairs = Pairs(sortid,:);
-    [FingerprintR,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCorrelationFingerPrint(srAllDays,Pairs,Unit2Take,recsesGood);
+    [FingerprintR,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCorrelationFingerPrint(sessionCorrelationsAll,Pairs,Unit2Take,recsesGood);
 %     CrossCorrelationFingerPrint_BU
 
     figure;
@@ -840,7 +822,7 @@ while flag<2 && runid<maxrun
         % Use a bunch of units with high total scores as reference population
         [PairScore,sortid] = sort(cell2mat(arrayfun(@(X) MatchProbability(Pairs(X,1),Pairs(X,2)),1:size(Pairs,1),'Uni',0)),'descend');
         Pairs = Pairs(sortid,:);
-        [FingerprintR,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCorrelationFingerPrint(srAllDays,Pairs,Unit2Take,recsesGood);
+        [FingerprintR,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCorrelationFingerPrint(sessionCorrelationsAll,Pairs,Unit2Take,recsesGood);
 %         CrossCorrelationFingerPrint_BU
 
         tmpf = triu(FingerprintR,1);
