@@ -76,8 +76,7 @@ for uid = 1:nclus
         end
 
         %load sp
-        tmppath = strsplit(Path4UnitNPY{uid} ,'RawWaveforms');
-        tmp = matfile(fullfile(tmppath{1},'PreparedData.mat'));
+        tmp = matfile(fullfile(param.KSDir{GoodRecSesID(uid)},'PreparedData.mat'));
         sp = tmp.sp;
 
         % Spike samples

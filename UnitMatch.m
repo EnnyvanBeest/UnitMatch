@@ -30,8 +30,6 @@ function  [UniqueIDConversion, MatchTable, WaveformInfo, AllSessionCorrelations]
 % Célian Bimbard (2022-2023)
 
 %% Parameters - tested on these values, but feel free to try others
-global stepsize
-stepsize = 0.01; % Of probability distribution
 MakePlotsOfPairs = 1; % Plots pairs for inspection
 Scores2Include = {'AmplitudeSim','WavformSim','LocTrajectorySim','spatialdecaySim','LocDistSim'}; %
 
@@ -40,7 +38,7 @@ TakeChannelRadius = 75; %in micron around max channel
 maxdist = 200; % Maximum distance at which units are considered as potential matches
 RemoveRawWavForms = 0; %Remove averaged waveforms again to save space --> Currently only two averages saved so shouldn't be a problem to keep it, normally speaking
 % Scores2Include = {'WavformSimilarity','LocationCombined','spatialdecayDiff','AmplitudeDiff'};%}
-MakeOwnNaiveBayes = 1; % if 0, use standard matlab version, which assumes normal distributions --> not recommended
+MakeOwnNaiveBayes = 0; % if 0, use standard matlab version, which assumes normal distributions --> not recommended
 ApplyExistingBayesModel = 0; %If 1, use probability distributions made available by us
 maxrun = 1; % This is whether you want to use Bayes' output to create a new potential candidate set to optimize the probability distributions. Probably we don't want to keep optimizing?, as this can be a bit circular (?)
 drawmax = inf; % Maximum number of drawed matches (otherwise it takes forever!)
@@ -213,7 +211,7 @@ for uid = 1:nclus
 
     end
     if  norm(channelpos(MaxChannel(uid,1),:)-channelpos(MaxChannel(uid,2),:))>TakeChannelRadius
-        keyboard
+        % keyboard
     end
 end
 fprintf('\n')
@@ -326,13 +324,13 @@ colorbar
 makepretty
 
 %% Get correlation matrics for fingerprint correlations
+Unit2Take = OriginalClusterIDs(Good_Idx);
+
 sessionCorrelationsAll = cell(1,ndays);
 for did = 1:ndays
-
     % Load sp for correct day
-    tmppath = strsplit(Path4UnitNPY{Unit2TakeIdxAll(1)},'RawWaveforms');
-    tmp = matfile(fullfile(tmppath{1},'PreparedData.mat'));
-    sessionCorrelationsAll{did} = tmp.sessionCorrelations;
+    tmp = matfile(fullfile(param.KSDir{did},'PreparedData.mat'));
+    sessionCorrelationsAll{did} = tmp.SessionCorrelations;
 end
 
 %% Location differences between pairs of units: - This is done twice to account for large drift between sessions

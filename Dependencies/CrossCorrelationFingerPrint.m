@@ -8,7 +8,7 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelationsFingerprint
     %% Parameters
     nclus = numel(Unit2Take);
     ndays = numel(sessionCorrelationsAll);
-    SessionSwitch = [1 1+cumsum(cell2mat(cellfun(@(x) size(x,1), sessionCorrelationsAll, 'uni', 0)))];
+    SessionSwitch = [1 1+cumsum(cell2mat(cellfun(@(x) size(x.fold1,1), sessionCorrelationsAll, 'uni', 0)))];
     AllSessionCorrelationsFingerprints = cell(ndays,ndays); % Used for plotting only
     FingerprintR_plt = cell(ndays,ndays);
     FingerprintRAll = nan(nclus,nclus);

@@ -13,12 +13,12 @@ Pairs(diff(Pairs,[],2)==0,:)=[]; %Remove own matches
 CurrentSPPath = [];
 ISIViolationsScore = nan(1,size(Pairs,1));
 fprintf(1,'Computing functional properties similarity. Progress: %3d%%',0)
-for pairid= 1:size(Pairs,1)
+for pairid = 1:size(Pairs,1)
     if GoodRecSesID(Pairs(pairid,1)) == GoodRecSesID(Pairs(pairid,2))       
         tmppath = strsplit(Path4UnitNPY{find(Good_Idx==Pairs(pairid,1))},'RawWaveforms');
         % Load sp for correct day
         if isempty(CurrentSPPath) || ~strcmp(CurrentSPPath{1},tmppath{1})
-            tmp = matfile(fullfile(tmppath{1},'PreparedData.mat'));
+            tmp = matfile(fullfile(param.KSDir{GoodRecSesID(Pairs(pairid,1))},'PreparedData.mat'));
             sp = tmp.sp;
             CurrentSPPath = tmppath;
         end
