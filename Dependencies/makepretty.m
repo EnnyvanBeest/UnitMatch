@@ -13,7 +13,7 @@ ch = get(gca, 'Children');
 
 for c = 1:length(ch)
     thisChild = ch(c);
-    if strcmp('line', get(thisChild, 'Type')) 
+    if strcmp('line', get(thisChild, 'Type')) || strcmp('errorbar', get(thisChild, 'Type'))
         if strcmp('.', get(thisChild, 'Marker'))
             set(thisChild, 'MarkerSize', 15);
         end
@@ -22,7 +22,7 @@ for c = 1:length(ch)
         end
         if strcmp('--', get(thisChild, 'LineStyle'))
             set(thisChild, 'LineWidth', 2.0);
-        end
+        end       
     end
 end
 box off
