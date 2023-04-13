@@ -6,8 +6,6 @@ end
 %% Extracting all relevant data/parameters
 if ~isdir(fullfile(param.SaveDir,'MatchFigures'))
     mkdir(fullfile(param.SaveDir,'MatchFigures'))
-else
-    delete(fullfile(param.SaveDir,'MatchFigures','*'))
 end
 
 % Load sp
