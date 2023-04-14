@@ -1,4 +1,4 @@
-function  [UniqueIDConversion, MatchTable, WaveformInfo, AllSessionCorrelations] = UnitMatch(clusinfo,param)
+function  [UniqueIDConversion, MatchTable, WaveformInfo, AllSessionCorrelations, param] = UnitMatch(clusinfo,param)
 %% Match units on neurophysiological evidence
 % Input:
 % - clusinfo (this is phy output, see also prepareinfo/spikes toolbox)
@@ -38,11 +38,14 @@ TakeChannelRadius = 75; %in micron around max channel
 maxdist = 200; % Maximum distance at which units are considered as potential matches
 RemoveRawWavForms = 0; %Remove averaged waveforms again to save space --> Currently only two averages saved so shouldn't be a problem to keep it, normally speaking
 % Scores2Include = {'WavformSimilarity','LocationCombined','spatialdecayDiff','AmplitudeDiff'};%}
-MakeOwnNaiveBayes = 0; % if 0, use standard matlab version, which assumes normal distributions --> not recommended
+MakeOwnNaiveBayes = 1; % if 0, use standard matlab version, which assumes normal distributions --> not recommended
 ApplyExistingBayesModel = 0; %If 1, use probability distributions made available by us
+SaveScoresAsProbability = 0; %If 1, the individual scores are converted to probabiliti
 maxrun = 1; % This is whether you want to use Bayes' output to create a new potential candidate set to optimize the probability distributions. Probably we don't want to keep optimizing?, as this can be a bit circular (?)
 drawmax = inf; % Maximum number of drawed matches (otherwise it takes forever!)
 VisibleSetting = 'off'; %Do we want to see the figures being plot online?
+global stepsize
+stepsize = 0.01;
 
 %% Read in from param
 Allchannelpos = param.channelpos;
@@ -63,6 +66,8 @@ waveidx = NewPeakLoc-7:NewPeakLoc+15; % Force this analysis window So far
 % best option
 param.TakeChannelRadius = TakeChannelRadius;
 param.waveidx = waveidx;
+param.SaveScoresAsProbability = SaveScoresAsProbability;
+
 %% Extract all cluster info
 OriginalClusterIDs = clusinfo.cluster_id;
 % nses = length(AllDecompPaths);
@@ -609,15 +614,7 @@ while flag<2
     disp('Computing fingerprints correlations...')
     [~,sortid] = sort(cell2mat(arrayfun(@(X) TotalScore(Pairs(X,1),Pairs(X,2)),1:size(Pairs,1),'Uni',0)),'descend');
     Pairs = Pairs(sortid,:);
-    [FingerprintR,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCorrelationFingerPrint(sessionCorrelationsAll,Pairs,Unit2Take,recsesGood);
-%     CrossCorrelationFingerPrint_BU
-
-    figure;
-    h=scatter(TotalScore(:),FingerprintR(:),14,RankScoreAll(:),'filled','AlphaData',0.1);
-    colormap(cat(1,[0 0 0],winter))
-    xlabel('TotalScore')
-    ylabel('Cross-correlation fingerprint')
-    makepretty
+    [FingerprintR,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCorrelationFingerPrint(sessionCorrelationsAll,Pairs,Unit2Take,recsesGood,0);
     disp(['Computing fingerprints correlations took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])
 
     %% three ways to define candidate scores
@@ -630,13 +627,13 @@ while flag<2
             [uid,uid2] = find(CandidatePairs);
             BestPairs = cat(2,uid,uid2);
             idx = find(BestPairs(:,1)>=SessionSwitch(did)&BestPairs(:,1)<SessionSwitch(did+1) & BestPairs(:,2)>=SessionSwitch(did+1)&BestPairs(:,2)<SessionSwitch(did+2));
-            if isempty(idx)
+            if isempty(idx) || length(idx)<5
                 disp('No pairs found to do any drift correction...')
-                flag = 1;
-                break
+                continue
             end
             drift = nanmedian(nanmean(ProjectedLocation(:,BestPairs(idx,1),:),3)-nanmean(ProjectedLocation(:,BestPairs(idx,2),:),3),2);
             disp(['Median drift recording ' num2str(did) ' calculated: X=' num2str(drift(1)) ', Y=' num2str(drift(2))])
+         
             if flag
                 break
             end
@@ -1222,15 +1219,16 @@ BestMdl.FalsePositiveEstimate = FPEst;
 BestMdl.FalseNegativeEstimate = FNEst;
 
 %% Save model and relevant information
-save(fullfile(SaveDir,'MatchingScores.mat'),'BestMdl','SessionSwitch','GoodRecSesID','OriginalClusterIDs','Good_Idx','WavformMSE','WVCorr','LocationCombined','waveformTimePointSim','PeakTimeSim','spatialdecaySim','TotalScore','label','MatchProbability')
+save(fullfile(SaveDir,'MatchingScores.mat'),'BestMdl','SessionSwitch','GoodRecSesID','OriginalClusterIDs','Good_Idx','WavformMSE','WVCorr','LocationCombined','waveformTimePointSim','PeakTimeSim','spatialdecaySim','TotalScore','label','MatchProbability','param')
 save(fullfile(SaveDir,'UnitMatchModel.mat'),'BestMdl')
 
 %% Change these parameters to probabilities of being a match
-for pidx = 1:length(Scores2Include)
-    [~,IndividualScoreprobability, ~]=ApplyNaiveBayes(Tbl(:,pidx),Parameterkernels(:,pidx,:),Priors);
-    eval([Scores2Include{pidx} ' = reshape(IndividualScoreprobability(:,2),nclus,nclus).*100;'])
+if SaveScoresAsProbability
+    for pidx = 1:length(Scores2Include)
+        [~,IndividualScoreprobability, ~]=ApplyNaiveBayes(Tbl(:,pidx),Parameterkernels(:,pidx,:),Priors);
+        eval([Scores2Include{pidx} ' = reshape(IndividualScoreprobability(:,2),nclus,nclus).*100;'])
+    end
 end
-
 %% Assign same Unique ID
 OriUniqueID = UniqueID; %need for plotting
 [PairID1,PairID2]=meshgrid(OriginalClusterIDs(Good_Idx));
@@ -1254,6 +1252,7 @@ WaveformInfo.ProjectedLocationPerTP = ProjectedLocationPerTP;
 UniqueIDConversion.UniqueID = UniqueID;
 UniqueIDConversion.OriginalClusID = OriginalClusterIDs;
 UniqueIDConversion.recsesAll = recsesAll;
+UniqueIDConversion.GoodID = clusinfo.Good_ID;
 
 %% Figures
 if MakePlotsOfPairs

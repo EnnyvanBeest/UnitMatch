@@ -428,7 +428,6 @@ for subsesid=1:length(KiloSortPaths)
     sp.RecSes = sp.SessionID+countid-1; %Keep track of recording session, as cluster IDs are not unique across sessions
 
     %% Compute cross-correlation matrices
-
     Good_Idx = find(Good_ID); % Only care about good units at this point
     
     % Define edges for this dataset
@@ -550,7 +549,7 @@ UMparam.AllRawPaths = RawDataPaths;
 UMparam.AllDecompPaths = arrayfun(@(X) fullfile(Params.tmpdatafolder,strrep(RawDataPaths(X).name,'cbin','bin')),1:length(RawDataPaths),'Uni',0);
 UMparam.RedoExtraction = 0; % Only necessary if KS was redone!
 UMparam.ProbabilityThreshold = 0.5;
-
+UMparam.binsize = Params.binsz;
 if Params.UnitMatch
     UnitMatchExist = dir(fullfile(UMparam.SaveDir,'UnitMatch.mat'));
     if ~isempty(UnitMatchExist) && ~Params.RedoUnitMatch
@@ -584,7 +583,7 @@ if Params.UnitMatch
         end
 
         % Run UnitMatch
-        [UniqueIDConversion, MatchTable, WaveformInfo, AllSessionCorrelations] = UnitMatch(clusinfo,UMparam);
+        [UniqueIDConversion, MatchTable, WaveformInfo, AllSessionCorrelations, UMparam] = UnitMatch(clusinfo,UMparam);
         save(fullfile(UMparam.SaveDir,'UnitMatch.mat'),'UniqueIDConversion','MatchTable','WaveformInfo','AllSessionCorrelations','UMparam')
         clusinfo.UniqueID = UniqueIDConversion.UniqueID;
         clusinfo.MatchTable = MatchTable;

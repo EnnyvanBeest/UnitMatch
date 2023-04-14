@@ -6,11 +6,12 @@ ncross = 5;
 Scores2Include = Tbl.Properties.VariableNames;
 SmoothProbability = 10; % smoothing, since we need to make sure none of the scores have a probability of 0
 SmoothSpatialFactor = 10; % Apply another smoothing factor for spatial decay and space
+global stepsize
+
 addone=0;%0.0001; %Add probability to the distribution to not have a probability of 0 (default 0.0001)
 if nargin<3
     Prior = [0.5 0.5];
 end
-global stepsize
 
 %% inatialization
 Cond = unique(label); %Number of conditions

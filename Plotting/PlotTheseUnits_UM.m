@@ -3,6 +3,11 @@ function PlotTheseUnits_UM(Pairs,MatchTable,WaveformInfo,AllSessionCorrelations,
 if nargin<4
     VisibleSetting = 'off';
 end
+
+if ~isfield(param,'TakeChannelRadius')
+        param.TakeChannelRadius = 200;
+        param.waveidx = 41-7:41+15;
+end
 %% Extracting all relevant data/parameters
 if ~isdir(fullfile(param.SaveDir,'MatchFigures'))
     mkdir(fullfile(param.SaveDir,'MatchFigures'))
@@ -300,7 +305,9 @@ for pairid=1:length(Pairs)
     fname = cell2mat(arrayfun(@(X) ['ID' num2str(OriUniqueID(X)) ', Rec' num2str(recsesGood(X))],Pairs{pairid},'Uni',0));
     saveas(tmpfig,fullfile(param.SaveDir,'MatchFigures',[fname '.fig']))
     saveas(tmpfig,fullfile(param.SaveDir,'MatchFigures',[fname '.bmp']))
-    delete(tmpfig)
+    if strcmp(VisibleSetting,'off')
+        delete(tmpfig)
+    end
 
 end
 disp(['Plotting pairs took ' num2str(round(toc(timercounter)./60)) ' minutes for ' num2str(nclus) ' units'])

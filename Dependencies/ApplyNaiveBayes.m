@@ -14,9 +14,9 @@ function [label,probability, Performance]=ApplyNaiveBayes(Tbl,Parameterkernels,l
     % Calculate posterior probability given Paremeterkernels (=probability
     % distributions)
     %% User input. Better not changed unless you do it everywhere
-    global stepsize
     nPairs = size(Tbl,1);
-    
+    global stepsize
+
     %% Initialize
     Edges = 0:stepsize:1;
     ScoreVector = Edges(1)+stepsize/2:stepsize:Edges(end)-stepsize/2;
