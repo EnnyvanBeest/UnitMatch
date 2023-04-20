@@ -31,7 +31,7 @@ function  [UniqueIDConversion, MatchTable, WaveformInfo, AllSessionCorrelations,
 % Célian Bimbard (2022-2023)
 
 %% Parameters - tested on these values, but feel free to try others
-MakePlotsOfPairs = 1; % Plots pairs for inspection
+param.MakePlotsOfPairs = 0; % Plots pairs for inspection
 Scores2Include = {'AmplitudeSim','WavformSim','LocTrajectorySim','spatialdecaySim','LocDistSim'}; %
 
 % Scores2Include = {'AmplitudeSim','WavformMSE','WVCorr','LocTrajectorySim','spatialdecaySim','LocDistSim'}; %
@@ -466,7 +466,7 @@ zlabel('Counts')
 title('Identified Matches')
 
 %% Figures
-if MakePlotsOfPairs
+if param.MakePlotsOfPairs
     % Pairs redefined:
     uId = unique(UniqueID(Good_Idx));
     Pairs = arrayfun(@(X) find(UniqueID(Good_Idx)==X),uId,'Uni',0);
@@ -487,7 +487,7 @@ if MakePlotsOfPairs
         DrawPairs = 1:size(Pairs,2);
     end
 
-    PlotTheseUnits_UM(Pairs(DrawPairs),MatchTable,WaveformInfo,AllSessionCorrelations,param,VisibleSetting)
+    PlotTheseUnits_UM(Pairs(DrawPairs),MatchTable,UniqueIDConversion,WaveformInfo,AllSessionCorrelations,param,VisibleSetting)
 end
 return
 

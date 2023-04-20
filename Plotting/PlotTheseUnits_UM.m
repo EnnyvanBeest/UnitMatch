@@ -1,4 +1,4 @@
-function PlotTheseUnits_UM(Pairs,MatchTable,WaveformInfo,AllSessionCorrelations,param,VisibleSetting)
+function PlotTheseUnits_UM(Pairs,MatchTable,UniqueIDConversion,WaveformInfo,AllSessionCorrelations,param,VisibleSetting)
 % Plot UM results for groups of units
 if nargin<4
     VisibleSetting = 'off';
@@ -62,10 +62,9 @@ for did=1:ndays
 end
 
 % Find session switch
-[UniqueID,id1,~] = unique(MatchTable.UID1); % all unique IDs
-recsesGood = MatchTable.RecSes1(id1); %Rec session of these units
-OriUniqueID = MatchTable.ID1(id1)+1; %0-indexed to 1-indexed
-nclus = length(UniqueID);
+recsesGood = UniqueIDConversion.recsesAll(logical(UniqueIDConversion.GoodID)); %Rec session of these units
+OriClusID = UniqueIDConversion.OriginalClusID(logical(UniqueIDConversion.GoodID)); %0-indexed to 1-indexed
+nclus = length(OriClusID);
 SessionSwitch = arrayfun(@(X) find(recsesGood==X,1,'first'),1:ndays,'Uni',0);
 SessionSwitch(cellfun(@isempty,SessionSwitch))=[];
 SessionSwitch = [cell2mat(SessionSwitch) nclus+1];
@@ -105,7 +104,7 @@ for pairid=1:length(Pairs)
         uid = Pairs{pairid}(uidx);
         channelpos = Allchannelpos{recsesGood(uid)};
         % Load raw data
-        spikeMap = readNPY(fullfile(param.KSDir{recsesGood(uid)},'RawWaveforms',['Unit' num2str(OriUniqueID(uid)) '_RawSpikes.npy']));
+        spikeMap = readNPY(fullfile(param.KSDir{recsesGood(uid)},'RawWaveforms',['Unit' num2str(OriClusID(uid)) '_RawSpikes.npy']));
         % Detrending
         spikeMap = permute(spikeMap,[2,1,3]); %detrend works over columns
         spikeMap = detrend(spikeMap,1); % Detrend (linearly) to be on the safe side. OVER TIME!
@@ -145,7 +144,7 @@ for pairid=1:length(Pairs)
         % Scatter spikes of each unit
         subplot(3,3,6)
         hold on
-        idx1=find(sp.spikeTemplates == OriUniqueID(uid)-1 & sp.RecSes == recsesGood(uid));
+        idx1=find(sp.spikeTemplates == OriClusID(uid)-1 & sp.RecSes == recsesGood(uid));
         if length(unique(Pairs{pairid}))==1
             if cv==1
                 idx1 = idx1(1:floor(length(idx1)/2));
@@ -185,7 +184,7 @@ for pairid=1:length(Pairs)
     ylabel('Ypos (um)')
     ylimcur = get(gca,'ylim');
     ylim([ylimcur(1) ylimcur(2)*1.005])
-    legend(hleg,arrayfun(@(X) ['ID' num2str(OriUniqueID(X)-1) ', Rec' num2str(recsesGood(X))],Pairs{pairid},'Uni',0),'Location','best')
+    legend(hleg,arrayfun(@(X) ['ID' num2str(OriClusID(X)-1) ', Rec' num2str(recsesGood(X))],Pairs{pairid},'Uni',0),'Location','best')
     Probs = cell2mat(arrayfun(@(X) [num2str(round(MatchProbability(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)) ','],1:length(Pairs{pairid})-1,'Uni',0));
     Probs(end)=[];
     title(['Probability=' Probs '%'])
@@ -244,7 +243,7 @@ for pairid=1:length(Pairs)
     makepretty
 
     subplot(3,3,8)
-    idx1=find(ismember(sp.spikeTemplates, OriUniqueID((Pairs{pairid}))) & ismember(sp.RecSes, recsesGood(Pairs{pairid})));
+    idx1=find(ismember(sp.spikeTemplates, OriClusID((Pairs{pairid}))) & ismember(sp.RecSes, recsesGood(Pairs{pairid})));
     isitot = diff(sort([tmpst(idx1)]));
     histogram(isitot,'FaceColor',[0 0 0])
     hold on
@@ -302,7 +301,7 @@ for pairid=1:length(Pairs)
 
     set(tmpfig,'units','normalized','outerposition',[0 0 1 1])
 
-    fname = cell2mat(arrayfun(@(X) ['ID' num2str(OriUniqueID(X)) ', Rec' num2str(recsesGood(X))],Pairs{pairid},'Uni',0));
+    fname = cell2mat(arrayfun(@(X) ['ID' num2str(OriClusID(X)) ', Rec' num2str(recsesGood(X))],Pairs{pairid},'Uni',0));
     saveas(tmpfig,fullfile(param.SaveDir,'MatchFigures',[fname '.fig']))
     saveas(tmpfig,fullfile(param.SaveDir,'MatchFigures',[fname '.bmp']))
     if strcmp(VisibleSetting,'off')
