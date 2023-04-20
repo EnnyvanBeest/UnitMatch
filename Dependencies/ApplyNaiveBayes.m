@@ -15,7 +15,7 @@ function [label,probability, Performance]=ApplyNaiveBayes(Tbl,Parameterkernels,l
     % distributions)
     %% User input. Better not changed unless you do it everywhere
     nPairs = size(Tbl,1);
-    global stepsize
+    stepsize = 1./size(Parameterkernels,1);
 
     %% Initialize
     Edges = 0:stepsize:1;
