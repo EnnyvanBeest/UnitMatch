@@ -154,7 +154,7 @@ for subsesid=1:length(KiloSortPaths)
     end
 
     %% Is it correct channelpos though...? Check using raw data
-    channelpostmpconv = ChannelIMROConversion(rawD(1).folder,1); % For conversion when not automatically done
+    channelpostmpconv = ChannelIMROConversion(rawD(1).folder,0); % For conversion when not automatically done
     AllChannelPos{countid} = channelpostmpconv;
 
     %% Load existing?
@@ -554,7 +554,7 @@ if Params.UnitMatch
     UnitMatchExist = dir(fullfile(UMparam.SaveDir,'UnitMatch.mat'));
     if ~isempty(UnitMatchExist) && ~Params.RedoUnitMatch
         load(fullfile(UMparam.SaveDir,'UnitMatch.mat'))
-        clusinfo.UniqueID = UniqueID;
+        clusinfo.UniqueID = UniqueIDConversion.UniqueID;
         clusinfo.MatchTable = MatchTable;
     else
         % Need to decompress if decompression wasn't done yet
