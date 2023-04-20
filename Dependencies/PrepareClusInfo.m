@@ -115,7 +115,7 @@ for subsesid=1:length(KiloSortPaths)
         end
 
         RawDataPaths = rawD;
-        AllKiloSortPaths = {AllKiloSortPaths{:} repmat(KiloSortPaths{subsesid},1,length(rawD))};
+        AllKiloSortPaths = cat(2,AllKiloSortPaths{:},repmat(KiloSortPaths(subsesid),1,length(rawD)));
     else
         if UseParamsKS
             spikeStruct = loadParamsPy(fullfile(KiloSortPaths{subsesid},'params.py'));
@@ -427,30 +427,32 @@ for subsesid=1:length(KiloSortPaths)
     end
     sp.RecSes = sp.SessionID+countid-1; %Keep track of recording session, as cluster IDs are not unique across sessions
 
-    %% Compute cross-correlation matrices
-    Good_Idx = find(Good_ID); % Only care about good units at this point
-    
-    % Define edges for this dataset
-    edges = floor(min(sp.st))-Params.binsz/2:Params.binsz:ceil(max(sp.st))+Params.binsz/2;
+    %% Compute cross-correlation matrices for individual recordings    
+    nRec = length(recsesAlltmp);
+    SessionCorrelations = cell(1,nRec);
+    for rid = 1:nRec
+        % Define edges for this dataset
+        edges = floor(min(sp.st(sp.RecSes==rid)))-Params.binsz/2:Params.binsz:ceil(max(sp.st(sp.RecSes==rid)))+Params.binsz/2;
+        Good_Idx = find(Good_ID(recsesAll==rid)); % Only care about good units at this point
 
-    % bin data to create PSTH
-    sr = nan(numel(Good_Idx),numel(edges)-1);
-    for uid = 1:numel(Good_Idx)
-        sr(uid,:) =  histcounts(sp.st(sp.spikeTemplates == sp.cids(Good_Idx(uid))),edges);
+        % bin data to create PSTH
+        sr = nan(numel(Good_Idx),numel(edges)-1);
+        for uid = 1:numel(Good_Idx)
+            sr(uid,:) =  histcounts(sp.st(sp.spikeTemplates == AllUniqueTemplates(Good_Idx(uid)) & sp.RecSes == recsesAll(Good_Idx(uid))),edges);
+        end
+
+        % Define folds (two halves)
+        idx_fold1 = 1:floor(size(sr,2)./2);
+        idx_fold2 = floor(size(sr,2)./2)+1:floor(size(sr,2)./2)*2;
+
+        % Find cross-correlation in first and second half of session
+        SessionCorrelations{rid}.fold1 = corr(sr(:,idx_fold1)',sr(:,idx_fold1)')';
+        SessionCorrelations{rid}.fold2 = corr(sr(:,idx_fold2)',sr(:,idx_fold2)')';
+
+        % Nan the diagonal
+        SessionCorrelations{rid}.fold1(logical(eye(size(SessionCorrelations{rid}.fold1)))) = nan;
+        SessionCorrelations{rid}.fold2(logical(eye(size(SessionCorrelations{rid}.fold2)))) = nan;
     end
-
-    % Define folds (two halves)
-    idx_fold1 = 1:floor(size(sr,2)./2);
-    idx_fold2 = floor(size(sr,2)./2)+1:floor(size(sr,2)./2)*2;
-
-    % Find cross-correlation in first and second half of session
-    SessionCorrelations.fold1 = corr(sr(:,idx_fold1)',sr(:,idx_fold1)')';
-    SessionCorrelations.fold2 = corr(sr(:,idx_fold2)',sr(:,idx_fold2)')';
-
-    % Nan the diagonal
-    SessionCorrelations.fold1(logical(eye(size(SessionCorrelations.fold1)))) = nan;
-    SessionCorrelations.fold2(logical(eye(size(SessionCorrelations.fold2)))) = nan;
-
     %% Save out sp and clusinfo for this session in the correct folder
     ShankOpt = unique(Shank);
     ShankID = nan(size(Shank));
@@ -491,7 +493,7 @@ end
 
 %% Here we're going to actually load in all the sessions requested - only clusinfo to save memory for unitmatch
 clusinfo = cell(1,length(KiloSortPaths));
-countid=1;
+addthis=0;
 for subsesid=1:length(KiloSortPaths)
     if isempty(dir(fullfile(KiloSortPaths{subsesid},'*.npy')))
         continue
@@ -500,9 +502,10 @@ for subsesid=1:length(KiloSortPaths)
     disp(['Loading clusinfo for ' KiloSortPaths{subsesid}])
     tmp = matfile(fullfile(KiloSortPaths{subsesid},'PreparedData.mat'));
     clusinfo{subsesid} = tmp.clusinfo;
+
     % Replace recsesid with subsesid
-    clusinfo{subsesid}.RecSesID = repmat(countid,size(clusinfo{subsesid}.RecSesID));
-    countid=countid+1;
+    clusinfo{subsesid}.RecSesID = clusinfo{subsesid}.RecSesID+addthis;
+    addthis=max(clusinfo{subsesid}.RecSesID);
 end
 
 % Add all cluster information in one 'cluster' struct - can be used for further analysis

@@ -143,7 +143,7 @@ save(fullfile(SaveDir,'UnitMatchModel.mat'),'BestMdl')
 %% Change these parameters to probabilities of being a match
 if SaveScoresAsProbability
     for pidx = 1:length(Scores2Include)
-        [~,IndividualScoreprobability, ~]=ApplyNaiveBayes(Tbl(:,pidx),Parameterkernels(:,pidx,:),Priors);
+        [~,IndividualScoreprobability, ~]=ApplyNaiveBayes(Tbl(:,pidx),Parameterkernels(:,pidx,:),BestMdl.Priors);
         eval([Scores2Include{pidx} ' = reshape(IndividualScoreprobability(:,2),nclus,nclus).*100;'])
     end
 end
@@ -198,7 +198,8 @@ if RunPyKSChronicStitched
     ScoreVector = Edges(1)+stepsize/2:stepsize:Edges(end)-stepsize/2;
 
     for scid=1:length(Scores2Include)
-        eval(['ScoresTmp = ' Scores2Include{scid} ';'])
+        eval(['ScoresTmp = Tbl.' Scores2Include{scid} ';'])
+        ScoresTmp = reshape(ScoresTmp,nclus,nclus);
         ScoresTmp(tril(true(size(ScoresTmp))))=nan;
         subplot(ceil(sqrt(length(Scores2Include))),round(sqrt(length(Scores2Include))),scid)
         hc = histcounts(ScoresTmp(~PyKSLabel),Edges)./sum(~PyKSLabel(:));
@@ -213,6 +214,32 @@ if RunPyKSChronicStitched
         makepretty
     end
     legend('Non-matches','Matches')
+
+    [~, ~,performance] = ApplyNaiveBayes(Tbl,BestMdl.Parameterkernels,PyKSLabel(:),BestMdl.Priors);
+    disp(['Correctly labelled ' num2str(round(performance(2)*1000)/10) '% of PyKS Matches and ' num2str(round(performance(1)*1000)/10) '% of PyKS non matches'])
+
+    disp('Results if training would be done with PyKs stitched')
+    [ParameterkernelsPyKS,~] = CreateNaiveBayes(Tbl,PyKSLabel(:),BestMdl.Priors);
+    [Fakelabel, Fakeposterior,performance] = ApplyNaiveBayes(Tbl,ParameterkernelsPyKS,PyKSLabel(:),BestMdl.Priors);
+    disp(['Correctly labelled ' num2str(round(performance(2)*1000)/10) '% of PyKS Matches and ' num2str(round(performance(1)*1000)/10) '% of PyKS non matches'])
+
+    Fakeposterior = reshape(Fakeposterior(:,2),nclus,nclus);
+    FNEst = (1-(sum(diag(Fakeposterior)>param.ProbabilityThreshold)./nclus))*100;
+    disp([num2str(round(sum(diag(Fakeposterior)>param.ProbabilityThreshold)./nclus*100)) '% of units were matched with itself'])
+    disp(['False negative estimate: ' num2str(round(FNEst*100)/100) '%'])
+    if FNEst>10
+        warning('Warning, false negatives very high!')
+    end
+    lowselfscores = find(diag(Fakeposterior<param.ProbabilityThreshold));
+
+    % Units off diagonal within a day are not matched by (Py)KS within a day.
+    FPEst=nan(1,ndays);
+    for did = 1:ndays
+        tmpprob = double(Fakeposterior(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1)>param.ProbabilityThreshold);
+        tmpprob(logical(eye(size(tmpprob)))) = nan;
+        FPEst(did) = sum(tmpprob(:)==1)./sum(~isnan(tmpprob(:)))*100;
+        disp(['False positive estimate recording ' num2str(did) ': ' num2str(round(FPEst(did)*100)/100) '%'])
+    end
 end
 
 
@@ -305,7 +332,7 @@ if RunPyKSChronicStitched
     [~,minidx] = arrayfun(@(X) min(abs(X-ScoreVector)),TmpSc,'Uni',0); % Find index for observation in score vector
     minidx=cell2mat(minidx);
     % Only interested in matches:
-    MatchLkh = cell2mat(arrayfun(@(Y) Parameterkernels(minidx(Y,:),Y,2),1:size(minidx,1),'Uni',0));
+    MatchLkh = cell2mat(arrayfun(@(Y) BestMdl.Parameterkernels(minidx(Y,:),Y,2),1:size(minidx,1),'Uni',0));
 
     figure;
     subplot(2,2,1)
@@ -372,6 +399,8 @@ figure('name','Parameter Scores');
 Edges = [0:0.01:1];
 for scid=1:length(Scores2Include)
     eval(['ScoresTmp = Tbl.' Scores2Include{scid} ';'])
+    ScoresTmp = reshape(ScoresTmp,nclus,nclus);
+
     ScoresTmp(tril(true(size(ScoresTmp))))=nan;
     subplot(length(Scores2Include),2,(scid-1)*2+1)
     histogram(ScoresTmp(~label),Edges)

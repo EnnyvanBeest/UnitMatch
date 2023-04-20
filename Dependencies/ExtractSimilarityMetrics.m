@@ -414,7 +414,15 @@ while flag<2
     for did = 1:ndays
         % Load sp for correct day
         tmp = matfile(fullfile(param.KSDir{did},'PreparedData.mat'));
-        sessionCorrelationsAll{did} = tmp.SessionCorrelations;
+        SessionCorrelations = tmp.SessionCorrelations;
+        if length(tmp.SessionCorrelations)==ndays
+            sessionCorrelationsAll{did} = SessionCorrelations{did};
+        elseif length(tmp.SessionCorrelations)==1  %Normal situation
+            sessionCorrelationsAll{did} = SessionCorrelations{1};
+        else
+            disp('This is a weird situation...')
+            keyboard
+        end
     end
     %% Fingerprint correlations
     % Not every recording day will have the same units. Therefore we will

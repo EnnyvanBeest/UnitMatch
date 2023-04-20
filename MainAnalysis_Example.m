@@ -20,7 +20,7 @@ RecordingType = repmat({'Acute'},1,length(MiceOpt)); % And whether recordings we
 RecordingType(ismember(MiceOpt,{'AL032','EB014','CB016','AV008'}))={'Chronic'}; %EB014', % Or maybe Chronic?
 
 %% Parameters on how to prepare units/data for analysis
-PrepareClusInfoparams.RunPyKSChronicStitched = 0; % if 1, run PyKS chronic recordings stitched when same IMRO table was used
+PrepareClusInfoparams.RunPyKSChronicStitched = 1; % if 1, run PyKS chronic recordings stitched when same IMRO table was used
 PrepareClusInfoparams.CopyToTmpFirst = 1; % If 1, copy data to local first, don't run from server (= advised!)
 PrepareClusInfoparams.DecompressLocal = 1; % If 1, uncompress data first if it's currently compressed (= necessary for unitmatch and faster for QualityMetrics))
 PrepareClusInfoparams.RedoQM = 0; %if 1, redo quality metrics if it already exists

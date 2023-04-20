@@ -214,17 +214,7 @@ if isfield(BestMdl,'Parameterkernels')
     Edges = [0:stepsize:1];
     ScoreVector = Edges(1)+stepsize/2:stepsize:Edges(end)-stepsize/2;
     BestMdl.ScoreVector = ScoreVector;
-    if param.RunPyKSChronicStitched
-        [label, posterior,performance] = ApplyNaiveBayes(Tbl,BestMdl.Parameterkernels,PyKSLabel(:),Priors);
-        disp(['Correctly labelled ' num2str(round(performance(2)*1000)/10) '% of PyKS Matches and ' num2str(round(performance(1)*1000)/10) '% of PyKS non matches'])
-
-        disp('Results if training would be done with PyKs stitched')
-        [ParameterkernelsPyKS,Performance] = CreateNaiveBayes(Tbl,PyKSLabel(:),Priors);
-        [Fakelabel, Fakeposterior,performance] = ApplyNaiveBayes(Tbl,ParameterkernelsPyKS,PyKSLabel(:),Priors);
-        disp(['Correctly labelled ' num2str(round(performance(2)*1000)/10) '% of PyKS Matches and ' num2str(round(performance(1)*1000)/10) '% of PyKS non matches'])
-    else
-        [label, posterior] = ApplyNaiveBayes(Tbl,BestMdl.Parameterkernels,[0 1],Priors);
-    end
+    [label, posterior] = ApplyNaiveBayes(Tbl,BestMdl.Parameterkernels,[0 1],Priors);
 else
     [label, posterior, cost] = predict(BestMdl,Tbl);
 end
@@ -248,5 +238,5 @@ title('Identified matches')
 makepretty
 saveas(gcf,fullfile(param.SaveDir,'IdentifiedMatches.fig'))
 saveas(gcf,fullfile(param.SaveDir,'IdentifiedMatches.bmp'))
-
+BestMdl.Priors = Priors;
 disp(['Extracting final pair of units took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])

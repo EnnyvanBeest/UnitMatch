@@ -35,7 +35,12 @@ for uid = 1:nclus
     spikeMap = detrend(spikeMap,1); % Detrend (linearly) to be on the safe side. OVER TIME!
     spikeMap = permute(spikeMap,[2,1,3]);  % Put back in order
 
-    channelpos = Allchannelpos{recsesGood(uid)};
+    try
+        channelpos = Allchannelpos{recsesGood(uid)};
+    catch ME
+        % assume they all have the same configuration
+        channelpos = Allchannelpos{recsesGood(uid)-1};
+    end
 
     % Extract channel positions that are relevant and extract mean location
     [~,MaxChanneltmp] = nanmax(nanmax(abs(nanmean(spikeMap(35:70,:,:),3)),[],1));
