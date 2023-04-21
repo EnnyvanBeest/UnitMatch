@@ -32,7 +32,7 @@ function  [UniqueIDConversion, MatchTable, WaveformInfo, AllSessionCorrelations,
 
 %% Parameters - tested on these values, but feel free to try others
 param.MakePlotsOfPairs = 0; % Plots pairs for inspection
-Scores2Include = {'AmplitudeSim','WavformMSE','TrajAngleSim','TrajDistSim','spatialdecaySim','CentroidDist','CentroidVar'}; %
+Scores2Include = {'AmplitudeSim','WavformMSE','spatialdecaySim','CentroidDist'}; %
 % Scores2Include = {'AmplitudeSim','WVCorr','WavformMSE','TrajAngleSim','TrajDistSim','spatialdecaySim','CentroidDist','CentroidVar'}; %
 
 TakeChannelRadius = 75; %in micron around max channel

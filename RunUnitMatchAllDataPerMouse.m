@@ -77,8 +77,12 @@ for midx = length(MiceOpt)
     %% Get cluster information
     [clusinfo,sp] = PrepareClusInfo(subsesoptAll,PrepareClusInfoparams);
 
+    %% Evaluate UnitMatch results
+    EvaluatingUnitMatch(PrepareClusInfoparams.SaveDir)
+
     %% 
     disp(['Preprocessed data for ' MiceOpt{midx}])
+    
 
 end
 

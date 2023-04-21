@@ -1,11 +1,12 @@
+function EvaluatingUnitMatch(DirToEvaluate)
 %% Evaluating UnitMatch
-DirToEvaluate = 'H:\MatchingUnits\Output\AL032\UnitMatch';
+% DirToEvaluate = 'H:\MatchingUnits\Output\AL032\UnitMatch';
 stepsize = 0.01;
 % Load UnitMatch Output
-Output2Evaluate = dir(fullfile(DirToEvaluate,'UnitMatch.mat'));
+Output2Evaluate = dir(fullfile(DirToEvaluate,'UnitMatch','UnitMatch.mat'));
 Output2Evaluate = matfile(fullfile(Output2Evaluate.folder,Output2Evaluate.name));
 
-Model2Evaluate = dir(fullfile(DirToEvaluate,'UnitMatchModel.mat'));
+Model2Evaluate = dir(fullfile(DirToEvaluate,'UnitMatch','UnitMatchModel.mat'));
 Model2Evaluate = matfile(fullfile(Model2Evaluate.folder,Model2Evaluate.name));
 
 % Extract MatchTable
@@ -20,8 +21,8 @@ if ~isfield(BestMdl,'Priors')
     BestMdl.Priors = [priorMatch 1-priorMatch];
 end
 VariableNames = BestMdl.VariableNames;
-nRows = ceil(sqrt(length(VariableNames)));
-nCols = round(sqrt(length(VariableNames)));
+nRows = ceil(sqrt(length(VariableNames)+1));
+nCols = round(sqrt(length(VariableNames)+1));
 %% 'Ground truth' (or as best as we can): Take the set where ID1 == ID2
 GTidx = find(MatchTable.ID1 == MatchTable.ID2);
 
@@ -94,7 +95,7 @@ for vid = 1:length(VariableNames)+1
         title(['Full model: ' num2str(round(FoundAsMatch(vid)*1000)./10) '%'])
         legend('KSMatch, Non UnitMatch','KSMatch and UnitMatch')
     else
-        title(['Without ' VariableNames{vid-1} ': ' num2str(round(FoundAsMatch(vid)*1000)./10) '%'])
+        title(['wo ' VariableNames{vid-1} ': ' num2str(round(FoundAsMatch(vid)*1000)./10) '%'])
     end
     ylabel('nSamples')
     xlabel('p|Match')
@@ -145,3 +146,5 @@ for vid = 1:length(VariableNames)+1
 
 end
 linkaxes
+
+return
