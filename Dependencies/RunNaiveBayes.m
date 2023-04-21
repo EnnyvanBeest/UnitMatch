@@ -1,5 +1,8 @@
  function [MatchProbability,label,Pairs,Tbl,BestMdl] = RunNaiveBayes(Predictors,TotalScore,Scores2Include,RankScoreAll,SigMask,clusinfo,param)
+
 %% Extract parameters
+FullSetParameters = {'AmplitudeSim','WVCorr','WavformMSE','TrajAngleSim','TrajDistSim','spatialdecaySim','CentroidDist','CentroidVar'};
+
 Good_Idx = find(clusinfo.Good_ID); %Only care about good units at this point
 GoodRecSesID = clusinfo.RecSesID(Good_Idx);
 OriginalClusterIDs = clusinfo.cluster_id;
@@ -53,18 +56,20 @@ Tbl = array2table(reshape(Predictors,[],size(Predictors,3)),'VariableNames',Scor
 while flag<2 && runid<param.maxrun
 
     timercounter = tic;
-    disp('Getting the Naive Bayes model...')
 
     flag = 0;
     runid = runid+1;
     filedir = which('UnitMatch');
     filedir = dir(filedir);
     if param.ApplyExistingBayesModel && exist(fullfile(filedir.folder,'UnitMatchModel.mat'))
-        load(fullfile(param.SaveDir,'UnitMatchModel.mat'),'BestMdl')
+        disp('Loading the existing Naive Bayes model...')
+
+        load(fullfile(filedir.folder,'UnitMatchModel.mat'),'BestMdl')
         % Apply naive bays classifier
+        
 
         if isfield(BestMdl,'Parameterkernels')
-            [label, posterior] = ApplyNaiveBayes(Tbl,BestMdl.Parameterkernels,[0 1],Priors);
+            [label, posterior] = ApplyNaiveBayes(Tbl,BestMdl.Parameterkernels(:,ismember(BestMdl.VariableNames,Scores2Include),:),[0 1],Priors);
         else
             [label, posterior, cost] = predict(BestMdl,Tbl);
         end
@@ -211,6 +216,7 @@ timercounter = tic;
    
 if isfield(BestMdl,'Parameterkernels')
     BestMdl.VariableNames = Scores2Include;
+    BestMdl.Parameterkernels = BestMdl.Parameterkernels(:,ismember(BestMdl.VariableNames,Scores2Include),:);
     Edges = [0:stepsize:1];
     ScoreVector = Edges(1)+stepsize/2:stepsize:Edges(end)-stepsize/2;
     BestMdl.ScoreVector = ScoreVector;

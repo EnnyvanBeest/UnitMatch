@@ -449,7 +449,7 @@ while flag<2
             [uid,uid2] = find(CandidatePairs);
             BestPairs = cat(2,uid,uid2);
             idx = find(BestPairs(:,1)>=SessionSwitch(did)&BestPairs(:,1)<SessionSwitch(did+1) & BestPairs(:,2)>=SessionSwitch(did+1)&BestPairs(:,2)<SessionSwitch(did+2));
-            if isempty(idx) || length(idx)<5
+            if isempty(idx) || length(idx)<3
                 disp('No pairs found to do any drift correction...')
                 continue
             end

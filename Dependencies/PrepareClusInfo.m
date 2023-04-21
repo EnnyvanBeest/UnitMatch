@@ -553,6 +553,9 @@ UMparam.AllDecompPaths = arrayfun(@(X) fullfile(Params.tmpdatafolder,strrep(RawD
 UMparam.RedoExtraction = 0; % Only necessary if KS was redone!
 UMparam.ProbabilityThreshold = 0.5;
 UMparam.binsize = Params.binsz;
+UMparam.Scores2Include = Params.Scores2Include; %
+UMparam.ApplyExistingBayesModel = Params.ApplyExistingBayesModel; %If 1, use probability distributions made available by us
+
 if Params.UnitMatch
     UnitMatchExist = dir(fullfile(UMparam.SaveDir,'UnitMatch.mat'));
     if ~isempty(UnitMatchExist) && ~Params.RedoUnitMatch

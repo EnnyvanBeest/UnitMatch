@@ -32,22 +32,18 @@ function  [UniqueIDConversion, MatchTable, WaveformInfo, AllSessionCorrelations,
 
 %% Parameters - tested on these values, but feel free to try others
 param.MakePlotsOfPairs = 0; % Plots pairs for inspection
-Scores2Include = {'AmplitudeSim','WavformMSE','spatialdecaySim','CentroidDist'}; %
-% Scores2Include = {'AmplitudeSim','WVCorr','WavformMSE','TrajAngleSim','TrajDistSim','spatialdecaySim','CentroidDist','CentroidVar'}; %
-
+Scores2Include = param.Scores2Include%
 TakeChannelRadius = 75; %in micron around max channel
 maxdist = 200; % Maximum distance at which units are considered as potential matches
 RemoveRawWavForms = 0; %Remove averaged waveforms again to save space --> Currently only two averages saved so shouldn't be a problem to keep it, normally speaking
 % Scores2Include = {'WavformSimilarity','LocationCombined','spatialdecayDiff','AmplitudeDiff'};%}
 param.MakeOwnNaiveBayes = 1; % if 0, use standard matlab version, which assumes normal distributions --> not recommended
-param.ApplyExistingBayesModel = 0; %If 1, use probability distributions made available by us
 SaveScoresAsProbability = 0; %If 1, the individual scores are converted to probabiliti
 param.maxrun = 1; % This is whether you want to use Bayes' output to create a new potential candidate set to optimize the probability distributions. Probably we don't want to keep optimizing?, as this can be a bit circular (?)
 drawmax = inf; % Maximum number of drawed matches (otherwise it takes forever!)
 VisibleSetting = 'off'; %Do we want to see the figures being plot online?
 global stepsize
 stepsize = 0.01;
-
 %% Read in from param
 Allchannelpos = param.channelpos;
 if ~iscell(Allchannelpos)

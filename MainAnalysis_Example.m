@@ -9,7 +9,7 @@ storevideopath=fullfile(tmpdatafolder,'Videos');
 HistoFolder = 'E:\Data\Histology'; % Necessary when aligning to histology
 
 %% Information on experiments
-MiceOpt = {'AV008'}; %CB016 %AL032 'AV008'Add all mice you want to analyse
+MiceOpt = {'CB016'}; %CB016 %AL032 'AV008'Add all mice you want to analyse
 nidq_sync_used = zeros(1,length(MiceOpt)); % Was an external nidq used for syncing (typically sync feeds directly into IMEC)
 nidq_sync_used(ismember(MiceOpt,{'EB001','CB007','CB008'}))=1; % Except for these mice...
 DataDir2Use = repmat(1,[1,length(MiceOpt)]); % In case you have multiple DataDir, index which directory is used for each mouse
@@ -35,6 +35,9 @@ PrepareClusInfoparams.separateIMRO = 0; % Run for every IMRO separately (for mem
 PrepareClusInfoparams.ReLoadAlways = 0; % If 1, SP & Clusinfo are always loaded from KS output
 PrepareClusInfoparams.binsz = 0.01; %Binsz for unitmatch PSTHs
 PrepareClusInfoparams.saveSp = 1; % Save SP struct for easy loading of preprocessed data
+PrepareClusInfoparams.Scores2Include = {'AmplitudeSim','WVCorr','WavformMSE','TrajAngleSim','TrajDistSim','spatialdecaySim','CentroidDist','CentroidVar'}; 
+% PrepareClusInfoparams.Scores2Include = {'AmplitudeSim','WVCorr','WavformMSE','TrajAngleSim','TrajDistSim','spatialdecaySim','CentroidDist','CentroidVar'}; % Full-Set
+PrepareClusInfoparams.ApplyExistingBayesModel = 0; %If 1, use probability distributions made available by us
 
 %% Parameters for further analysis
 maxsessnr = 2; %max nr. sessions on a day (doesn't need to be accurate)
