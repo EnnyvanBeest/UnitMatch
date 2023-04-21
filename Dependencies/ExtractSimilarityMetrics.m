@@ -420,7 +420,11 @@ while flag<2
         if length(tmp.SessionCorrelations)==ndays
             sessionCorrelationsAll{did} = SessionCorrelations{did};
         elseif length(tmp.SessionCorrelations)==1  %Normal situation
-            sessionCorrelationsAll{did} = SessionCorrelations{1};
+            if iscell(SessionCorrelations)
+                sessionCorrelationsAll{did} = SessionCorrelations{1};
+            else
+                sessionCorrelationsAll{did} = SessionCorrelations;
+            end
         else
             disp('This is a weird situation...')
             keyboard
