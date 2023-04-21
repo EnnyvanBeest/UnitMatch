@@ -41,7 +41,7 @@ for id = 1:2 % Loop: first use model that was used, then see if standard model w
     nCols = round(sqrt(length(VariableNames)+1));
 
     %% 'Ground truth' (or as best as we can): Take the set where ID1 == ID2 (False Negatives)
-    GTidx = find(MatchTable.ID1 == MatchTable.ID2);
+    GTidx = find(MatchTable.ID1 == MatchTable.ID2 & MatchTable.RecSes1 == MatchTable.RecSes2);
 
     % What is the match probability of
     MatchIdx = GTidx(find(MatchTable.UID1(GTidx)==MatchTable.UID2(GTidx)));
