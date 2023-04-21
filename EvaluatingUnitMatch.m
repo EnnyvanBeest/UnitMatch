@@ -1,5 +1,5 @@
 %% Evaluating UnitMatch
-DirToEvaluate = 'H:\Ongoing\EB019\UnitMatch';
+DirToEvaluate = 'H:\MatchingUnits\Output\AL032\UnitMatch';
 stepsize = 0.01;
 % Load UnitMatch Output
 Output2Evaluate = dir(fullfile(DirToEvaluate,'UnitMatch.mat'));
@@ -42,7 +42,7 @@ subplot(nRows,nCols,1)
 plot(Vect,hNM,'b-')
 hold on
 plot(Vect,hM,'r-')
-legend('Non-Match','Match')
+legend('KSMatch, Non UnitMatch','KSMatch and UnitMatch')
 title('Match probability of KS identified clusters')
 ylabel('nSamples')
 makepretty
@@ -59,7 +59,7 @@ for vid = 1:length(VariableNames)
     ylabel('nSamples')
     makepretty
 end
-
+linkaxes
 %% Leave-One-Out Analysis; would we have performed better when we left out one of the variables?
 figure('name','Leave Out Analysis')
 FoundAsMatch = nan(length(VariableNames)+1,1);
@@ -92,7 +92,7 @@ for vid = 1:length(VariableNames)+1
     plot(Vect,hM,'r-')
     if vid==1
         title(['Full model: ' num2str(round(FoundAsMatch(vid)*1000)./10) '%'])
-        legend('Non-Match','Match')
+        legend('KSMatch, Non UnitMatch','KSMatch and UnitMatch')
     else
         title(['Without ' VariableNames{vid-1} ': ' num2str(round(FoundAsMatch(vid)*1000)./10) '%'])
     end
@@ -101,3 +101,47 @@ for vid = 1:length(VariableNames)+1
     makepretty
 
 end
+linkaxes
+%% Leave-One-In Analysis; would we have performed better when we left out one of the variables?
+figure('name','Leave In Analysis')
+FoundAsMatch = nan(length(VariableNames)+1,1);
+for vid = 1:length(VariableNames)+1
+    if vid>1
+        VarNameSet = VariableNames{vid-1};
+    else
+        VarNameSet = VariableNames;
+    end
+    % Re-run model
+    Tbl = MatchTable(:,ismember(MatchTable.Properties.VariableNames,VarNameSet));
+    [Fakelabel, LeaveOutProb, performance] = ApplyNaiveBayes(Tbl,BestMdl.Parameterkernels(:,ismember(VariableNames,VarNameSet),:),[0,1],BestMdl.Priors);
+
+    % Were these neurons assigned as final matches?
+    FoundAsMatch(vid) = sum(Fakelabel(GTidx))./length(GTidx);
+    if vid==1
+        disp(['Full model UnitMatch identified ' num2str(round(FoundAsMatch(vid)*1000)./10) '% of Kilosort single units as such'])
+    else
+        disp(['Only ' VariableNames{vid-1} ' UnitMatch identified ' num2str(round(FoundAsMatch(vid)*1000)./10) '% of Kilosort single units as such'])
+    end
+
+    % What is the match probability of
+    MatchIdx = GTidx(find(Fakelabel(GTidx)));
+    NonMatchIDx = GTidx(find(~Fakelabel(GTidx)));  
+    hM = histcounts(LeaveOutProb(MatchIdx,2),Edges)./length(MatchIdx);
+    hNM = histcounts(LeaveOutProb(NonMatchIDx,2),Edges)./length(NonMatchIDx);
+
+    subplot(nRows,nCols,vid)
+    plot(Vect,hNM,'b-')
+    hold on
+    plot(Vect,hM,'r-')
+    if vid==1
+        title(['Full model: ' num2str(round(FoundAsMatch(vid)*1000)./10) '%'])
+        legend('KSMatch, Non UnitMatch','KSMatch and UnitMatch')
+    else
+        title(['Only ' VariableNames{vid-1} ': ' num2str(round(FoundAsMatch(vid)*1000)./10) '%'])
+    end
+    ylabel('nSamples')
+    xlabel('p|Match')
+    makepretty
+
+end
+linkaxes

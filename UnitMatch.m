@@ -32,9 +32,9 @@ function  [UniqueIDConversion, MatchTable, WaveformInfo, AllSessionCorrelations,
 
 %% Parameters - tested on these values, but feel free to try others
 param.MakePlotsOfPairs = 0; % Plots pairs for inspection
-Scores2Include = {'AmplitudeSim','WavformSim','LocTrajectorySim','spatialdecaySim','LocDistSim'}; %
+Scores2Include = {'AmplitudeSim','WVCorr','WavformMSE','TrajAngleSim','TrajDistSim','spatialdecaySim','CentroidDist','CentroidVar'}; %
 
-% Scores2Include = {'AmplitudeSim','WavformMSE','WVCorr','LocTrajectorySim','spatialdecaySim','LocDistSim'}; %
+% Scores2Include = {'AmplitudeSim','WavformMSE','WVCorr','LocTrajectorySim','spatialdecaySim','CentroidDist'}; %
 TakeChannelRadius = 75; %in micron around max channel
 maxdist = 200; % Maximum distance at which units are considered as potential matches
 RemoveRawWavForms = 0; %Remove averaged waveforms again to save space --> Currently only two averages saved so shouldn't be a problem to keep it, normally speaking
@@ -111,7 +111,13 @@ ExtractSimilarityMetrics(Scores2Include,AllWVBParameters,clusinfo,param)% All Sc
 % Use a bunch of units with high total scores as reference population
 [~,sortid] = sort(cell2mat(arrayfun(@(X) MatchProbability(Pairs(X,1),Pairs(X,2)),1:size(Pairs,1),'Uni',0)),'descend');
 Pairs = Pairs(sortid,:);
-[FingerprintR,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCorrelationFingerPrint(sessionCorrelationsAll,Pairs,Unit2Take,recsesGood,0);
+if ndays<5
+    drawdrosscorr = 1;
+else
+    drawdrosscorr = 0;
+end
+[FingerprintR,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCorrelationFingerPrint(sessionCorrelationsAll,Pairs,Unit2Take,recsesGood,drawdrosscorr);
+
 
 %% Some evaluation:
 % Units on the diagonal are matched by (Py)KS within a day. Very likely to

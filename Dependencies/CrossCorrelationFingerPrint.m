@@ -81,8 +81,8 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelationsFingerprint
                     end
     
                     % Normalize correlations to compare across recordings
-                    SessionCorrelation_Pair{did} = (SessionCorrelation_Pair{did}-nanmedian(SessionCorrelation_Pair{did}(:)))./ ...
-                        (quantile(SessionCorrelation_Pair{did}(:),0.95)-quantile(SessionCorrelation_Pair{did}(:),0.05));
+%                     SessionCorrelation_Pair{did} = (SessionCorrelation_Pair{did}-nanmedian(SessionCorrelation_Pair{did}(:)))./ ...
+%                         (quantile(SessionCorrelation_Pair{did}(:),0.95)-quantile(SessionCorrelation_Pair{did}(:),0.05));
                 end
 
                 % Get the correlation of the fingerprints
@@ -100,7 +100,7 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelationsFingerprint
             FingerprintRAll(clusIdxD1All,clusIdxD2All) = FingerprintR;
 
             % Find rank
-            FingerprintR(isnan(FingerprintR)) = 0; % should not participate to the rank
+            FingerprintR(isnan(FingerprintR)) = -1; % should not participate to the rank
             [~,idx] = sort(FingerprintR,2,'descend');
             for c = 1:numel(clusIdxD1All)
                 RankScoreAll(clusIdxD1All(c),clusIdxD2All(idx(c,:))) = 1:numel(clusIdxD2All);

@@ -79,7 +79,8 @@ x2 = ProjectedWaveform(waveidx,:,2);
 WVCorr = corr(x1,x2,'rows','pairwise');
 % Make WVCorr a normal distribution
 WVCorr = atanh(WVCorr);
-WVCorr = (WVCorr-nanmin(WVCorr(:)))./(nanmax(WVCorr(~isinf(WVCorr(:))))-nanmin(WVCorr(:)));
+WVCorr = (WVCorr-quantile(WVCorr(:),0.005))./(nanmax(WVCorr(~isinf(WVCorr(:))))-quantile(WVCorr(:),0.005));
+WVCorr(WVCorr<0)=0;
 
 ProjectedWaveformNorm = cat(3,x1,x2);
 ProjectedWaveformNorm = (ProjectedWaveformNorm-nanmin(ProjectedWaveformNorm,[],1))./(nanmax(ProjectedWaveformNorm,[],1)-nanmin(ProjectedWaveformNorm,[],1));
@@ -153,62 +154,63 @@ while flag<2
     disp('Computing location distances between pairs of units...')
     LocDist = sqrt((ProjectedLocation(1,:,1)'-ProjectedLocation(1,:,2)).^2 + ...
         (ProjectedLocation(2,:,1)'-ProjectedLocation(2,:,2)).^2);
+    LocDist = 1-((LocDist-nanmin(LocDist(:)))./(maxdist-nanmin(LocDist(:))));
+    LocDist(LocDist<0)=0;
 
     disp('Computing location distances between pairs of units, per individual time point of the waveform...')
-    % Difference in distance at different time points
+    % Difference in distance between centroids of two halfs of the recording 
     x1 = repmat(squeeze(ProjectedLocationPerTP(:,:,waveidx,1)),[1 1 1 size(ProjectedLocationPerTP,2)]);
     x2 = permute(repmat(squeeze(ProjectedLocationPerTP(:,:,waveidx,2)),[1 1 1 size(ProjectedLocationPerTP,2)]),[1 4 3 2]);
-    LocDistSign = squeeze(sqrt(nansum((x1-x2).^2,1)));
-    thesearenan = squeeze(nansum(LocDistSign>maxdist,2))>0.5*size(LocDistSign,2);
+    EuclDist = squeeze(sqrt(nansum((x1-x2).^2,1))); % Euclidean distance
     w = squeeze(isnan(abs(x1(1,:,:,:)-x2(1,:,:,:))));
-    %     LocDistSign(w) = nan;
-    % Average location + variance in location (captures the trajectory of a waveform in space)
-    LocDistSim = squeeze(nanmean(LocDistSign,2)+nanvar(LocDistSign,[],2));
-    LocDistSim(thesearenan) = nan;
+    EuclDist(w) = nan;
+    % Average location
+    CentroidDist = squeeze(nanmean(EuclDist,2));%+nanvar(EuclDist,[],2));
+    % Normalize each of them from 0 to 1, 1 being the 'best'
+    % If distance > maxdist micron it will never be the same unit:
+    CentroidDist = 1-((CentroidDist-nanmin(CentroidDist(:)))./(maxdist*2-nanmin(CentroidDist(:)))); %Average difference
+    CentroidDist(CentroidDist<0)=0;    
+    CentroidDist(isnan(CentroidDist))=0;
 
     % Variance in error, corrected by average error. This captures whether
     % the trajectory is consistenly separate
-    MSELoc = squeeze(nanvar(LocDistSign,[],2)./nanmean(LocDistSign,2)+nanmean(LocDistSign,2));
-    LocDistSign = squeeze(nanvar(LocDistSign,[],2))./sqrt(squeeze(sum(w,2))); % Variance in distance between the two traces
-    LocDistSign(thesearenan) = nan;
-    LocDistSign = 1-((LocDistSign-nanmin(LocDistSign(:)))./(quantile(LocDistSign(~isinf(LocDistSign)),0.99)-nanmin(LocDistSign(:))));
-    LocDistSign(LocDistSign<0 | isnan(LocDistSign))=0;
-
+    CentroidVar = squeeze(nanvar(EuclDist,[],2));%./nanmean(EuclDist,2)+nanmean(EuclDist,2));
+    CentroidVar = sqrt(CentroidVar);
+    CentroidVar = 1-((CentroidVar-nanmin(CentroidVar(:)))./(nanmax(CentroidVar(:))-nanmin(CentroidVar(:)))); %Average difference
     
     disp('Computing location angle (direction) differences between pairs of units, per individual time point of the waveform...')
-    % Difference in angle between two time points
     x1 = ProjectedLocationPerTP(:,:,waveidx(2):waveidx(end),:);
     x2 = ProjectedLocationPerTP(:,:,waveidx(1):waveidx(end-1),:);
-    LocAngle = squeeze(atan(abs(x1(1,:,:,:)-x2(1,:,:,:))./abs(x1(2,:,:,:)-x2(2,:,:,:))));
-
-    % Actually just taking the weighted sum of angles is better?
+    % The distance traveled
+    TrajDist = squeeze(nansum((x1-x2).^2,1));
+    % Difference in angle between two time points
+    LocAngle = squeeze(atan(abs(x1(1,:,:,:)-x2(1,:,:,:))./abs(x1(2,:,:,:)-x2(2,:,:,:))));  
+    % Actually just taking the weighted sum of angles is better
     x1 = repmat(LocAngle(:,:,1),[1 1 nclus]);
     x2 = permute(repmat(LocAngle(:,:,2),[1 1 nclus]),[3 2 1]); %   
     AngleSubtraction = abs(x1-x2);
     AngleSubtraction(isnan(abs(x1-x2))) = 0.5*pi; %punish points with nan
-    LocAngleSim = squeeze(nansum(AngleSubtraction,2)); % sum of angles
-%     LocAngleSim(thesearenan) = nan;
+    TrajAngleSim = squeeze(nansum(AngleSubtraction,2)); % sum of angles
+    TrajAngleSim = 1-((TrajAngleSim-nanmin(TrajAngleSim(:)))./(nanmax(TrajAngleSim(:))-nanmin(TrajAngleSim(:))));
+    TrajAngleSim(TrajAngleSim<0 | isnan(TrajAngleSim))=0;
 
-    LocAngleSim = 1-((LocAngleSim-nanmin(LocAngleSim(:)))./(nanmax(LocAngleSim(:))-nanmin(LocAngleSim(:))));
-    LocAngleSim(LocAngleSim<0 | isnan(LocAngleSim))=0;
-
-    % Normalize each of them from 0 to 1, 1 being the 'best'
-    % If distance > maxdist micron it will never be the same unit:
-    LocDistSim = 1-((LocDistSim-nanmin(LocDistSim(:)))./(maxdist*2-nanmin(LocDistSim(:)))); %Average difference
-    LocDistSim(LocDistSim<0)=0;
-    LocDist = 1-((LocDist-nanmin(LocDist(:)))./(maxdist-nanmin(LocDist(:))));
-    LocDist(LocDist<0)=0;
-    LocDistSim(isnan(LocDistSim))=0;
-
-    MSELoc = 1-((MSELoc-nanmin(MSELoc(:)))./(nanmax(MSELoc(:))-nanmin(MSELoc(:))));
-
-    LocTrajectorySim = (LocAngleSim+LocDistSign)./2; % Trajectory Similarity is sum of distance + sum of angles
+    % Continue distance traveled
+    x1 = repmat(TrajDist(:,:,1),[1 1 nclus]);
+    x2 = permute(repmat(TrajDist(:,:,2),[1 1 nclus]),[3 2 1]); %   
+    % Distance similarity (subtract for each pair of units)
+    TrajDistCompared = abs(x1-x2);%
+    TrajDistSim = squeeze(nansum(TrajDistCompared,2));  
+    TrajDistSim = sqrt(TrajDistSim); % Make more normal
+    TrajDistSim = 1-((TrajDistSim-nanmin(TrajDistSim(:)))./(nanmax(TrajDistSim(:))-nanmin(TrajDistSim(:))));
+  
+  
+    LocTrajectorySim = (TrajAngleSim+TrajDistSim)./2; % Trajectory Similarity is sum of distance + sum of angles
     LocTrajectorySim = (LocTrajectorySim-nanmin(LocTrajectorySim(:))./(nanmax(LocTrajectorySim(:))-nanmin(LocTrajectorySim(:))));
     %
     figure('name','Distance Measures')
     subplot(4,2,1)
-    imagesc(LocDistSim);
-    title('LocDistSim')
+    imagesc(CentroidDist);
+    title('CentroidDist')
     xlabel('Unit_i')
     ylabel('Unit_j')
     hold on
@@ -219,7 +221,7 @@ while flag<2
     makepretty
 
     subplot(4,2,2)
-    tmp = LocDistSim;
+    tmp = CentroidDist;
     hc1 = histcounts(diag(tmp),[0:0.01:1])./size(tmp,1);
     hc2 = histcounts(tmp(~logical(eye(size(tmp)))),[0:0.01:1])./(numel(tmp)-size(tmp,1));
     plot([0.005:0.01:0.995],hc2); hold on; plot([0.005:0.01:0.995],hc1)
@@ -227,8 +229,8 @@ while flag<2
     makepretty
 
     subplot(4,2,3)
-    imagesc(LocAngleSim);
-    title('LocAngleSim')
+    imagesc(TrajAngleSim);
+    title('TrajAngleSim')
     xlabel('Unit_i')
     ylabel('Unit_j')
     hold on
@@ -238,7 +240,7 @@ while flag<2
     colorbar
     makepretty
     subplot(4,2,4)
-    tmp = LocAngleSim;
+    tmp = TrajAngleSim;
     hc1 = histcounts(diag(tmp),[0:0.01:1])./size(tmp,1);
     hc2 = histcounts(tmp(~logical(eye(size(tmp)))),[0:0.01:1])./(numel(tmp)-size(tmp,1));
     plot([0.005:0.01:0.995],hc2); hold on; plot([0.005:0.01:0.995],hc1)
@@ -246,8 +248,8 @@ while flag<2
     makepretty
 
     subplot(4,2,5)
-    imagesc(LocDistSign);
-    title('LocDistSign')
+    imagesc(TrajDistSim);
+    title('TrajDistSim')
     xlabel('Unit_i')
     ylabel('Unit_j')
     hold on
@@ -257,7 +259,7 @@ while flag<2
     colorbar
     makepretty
     subplot(4,2,6)
-    tmp = LocDistSign;
+    tmp = TrajDistSim;
     hc1 = histcounts(diag(tmp),[0:0.01:1])./size(tmp,1);
     hc2 = histcounts(tmp(~logical(eye(size(tmp)))),[0:0.01:1])./(numel(tmp)-size(tmp,1));
     plot([0.005:0.01:0.995],hc2); hold on; plot([0.005:0.01:0.995],hc1)
@@ -265,8 +267,8 @@ while flag<2
     makepretty
 
     subplot(4,2,7)
-    imagesc(LocTrajectorySim);
-    title('LocTrajectorySim')
+    imagesc(CentroidVar);
+    title('CentroidVar')
     xlabel('Unit_i')
     ylabel('Unit_j')
     hold on
@@ -276,7 +278,7 @@ while flag<2
     colorbar
     makepretty
     subplot(4,2,8)
-    tmp = LocTrajectorySim;
+    tmp = CentroidVar;
     hc1 = histcounts(diag(tmp),[0:0.01:1])./size(tmp,1);
     hc2 = histcounts(tmp(~logical(eye(size(tmp)))),[0:0.01:1])./(numel(tmp)-size(tmp,1));
     plot([0.005:0.01:0.995],hc2); hold on; plot([0.005:0.01:0.995],hc1)

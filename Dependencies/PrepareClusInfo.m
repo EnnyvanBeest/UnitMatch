@@ -433,7 +433,7 @@ for subsesid=1:length(KiloSortPaths)
     for rid = 1:nRec
         % Define edges for this dataset
         edges = floor(min(sp.st(sp.RecSes==rid)))-Params.binsz/2:Params.binsz:ceil(max(sp.st(sp.RecSes==rid)))+Params.binsz/2;
-        Good_Idx = find(Good_ID(recsesAll==rid)); % Only care about good units at this point
+        Good_Idx = find(Good_ID & recsesAll'==rid); % Only care about good units at this point
 
         % bin data to create PSTH
         sr = nan(numel(Good_Idx),numel(edges)-1);
