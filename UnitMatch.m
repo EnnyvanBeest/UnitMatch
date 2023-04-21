@@ -32,9 +32,9 @@ function  [UniqueIDConversion, MatchTable, WaveformInfo, AllSessionCorrelations,
 
 %% Parameters - tested on these values, but feel free to try others
 param.MakePlotsOfPairs = 0; % Plots pairs for inspection
-Scores2Include = {'AmplitudeSim','WVCorr','WavformMSE','TrajAngleSim','TrajDistSim','spatialdecaySim','CentroidDist','CentroidVar'}; %
+Scores2Include = {'AmplitudeSim','WavformMSE','TrajAngleSim','TrajDistSim','spatialdecaySim','CentroidDist','CentroidVar'}; %
+% Scores2Include = {'AmplitudeSim','WVCorr','WavformMSE','TrajAngleSim','TrajDistSim','spatialdecaySim','CentroidDist','CentroidVar'}; %
 
-% Scores2Include = {'AmplitudeSim','WavformMSE','WVCorr','LocTrajectorySim','spatialdecaySim','CentroidDist'}; %
 TakeChannelRadius = 75; %in micron around max channel
 maxdist = 200; % Maximum distance at which units are considered as potential matches
 RemoveRawWavForms = 0; %Remove averaged waveforms again to save space --> Currently only two averages saved so shouldn't be a problem to keep it, normally speaking
@@ -109,13 +109,15 @@ ExtractSimilarityMetrics(Scores2Include,AllWVBParameters,clusinfo,param)% All Sc
 
 %% Final functional scores
 % Use a bunch of units with high total scores as reference population
-[~,sortid] = sort(cell2mat(arrayfun(@(X) MatchProbability(Pairs(X,1),Pairs(X,2)),1:size(Pairs,1),'Uni',0)),'descend');
-Pairs = Pairs(sortid,:);
 if ndays<5
     drawdrosscorr = 1;
 else
     drawdrosscorr = 0;
 end
+[r, c] = find(MatchProbability>param.ProbabilityThreshold); %Find matches
+Pairs = cat(2,r,c);
+Pairs = sortrows(Pairs);
+Pairs = unique(Pairs,'rows');
 [FingerprintR,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCorrelationFingerPrint(sessionCorrelationsAll,Pairs,Unit2Take,recsesGood,drawdrosscorr);
 
 

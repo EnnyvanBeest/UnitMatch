@@ -32,7 +32,7 @@ PrepareClusInfoparams.RedoUnitMatch = 1; % if 1, Redo unitmatch
 PrepareClusInfoparams.SaveDir = SaveDir; % Save results here
 PrepareClusInfoparams.tmpdatafolder = tmpdatafolder; % use this as a local directory (should be large enough to handle all sessions you want to combine)
 PrepareClusInfoparams.separateIMRO = 0; % Run for every IMRO separately (for memory reasons this might be a good idea)
-PrepareClusInfoparams.ReLoadAlways = 1; % If 1, SP & Clusinfo are always loaded from KS output
+PrepareClusInfoparams.ReLoadAlways = 0; % If 1, SP & Clusinfo are always loaded from KS output
 PrepareClusInfoparams.binsz = 0.01; %Binsz for unitmatch PSTHs
 PrepareClusInfoparams.saveSp = 1; % Save SP struct for easy loading of preprocessed data
 

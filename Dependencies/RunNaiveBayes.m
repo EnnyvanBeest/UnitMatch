@@ -221,11 +221,11 @@ end
 MatchProbability = reshape(posterior(:,2),size(Predictors,1),size(Predictors,2));
 label = (MatchProbability>=param.ProbabilityThreshold);% | (MatchProbability>0.05 & RankScoreAll==1 & SigMask==1);
 % label = reshape(label,nclus,nclus);
-[r, c] = find(triu(label)==1); %Find matches across 2 days
+[r, c] = find(label==1); %Find matches across 2 days
 Pairs = cat(2,r,c);
 Pairs = sortrows(Pairs);
 Pairs = unique(Pairs,'rows');
-Pairs(Pairs(:,1)==Pairs(:,2),:) = [];
+
 
 figure; imagesc(label)
 colormap(flipud(gray))
