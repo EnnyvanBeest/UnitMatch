@@ -178,9 +178,9 @@ for id = 1:2 % Loop: first use model that was used, then see if standard model w
         % Were these neurons assigned as final matches?
         FoundAsMatch(vid,id) = sum(Fakelabel(GTidx))./length(GTidx);
         if vid==1
-            FalsePositiveChanges(id,vid) = FoundAsMatchN(vid,id) - FoundAsMatchN(1,1);
+            FalsePositiveChanges(id,vid) = FoundAsMatch(vid,id) - FoundAsMatch(1,1);
         else
-            FalsePositiveChanges(id,vid) = FoundAsMatchN(vid,id) - FoundAsMatchN(1,id);
+            FalsePositiveChanges(id,vid) = FoundAsMatch(vid,id) - FoundAsMatch(1,id);
         end
         %         if vid==1
         %             disp(['Full model UnitMatch identified ' num2str(round(FoundAsMatch(vid)*1000)./10) '% of Kilosort single units as such'])
@@ -261,7 +261,7 @@ for id = 1:2 % Loop: first use model that was used, then see if standard model w
 end
 
 %% Some Advise:
-if FalseNegativeChanges(2,1)>FalseNegativeChanges(1,1)
+if FalseNegativeChanges(2,1)>FalseNegativeChanges(1,1) & FalsePositiveChanges(2,1)<FalsePositiveChanges(1,1)
     disp('We advise to use the standard model on this data:')
     disp('PrepareClusInfoparams.ApplyExistingBayesModel = 1');
     id2take = 2;
