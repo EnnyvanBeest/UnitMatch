@@ -31,7 +31,6 @@ function  [UniqueIDConversion, MatchTable, WaveformInfo, AllSessionCorrelations,
 % Célian Bimbard (2022-2023)
 
 %% Parameters - tested on these values, but feel free to try others
-param.MakePlotsOfPairs = 0; % Plots pairs for inspection
 Scores2Include = param.Scores2Include%
 TakeChannelRadius = 75; %in micron around max channel
 maxdist = 200; % Maximum distance at which units are considered as potential matches

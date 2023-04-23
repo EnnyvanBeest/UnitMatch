@@ -35,9 +35,11 @@ PrepareClusInfoparams.separateIMRO = 0; % Run for every IMRO separately (for mem
 PrepareClusInfoparams.ReLoadAlways = 0; % If 1, SP & Clusinfo are always loaded from KS output
 PrepareClusInfoparams.binsz = 0.01; %Binsz for unitmatch PSTHs
 PrepareClusInfoparams.saveSp = 1; % Save SP struct for easy loading of preprocessed data
-PrepareClusInfoparams.Scores2Include = {'AmplitudeSim','WVCorr','WavformMSE','TrajAngleSim','TrajDistSim','spatialdecaySim','CentroidDist','CentroidVar'}; 
-% PrepareClusInfoparams.Scores2Include = {'AmplitudeSim','WVCorr','WavformMSE','TrajAngleSim','TrajDistSim','spatialdecaySim','CentroidDist','CentroidVar'}; % Full-Set
+% UnitMatch Parameters:
+% PrepareClusInfoparams.Scores2Include = {'AmplitudeSim','WVCorr','WavformMSE','TrajAngleSim','TrajDistSim','spatialdecaySim','CentroidDist','CentroidVar'}; 
+PrepareClusInfoparams.Scores2Include = {'AmplitudeSim','TrajAngleSim','spatialdecaySim','CentroidDist','CentroidVar'}; % Full-Set
 PrepareClusInfoparams.ApplyExistingBayesModel = 0; %If 1, use probability distributions made available by us
+PrepareClusInfoparams.MakePlotsOfPairs = 0; % Plots pairs for inspection (UnitMatch)
 
 %% Parameters for further analysis
 maxsessnr = 2; %max nr. sessions on a day (doesn't need to be accurate)
