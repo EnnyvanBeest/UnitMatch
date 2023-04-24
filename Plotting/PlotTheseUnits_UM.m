@@ -78,13 +78,11 @@ end
 
 % Extract matchtable scores
 MatchProbability = reshape(MatchTable.MatchProb,nclus,nclus);
-LocTrajectorySim = reshape(MatchTable.LocTrajectorySim,nclus,nclus);
-LocDistSim = reshape(MatchTable.LocDistSim,nclus,nclus);
-WavformSim = reshape(MatchTable.WavformSim,nclus,nclus);
-AmplitudeSim = reshape(MatchTable.AmplitudeSim,nclus,nclus);
-spatialdecaySim = reshape(MatchTable.spatialdecaySim,nclus,nclus);
 FingerprintR = reshape(MatchTable.FingerprintCor,nclus,nclus);
 RankScoreAll = reshape(MatchTable.RankScore,nclus,nclus);
+for scid = 1:length(param.Scores2Include)
+    eval([param.Scores2Include{scid} ' = reshape(MatchTable.' param.Scores2Include{scid} ',nclus,nclus);'])
+end
 %% Plot figures
 timercounter = tic;
 disp('Plotting pairs...')
@@ -104,7 +102,11 @@ for pairid=1:length(Pairs)
         uid = Pairs{pairid}(uidx);
         channelpos = Allchannelpos{recsesGood(uid)};
         % Load raw data
-        spikeMap = readNPY(fullfile(param.KSDir{recsesGood(uid)},'RawWaveforms',['Unit' num2str(OriClusID(uid)) '_RawSpikes.npy']));
+        try
+            spikeMap = readNPY(fullfile(param.KSDir{recsesGood(uid)},'RawWaveforms',['Unit' num2str(OriClusID(uid)) '_RawSpikes.npy']));
+        catch
+            keyboard
+        end
         % Detrending
         spikeMap = permute(spikeMap,[2,1,3]); %detrend works over columns
         spikeMap = detrend(spikeMap,1); % Detrend (linearly) to be on the safe side. OVER TIME!
@@ -208,31 +210,68 @@ for pairid=1:length(Pairs)
     end
     axis  square
     makepretty
-    tmp = cell2mat(arrayfun(@(X) [num2str(round(LocDistSim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
-    tmp(end)=[];
-    tmp2 = cell2mat(arrayfun(@(X) [num2str(round(LocTrajectorySim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
-    tmp2(end)=[];
-    title(['Distance: ' tmp '%, angle: ' tmp2 '%'])
+    if exist('TrajDistSim')
+        tmp = cell2mat(arrayfun(@(X) [num2str(round(TrajDistSim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp(end)=[];
+    else
+        tmp = 'nan';
+    end
+    if exist('TrajAngleSim')
+        tmp2 = cell2mat(arrayfun(@(X) [num2str(round(TrajAngleSim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp2(end)=[];
+    else
+        tmp2 = 'nan';
+    end
+    title(['Trajectory length: ' tmp '%, angle: ' tmp2 '%'])
 
     subplot(3,3,5)
     xlabel('X position')
     ylabel('um from tip')
     makepretty
-    tmp = cell2mat(arrayfun(@(X) [num2str(WaveformInfo.MaxChannel(Pairs{pairid}(X))) ','],1:length(Pairs{pairid}),'Uni',0));
-    tmp(end)=[];
-    title(['Chan ' tmp])
+
+    if exist('CentroidDist')
+        tmp = cell2mat(arrayfun(@(X) [num2str(round(CentroidDist(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp(end)=[];
+    else
+        tmp = 'nan';
+    end
+    if exist('CentroidVar')
+        tmp2 = cell2mat(arrayfun(@(X) [num2str(round(CentroidVar(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp2(end)=[];
+    else
+        tmp2 = 'nan';
+    end
+    title(['Centroid Distance: ' tmp '%, Variance: ' tmp2 '%'])
 
     subplot(3,3,3)
     makepretty
-    tmp = cell2mat(arrayfun(@(X) [num2str(round(WavformSim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
-    tmp(end)=[];
-    tmp3 = cell2mat(arrayfun(@(X) [num2str(round(AmplitudeSim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
-    tmp3(end)=[];
-    tmp4 = cell2mat(arrayfun(@(X) [num2str(round(spatialdecaySim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
-    tmp4(end)=[];
+    if exist('WavformMSE')
+        tmp = cell2mat(arrayfun(@(X) [num2str(round(WavformMSE(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp(end)=[];
+    else
+        tmp = 'nan';
+    end
+    if exist('WVCorr')
+         tmp2 = cell2mat(arrayfun(@(X) [num2str(round(WVCorr(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp2(end)=[];
+    else
+        tmp2 = 'nan';
+    end
+    if exist('AmplitudeSim')
+        tmp3 = cell2mat(arrayfun(@(X) [num2str(round(AmplitudeSim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp3(end)=[];
+    else
+        tmp3 = 'nan';
+    end
+    if exist('spatialdecaySim')
+        tmp4 = cell2mat(arrayfun(@(X) [num2str(round(spatialdecaySim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp4(end)=[];
+    else
+        tmp4 = 'nan';
+    end
     axis square
 
-    title(['Sim=' tmp '%, Ampl=' tmp3 '%, decay='  tmp4 '%'])
+    title(['Sim=' tmp '%, corr= ' tmp2 '%'])
 
     subplot(3,3,6)
     xlabel('Time (min)')
@@ -241,6 +280,7 @@ for pairid=1:length(Pairs)
     ylabel('Amplitude')
     set(gca,'YTick',[])
     makepretty
+    title(['Ampl=' tmp3 ', decay='  tmp4 '%'])
 
     subplot(3,3,8)
     idx1=find(ismember(sp.spikeTemplates, OriClusID((Pairs{pairid}))) & ismember(sp.RecSes, recsesGood(Pairs{pairid})));
