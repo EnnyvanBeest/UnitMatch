@@ -79,8 +79,10 @@ x2 = ProjectedWaveform(waveidx,:,2);
 WVCorr = corr(x1,x2,'rows','pairwise');
 % Make WVCorr a normal distribution
 WVCorr = atanh(WVCorr);
-WVCorr = (WVCorr-quantile(WVCorr(:),0.005))./(nanmax(WVCorr(~isinf(WVCorr(:))))-quantile(WVCorr(:),0.005));
+WVCorr = (WVCorr-quantile(WVCorr(:),0.005))./(quantile(WVCorr(:),0.995)-quantile(WVCorr(:),0.005)); %Give WVCorr a better chance
 WVCorr(WVCorr<0)=0;
+WVCorr(WVCorr>1)=1;
+
 
 ProjectedWaveformNorm = cat(3,x1,x2);
 ProjectedWaveformNorm = (ProjectedWaveformNorm-nanmin(ProjectedWaveformNorm,[],1))./(nanmax(ProjectedWaveformNorm,[],1)-nanmin(ProjectedWaveformNorm,[],1));

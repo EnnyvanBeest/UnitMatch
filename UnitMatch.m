@@ -31,7 +31,7 @@ function  [UniqueIDConversion, MatchTable, WaveformInfo, AllSessionCorrelations,
 % Célian Bimbard (2022-2023)
 
 %% Parameters - tested on these values, but feel free to try others
-Scores2Include = param.Scores2Include; %
+Scores2Include = param.Scores2Include % Good to show for failure prevention
 TakeChannelRadius = 75; %in micron around max channel
 maxdist = 200; % Maximum distance at which units are considered as potential matches
 RemoveRawWavForms = 0; %Remove averaged waveforms again to save space --> Currently only two averages saved so shouldn't be a problem to keep it, normally speaking
