@@ -99,7 +99,7 @@ WavformMSE(WavformMSE<0) = 0;
 disp(['Calculating waveform similarity took ' num2str(round(toc(timercounter))) ' seconds for ' num2str(nclus) ' units'])
 figure('name','Waveform similarity measures')
 subplot(1,3,1)
-imagesc(WVCorr);
+imagesc(WVCorr,[0.5 0.9]);
 title('Waveform correlations')
 xlabel('Unit Y')
 ylabel('Unit Z')
@@ -111,7 +111,7 @@ colorbar
 makepretty
 
 subplot(1,3,2)
-imagesc(WavformMSE);
+imagesc(WavformMSE,[0.5 0.9]);
 title('Waveform mean squared errors')
 xlabel('Unit Y')
 ylabel('Unit Z')
@@ -124,7 +124,7 @@ makepretty
 
 WavformSim = (WVCorr+WavformMSE)/2;
 subplot(1,3,3)
-imagesc(WavformSim);
+imagesc(WavformSim,[0.5 0.9]);
 title('Average Waveform scores')
 xlabel('Unit Y')
 ylabel('Unit Z')
@@ -183,8 +183,8 @@ while flag<2
     disp('Computing location angle (direction) differences between pairs of units, per individual time point of the waveform...')
     x1 = ProjectedLocationPerTP(:,:,waveidx(2):waveidx(end),:);
     x2 = ProjectedLocationPerTP(:,:,waveidx(1):waveidx(end-1),:);
-    % The distance traveled
-    TrajDist = squeeze(nansum((x1-x2).^2,1));
+    % The distance traveled (Eucledian)
+    TrajDist = sqrt(squeeze(nansum((x1-x2).^2,1)));
     % Difference in angle between two time points
     LocAngle = squeeze(atan(abs(x1(1,:,:,:)-x2(1,:,:,:))./abs(x1(2,:,:,:)-x2(2,:,:,:))));  
     % Actually just taking the weighted sum of angles is better
