@@ -62,7 +62,7 @@ for uid = 1:nclus
         weight = (param.TakeChannelRadius-Distance2MaxProj)./param.TakeChannelRadius;
         ProjectedWaveform(:,uid,cv) = nansum(spikeMap(:,ChanIdx,cv).*repmat(weight,1,size(spikeMap,1))',2)./sum(weight);
         % Find significant timepoints
-        wvdurtmp = find(abs(ProjectedWaveform(:,uid,cv))>abs(nanmean(ProjectedWaveform(1:20,uid,cv)))+2.5*nanstd(ProjectedWaveform(1:20,uid,cv))); % More than 2. std from baseline
+        wvdurtmp = find(abs(ProjectedWaveform(:,uid,cv) - nanmean(ProjectedWaveform(1:20,uid,cv)))>2.5*nanstd(ProjectedWaveform(1:20,uid,cv))); % More than 2. std from baseline
         if isempty(wvdurtmp)
             wvdurtmp = waveidx;
         end
