@@ -63,7 +63,7 @@ end
 
 % Find session switch
 recsesGood = UniqueIDConversion.recsesAll(logical(UniqueIDConversion.GoodID)); %Rec session of these units
-OriClusID = UniqueIDConversion.OriginalClusID(logical(UniqueIDConversion.GoodID)); %0-indexed to 1-indexed
+OriClusID = UniqueIDConversion.OriginalClusID(logical(UniqueIDConversion.GoodID));
 nclus = length(OriClusID);
 SessionSwitch = arrayfun(@(X) find(recsesGood==X,1,'first'),1:ndays,'Uni',0);
 SessionSwitch(cellfun(@isempty,SessionSwitch))=[];
@@ -103,7 +103,7 @@ for pairid=1:length(Pairs)
         channelpos = Allchannelpos{recsesGood(uid)};
         % Load raw data
         try
-            spikeMap = readNPY(fullfile(param.KSDir{recsesGood(uid)},'RawWaveforms',['Unit' num2str(OriClusID(uid)) '_RawSpikes.npy']));
+            spikeMap = readNPY(fullfile(param.KSDir{recsesGood(uid)},'RawWaveforms',['Unit' num2str(OriClusID(uid)+1) '_RawSpikes.npy'])); %0-indexed to 1-indexed
         catch
             keyboard
         end

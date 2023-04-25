@@ -36,9 +36,6 @@ rawdatapath = dir(fullfile('\\',pathparts{1:end-1}));
 if isempty(rawdatapath)
     rawdatapath = dir(fullfile(pathparts{1:end-1}));
 end
-if exist(fullfile(SaveDir,'UnitMatchWaveforms',['Unit' num2str(UniqueID(Good_Idx(1))) '_RawSpikes.mat'])) && RedoExtraction
-    delete(fullfile(SaveDir,'UnitMatchWaveforms','*'))
-end
 
 Currentlyloaded = 0;
 for uid = 1:nclus
@@ -48,7 +45,7 @@ for uid = 1:nclus
         % Probably stitched:
         tmppath = tmppath(GoodRecSesID(uid));
     end
-    Path4UnitNPY{uid} = fullfile(tmppath.folder,tmppath.name,['Unit' num2str(UniqueID(Good_Idx(uid))-OriSessionSwitch(GoodRecSesID(uid))+1) '_RawSpikes.npy']);
+    Path4UnitNPY{uid} = fullfile(tmppath.folder,tmppath.name,['Unit' num2str(AllClusterIDs(Good_Idx(uid))+1) '_RawSpikes.npy']); %0 to 1 indexed
 
     if exist(Path4UnitNPY{uid}) && ~RedoExtraction
         continue
@@ -115,7 +112,6 @@ for uid = 1:nclus
 
     end
 end
-
 
 fprintf('\n')
 disp(['Extracting raw waveforms took ' num2str(round(toc(timercounter)./60)) ' minutes for ' num2str(nclus) ' units'])
