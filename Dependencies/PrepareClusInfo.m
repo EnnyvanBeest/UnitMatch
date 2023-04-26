@@ -484,7 +484,7 @@ for subsesid=1:length(KiloSortPaths)
 
     save(fullfile(KiloSortPaths{subsesid},'PreparedData.mat'),'clusinfo','Params','SessionCorrelations','-v7.3')
     if Params.saveSp
-        save(fullfile(KiloSortPaths{subsesid},'PreparedData.mat'),'sp','-append','-v7.3')
+        save(fullfile(KiloSortPaths{subsesid},'PreparedData.mat'),'sp','-append')
     end
 
     countid=countid+1;

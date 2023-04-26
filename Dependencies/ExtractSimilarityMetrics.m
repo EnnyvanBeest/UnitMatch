@@ -160,7 +160,7 @@ while flag<2
     LocDist(LocDist<0)=0;
 
     disp('Computing location distances between pairs of units, per individual time point of the waveform...')
-    % Difference in distance between centroids of two halfs of the recording 
+    % Difference in distance between centroids of two halfs of the recording
     x1 = repmat(squeeze(ProjectedLocationPerTP(:,:,waveidx,1)),[1 1 1 size(ProjectedLocationPerTP,2)]);
     x2 = permute(repmat(squeeze(ProjectedLocationPerTP(:,:,waveidx,2)),[1 1 1 size(ProjectedLocationPerTP,2)]),[1 4 3 2]);
     EuclDist = squeeze(sqrt(nansum((x1-x2).^2,1))); % Euclidean distance
@@ -170,8 +170,8 @@ while flag<2
     CentroidDist = squeeze(nanmean(EuclDist,2));%+nanvar(EuclDist,[],2));
     % Normalize each of them from 0 to 1, 1 being the 'best'
     % If distance > maxdist micron it will never be the same unit:
-    CentroidDist = 1-((CentroidDist-nanmin(CentroidDist(:)))./(maxdist*2-nanmin(CentroidDist(:)))); %Average difference
-    CentroidDist(CentroidDist<0)=0;    
+    CentroidDist = 1-((CentroidDist-nanmin(CentroidDist(:)))./(maxdist-nanmin(CentroidDist(:)))); %Average difference
+    CentroidDist(CentroidDist<0)=0;
     CentroidDist(isnan(CentroidDist))=0;
 
     % Variance in error, corrected by average error. This captures whether
@@ -179,17 +179,17 @@ while flag<2
     CentroidVar = squeeze(nanvar(EuclDist,[],2));%./nanmean(EuclDist,2)+nanmean(EuclDist,2));
     CentroidVar = sqrt(CentroidVar);
     CentroidVar = 1-((CentroidVar-nanmin(CentroidVar(:)))./(nanmax(CentroidVar(:))-nanmin(CentroidVar(:)))); %Average difference
-    
+
     disp('Computing location angle (direction) differences between pairs of units, per individual time point of the waveform...')
     x1 = ProjectedLocationPerTP(:,:,waveidx(2):waveidx(end),:);
     x2 = ProjectedLocationPerTP(:,:,waveidx(1):waveidx(end-1),:);
     % The distance traveled (Eucledian)
     TrajDist = sqrt(squeeze(nansum((x1-x2).^2,1)));
     % Difference in angle between two time points
-    LocAngle = squeeze(atan(abs(x1(1,:,:,:)-x2(1,:,:,:))./abs(x1(2,:,:,:)-x2(2,:,:,:))));  
+    LocAngle = squeeze(atan(abs(x1(1,:,:,:)-x2(1,:,:,:))./abs(x1(2,:,:,:)-x2(2,:,:,:))));
     % Actually just taking the weighted sum of angles is better
     x1 = repmat(LocAngle(:,:,1),[1 1 nclus]);
-    x2 = permute(repmat(LocAngle(:,:,2),[1 1 nclus]),[3 2 1]); %   
+    x2 = permute(repmat(LocAngle(:,:,2),[1 1 nclus]),[3 2 1]); %
     AngleSubtraction = abs(x1-x2);
     AngleSubtraction(isnan(abs(x1-x2))) = 0.5*pi; %punish points with nan
     TrajAngleSim = squeeze(nansum(AngleSubtraction,2)); % sum of angles
@@ -198,14 +198,14 @@ while flag<2
 
     % Continue distance traveled
     x1 = repmat(TrajDist(:,:,1),[1 1 nclus]);
-    x2 = permute(repmat(TrajDist(:,:,2),[1 1 nclus]),[3 2 1]); %   
+    x2 = permute(repmat(TrajDist(:,:,2),[1 1 nclus]),[3 2 1]); %
     % Distance similarity (subtract for each pair of units)
     TrajDistCompared = abs(x1-x2);%
-    TrajDistSim = squeeze(nansum(TrajDistCompared,2));  
+    TrajDistSim = squeeze(nansum(TrajDistCompared,2));
     TrajDistSim = sqrt(TrajDistSim); % Make more normal
     TrajDistSim = 1-((TrajDistSim-nanmin(TrajDistSim(:)))./(nanmax(TrajDistSim(:))-nanmin(TrajDistSim(:))));
-  
-  
+
+
     LocTrajectorySim = (TrajAngleSim+TrajDistSim)./2; % Trajectory Similarity is sum of distance + sum of angles
     LocTrajectorySim = (LocTrajectorySim-nanmin(LocTrajectorySim(:))./(nanmax(LocTrajectorySim(:))-nanmin(LocTrajectorySim(:))));
     %
@@ -293,9 +293,11 @@ while flag<2
         figure('name','Total Score components');
         for sid = 1:length(Scores2Include)
             eval(['tmp = ' Scores2Include{sid} ';'])
-            subplot(round(sqrt(length(Scores2Include))),ceil(sqrt(length(Scores2Include))),sid)
+            tmp(CentroidDist==0)=nan; %Remove pairs that are never gonna happen
+
+            subplot(ceil(sqrt(length(Scores2Include))),round(sqrt(length(Scores2Include))),sid)
             try
-                imagesc(tmp,[quantile(tmp(:),0.1) 1]);
+                imagesc(tmp);
             catch
                 imagesc(tmp,[0 1]);
             end
@@ -311,11 +313,42 @@ while flag<2
         end
         saveas(gcf,fullfile(SaveDir,'TotalScoreComponents.fig'))
         saveas(gcf,fullfile(SaveDir,'TotalScoreComponents.bmp'))
+
+
+        figure('name','Diagonal versus off-diagonal')
+        for sid = 1:length(Scores2Include)
+            eval(['tmp = ' Scores2Include{sid} ';'])
+            % Take centroid dist > maxdist out
+            tmp(CentroidDist==0)=nan;
+            % Take between session out
+            for did = 1:ndays
+                for did2 = 1:ndays
+                    if did==did2
+                        continue
+                    end
+                    tmp(SessionSwitch(did):SessionSwitch(did+1),SessionSwitch(did2):SessionSwitch(did2+1))=nan;
+                end
+            end
+            hd = histcounts(diag(tmp),0:0.01:1)./nclus;
+            hnd = histcounts(tmp(~eye(size(tmp))),0:0.01:1)./sum(~isnan(tmp(~eye(size(tmp)))));
+            subplot(ceil(sqrt(length(Scores2Include))),round(sqrt(length(Scores2Include))),sid)
+            plot(0.005:0.01:0.995,hd,'r-'); hold on; plot(0.005:0.01:0.995,hnd,'b-')
+
+            title(Scores2Include{sid})
+            makepretty
+
+        end
+        legend('Within session diagonal','Within session off-diagonal (<maxdist)','Location', 'best')
+        saveas(gcf,fullfile(SaveDir,'WithinSessionDistributions.fig'))
+        saveas(gcf,fullfile(SaveDir,'WithinSessionDistributions.bmp'))
+
     end
     %% Calculate total score
+    IncludeThesePairs = find(CentroidDist>0);
+
     disp('Computing total score...')
     timercounter = tic;
-    priorMatch = 1-(nclus*ndays)./(nclus*nclus);
+    priorMatch = 1-(nclus*ndays)./length(IncludeThesePairs);
     leaveoutmatches = false(nclus,nclus,length(Scores2Include)); %Used later
     figure;
     if length(Scores2Include)>1
@@ -345,8 +378,8 @@ while flag<2
             makepretty
 
             % Thresholds
-            ThrsOpt = quantile(TotalScore(:),priorMatch); %Select best ones only later
-            if ThrsOpt == max(TotalScore(:))
+            ThrsOpt = quantile(TotalScore(IncludeThesePairs),priorMatch); %Select best ones only later
+            if ThrsOpt == max(TotalScore(IncludeThesePairs))
                 ThrsOpt = ThrsOpt-0.1;
             end
             subplot(2,length(Scores2Include),scid+(length(Scores2Include)))
@@ -367,10 +400,24 @@ while flag<2
     end
     TotalScore = zeros(nclus,nclus);
     Predictors = zeros(nclus,nclus,0);
-    for scid2=1:length(Scores2Include)
-        Predictors = cat(3,Predictors,eval(Scores2Include{scid2}));
-        eval(['TotalScore=TotalScore+' Scores2Include{scid2} ';'])
+    for sid=1:length(Scores2Include)
+        eval(['tmp = ' Scores2Include{sid} ';'])
+        % Take centroid dist > maxdist out
+        %         tmp(CentroidDist==0)=nan;
+        Predictors = cat(3,Predictors,tmp);
+        TotalScore=TotalScore+tmp;
     end
+
+    figure('name','Predictor Matrix of max dist pairs')
+    %  Score correlation matrix
+    tmp = reshape(Predictors,nclus*nclus,[]);
+    [~,ax] = plotmatrix(tmp(IncludeThesePairs,:));
+    for sid = 1:size(ax,1)
+        set(ax(sid,1),'YTick',0.5,'YTickLabel',Scores2Include{sid})
+        set(ax(end,sid),'XTick',0.5,'XTickLabel',Scores2Include{sid},'XTickLabelRotation',45)
+    end
+    makepretty
+   
     figure('name','TotalScore')
     subplot(2,1,1)
     imagesc(TotalScore,[0 length(Scores2Include)]);
@@ -385,7 +432,7 @@ while flag<2
     makepretty
 
     % Make initial threshold --> to be optimized
-    ThrsOpt = quantile(TotalScore(:),priorMatch); %Select best ones only later
+    ThrsOpt = quantile(TotalScore(IncludeThesePairs),priorMatch); %Select best ones only later
     subplot(2,1,2)
     imagesc(TotalScore>ThrsOpt)
     hold on
@@ -432,22 +479,10 @@ while flag<2
             keyboard
         end
     end
-    %% Fingerprint correlations
-    % Not every recording day will have the same units. Therefore we will
-    % correlate each unit's activity with average activity across different
-    % depths
-    % Use a bunch of units with high total scores as reference population
-    timercounter = tic;
-    disp('Computing fingerprints correlations...')
-    [~,sortid] = sort(cell2mat(arrayfun(@(X) TotalScore(Pairs(X,1),Pairs(X,2)),1:size(Pairs,1),'Uni',0)),'descend');
-    Pairs = Pairs(sortid,:);
-    [FingerprintR,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCorrelationFingerPrint(sessionCorrelationsAll,Pairs,Unit2Take,recsesGood,0);
-    disp(['Computing fingerprints correlations took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])
-    disp(['Computing total score took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])
   
     %% three ways to define candidate scores
     % Total score larger than threshold
-    CandidatePairs = TotalScore>ThrsOpt & RankScoreAll == 1 & SigMask == 1; %
+    CandidatePairs = TotalScore>ThrsOpt;%
 
     %% Calculate median drift on this population (between days)
     if ndays>1
@@ -486,9 +521,8 @@ assignin('caller','drift',drift)
 assignin('caller','ProjectedLocationPerTP',ProjectedLocationPerTP)
 assignin('caller','ProjectedLocation',ProjectedLocation)
 assignin('caller','sessionCorrelationsAll',sessionCorrelationsAll)
-assignin('caller','RankScoreAll',RankScoreAll)
-assignin('caller','SigMask',SigMask)
 assignin('caller','Unit2Take',Unit2Take)
+
 
 
 

@@ -39,6 +39,7 @@ SaveScoresAsProbability = 0; %If 1, the individual scores are converted to proba
 param.maxrun = 1; % This is whether you want to use Bayes' output to create a new potential candidate set to optimize the probability distributions. Probably we don't want to keep optimizing?, as this can be a bit circular (?)
 drawmax = inf; % Maximum number of drawed matches (otherwise it takes forever!)
 VisibleSetting = 'off'; %Do we want to see the figures being plot online?
+Draw2DMatrixes = 0; % If you find this useful
 global stepsize
 stepsize = 0.01;
 %% Read in from param
@@ -98,21 +99,7 @@ AllWVBParameters = ExtractParameters(Path4UnitNPY,clusinfo,param);
 ExtractSimilarityMetrics(Scores2Include,AllWVBParameters,clusinfo,param)% All Scores2Include are pushed to the workspace
 
 %% Naive bayes classifier
-[MatchProbability,label,Pairs,Tbl,BestMdl] = RunNaiveBayes(Predictors,TotalScore,Scores2Include,RankScoreAll,SigMask,clusinfo,param);
-
-%% Final functional scores
-% Use a bunch of units with high total scores as reference population
-if ndays<5
-    drawdrosscorr = 1;
-else
-    drawdrosscorr = 0;
-end
-[r, c] = find(MatchProbability>param.ProbabilityThreshold); %Find matches
-Pairs = cat(2,r,c);
-Pairs = sortrows(Pairs);
-Pairs = unique(Pairs,'rows');
-[FingerprintR,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCorrelationFingerPrint(sessionCorrelationsAll,Pairs,Unit2Take,recsesGood,drawdrosscorr);
-
+[MatchProbability,label,Pairs,Tbl,BestMdl] = RunNaiveBayes(Predictors,TotalScore,Scores2Include,clusinfo,param);
 
 %% Some evaluation:
 % Units on the diagonal are matched by (Py)KS within a day. Very likely to
@@ -148,6 +135,20 @@ if SaveScoresAsProbability
         eval([Scores2Include{pidx} ' = reshape(IndividualScoreprobability(:,2),nclus,nclus).*100;'])
     end
 end
+
+%% Compute functional score (cross-correlation fingerprint)
+if ndays<5
+    drawdrosscorr = 1;
+else
+    drawdrosscorr = 0;
+end
+[r, c] = find(MatchProbability>param.ProbabilityThreshold); %Find matches
+Pairs = cat(2,r,c);
+Pairs = sortrows(Pairs);
+Pairs = unique(Pairs,'rows');
+[FingerprintR,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCorrelationFingerPrint(sessionCorrelationsAll,Pairs,Unit2Take,recsesGood,drawdrosscorr);
+
+
 %% Assign same Unique ID
 OriUniqueID = UniqueID; %need for plotting
 [PairID1,PairID2]=meshgrid(OriginalClusterIDs(Good_Idx));
@@ -262,7 +263,7 @@ end
 saveas(gcf,fullfile(SaveDir,'ProbabilitiesMatches.fig'))
 saveas(gcf,fullfile(SaveDir,'ProbabilitiesMatches.bmp'))
 
-%%
+%% Compare to functional scores
 figure;
 subplot(1,3,1)
 imagesc(RankScoreAll==1 & SigMask==1)
@@ -284,7 +285,6 @@ makepretty
 
 subplot(1,3,3)
 imagesc(MatchProbability>=param.ProbabilityThreshold | (MatchProbability>0.05 & RankScoreAll==1 & SigMask==1));
-
 % imagesc(MatchProbability>=0.99 | (MatchProbability>=0.05 & RankScoreAll==1 & SigMask==1))
 hold on
 arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
@@ -419,7 +419,7 @@ for scid=1:length(Scores2Include)
     makepretty
 end
 
-%
+if Draw2DMatrixes 
 figure('name','Projected Location Distance to [0 0]')
 Dist2Tip = sqrt(nansum(ProjectedLocation.^2,1));
 % Dist2TipMatrix = nan(size(CandidatePairs));
@@ -494,7 +494,7 @@ xlabel('Unit_i')
 ylabel('Unit_j')
 zlabel('Counts')
 title('Identified Matches')
-
+end
 %% Figures
 if param.MakePlotsOfPairs
     % Pairs redefined:

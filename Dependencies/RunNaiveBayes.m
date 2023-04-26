@@ -1,4 +1,4 @@
- function [MatchProbability,label,Pairs,Tbl,BestMdl] = RunNaiveBayes(Predictors,TotalScore,Scores2Include,RankScoreAll,SigMask,clusinfo,param)
+ function [MatchProbability,label,Pairs,Tbl,BestMdl] = RunNaiveBayes(Predictors,TotalScore,Scores2Include,clusinfo,param)
 
 %% Extract parameters
 FullSetParameters = {'AmplitudeSim','WVCorr','WavformMSE','TrajAngleSim','TrajDistSim','spatialdecaySim','CentroidDist','CentroidVar'};
@@ -15,15 +15,16 @@ ndays = length(unique(recsesAll));
 SessionSwitch = arrayfun(@(X) find(GoodRecSesID==X,1,'first'),1:ndays,'Uni',0);
 SessionSwitch(cellfun(@isempty,SessionSwitch))=[];
 SessionSwitch = [cell2mat(SessionSwitch) nclus+1];
+IncludeThesePairs = find(Predictors(:,:,ismember(param.Scores2Include,'CentroidDist'))>0);
 
 %% Prepare naive bayes - inspect probability distributions
 % Prepare a set INCLUDING the cross-validated self-scores, otherwise the probability
 % distributions are just weird
-priorMatch = 1-(nclus*ndays)./(nclus*nclus); %Now use a slightly more lenient prior
+priorMatch = 1-(nclus*ndays)./(nclus*nclus); %Now use the actual expected prior for bayes'
 ThrsOpt = quantile(TotalScore(:),priorMatch);
-CandidatePairs = TotalScore>ThrsOpt & RankScoreAll == 1 & SigMask == 1; %Best results if all 3 are true
+CandidatePairs = TotalScore>ThrsOpt;% 
 % Also assume kilosort does a good job ?
-CandidatePairs(logical(eye(size(CandidatePairs))))=1;
+% CandidatePairs(logical(eye(size(CandidatePairs))))=1;
 
 figure('name','Potential Matches')
 imagesc(CandidatePairs)
@@ -52,9 +53,7 @@ runid = 0;
 Priors = [priorMatch 1-priorMatch];
 BestMdl = [];
 Tbl = array2table(reshape(Predictors,[],size(Predictors,3)),'VariableNames',Scores2Include); %All parameters
-
 while flag<2 && runid<param.maxrun
-
     timercounter = tic;
 
     flag = 0;
@@ -66,19 +65,16 @@ while flag<2 && runid<param.maxrun
 
         load(fullfile(filedir.folder,'UnitMatchModel.mat'),'BestMdl')
         % Apply naive bays classifier
-        
-
         if isfield(BestMdl,'Parameterkernels')
             [label, posterior] = ApplyNaiveBayes(Tbl,BestMdl.Parameterkernels(:,ismember(BestMdl.VariableNames,Scores2Include),:),[0 1],Priors);
         else
             [label, posterior, cost] = predict(BestMdl,Tbl);
         end
     else
-        tmp= reshape(Predictors(Pairs(:,1),Pairs(:,2),:),[],length(Scores2Include));
+        tmp = reshape(Predictors,[],length(Scores2Include));
         Tbltmp = array2table(reshape(tmp,[],size(tmp,2)),'VariableNames',Scores2Include); %All parameters
-        % Use Rank as 'correct' label
-        label = reshape(CandidatePairs(Pairs(:,1),Pairs(:,2)),1,[])';
-       
+        label = CandidatePairs(:);
+
         if param.MakeOwnNaiveBayes
             % Work in progress
             fprintf('Creating the Naive Bayes model...\n')
@@ -233,16 +229,16 @@ Pairs = sortrows(Pairs);
 Pairs = unique(Pairs,'rows');
 
 
-figure; imagesc(label)
+figure; imagesc(MatchProbability,[0.5 1])
 colormap(flipud(gray))
 xlabel('Unit_i')
 ylabel('Unit_j')
 hold on
 arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
 arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
-title('Identified matches')
+title('match probability')
 makepretty
-saveas(gcf,fullfile(param.SaveDir,'IdentifiedMatches.fig'))
-saveas(gcf,fullfile(param.SaveDir,'IdentifiedMatches.bmp'))
+saveas(gcf,fullfile(param.SaveDir,'MatchProbability.fig'))
+saveas(gcf,fullfile(param.SaveDir,'MatchProbability.bmp'))
 BestMdl.Priors = Priors;
 disp(['Extracting final pair of units took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])
