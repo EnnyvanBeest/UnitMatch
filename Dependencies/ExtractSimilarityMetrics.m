@@ -167,7 +167,7 @@ while flag<2
     w = squeeze(isnan(abs(x1(1,:,:,:)-x2(1,:,:,:))));
     EuclDist(w) = nan;
     % Average location
-    CentroidDist = squeeze(nanmean(EuclDist,2));%+nanvar(EuclDist,[],2));
+    CentroidDist = squeeze(nanmean(EuclDist,2));%
     % Normalize each of them from 0 to 1, 1 being the 'best'
     % If distance > maxdist micron it will never be the same unit:
     CentroidDist = 1-((CentroidDist-nanmin(CentroidDist(:)))./(maxdist-nanmin(CentroidDist(:)))); %Average difference
@@ -179,6 +179,19 @@ while flag<2
     CentroidVar = squeeze(nanvar(EuclDist,[],2));%./nanmean(EuclDist,2)+nanmean(EuclDist,2));
     CentroidVar = sqrt(CentroidVar);
     CentroidVar = 1-((CentroidVar-nanmin(CentroidVar(:)))./(nanmax(CentroidVar(:))-nanmin(CentroidVar(:)))); %Average difference
+
+    % @Célian suggestion: recenter to 0 first, then calculate the
+    % difference in distance (to account for uncorrected drift)
+    ProjectedLocationPerTPRecentered = permute(permute(ProjectedLocationPerTP,[1,2,4,3]) - ProjectedLocation,[1,2,4,3]);
+    x1 = repmat(squeeze(ProjectedLocationPerTPRecentered(:,:,waveidx,1)),[1 1 1 size(ProjectedLocationPerTPRecentered,2)]);
+    x2 = permute(repmat(squeeze(ProjectedLocationPerTPRecentered(:,:,waveidx,2)),[1 1 1 size(ProjectedLocationPerTPRecentered,2)]),[1 4 3 2]);
+    EuclDist = squeeze(sqrt(nansum((x1-x2).^2,1))); % Euclidean distance
+    w = squeeze(isnan(abs(x1(1,:,:,:)-x2(1,:,:,:))));
+    EuclDist(w) = nan;
+    % Average location
+    CentroidDistRecentered = squeeze(nanmean(EuclDist,2));%
+    CentroidDistRecentered = 1-(CentroidDistRecentered-nanmin(CentroidDistRecentered(:)))./(nanmax(CentroidDistRecentered(:))-nanmin(CentroidDistRecentered(:)));
+    
 
     disp('Computing location angle (direction) differences between pairs of units, per individual time point of the waveform...')
     x1 = ProjectedLocationPerTP(:,:,waveidx(2):waveidx(end),:);
@@ -210,7 +223,7 @@ while flag<2
     LocTrajectorySim = (LocTrajectorySim-nanmin(LocTrajectorySim(:))./(nanmax(LocTrajectorySim(:))-nanmin(LocTrajectorySim(:))));
     %
     figure('name','Distance Measures')
-    subplot(4,2,1)
+    subplot(5,2,1)
     imagesc(CentroidDist);
     title('CentroidDist')
     xlabel('Unit_i')
@@ -222,7 +235,7 @@ while flag<2
     colorbar
     makepretty
 
-    subplot(4,2,2)
+    subplot(5,2,2)
     tmp = CentroidDist;
     hc1 = histcounts(diag(tmp),[0:0.01:1])./size(tmp,1);
     hc2 = histcounts(tmp(~logical(eye(size(tmp)))),[0:0.01:1])./(numel(tmp)-size(tmp,1));
@@ -230,7 +243,7 @@ while flag<2
     xlabel('Score')
     makepretty
 
-    subplot(4,2,3)
+    subplot(5,2,3)
     imagesc(TrajAngleSim);
     title('TrajAngleSim')
     xlabel('Unit_i')
@@ -241,7 +254,7 @@ while flag<2
     colormap(flipud(gray))
     colorbar
     makepretty
-    subplot(4,2,4)
+    subplot(5,2,4)
     tmp = TrajAngleSim;
     hc1 = histcounts(diag(tmp),[0:0.01:1])./size(tmp,1);
     hc2 = histcounts(tmp(~logical(eye(size(tmp)))),[0:0.01:1])./(numel(tmp)-size(tmp,1));
@@ -249,7 +262,7 @@ while flag<2
     xlabel('Score')
     makepretty
 
-    subplot(4,2,5)
+    subplot(5,2,5)
     imagesc(TrajDistSim);
     title('TrajDistSim')
     xlabel('Unit_i')
@@ -260,7 +273,7 @@ while flag<2
     colormap(flipud(gray))
     colorbar
     makepretty
-    subplot(4,2,6)
+    subplot(5,2,6)
     tmp = TrajDistSim;
     hc1 = histcounts(diag(tmp),[0:0.01:1])./size(tmp,1);
     hc2 = histcounts(tmp(~logical(eye(size(tmp)))),[0:0.01:1])./(numel(tmp)-size(tmp,1));
@@ -268,7 +281,7 @@ while flag<2
     xlabel('Score')
     makepretty
 
-    subplot(4,2,7)
+    subplot(5,2,7)
     imagesc(CentroidVar);
     title('CentroidVar')
     xlabel('Unit_i')
@@ -279,8 +292,28 @@ while flag<2
     colormap(flipud(gray))
     colorbar
     makepretty
-    subplot(4,2,8)
+    subplot(5,2,8)
     tmp = CentroidVar;
+    hc1 = histcounts(diag(tmp),[0:0.01:1])./size(tmp,1);
+    hc2 = histcounts(tmp(~logical(eye(size(tmp)))),[0:0.01:1])./(numel(tmp)-size(tmp,1));
+    plot([0.005:0.01:0.995],hc2); hold on; plot([0.005:0.01:0.995],hc1)
+    xlabel('Score')
+    makepretty
+
+     subplot(5,2,9)
+    imagesc(CentroidDistRecentered);
+    title('CentroidDistRecentered')
+    xlabel('Unit_i')
+    ylabel('Unit_j')
+    hold on
+    arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+    arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+    colormap(flipud(gray))
+    colorbar
+    makepretty
+
+    subplot(5,2,10)
+    tmp = CentroidDistRecentered;
     hc1 = histcounts(diag(tmp),[0:0.01:1])./size(tmp,1);
     hc2 = histcounts(tmp(~logical(eye(size(tmp)))),[0:0.01:1])./(numel(tmp)-size(tmp,1));
     plot([0.005:0.01:0.995],hc2); hold on; plot([0.005:0.01:0.995],hc1)

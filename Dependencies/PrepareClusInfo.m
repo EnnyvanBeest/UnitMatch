@@ -432,13 +432,13 @@ for subsesid=1:length(KiloSortPaths)
     SessionCorrelations = cell(1,nRec);
     for rid = 1:nRec
         % Define edges for this dataset
-        edges = floor(min(sp.st(cat(2,recsesAlltmp{:})'==rid)))-Params.binsz/2:Params.binsz:ceil(max(sp.st(cat(2,recsesAlltmp{:})'==rid)))+Params.binsz/2;
+        edges = floor(min(sp.st(sp.SessionID==rid)))-Params.binsz/2:Params.binsz:ceil(max(sp.st(sp.SessionID==rid)))+Params.binsz/2;
         Good_Idx = find(Good_ID & recsesAll'==rid); % Only care about good units at this point
 
         % bin data to create PSTH
         sr = nan(numel(Good_Idx),numel(edges)-1);
         for uid = 1:numel(Good_Idx)
-            sr(uid,:) =  histcounts(sp.st(sp.spikeTemplates == AllUniqueTemplates(Good_Idx(uid)) & sp.RecSes == recsesAll(Good_Idx(uid))),edges);
+            sr(uid,:) =  histcounts(sp.st(sp.spikeTemplates == AllUniqueTemplates(Good_Idx(uid)) & sp.SessionID == recsesAll(Good_Idx(uid))),edges);
         end
 
         % Define folds (two halves)
