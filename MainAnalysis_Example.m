@@ -42,6 +42,7 @@ PrepareClusInfoparams.saveSp = 1; % Save SP struct for easy loading of preproces
 PrepareClusInfoparams.Scores2Include = {'AmplitudeSim','spatialdecaySim','WavformSim','CentroidDist','TrajAngleSim','CentroidOverlord'}; % 
 PrepareClusInfoparams.ApplyExistingBayesModel = 0; %If 1, use probability distributions made available by us
 PrepareClusInfoparams.MakePlotsOfPairs = 0; % Plots pairs for inspection (UnitMatch)
+PrepareClusInfoparams.AssignUniqueID = 1; % Assign UniqueID 
 
 %% Parameters for further analysis
 maxsessnr = 2; %max nr. sessions on a day (doesn't need to be accurate)
@@ -77,6 +78,3 @@ RunPyKS2_FromMatlab
 
 %% Runs unitmatch across all data from a mouse to generate a table
 RunUnitMatchAllDataPerMouse
-
-%% Average Probe Activity - example script showing datapoints per day/probe/location
-AverageProbeActivity

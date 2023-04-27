@@ -3,12 +3,12 @@ function EvaluatingUnitMatch(DirToEvaluate)
 % DirToEvaluate = 'H:\MatchingUnits\Output\AL032\UnitMatch';
 stepsize = 0.01;
 % Load UnitMatch Output
-Output2Evaluate = dir(fullfile(DirToEvaluate,'UnitMatch','UnitMatch.mat'));
+Output2Evaluate = dir(fullfile(DirToEvaluate,'UnitMatch.mat'));
 Output2Evaluate = matfile(fullfile(Output2Evaluate.folder,Output2Evaluate.name));
 ShowScores = 0;
 for id = 1%:2 % Loop: first use model that was used, then see if standard model would work better
     if id==1
-        Model2Evaluate = dir(fullfile(DirToEvaluate,'UnitMatch','UnitMatchModel.mat'));
+        Model2Evaluate = dir(fullfile(DirToEvaluate,'UnitMatchModel.mat'));
         disp('Evaluating the model as it was ran by user')
         extraname = 'Used Model';
     else
@@ -18,7 +18,6 @@ for id = 1%:2 % Loop: first use model that was used, then see if standard model 
         P = fileparts(P);
         Model2Evaluate = dir(fullfile(P,'UnitMatchModel.mat'));
         extraname = 'Standard Model';
-
     end
     Model2Evaluate = matfile(fullfile(Model2Evaluate.folder,Model2Evaluate.name));
 
@@ -269,10 +268,11 @@ if FalseNegativeChanges(2,1)>FalseNegativeChanges(1,1) & FalsePositiveChanges(2,
     disp('PrepareClusInfoparams.ApplyExistingBayesModel = 1');
     id2take = 2;
 else
+    disp('We advise to use the model you just used on this data:')
     id2take = 1;
 end
 if any((FalseNegativeChanges(id2take,2:end)>0 & FalsePositiveChanges(id2take,2:end)<0))
-    disp(['To decrease false negatives and positives, consider taking out:'])
+    disp(['To optimize detection, consider taking out:'])
     VariableNames((FalseNegativeChanges(id2take,2:end)>0 & FalsePositiveChanges(id2take,2:end)<0))
 
     disp(['So please try running the model with: PrepareClusInfoparams.Scores2Include = '])

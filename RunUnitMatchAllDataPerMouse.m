@@ -78,7 +78,7 @@ for midx = length(MiceOpt)
     PrepareClusInfoparams = PrepareClusInfo(subsesoptAll,PrepareClusInfoparams);
 
     %% Run UnitMatch
-    UMparam = RunUnitMatch(subsesoptAll,PrepareClusInfoparams)
+    UMparam = RunUnitMatch(subsesoptAll,PrepareClusInfoparams);
 
     %% 
     disp(['Preprocessed data for ' MiceOpt{midx}])

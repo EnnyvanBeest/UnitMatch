@@ -99,8 +99,6 @@ if Params.UnitMatch
         % Run UnitMatch
         [UniqueIDConversion, MatchTable, WaveformInfo, AllSessionCorrelations, UMparam] = UnitMatch(clusinfo,UMparam);
         save(fullfile(UMparam.SaveDir,'UnitMatch.mat'),'UniqueIDConversion','MatchTable','WaveformInfo','AllSessionCorrelations','UMparam')
-        clusinfo.UniqueID = UniqueIDConversion.UniqueID;
-        clusinfo.MatchTable = MatchTable;
 
     end
 elseif DecompressionFlag % You might want to at least save out averaged waveforms for every session to get back to later, if they were saved out by bomcell
@@ -109,6 +107,6 @@ elseif DecompressionFlag % You might want to at least save out averaged waveform
 end
 
 %% Evaluate
-EvaluatingUnitMatch(UMparam.SaveDir)
+EvaluatingUnitMatch(UMparam.SaveDir);
 
 return
