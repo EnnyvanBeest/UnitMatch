@@ -35,7 +35,6 @@ Pairs(ISIViolationsScore>0.05,:)=[];
 
 
 %%
-if 0
 disp('Assigning correct Unique ID values now')
 MatchProbability = arrayfun(@(X) MatchTable.MatchProb(ismember(MatchTable.UID1,Pairs(X,1))&ismember(MatchTable.UID2,Pairs(X,2))),1:size(Pairs,1));
 [~,sortidx] = sort(MatchProbability,'descend');
@@ -46,7 +45,6 @@ for id = 1:size(Pairs,1)
         %     if all((MatchTable.MatchProb(ismember(MatchTable.ID1,AllClusterIDs(AllUID))&ismember(MatchTable.ID2,Pairs(id,2)-1))>param.ProbabilityThreshold) | (MatchTable.MatchProb(ismember(MatchTable.ID1,Pairs(id,2)-1)&ismember(MatchTable.ID2,AllClusterIDs(AllUID)))>param.ProbabilityThreshold)') %only if all UID have a high enough probability with this second pair, we will include it to have the same UID
         UniqueID(Pairs(id,2)) = UniqueID(Pairs(id,1));
     end
-end
 end
 %% Replace in table
 [PairID3,PairID4]=meshgrid(UniqueID(Good_Idx));

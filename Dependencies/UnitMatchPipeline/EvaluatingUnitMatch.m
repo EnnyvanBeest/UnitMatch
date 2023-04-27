@@ -6,7 +6,7 @@ stepsize = 0.01;
 Output2Evaluate = dir(fullfile(DirToEvaluate,'UnitMatch.mat'));
 Output2Evaluate = matfile(fullfile(Output2Evaluate.folder,Output2Evaluate.name));
 ShowScores = 0;
-for id = 1%:2 % Loop: first use model that was used, then see if standard model would work better
+for id = 1:2 % Loop: first use model that was used, then see if standard model would work better
     if id==1
         Model2Evaluate = dir(fullfile(DirToEvaluate,'UnitMatchModel.mat'));
         disp('Evaluating the model as it was ran by user')
