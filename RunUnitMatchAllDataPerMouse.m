@@ -74,11 +74,11 @@ for midx = length(MiceOpt)
     end
     PrepareClusInfoparams.SaveDir = fullfile(SaveDir,MiceOpt{midx});
 
-    %% Get cluster information
-    [clusinfo,sp] = PrepareClusInfo(subsesoptAll,PrepareClusInfoparams);
+    %% Prepare cluster information
+    PrepareClusInfoparams = PrepareClusInfo(subsesoptAll,PrepareClusInfoparams);
 
-    %% Evaluate UnitMatch results
-    EvaluatingUnitMatch(PrepareClusInfoparams.SaveDir)
+    %% Run UnitMatch
+    UMparam = RunUnitMatch(subsesoptAll,PrepareClusInfoparams)
 
     %% 
     disp(['Preprocessed data for ' MiceOpt{midx}])

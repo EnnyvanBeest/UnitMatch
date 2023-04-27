@@ -1,4 +1,4 @@
-function [clusinfo,sp,AllChannelPos] = PrepareClusInfo(KiloSortPaths,Params,RawDataPaths)
+function Params = PrepareClusInfo(KiloSortPaths,Params,RawDataPaths)
 % Prepares cluster information for subsequent analysis
 %% Inputs:
 % KiloSortPaths = List of directories pointing at kilosort output (same format as what you get when
@@ -186,7 +186,6 @@ for subsesid=1:length(KiloSortPaths)
 
     %% Remove noise; spikes across all channels'
     sp = RemoveNoiseAmplitudeBased(sp);
-
 
     %% Bombcell parameters
     % clear paramBC
@@ -481,7 +480,6 @@ for subsesid=1:length(KiloSortPaths)
     sp = rmfield(sp,'tempsUnW');
     sp = rmfield(sp,'templateDuration');
     sp = rmfield(sp,'waveforms');
-
     save(fullfile(KiloSortPaths{subsesid},'PreparedData.mat'),'clusinfo','Params','SessionCorrelations','-v7.3')
     if Params.saveSp
         save(fullfile(KiloSortPaths{subsesid},'PreparedData.mat'),'sp','-append')
@@ -491,167 +489,9 @@ for subsesid=1:length(KiloSortPaths)
     close all
 end
 
-%% Here we're going to actually load in all the sessions requested - only clusinfo to save memory for unitmatch
-clusinfo = cell(1,length(KiloSortPaths));
-addthis=0;
-for subsesid=1:length(KiloSortPaths)
-    if isempty(dir(fullfile(KiloSortPaths{subsesid},'*.npy')))
-        continue
-    end
-   
-    disp(['Loading clusinfo for ' KiloSortPaths{subsesid}])
-    tmp = matfile(fullfile(KiloSortPaths{subsesid},'PreparedData.mat'));
-    clusinfo{subsesid} = tmp.clusinfo;
-
-    % Replace recsesid with subsesid
-    clusinfo{subsesid}.RecSesID = clusinfo{subsesid}.RecSesID+addthis;
-    addthis=max(clusinfo{subsesid}.RecSesID);
-end
-
-% Add all cluster information in one 'cluster' struct - can be used for further analysis
-clusinfo = [clusinfo{:}];
-clusinfoNew = struct;
-fields = fieldnames(clusinfo(1));
-for fieldid=1:length(fields)
-    try
-        eval(['clusinfoNew.' fields{fieldid} '= cat(1,clusinfo(:).' fields{fieldid} ');'])
-    catch ME
-        try
-            eval(['clusinfoNew.' fields{fieldid} '= cat(2,clusinfo(:).' fields{fieldid} ');'])
-        catch ME
-            keyboard
-        end
-    end
-end
-clusinfo = clusinfoNew;
-clear clusinfoNew
-
-%% UnitMatch Parameters
-% Use some bombcell parameters
-if Params.RunQualityMetrics
-    paramBC = bc_qualityParamValuesForUnitMatch;
-    UMparam.sampleamount = paramBC.nRawSpikesToExtract; %500; % Nr. waveforms to include
-    UMparam.spikeWidth =paramBC.spikeWidth; %82; % in sample space (time)
-else
-    UMparam.sampleamount = 200; %500; % Nr. waveforms to include
-    UMparam.spikeWidth = 82; %82; % in sample space (time)
-end
-
-UMparam.RunPyKSChronicStitched = Params.RunPyKSChronicStitched;
-UMparam.SaveDir = fullfile(Params.SaveDir,'UnitMatch');
-if ~isdir(UMparam.SaveDir)
-    mkdir(UMparam.SaveDir)
-end
-UMparam.ACGbinSize =  0.001;%paramBC.ACGbinSize;
-UMparam.ACGduration = 1;%paramBC.ACGduration;
-
-UMparam.UseBombCelRawWav = Params.RunQualityMetrics; % 1 by default
-UMparam.KSDir = AllKiloSortPaths;
-UMparam.channelpos = AllChannelPos;
-UMparam.AllRawPaths = RawDataPaths;
-UMparam.AllDecompPaths = arrayfun(@(X) fullfile(Params.tmpdatafolder,strrep(RawDataPaths(X).name,'cbin','bin')),1:length(RawDataPaths),'Uni',0);
-UMparam.RedoExtraction = 0; % Only necessary if KS was redone!
-UMparam.ProbabilityThreshold = 0.5;
-UMparam.binsize = Params.binsz;
-UMparam.Scores2Include = Params.Scores2Include; %
-UMparam.ApplyExistingBayesModel = Params.ApplyExistingBayesModel; %If 1, use probability distributions made available by us
-UMparam.MakePlotsOfPairs = Params.MakePlotsOfPairs; % Plot all pairs
-UMparam.AssignUniqueID = Params.AssignUniqueID; %Assign Unique ID
-if Params.UnitMatch
-    UnitMatchExist = dir(fullfile(UMparam.SaveDir,'UnitMatch.mat'));
-    if ~isempty(UnitMatchExist) && ~Params.RedoUnitMatch
-        load(fullfile(UMparam.SaveDir,'UnitMatch.mat'))
-        clusinfo.UniqueID = UniqueIDConversion.UniqueID;
-        clusinfo.MatchTable = MatchTable;
-    else
-        % Need to decompress if decompression wasn't done yet
-        for id = 1:length(RawDataPaths)
-            ephysap_tmp = [];
-            ephysap_path = fullfile(RawDataPaths(id).folder,RawDataPaths(id).name);
-            if (isempty(UnitMatchExist) || Params.RedoUnitMatch) && ~DecompressionFlag && ~UMparam.UseBombCelRawWav
-                % First check if we want to use python for compressed data. If not, uncompress data first
-                if any(strfind(RawDataPaths(id).name,'cbin')) && Params.DecompressLocal
-                    if ~exist(fullfile(Params.tmpdatafolder,strrep(RawDataPaths(id).name,'cbin','bin')))
-                        disp('This is compressed data and we do not want to use Python integration... uncompress temporarily')
-
-                        decompDataFile = bc_extractCbinData(fullfile(RawDataPaths(id).folder,RawDataPaths(id).name),...
-                            [], [], 0, fullfile(Params.tmpdatafolder,strrep(RawDataPaths(id).name,'cbin','bin')));
-                        paramBC.rawFile = decompDataFile;
-                        % Decompression
-%                         success = pyrunfile("MTSDecomp_From_Matlab.py","success",datapath = strrep(fullfile(RawDataPaths(id).folder,RawDataPaths(id).name),'\','/'),...
-%                             JsonPath =  strrep(fullfile(RawDataPaths(id).folder,strrep(RawDataPaths(id).name,'cbin','ch')),'\','/'), savepath = strrep(fullfile(Params.tmpdatafolder,strrep(RawDataPaths(id).name,'cbin','bin')),'\','/'));
-%                         % Also copy metafile
-                        copyfile(strrep(fullfile(RawDataPaths(id).folder,RawDataPaths(id).name),'cbin','meta'),strrep(fullfile(Params.tmpdatafolder,RawDataPaths(id).name),'cbin','meta'))
-                    end
-                    ephysap_tmp = fullfile(Params.tmpdatafolder,strrep(RawDataPaths(id).name,'cbin','bin'));
-%                     DecompressionFlag = 1;
-                end
-            end
-        end
-
-        % Run UnitMatch
-        [UniqueIDConversion, MatchTable, WaveformInfo, AllSessionCorrelations, UMparam] = UnitMatch(clusinfo,UMparam);
-        save(fullfile(UMparam.SaveDir,'UnitMatch.mat'),'UniqueIDConversion','MatchTable','WaveformInfo','AllSessionCorrelations','UMparam')
-        clusinfo.UniqueID = UniqueIDConversion.UniqueID;
-        clusinfo.MatchTable = MatchTable;
-
-    end
-elseif DecompressionFlag % You might want to at least save out averaged waveforms for every session to get back to later, if they were saved out by bomcell
-    % Extract average waveforms
-    ExtractAndSaveAverageWaveforms(clusinfo,UMparam)
-end
-
-%% Here we're going to actually load in all the sessions requested - sp
-callerFunctions = dbstack;
-if ~strcmp(callerFunctions(2).name,'RunUnitMatchAllDataPerMouse') %no need for this since this script is just meant to run UnitMatch
-sp = cell(1,length(KiloSortPaths));
-if Params.saveSp
-    countid=1;
-    for subsesid=1:length(KiloSortPaths)
-        if isempty(dir(fullfile(KiloSortPaths{subsesid},'*.npy')))
-            continue
-        end
-
-        disp(['Loading spike data for ' KiloSortPaths{subsesid}])
-        tmp = matfile(fullfile(KiloSortPaths{subsesid},'PreparedData.mat'));
-        sp{subsesid} = tmp.sp;
-        % Replace recsesid with subsesid
-        sp{subsesid}.RecSes = repmat(countid,size(sp{subsesid}.RecSes));
-        countid=countid+1;
-    end
-    % Add all spikedata in one spikes struct - can be used for further analysis
-    sp = [sp{:}];
-    spnew = struct;
-
-    fields = fieldnames(sp(1));
-    for fieldid=1:length(fields)
-        try
-            eval(['spnew.' fields{fieldid} '= cat(1,sp(:).' fields{fieldid} ');'])
-        catch ME
-            if strcmp(ME.message,'Out of memory.')
-                eval(['spnew.' fields{fieldid} ' = sp(1).' fields{fieldid} ';'])
-                for tmpid = 2:length(sp)
-                    eval(['spnew.' fields{fieldid} ' = cat(1,spnew.' fields{fieldid} ', sp(tmpid).' fields{fieldid} ');'])
-                end
-            else
-                eval(['spnew.' fields{fieldid} '= cat(2,sp(:).' fields{fieldid} ');'])
-            end
-        end
-    end
-    sp = spnew;
-    sp.sample_rate = sp.sample_rate(1);
-    clear spnew
-
-    % Save out sp unique cluster
-    nclus = length(clusinfo.cluster_id);
-    sp.UniqClu = sp.clu;
-    if Params.UnitMatch
-        for clusid=1:nclus
-            sp.UniqClu(sp.clu==clusinfo.cluster_id(clusid) & sp.RecSes==clusinfo.RecSesID(clusid)) = clusinfo.UniqueID(clusid);
-        end
-    end
-end
-end
+Params.AllChannelPos = AllChannelPos;
+Params.RawDataPaths = RawDataPaths;
+Params.DecompressionFlag = DecompressionFlag;
 %% Remove temporary files
 if 0%Params.DecompressLocal && DecompressionFlag
     clear memMapData
@@ -672,21 +512,5 @@ end
 
 return
 
-% % Find correct dataset index
-% spikeTimes =cat(1,sp(:).st);
-% spikeRecSes = cat(1,sp(:).RecSes);
-% spikeSites = cat(1,sp(:).spikeTemplates);
-% spikeCluster = cat(1,sp(:).clu);
-% spikeAmps = cat(1,sp(:).spikeAmps);
-% spikeDepths = cat(1,sp(:).spikeDepths);
 
-% templateDepths = cat(1,sp(:).templateDepths);
-% tempAmps = cat(1,sp(:).tempAmps);
-% tempsUnW = cat(1,sp(:).tempsUnW);
-% templateDuration = cat(1,sp(:).templateDuration);
-% waveforms = cat(1,sp(:).waveforms);
-% templateWaveforms = cat(1,sp(:).temps);
-% templateAmplitudes = cat(1,sp(:).tempScalingAmps);
-% pcFeatures = cat(1,sp(:).pcFeat);
-% pcFeatureIdx = cat(1,sp(:).pcFeatInd);
 
