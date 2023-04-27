@@ -156,7 +156,9 @@ OriUniqueID = UniqueID; %need for plotting
 [PairID3,PairID4]=meshgrid(OriUniqueID(Good_Idx));
 
 MatchTable = table(PairID1(:),PairID2(:),recses1(:),recses2(:),PairID3(:),PairID4(:),MatchProbability(:),RankScoreAll(:),FingerprintR(:),TotalScore(:),'VariableNames',{'ID1','ID2','RecSes1','RecSes2','UID1','UID2','MatchProb','RankScore','FingerprintCor','TotalScore'});
-[UniqueID, MatchTable] = AssignUniqueID(MatchTable,clusinfo,Path4UnitNPY,param);
+if param.AssignUniqueID
+    [UniqueID, MatchTable] = AssignUniqueID(MatchTable,clusinfo,Path4UnitNPY,param);
+end
 % Add Scores2Include to MatchTable
 for sid = 1:length(Scores2Include)
     eval(['MatchTable.' Scores2Include{sid} ' = Tbl.' Scores2Include{sid} '(:);'])

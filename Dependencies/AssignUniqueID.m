@@ -35,6 +35,7 @@ Pairs(ISIViolationsScore>0.05,:)=[];
 
 
 %%
+if 0
 disp('Assigning correct Unique ID values now')
 MatchProbability = arrayfun(@(X) MatchTable.MatchProb(ismember(MatchTable.UID1,Pairs(X,1))&ismember(MatchTable.UID2,Pairs(X,2))),1:size(Pairs,1));
 [~,sortidx] = sort(MatchProbability,'descend');
@@ -46,7 +47,7 @@ for id = 1:size(Pairs,1)
         UniqueID(Pairs(id,2)) = UniqueID(Pairs(id,1));
     end
 end
-
+end
 %% Replace in table
 [PairID3,PairID4]=meshgrid(UniqueID(Good_Idx));
 MatchTable.UID1 = PairID3(:);

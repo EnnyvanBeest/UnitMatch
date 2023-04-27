@@ -192,6 +192,7 @@ while flag<2
     CentroidDistRecentered = squeeze(nanmean(EuclDist,2));%
     CentroidDistRecentered = 1-(CentroidDistRecentered-nanmin(CentroidDistRecentered(:)))./(nanmax(CentroidDistRecentered(:))-nanmin(CentroidDistRecentered(:)));
     
+    CentroidOverlord = (CentroidDistRecentered+CentroidVar)/2;
 
     disp('Computing location angle (direction) differences between pairs of units, per individual time point of the waveform...')
     x1 = ProjectedLocationPerTP(:,:,waveidx(2):waveidx(end),:);
