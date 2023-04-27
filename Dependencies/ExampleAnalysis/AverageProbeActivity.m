@@ -82,7 +82,8 @@ for midx = length(MiceOpt)
 
                     %% Get cluster information
                     PrepareClusInfoparams.SaveDir = fullfile(SaveDir,MiceOpt{midx});
-                    [clusinfo,sp] = PrepareClusInfo(subsesoptAll(subsesoptGroups{IMROID}),PrepareClusInfoparams);
+                    [clusinfo, sp, Params] = LoadPreparedClusInfo(subsesoptAll(subsesoptGroups{IMROID}),PrepareClusInfoparams)
+%                     [clusinfo,sp] = PrepareClusInfo(subsesoptAll(subsesoptGroups{IMROID}),PrepareClusInfoparams);
 
                     %% Save out
                     GoodUnits{midx}{probeid}{IMROID} = clusinfo;
@@ -98,7 +99,8 @@ for midx = length(MiceOpt)
                 PrepareClusInfoparams.SaveDir = fullfile(SaveDir,MiceOpt{midx});
 
                 %% Get cluster information
-                [clusinfo,sp] = PrepareClusInfo(subsesoptAll,PrepareClusInfoparams);
+                [clusinfo, sp, PrepareClusInfoparams] = LoadPreparedClusInfo(subsesoptAll,PrepareClusInfoparams)
+%                 [clusinfo,sp] = PrepareClusInfo(subsesoptAll,PrepareClusInfoparams);
 
                 %% Save out
                 GoodUnits{midx}{probeid} = clusinfo;
@@ -287,8 +289,9 @@ for midx = length(MiceOpt)
                 clear params
                 PrepareClusInfoparams.thisdate = thisdate;
                 PrepareClusInfoparams.SaveDir = fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe);
+                [clusinfo, sp, Params] = LoadPreparedClusInfo(subksdirs(probeid),PrepareClusInfoparams)
 
-                [clusinfo,sp] = PrepareClusInfo(subksdirs(probeid),PrepareClusInfoparams);
+%                 [clusinfo,sp] = PrepareClusInfo(subksdirs(probeid),PrepareClusInfoparams);
                 GoodUnits{midx}{didx}{probeid} = clusinfo;
 
                 % This extracts the parameters within clusinfo and sp

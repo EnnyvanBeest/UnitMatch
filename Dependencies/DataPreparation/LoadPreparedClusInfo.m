@@ -1,5 +1,40 @@
 function [clusinfo, sp, Params] = LoadPreparedClusInfo(KiloSortPaths,Params)
 
+%% Here we're going to actually load in all the sessions requested - only clusinfo to save memory for unitmatch
+clusinfo = cell(1,length(KiloSortPaths));
+addthis=0;
+for subsesid=1:length(KiloSortPaths)
+    if isempty(dir(fullfile(KiloSortPaths{subsesid},'*.npy')))
+        continue
+    end
+   
+    disp(['Loading clusinfo for ' KiloSortPaths{subsesid}])
+    tmp = matfile(fullfile(KiloSortPaths{subsesid},'PreparedData.mat'));
+    clusinfo{subsesid} = tmp.clusinfo;
+
+    % Replace recsesid with subsesid
+    clusinfo{subsesid}.RecSesID = clusinfo{subsesid}.RecSesID+addthis;
+    addthis=max(clusinfo{subsesid}.RecSesID);
+end
+
+% Add all cluster information in one 'cluster' struct - can be used for further analysis
+clusinfo = [clusinfo{:}];
+clusinfoNew = struct;
+fields = fieldnames(clusinfo(1));
+for fieldid=1:length(fields)
+    try
+        eval(['clusinfoNew.' fields{fieldid} '= cat(1,clusinfo(:).' fields{fieldid} ');'])
+    catch ME
+        try
+            eval(['clusinfoNew.' fields{fieldid} '= cat(2,clusinfo(:).' fields{fieldid} ');'])
+        catch ME
+            keyboard
+        end
+    end
+end
+clusinfo = clusinfoNew;
+clear clusinfoNew
+
 %% Here we're going to actually load in all the sessions requested - sp
 sp = cell(1,length(KiloSortPaths));
 countid=1;
