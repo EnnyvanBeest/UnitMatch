@@ -7,7 +7,7 @@ for subsesid=1:length(KiloSortPaths)
     if isempty(dir(fullfile(KiloSortPaths{subsesid},'*.npy')))
         continue
     end
-   
+
     disp(['Loading clusinfo for ' KiloSortPaths{subsesid}])
     tmp = matfile(fullfile(KiloSortPaths{subsesid},'PreparedData.mat'));
     clusinfo{subsesid} = tmp.clusinfo;
@@ -76,10 +76,15 @@ clear spnew
 nclus = length(clusinfo.cluster_id);
 sp.UniqClu = sp.clu;
 if Params.UnitMatch
+    UMOutput = dir(fullfile(Params.SaveDir,'UnitMatch','UnitMatch.mat'));
+    UMOutput = matfile(fullfile(UMOutput.folder,UMOutput.name));
+    UniqueIDConversion = UMOutput.UniqueIDConversion;
+    clusinfo.UniqueID = UniqueIDConversion.UniqueID';
     for clusid=1:nclus
         sp.UniqClu(sp.clu==clusinfo.cluster_id(clusid) & sp.RecSes==clusinfo.RecSesID(clusid)) = clusinfo.UniqueID(clusid);
     end
+else
+    clusinfo.UniqueID = (1:length(clusinfo.cluster_id))';
 end
-
 
 return
