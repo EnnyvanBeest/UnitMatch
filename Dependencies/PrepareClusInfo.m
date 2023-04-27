@@ -594,6 +594,7 @@ if Params.UnitMatch
         save(fullfile(UMparam.SaveDir,'UnitMatch.mat'),'UniqueIDConversion','MatchTable','WaveformInfo','AllSessionCorrelations','UMparam')
         clusinfo.UniqueID = UniqueIDConversion.UniqueID;
         clusinfo.MatchTable = MatchTable;
+
     end
 elseif DecompressionFlag % You might want to at least save out averaged waveforms for every session to get back to later, if they were saved out by bomcell
     % Extract average waveforms
@@ -601,6 +602,8 @@ elseif DecompressionFlag % You might want to at least save out averaged waveform
 end
 
 %% Here we're going to actually load in all the sessions requested - sp
+callerFunctions = dbstack;
+if ~strcmp(callerFunctions(2).name,'RunUnitMatchAllDataPerMouse') %no need for this since this script is just meant to run UnitMatch
 sp = cell(1,length(KiloSortPaths));
 if Params.saveSp
     countid=1;
@@ -648,7 +651,7 @@ if Params.saveSp
         end
     end
 end
-
+end
 %% Remove temporary files
 if 0%Params.DecompressLocal && DecompressionFlag
     clear memMapData
