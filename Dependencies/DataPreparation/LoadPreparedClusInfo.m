@@ -76,10 +76,14 @@ clear spnew
 nclus = length(clusinfo.cluster_id);
 sp.UniqClu = sp.clu;
 if Params.UnitMatch
-    UMOutput = dir(fullfile(Params.SaveDir,'UnitMatch','UnitMatch.mat'));
+    disp('Assigning correct unique ID')
+    PartsPath = strsplit(Params.SaveDir,'\');
+    UMOutput = dir(fullfile(PartsPath{1},PartsPath{2},PartsPath{3},'**','UnitMatch','UnitMatch.mat'));
     UMOutput = matfile(fullfile(UMOutput.folder,UMOutput.name));
+    UMparam = UMOutput.UMparam;
+    recsesidx = find(ismember(UMparam.KSDir,KiloSortPaths)); % Find which recses id they should have in UM output
     UniqueIDConversion = UMOutput.UniqueIDConversion;
-    clusinfo.UniqueID = UniqueIDConversion.UniqueID';
+    clusinfo.UniqueID = UniqueIDConversion.UniqueID(ismember(UniqueIDConversion.recsesAll,recsesidx))'; %Assign correct UniqueID
     for clusid=1:nclus
         sp.UniqClu(sp.clu==clusinfo.cluster_id(clusid) & sp.RecSes==clusinfo.RecSesID(clusid)) = clusinfo.UniqueID(clusid);
     end
