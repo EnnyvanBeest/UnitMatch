@@ -186,7 +186,7 @@ for pairid=1:length(Pairs)
     ylabel('Ypos (um)')
     ylimcur = get(gca,'ylim');
     ylim([ylimcur(1) ylimcur(2)*1.005])
-    legend(hleg,arrayfun(@(X) ['ID' num2str(OriClusID(X)-1) ', Rec' num2str(recsesGood(X))],Pairs{pairid},'Uni',0),'Location','best')
+    legend(hleg,arrayfun(@(X) ['ID' num2str(OriClusID(X)) ', Rec' num2str(recsesGood(X))],Pairs{pairid},'Uni',0),'Location','best')
     Probs = cell2mat(arrayfun(@(X) [num2str(round(MatchProbability(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)) ','],1:length(Pairs{pairid})-1,'Uni',0));
     Probs(end)=[];
     title(['Probability=' Probs '%'])
