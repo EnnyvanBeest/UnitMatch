@@ -23,8 +23,9 @@ IncludeThesePairs = find(Predictors(:,:,ismember(param.Scores2Include,'CentroidD
 priorMatch = 1-(nclus*ndays)./(nclus*nclus); %Now use the actual expected prior for bayes'
 ThrsOpt = quantile(TotalScore(:),priorMatch);
 CandidatePairs = TotalScore>ThrsOpt;% 
-% Also assume kilosort does a good job ?
-% CandidatePairs(logical(eye(size(CandidatePairs))))=1;
+% For Célian & Matteo:
+% CandidatePairs = eye(size(TotalScore));
+% 
 
 figure('name','Potential Matches')
 imagesc(CandidatePairs)
@@ -40,6 +41,7 @@ Pairs = cat(2,uid,uid2);
 Pairs = sortrows(Pairs);
 Pairs = unique(Pairs,'rows');
 global stepsize
+
 %% Initialize
 % Usually this means there's no variance in the match distribution
 % (which in a way is great). Create some small variance

@@ -10,6 +10,7 @@ spikeWidth = param.spikeWidth; %83; % in sample space (time)
 halfWidth = floor(spikeWidth/2);
 UseBombCelRawWav = param.UseBombCelRawWav; % If Bombcell was also applied on this dataset, it's faster to read in the raw waveforms extracted by Bombcell
 SaveDir = param.SaveDir;
+
 %% Extract all cluster info
 AllClusterIDs = clusinfo.cluster_id;
 UniqueID = 1:length(AllClusterIDs); % Initial assumption: All clusters are unique
@@ -31,12 +32,6 @@ Path4UnitNPY = cell(1,nclus);
 
 timercounter = tic;
 fprintf(1,'Extracting raw waveforms. Progress: %3d%%',0)
-pathparts = strsplit(AllDecompPaths{GoodRecSesID(1)},'\');
-rawdatapath = dir(fullfile('\\',pathparts{1:end-1}));
-if isempty(rawdatapath)
-    rawdatapath = dir(fullfile(pathparts{1:end-1}));
-end
-
 Currentlyloaded = 0;
 for uid = 1:nclus
     fprintf(1,'\b\b\b\b%3.0f%%',uid/nclus*100)
@@ -49,12 +44,7 @@ for uid = 1:nclus
 
     if exist(Path4UnitNPY{uid}) && ~RedoExtraction
         continue
-    else
-        pathparts = strsplit(AllDecompPaths{GoodRecSesID(uid)},'\');
-        rawdatapath = dir(fullfile('\\',pathparts{1:end-1}));
-        if isempty(rawdatapath)
-            rawdatapath = dir(fullfile(pathparts{1:end-1}));
-        end
+    else       
         if ~(GoodRecSesID(uid) == Currentlyloaded) % Only load new memmap if not already loaded
             % Map the data
             clear memMapData
@@ -75,9 +65,10 @@ for uid = 1:nclus
         %load sp
         tmp = matfile(fullfile(param.KSDir{GoodRecSesID(uid)},'PreparedData.mat'));
         sp = tmp.sp;
+        tmpclusinfo = tmp.clusinfo; %Load original clusinfo
 
         % Spike samples
-        idx1=(sp.st(sp.spikeTemplates == AllClusterIDs(Good_Idx(uid))).*round(sp.sample_rate));  % Spike times in samples;
+        idx1=(sp.st(sp.spikeTemplates == AllClusterIDs(Good_Idx(uid)) & sp.SessionID == tmpclusinfo.RecSesID(Good_Idx(uid))).*round(sp.sample_rate));  % Spike times in samples;
 
         %Extract raw waveforms on the fly - % Unit uid
         try

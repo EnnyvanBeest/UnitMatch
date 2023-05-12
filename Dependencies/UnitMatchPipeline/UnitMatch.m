@@ -38,7 +38,7 @@ param.MakeOwnNaiveBayes = 1; % if 0, use standard matlab version, which assumes 
 SaveScoresAsProbability = 0; %If 1, the individual scores are converted to probabiliti
 param.maxrun = 1; % This is whether you want to use Bayes' output to create a new potential candidate set to optimize the probability distributions. Probably we don't want to keep optimizing?, as this can be a bit circular (?)
 drawmax = inf; % Maximum number of drawed matches (otherwise it takes forever!)
-VisibleSetting = 'off'; %Do we want to see the figures being plot online?
+VisibleSetting = 'on'; %Do we want to see the figures being plot online?
 Draw2DMatrixes = 0; % If you find this useful
 global stepsize
 stepsize = 0.01;
@@ -155,7 +155,7 @@ OriUniqueID = UniqueID; %need for plotting
 [recses1,recses2] = meshgrid(recsesAll(Good_Idx));
 [PairID3,PairID4]=meshgrid(OriUniqueID(Good_Idx));
 
-MatchTable = table(PairID1(:),PairID2(:),recses1(:),recses2(:),PairID3(:),PairID4(:),MatchProbability(:),RankScoreAll(:),FingerprintR(:),TotalScore(:),'VariableNames',{'ID1','ID2','RecSes1','RecSes2','UID1','UID2','MatchProb','RankScore','FingerprintCor','TotalScore'});
+MatchTable = table(PairID1(:),PairID2(:),recses1(:),recses2(:),PairID3(:),PairID4(:),MatchProbability(:),RankScoreAll(:),FingerprintR(:),TotalScore(:),EuclDist(:),'VariableNames',{'ID1','ID2','RecSes1','RecSes2','UID1','UID2','MatchProb','RankScore','FingerprintCor','TotalScore','EucledianDistance'});
 if param.AssignUniqueID
     [UniqueID, MatchTable] = AssignUniqueID(MatchTable,clusinfo,Path4UnitNPY,param);
 end
@@ -366,33 +366,41 @@ end
 
 
 %% TotalScore Pair versus no pair
+NeighbourDist = 30; % In micron
 SelfScore = MatchProbability(logical(eye(size(MatchProbability))));
-scorematches = nan(size(Pairs,1),1); %First being TotalScore, second being TemplateMatch
-scoreNoMatches = MatchProbability;
-scoreNoMatches(logical(eye(size(MatchProbability))))=nan;
-
-for id = 1:size(Pairs,1)
-    scorematches(id,1) = MatchProbability(Pairs(id,1),Pairs(id,2));
-    scoreNoMatches(Pairs(id,1),Pairs(id,2),:)=nan;
-    scoreNoMatches(Pairs(id,2),Pairs(id,1),:)=nan;
+OtherScores = MatchProbability; %First being TotalScore, second being TemplateMatch
+OtherScores(logical(eye(size(MatchProbability)))) = nan; %Get rid of diagonal
+OtherScores(EuclDist>NeighbourDist) = nan;%Remove units that were too far away
+AcrossScores = nan(size(EuclDist));
+WithinScores = nan(size(EuclDist));
+% Divide in within and across scores
+for did = 1:ndays
+    WithinScores(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1) = OtherScores(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1);
+    for did2 = 1:ndays
+        if did==did2
+            continue
+        end
+        AcrossScores(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1) = OtherScores(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1);
+    end
 end
+
 ThrsScore = min(MatchProbability(label==1));
 figure;
-subplot(1,2,1)
-histogram(scoreNoMatches(:),[0:0.01:1]); hold on
-title('Non Matches')
-xlabel('Match Probability')
-ylabel('Nr Pairs')
-makepretty
-subplot(1,2,2)
-histogram(SelfScore(:),[0:0.01:1]); hold on
-histogram(scorematches(:),[0:0.01:1]);
-line([ThrsScore ThrsScore],get(gca,'ylim'),'color',[1 0 0])
+hs = histcounts(SelfScore(:),[0:0.1:1]); 
+hw = histcounts(WithinScores(~isnan(WithinScores)),[0:0.1:1]);
+ha = histcounts(AcrossScores(~isnan(AcrossScores)),[0:0.1:1]);
+
+plot([0.05:0.1:1-0.05],hs./sum(hs),'-','color',[0.5 0.5 0.5])
+hold on
+plot([0.05:0.1:1-.005],ha./sum(ha),'g-')
+plot([0.05:0.1:1-.005],hw./sum(hw),'r-')
+
+line([ThrsScore ThrsScore],get(gca,'ylim'),'color',[1 0 0],'LineStyle','--')
 
 % histogram(scorematches(:,1),[0:0.02:6])
 xlabel('Matching Probability')
-ylabel('Nr Pairs')
-legend('Self Score','Matches','Threshold','Location','best')
+ylabel('Proportion|Group')
+legend('Self Score',['Across C_i_j<' num2str(NeighbourDist)],['Within C_i_j<' num2str(NeighbourDist)],'Threshold','Location','best')
 makepretty
 saveas(gcf,fullfile(SaveDir,'ScoresSelfvsMatch.fig'))
 saveas(gcf,fullfile(SaveDir,'ScoresSelfvsMatch.bmp'))

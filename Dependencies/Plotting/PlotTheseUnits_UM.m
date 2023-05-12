@@ -116,14 +116,19 @@ for pairid=1:length(Pairs)
         hold on
         ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(WaveformInfo.MaxChannel(uid,cv),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius); %Averaging over 10 channels helps with drift
         Locs = channelpos(ChanIdx,:);
+        scatter(Locs(:,1)*10,Locs(:,2)*10,20,[0.5 0.5 0.5],'filled') % Indicate sites
         for id = 1:length(Locs)
             plot(Locs(id,1)*10+[1:size(spikeMap,1)],Locs(id,2)*10+spikeMap(:,ChanIdx(id),cv),'-','color',cols(uidx,:),'LineWidth',1)
         end
-        hleg(uidx) = plot(WaveformInfo.ProjectedLocation(1,uid,cv)*10+[1:size(spikeMap,1)],WaveformInfo.ProjectedLocation(2,uid,cv)*10+WaveformInfo.ProjectedWaveform(:,uid,cv),'--','color',cols(uidx,:),'LineWidth',2);
+        scatter(WaveformInfo.ProjectedLocation(1,uid,cv)*10,WaveformInfo.ProjectedLocation(2,uid,cv)*10,20,[0 0 0],'filled') %Indicate Centroid
+        hleg(uidx) = plot(WaveformInfo.ProjectedLocation(1,uid,cv)*10+[1:size(spikeMap,1)],WaveformInfo.ProjectedLocation(2,uid,cv)*10+WaveformInfo.ProjectedWaveform(:,uid,cv),'-','color',cols(uidx,:),'LineWidth',2);
 
 
         subplot(3,3,[2])
         hold on
+        scatter(Locs(:,1),Locs(:,2),20,[0.5 0.5 0.5],'filled')
+        scatter(WaveformInfo.ProjectedLocation(1,uid,cv),WaveformInfo.ProjectedLocation(2,uid,cv),20,[0 0 0],'filled')
+
         takesamples = param.waveidx;
         takesamples = unique(takesamples(~isnan(takesamples)));
         h(1) = plot(squeeze(WaveformInfo.ProjectedLocationPerTP(1,uid,takesamples,cv)),squeeze(WaveformInfo.ProjectedLocationPerTP(2,uid,takesamples,cv)),'-','color',cols(uidx,:));
@@ -165,13 +170,13 @@ for pairid=1:length(Pairs)
         addforamplitude = addforamplitude+edges(end-1);
 
         % compute ACG
-        [ccg, ~] = CCGBz([double(sp.st(idx1)); double(sp.st(idx1))], [ones(size(sp.st(idx1), 1), 1); ...
+        [ccg, t] = CCGBz([double(sp.st(idx1)); double(sp.st(idx1))], [ones(size(sp.st(idx1), 1), 1); ...
             ones(size(sp.st(idx1), 1), 1) * 2], 'binSize', param.ACGbinSize, 'duration', param.ACGduration, 'norm', 'rate'); %function
         ACG = ccg(:, 1, 1);
 
         subplot(3,3,7);
         hold on
-        plot(ACG,'color',cols(uidx,:));
+        plot(t,ACG,'color',cols(uidx,:));
         title(['AutoCorrelogram'])
         makepretty
     end
@@ -180,12 +185,15 @@ for pairid=1:length(Pairs)
     subplot(3,3,[1,4])
     subplot
     makepretty
-    set(gca,'xtick',get(gca,'xtick'),'xticklabel',arrayfun(@(X) num2str(X./10),cellfun(@(X) str2num(X),get(gca,'xticklabel')),'UniformOutput',0))
-    set(gca,'yticklabel',arrayfun(@(X) num2str(X./10),cellfun(@(X) str2num(X),get(gca,'yticklabel')),'UniformOutput',0))
+    set(gca,'yticklabel',arrayfun(@(X) num2str(X./10),arrayfun(@(X) X,get(gca,'ytick')),'UniformOutput',0))
     xlabel('Xpos (um)')
     ylabel('Ypos (um)')
     ylimcur = get(gca,'ylim');
     ylim([ylimcur(1) ylimcur(2)*1.005])
+    xlimcur = get(gca,'xlim');
+    xlim([min(Locs(:,1))*10-param.spikeWidth/2 max(Locs(:,1))*10+param.spikeWidth*1.5])
+    set(gca,'xtick',get(gca,'xtick'),'xticklabel',arrayfun(@(X) num2str(X./10),cellfun(@(X) str2num(X),get(gca,'xticklabel')),'UniformOutput',0))
+
     legend(hleg,arrayfun(@(X) ['ID' num2str(OriClusID(X)) ', Rec' num2str(recsesGood(X))],Pairs{pairid},'Uni',0),'Location','best')
     Probs = cell2mat(arrayfun(@(X) [num2str(round(MatchProbability(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)) ','],1:length(Pairs{pairid})-1,'Uni',0));
     Probs(end)=[];
@@ -195,10 +203,9 @@ for pairid=1:length(Pairs)
     subplot(3,3,[2])
     xlabel('Xpos (um)')
     ylabel('Ypos (um)')
-    ydif = diff(get(gca,'ylim'));
-    xdif = diff(get(gca,'xlim'));
-    stretch = (ydif-xdif)./2;
-    set(gca,'xlim',[min(get(gca,'xlim')) - stretch, max(get(gca,'xlim')) + stretch])
+    xlims = [WaveformInfo.ProjectedLocation(1,uid,cv)-25 WaveformInfo.ProjectedLocation(1,uid,cv)+25];
+    ylims = [WaveformInfo.ProjectedLocation(2,uid,cv)-25 WaveformInfo.ProjectedLocation(2,uid,cv)+25];  
+    set(gca,'xlim',xlims,'ylim',ylims)
     axis square
     %     legend([h(1),h(2)],{['Unit ' num2str(uid)],['Unit ' num2str(uid2)]})
     hc= colorbar;
@@ -208,7 +215,6 @@ for pairid=1:length(Pairs)
         disp(ME)
         keyboard
     end
-    axis  square
     makepretty
     if exist('TrajDistSim')
         tmp = cell2mat(arrayfun(@(X) [num2str(round(TrajDistSim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
@@ -244,6 +250,9 @@ for pairid=1:length(Pairs)
     title(['Centroid Distance: ' tmp '%, Variance: ' tmp2 '%'])
 
     subplot(3,3,3)
+    ylims = get(gca,'ylim');
+    patch([param.waveidx(1) param.waveidx(end) param.waveidx(end) param.waveidx(1)],[ylims(1) ylims(1) ylims(2) ylims(2)],[0.5 0.5 0.5],'FaceAlpha',0.2,'EdgeColor','none')
+
     makepretty
     if exist('WavformMSE')
         tmp = cell2mat(arrayfun(@(X) [num2str(round(WavformMSE(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));

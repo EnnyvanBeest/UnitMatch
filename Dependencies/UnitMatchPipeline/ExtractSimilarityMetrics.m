@@ -185,11 +185,11 @@ while flag<2
     ProjectedLocationPerTPRecentered = permute(permute(ProjectedLocationPerTP,[1,2,4,3]) - ProjectedLocation,[1,2,4,3]);
     x1 = repmat(squeeze(ProjectedLocationPerTPRecentered(:,:,waveidx,1)),[1 1 1 size(ProjectedLocationPerTPRecentered,2)]);
     x2 = permute(repmat(squeeze(ProjectedLocationPerTPRecentered(:,:,waveidx,2)),[1 1 1 size(ProjectedLocationPerTPRecentered,2)]),[1 4 3 2]);
-    EuclDist = squeeze(sqrt(nansum((x1-x2).^2,1))); % Euclidean distance
+    EuclDist2 = squeeze(sqrt(nansum((x1-x2).^2,1))); % Euclidean distance
     w = squeeze(isnan(abs(x1(1,:,:,:)-x2(1,:,:,:))));
-    EuclDist(w) = nan;
+    EuclDist2(w) = nan;
     % Average location
-    CentroidDistRecentered = squeeze(nanmean(EuclDist,2));%
+    CentroidDistRecentered = squeeze(nanmean(EuclDist2,2));%
     CentroidDistRecentered = 1-(CentroidDistRecentered-nanmin(CentroidDistRecentered(:)))./(nanmax(CentroidDistRecentered(:))-nanmin(CentroidDistRecentered(:)));
     
     CentroidOverlord = (CentroidDistRecentered+CentroidVar)/2;
@@ -453,7 +453,7 @@ while flag<2
     makepretty
    
     figure('name','TotalScore')
-    subplot(2,1,1)
+    subplot(2,2,1)
     imagesc(TotalScore,[0 length(Scores2Include)]);
     title('Total Score')
     xlabel('Unit_i')
@@ -467,7 +467,7 @@ while flag<2
 
     % Make initial threshold --> to be optimized
     ThrsOpt = quantile(TotalScore(IncludeThesePairs),priorMatch); %Select best ones only later
-    subplot(2,1,2)
+    subplot(2,2,2)
     imagesc(TotalScore>ThrsOpt)
     hold on
     title(['Thresholding at ' num2str(ThrsOpt)])
@@ -480,11 +480,53 @@ while flag<2
     colorbar
     % axis square
     makepretty
+
+
+    subplot(2,2,3)
+    tmp = TotalScore;
+    % Take centroid dist > maxdist out
+    tmp(CentroidDist==0)=nan;
+    % Take between session out
+    for did = 1:ndays
+        for did2 = 1:ndays
+            if did==did2
+                continue
+            end
+            tmp(SessionSwitch(did):SessionSwitch(did+1),SessionSwitch(did2):SessionSwitch(did2+1))=nan;
+        end
+    end
+    hd = histcounts(diag(tmp),0:0.1:length(Scores2Include))./nclus;
+    hnd = histcounts(tmp(~eye(size(tmp))),0:0.1:length(Scores2Include))./sum(~isnan(tmp(~eye(size(tmp)))));
+    plot(0.05:0.1:length(Scores2Include)-0.05,hd,'r-'); hold on; plot(0.05:0.1:length(Scores2Include)-0.05,hnd,'b-')
+    line([ThrsOpt ThrsOpt],get(gca,'ylim'),'LineStyle','--','color',[0 0 0])
+    makepretty
+    title('Within session cross-validation')
+    legend('Within session diagonal','Within session off-diagonal (<maxdist)','Threshold','Location', 'best')
+
+
+    subplot(2,2,4)
+    tmp = TotalScore;
+    % Take centroid dist > maxdist out
+    tmp(CentroidDist==0)=nan;
+    % Take within session out
+    for did = 1:ndays       
+        tmp(SessionSwitch(did):SessionSwitch(did+1),SessionSwitch(did):SessionSwitch(did+1))=nan;
+    end
+    hb = histcounts(tmp(~isnan(tmp(:))),0:0.1:length(Scores2Include))./sum(tmp(~isnan(tmp(:))));
+    hd = histcounts(tmp(tmp(:)>ThrsOpt),0:0.1:length(Scores2Include))./sum(tmp(:)>ThrsOpt);
+    hnd = histcounts(tmp(tmp(:)<=ThrsOpt),0:0.1:length(Scores2Include))./sum(tmp(:)<=ThrsOpt);
+    plot(0.05:0.1:length(Scores2Include)-0.05,hb,'k-');
+    hold on
+    plot(0.05:0.1:length(Scores2Include)-0.05,hd,'r-'); hold on; plot(0.05:0.1:length(Scores2Include)-0.05,hnd,'b-'); 
+    makepretty
+    title('Across sessions')
+    legend('All units','T>threshold','T<threshold','Location', 'best')
+
+
     saveas(gcf,fullfile(SaveDir,'TotalScore.fig'))
     saveas(gcf,fullfile(SaveDir,'TotalScore.bmp'))
     % Find all pairs
     % first factor authentication: score above threshold
-    ThrsScore = ThrsOpt;
     % Take into account:
     label = TotalScore>ThrsOpt;
     [uid,uid2] = find(label);
@@ -549,6 +591,7 @@ while flag<2
 end
 
 %% Assign to workspace
+EuclDist = squeeze(nanmean(EuclDist,2));
 assignin('caller','TotalScore',TotalScore)
 assignin('caller','Predictors',Predictors)
 assignin('caller','drift',drift)
@@ -556,6 +599,7 @@ assignin('caller','ProjectedLocationPerTP',ProjectedLocationPerTP)
 assignin('caller','ProjectedLocation',ProjectedLocation)
 assignin('caller','sessionCorrelationsAll',sessionCorrelationsAll)
 assignin('caller','Unit2Take',Unit2Take)
+assignin('caller','EuclDist',EuclDist)
 
 
 
