@@ -23,6 +23,7 @@ spatialdecay = nan(nclus,2); % how fast does the unit decay across space, first 
 WaveIdx = false(nclus,spikeWidth,2);
 
 expFun = @(p,d) -exp(-p(1)*d)+p(2); % for spatial decay
+opts = optimset('Display','off');
 
 %% Take geographically close channels (within 50 microns!), not just index!
 timercounter = tic;
@@ -114,7 +115,7 @@ for uid = 1:nclus
         spdctmp = (nanmax(abs(spikeMap(:,MaxChannel(uid,cv),cv)),[],1)-nanmax(abs(spikeMap(:,ChanIdx,cv)),[],1))./nanmax(abs(spikeMap(:,MaxChannel(uid,cv),cv)),[],1);
         % Spatial decay (average oer micron)
         % spatialdecay(uid,cv) = nanmean(spdctmp./Distance2MaxChan');
-        p = lsqcurvefit(expFun,[1 1],Distance2MaxChan',spdctmp);
+        p = lsqcurvefit(expFun,[1 1],Distance2MaxChan',spdctmp,[],[],opts);
         spatialdecay(uid,cv) = p(1);
         Peakval = ProjectedWaveform(PeakTime(uid,cv),uid,cv);
         Amplitude(uid,cv) = Peakval;
