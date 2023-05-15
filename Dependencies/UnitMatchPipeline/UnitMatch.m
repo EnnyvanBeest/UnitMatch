@@ -65,6 +65,10 @@ param.SaveScoresAsProbability = SaveScoresAsProbability;
 param.NewPeakLoc = NewPeakLoc;
 param.maxdist = maxdist;
 
+if ~exist(SaveDir)
+    mkdir(SaveDir)
+end
+
 %% Extract all cluster info
 OriginalClusterIDs = clusinfo.cluster_id;
 % nses = length(AllDecompPaths);
