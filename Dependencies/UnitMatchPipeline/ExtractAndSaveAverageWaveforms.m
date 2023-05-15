@@ -35,7 +35,11 @@ fprintf(1,'Extracting raw waveforms. Progress: %3d%%',0)
 Currentlyloaded = 0;
 for uid = 1:nclus
     fprintf(1,'\b\b\b\b%3.0f%%',uid/nclus*100)
-    tmppath = dir(fullfile(param.KSDir{GoodRecSesID(uid)},'**','RawWaveforms*'));
+    if length(param.KSDir)>1
+        tmppath = dir(fullfile(param.KSDir{GoodRecSesID(uid)},'**','RawWaveforms*'));
+    else %Stitched KS
+        tmppath = dir(fullfile(param.KSDir{1},'**','RawWaveforms*'));
+    end
     if length(tmppath)>1
         % Probably stitched:
         tmppath = tmppath(GoodRecSesID(uid));
@@ -63,7 +67,11 @@ for uid = 1:nclus
         end
 
         %load sp
-        tmp = matfile(fullfile(param.KSDir{GoodRecSesID(uid)},'PreparedData.mat'));
+        if length(param.KSDir)>1
+            tmp = matfile(fullfile(param.KSDir{GoodRecSesID(uid)},'PreparedData.mat'));
+        else %Stitched Kilosort
+            tmp = matfile(fullfile(param.KSDir{1},'PreparedData.mat'));
+        end
         sp = tmp.sp;
         tmpclusinfo = tmp.clusinfo; %Load original clusinfo
 

@@ -540,7 +540,11 @@ while flag<2
     sessionCorrelationsAll = cell(1,ndays);
     for did = 1:ndays
         % Load sp for correct day
-        tmp = matfile(fullfile(param.KSDir{did},'PreparedData.mat'));
+        if length(param.KSDir)>1
+            tmp = matfile(fullfile(param.KSDir{did},'PreparedData.mat'));
+        else %Stitched
+            tmp = matfile(fullfile(param.KSDir{1},'PreparedData.mat'));
+        end
         SessionCorrelations = tmp.SessionCorrelations;
         if length(tmp.SessionCorrelations)==ndays
             sessionCorrelationsAll{did} = SessionCorrelations{did};
@@ -602,7 +606,74 @@ assignin('caller','Unit2Take',Unit2Take)
 assignin('caller','EuclDist',EuclDist)
 
 
+if 0
+    %% Plot
+    Pairs = [2,276,4] % Example
+    cols =  jet(length(Pairs));
+
+    figure
+    subplot(5,1,1:3)
+    for uidx=1:length(Pairs)
+        uid = Pairs(uidx);
+        channelpos = Allchannelpos{recsesGood(uid)};
+        % Load raw data
+        try
+            spikeMap = readNPY(fullfile(param.KSDir{recsesGood(uid)},'RawWaveforms',['Unit' num2str(OriginalClusterIDs(uid)+1) '_RawSpikes.npy'])); %0-indexed to 1-indexed
+        catch
+            keyboard
+        end
+        % Detrending
+        spikeMap = permute(spikeMap,[2,1,3]); %detrend works over columns
+        spikeMap = detrend(spikeMap,1); % Detrend (linearly) to be on the safe side. OVER TIME!
+        spikeMap = permute(spikeMap,[2,1,3]);  % Put back in order
+        %Load channels
+        ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChannel(uid,1),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius); %Averaging over 10 channels helps with drift
+        Locs = channelpos(ChanIdx,:);
+
+        scatter(Locs(:,1),Locs(:,2),20,[0.5 0.5 0.5],'filled')
+        hold on
+        scatter(ProjectedLocation(1,uid,1),ProjectedLocation(2,uid,1),20,cols(uidx,:),'filled')
+
+        takesamples = param.waveidx;
+        takesamples = unique(takesamples(~isnan(takesamples)));
+        h(1) = plot(squeeze(ProjectedLocationPerTP(1,uid,takesamples,1)),squeeze(ProjectedLocationPerTP(2,uid,takesamples,1)),'-','color',cols(uidx,:));
+        scatter(squeeze(ProjectedLocationPerTP(1,uid,takesamples,1)),squeeze(ProjectedLocationPerTP(2,uid,takesamples,1)),30,takesamples,'filled')
+    end
+    colormap(hot)
+
+    xlabel('Xpos (um)')
+    ylabel('Ypos (um)')
+    xlims = [ProjectedLocation(1,uid,1)-30 ProjectedLocation(1,uid,1)+30];
+    ylims = [ProjectedLocation(2,uid,1)-30 ProjectedLocation(2,uid,1)+30];
+    set(gca,'xlim',xlims,'ylim',ylims)
+    axis square
+    %     legend([h(1),h(2)],{['Unit ' num2str(uid)],['Unit ' num2str(uid2)]})
+    hc= colorbar;
+    try
+        hc.Label.String = 'timesample';
+    catch ME
+        disp(ME)
+        keyboard
+    end
+    makepretty
+
+    subplot(5,1,4)
+    for uid = 2:length(Pairs)
+        tmp = sqrt(nansum((squeeze([ProjectedLocationPerTP(1,Pairs(1),param.waveidx,1),ProjectedLocationPerTP(2,Pairs(1),param.waveidx,1)])-squeeze([ProjectedLocationPerTP(1,Pairs(uid),param.waveidx,1),ProjectedLocationPerTP(2,Pairs(uid),param.waveidx,1)])).^2,1));
+        tmp(tmp==0)=nan; % =nan
+        plot(param.waveidx,tmp,'|','color',cols(uid,:))
+        hold on
+    end
+    ylabel('\Deltad_i_j')
+    makepretty
 
 
+    subplot(5,1,5)
+    for uid = 2:length(Pairs)
+        plot(param.waveidx(2:end),squeeze(AngleSubtraction(Pairs(1),:,Pairs(uid))),'|','color',cols(uid,:)) 
+        hold on
+    end
+    ylabel('\Deltad_i_j')
+    makepretty
 
-
+end

@@ -38,7 +38,7 @@ param.MakeOwnNaiveBayes = 1; % if 0, use standard matlab version, which assumes 
 SaveScoresAsProbability = 0; %If 1, the individual scores are converted to probabiliti
 param.maxrun = 1; % This is whether you want to use Bayes' output to create a new potential candidate set to optimize the probability distributions. Probably we don't want to keep optimizing?, as this can be a bit circular (?)
 drawmax = inf; % Maximum number of drawed matches (otherwise it takes forever!)
-VisibleSetting = 'on'; %Do we want to see the figures being plot online?
+VisibleSetting = 'off'; %Do we want to see the figures being plot online?
 Draw2DMatrixes = 0; % If you find this useful
 global stepsize
 stepsize = 0.01;
@@ -429,81 +429,81 @@ for scid=1:length(Scores2Include)
     makepretty
 end
 
-if Draw2DMatrixes 
-figure('name','Projected Location Distance to [0 0]')
-Dist2Tip = sqrt(nansum(ProjectedLocation.^2,1));
-% Dist2TipMatrix = nan(size(CandidatePairs));
+if Draw2DMatrixes
+    figure('name','Projected Location Distance to [0 0]')
+    Dist2Tip = sqrt(nansum(ProjectedLocation.^2,1));
+    % Dist2TipMatrix = nan(size(CandidatePairs));
 
-Dist2TipMatrix = arrayfun(@(Y) cell2mat(arrayfun(@(X) cat(1,Dist2Tip(X),Dist2Tip(Y)),1:nclus,'Uni',0)),1:nclus,'Uni',0);
-Dist2TipMatrix = cat(3,Dist2TipMatrix{:});
-Dist2TipMatrix = reshape(Dist2TipMatrix,2,[]);
-subplot(1,2,1)
-[N,C] = hist3(Dist2TipMatrix(:,~label(:))');
-imagesc(N)
-colormap(flipud(gray))
-makepretty
-xlabel('Unit_i')
-ylabel('Unit_j')
-zlabel('Counts')
-title('Identified Non-matches')
+    Dist2TipMatrix = arrayfun(@(Y) cell2mat(arrayfun(@(X) cat(1,Dist2Tip(X),Dist2Tip(Y)),1:nclus,'Uni',0)),1:nclus,'Uni',0);
+    Dist2TipMatrix = cat(3,Dist2TipMatrix{:});
+    Dist2TipMatrix = reshape(Dist2TipMatrix,2,[]);
+    subplot(1,2,1)
+    [N,C] = hist3(Dist2TipMatrix(:,~label(:))');
+    imagesc(N)
+    colormap(flipud(gray))
+    makepretty
+    xlabel('Unit_i')
+    ylabel('Unit_j')
+    zlabel('Counts')
+    title('Identified Non-matches')
 
-subplot(1,2,2)
-[N,C] = hist3(Dist2TipMatrix(:,label(:))');
-imagesc(N)
-colormap(flipud(gray))
-makepretty
-xlabel('Unit_i')
-ylabel('Unit_j')
-zlabel('Counts')
-title('Identified Matches')
+    subplot(1,2,2)
+    [N,C] = hist3(Dist2TipMatrix(:,label(:))');
+    imagesc(N)
+    colormap(flipud(gray))
+    makepretty
+    xlabel('Unit_i')
+    ylabel('Unit_j')
+    zlabel('Counts')
+    title('Identified Matches')
 
-% Waveform duration
-figure('name','WaveDur')
-waveformdurationMat = arrayfun(@(Y) cell2mat(arrayfun(@(X) cat(1,AllWVBParameters.waveformduration(X),AllWVBParameters.waveformduration(Y)),1:nclus,'UniformOutput',0)),1:nclus,'UniformOutput',0);
-waveformdurationMat = cat(3,waveformdurationMat{:});
-subplot(1,2,1)
-[N,C] = hist3(waveformdurationMat(:,~label(:))');
-imagesc(N)
-colormap(flipud(gray))
-makepretty
-xlabel('Unit_i')
-ylabel('Unit 2')
-zlabel('Counts')
-title('Identified Non-matches')
+    % Waveform duration
+    figure('name','WaveDur')
+    waveformdurationMat = arrayfun(@(Y) cell2mat(arrayfun(@(X) cat(1,AllWVBParameters.waveformduration(X),AllWVBParameters.waveformduration(Y)),1:nclus,'UniformOutput',0)),1:nclus,'UniformOutput',0);
+    waveformdurationMat = cat(3,waveformdurationMat{:});
+    subplot(1,2,1)
+    [N,C] = hist3(waveformdurationMat(:,~label(:))');
+    imagesc(N)
+    colormap(flipud(gray))
+    makepretty
+    xlabel('Unit_i')
+    ylabel('Unit 2')
+    zlabel('Counts')
+    title('Identified Non-matches')
 
-subplot(1,2,2)
-[N,C] = hist3(waveformdurationMat(:,label(:))');
-imagesc(N)
-colormap(flipud(gray))
-makepretty
-xlabel('Unit_i')
-ylabel('Unit_j')
-zlabel('Counts')
-title('Identified Matches')
+    subplot(1,2,2)
+    [N,C] = hist3(waveformdurationMat(:,label(:))');
+    imagesc(N)
+    colormap(flipud(gray))
+    makepretty
+    xlabel('Unit_i')
+    ylabel('Unit_j')
+    zlabel('Counts')
+    title('Identified Matches')
 
-% SpatialDecaySlope
-figure('name','Spatial Decay Slope')
-SpatDecMat = arrayfun(@(Y) cell2mat(arrayfun(@(X) cat(1,AllWVBParameters.spatialdecay(X),AllWVBParameters.spatialdecay(Y)),1:nclus,'UniformOutput',0)),1:nclus,'UniformOutput',0);
-SpatDecMat = cat(3,SpatDecMat{:});
-subplot(1,2,1)
-[N,C] = hist3(SpatDecMat(:,~label(:))');
-imagesc(N)
-colormap(flipud(gray))
-makepretty
-xlabel('Unit_i')
-ylabel('Unit_j')
-zlabel('Counts')
-title('Identified Non-matches')
+    % SpatialDecaySlope
+    figure('name','Spatial Decay Slope')
+    SpatDecMat = arrayfun(@(Y) cell2mat(arrayfun(@(X) cat(1,AllWVBParameters.spatialdecay(X),AllWVBParameters.spatialdecay(Y)),1:nclus,'UniformOutput',0)),1:nclus,'UniformOutput',0);
+    SpatDecMat = cat(3,SpatDecMat{:});
+    subplot(1,2,1)
+    [N,C] = hist3(SpatDecMat(:,~label(:))');
+    imagesc(N)
+    colormap(flipud(gray))
+    makepretty
+    xlabel('Unit_i')
+    ylabel('Unit_j')
+    zlabel('Counts')
+    title('Identified Non-matches')
 
-subplot(1,2,2)
-[N,C] = hist3(SpatDecMat(:,label(:))');
-imagesc(N)
-colormap(flipud(gray))
-makepretty
-xlabel('Unit_i')
-ylabel('Unit_j')
-zlabel('Counts')
-title('Identified Matches')
+    subplot(1,2,2)
+    [N,C] = hist3(SpatDecMat(:,label(:))');
+    imagesc(N)
+    colormap(flipud(gray))
+    makepretty
+    xlabel('Unit_i')
+    ylabel('Unit_j')
+    zlabel('Counts')
+    title('Identified Matches')
 end
 %% Figures
 if param.MakePlotsOfPairs

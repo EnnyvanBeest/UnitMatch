@@ -18,7 +18,11 @@ for pairid = 1:size(Pairs,1)
         tmppath = strsplit(Path4UnitNPY{find(Good_Idx==Pairs(pairid,1))},'RawWaveforms');
         % Load sp for correct day
         if isempty(CurrentSPPath) || ~strcmp(CurrentSPPath{1},tmppath{1})
-            tmp = matfile(fullfile(param.KSDir{GoodRecSesID(Pairs(pairid,1))},'PreparedData.mat'));
+            if length(param.KSDir)>1
+                tmp = matfile(fullfile(param.KSDir{GoodRecSesID(Pairs(pairid,1))},'PreparedData.mat'));
+            else %Stitched
+                tmp = matfile(fullfile(param.KSDir{1},'PreparedData.mat'));
+            end
             sp = tmp.sp;
             CurrentSPPath = tmppath;
         end

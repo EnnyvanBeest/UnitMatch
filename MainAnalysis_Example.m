@@ -9,18 +9,18 @@ storevideopath=fullfile(tmpdatafolder,'Videos');
 HistoFolder = 'E:\Data\Histology'; % Necessary when aligning to histology
 
 %% Information on experiments
-MiceOpt = {'CB016'}; %CB016 %AL032 'AV008' JF067Add all mice you want to analyse
+MiceOpt = {'AL032'}; %CB016 %AL032 'AV008' JF067Add all mice you want to analyse
 nidq_sync_used = zeros(1,length(MiceOpt)); % Was an external nidq used for syncing (typically sync feeds directly into IMEC)
 nidq_sync_used(ismember(MiceOpt,{'EB001','CB007','CB008'}))=1; % Except for these mice...
 DataDir2Use = repmat(1,[1,length(MiceOpt)]); % In case you have multiple DataDir, index which directory is used for each mouse
 % DataDir2Use(ismember(MiceOpt,{'EB001','EB002','EB003','EB004','EB005','CB007','CB008','AL056'}))=2; 
 ProbeType = repmat({'1_3b'},1,length(MiceOpt)); % WE need to know which probe type was used for each mice. Default:
 ProbeType(ismember(MiceOpt,{'AL032'}))={'2_4S'}; % Change to 2_4Shank for these mice
-RecordingType = repmat({'Acute'},1,length(MiceOpt)); % And whether recordings were acute (default)
+RecordingType = repmat({'Acutede'},1,length(MiceOpt)); % And whether recordings were acute (default)
 RecordingType(ismember(MiceOpt,{'AL032','EB014','CB016','AV008','JF067'}))={'Chronic'}; %EB014', % Or maybe Chronic?
 
 %% Parameters on how to prepare units/data for analysis
-PrepareClusInfoparams.RunPyKSChronicStitched = 1; % if 1, run PyKS chronic recordings stitched when same IMRO table was used
+PrepareClusInfoparams.RunPyKSChronicStitched = 0; % if 1, run PyKS chronic recordings stitched when same IMRO table was used
 PrepareClusInfoparams.CopyToTmpFirst = 1; % If 1, copy data to local first, don't run from server (= advised!)
 PrepareClusInfoparams.DecompressLocal = 1; % If 1, uncompress data first if it's currently compressed (= necessary for unitmatch and faster for QualityMetrics))
 PrepareClusInfoparams.RedoQM = 0; %if 1, redo quality metrics if it already exists
@@ -41,7 +41,7 @@ PrepareClusInfoparams.saveSp = 1; % Save SP struct for easy loading of preproces
 % %Full set. WavformSim is average of WVCorr and WavformMSE
 PrepareClusInfoparams.Scores2Include = {'AmplitudeSim','spatialdecaySim','WavformSim','CentroidDist','CentroidVar','TrajAngleSim'}; % 
 PrepareClusInfoparams.ApplyExistingBayesModel = 0; %If 1, use probability distributions made available by us
-PrepareClusInfoparams.MakePlotsOfPairs = 1; % Plots pairs for inspection (UnitMatch)
+PrepareClusInfoparams.MakePlotsOfPairs = 0; % Plots pairs for inspection (UnitMatch)
 PrepareClusInfoparams.AssignUniqueID = 1; % Assign UniqueID 
 
 %% Parameters for further analysis

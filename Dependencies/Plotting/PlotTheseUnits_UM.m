@@ -111,12 +111,13 @@ for pairid=1:length(Pairs)
         spikeMap = permute(spikeMap,[2,1,3]); %detrend works over columns
         spikeMap = detrend(spikeMap,1); % Detrend (linearly) to be on the safe side. OVER TIME!
         spikeMap = permute(spikeMap,[2,1,3]);  % Put back in order
-
-        subplot(3,3,[1,4])
-        hold on
+        %Load channels
         ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(WaveformInfo.MaxChannel(uid,cv),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius); %Averaging over 10 channels helps with drift
         Locs = channelpos(ChanIdx,:);
-        scatter(Locs(:,1)*10,Locs(:,2)*10,20,[0.5 0.5 0.5],'filled') % Indicate sites
+    
+        subplot(3,3,[1,4])
+        hold on
+         scatter(Locs(:,1)*10,Locs(:,2)*10,20,[0.5 0.5 0.5],'filled') % Indicate sites
         for id = 1:length(Locs)
             plot(Locs(id,1)*10+[1:size(spikeMap,1)],Locs(id,2)*10+spikeMap(:,ChanIdx(id),cv),'-','color',cols(uidx,:),'LineWidth',1)
         end
@@ -266,6 +267,12 @@ for pairid=1:length(Pairs)
     else
         tmp2 = 'nan';
     end
+     if exist('WavformSim')
+         tmp5 = cell2mat(arrayfun(@(X) [num2str(round(WavformSim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp5(end)=[];
+    else
+        tmp5 = 'nan';
+    end
     if exist('AmplitudeSim')
         tmp3 = cell2mat(arrayfun(@(X) [num2str(round(AmplitudeSim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
         tmp3(end)=[];
@@ -280,7 +287,7 @@ for pairid=1:length(Pairs)
     end
     axis square
 
-    title(['Sim=' tmp '%, corr= ' tmp2 '%'])
+    title(['MSE=' tmp '%, corr= ' tmp2 '%' 'SIM=, ' tmp5 '%'])
 
     subplot(3,3,6)
     xlabel('Time (min)')
