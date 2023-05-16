@@ -5,7 +5,6 @@ if nargin<5
 end
 %% Extract fields and parameters
 ExtractFields({AllWVBParameters})
-
 waveidx = param.waveidx;
 Allchannelpos = param.channelpos;
 SaveDir = param.SaveDir;
@@ -322,12 +321,15 @@ while flag<2
     makepretty
     disp(['Extracting projected location took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])
 
+    %Average EuclDist
+    EuclDist = squeeze(nanmean(EuclDist,2));
+
     %% These are the parameters to include:
     if drawthis
         figure('name','Total Score components');
         for sid = 1:length(Scores2Include)
             eval(['tmp = ' Scores2Include{sid} ';'])
-            tmp(CentroidDist==0)=nan; %Remove pairs that are never gonna happen
+            tmp(EuclDist>param.NeighbourDist)=nan; %Remove pairs that are never gonna happen
 
             subplot(ceil(sqrt(length(Scores2Include))),round(sqrt(length(Scores2Include))),sid)
             try
@@ -353,7 +355,7 @@ while flag<2
         for sid = 1:length(Scores2Include)
             eval(['tmp = ' Scores2Include{sid} ';'])
             % Take centroid dist > maxdist out
-            tmp(CentroidDist==0)=nan;
+            tmp(EuclDist>param.NeighbourDist)=nan;
             % Take between session out
             for did = 1:ndays
                 for did2 = 1:ndays
@@ -378,11 +380,12 @@ while flag<2
 
     end
     %% Calculate total score
-    IncludeThesePairs = find(CentroidDist>0);
+    IncludeThesePairs = find(EuclDist<maxdist);
 
     disp('Computing total score...')
     timercounter = tic;
-    priorMatch = 1-(nclus*ndays)./length(IncludeThesePairs);
+    priorMatch = 1-((nclus+nclus.*sqrt(ndays-1))./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days)
+
     leaveoutmatches = false(nclus,nclus,length(Scores2Include)); %Used later
     figure;
     if length(Scores2Include)>1
@@ -437,7 +440,7 @@ while flag<2
     for sid=1:length(Scores2Include)
         eval(['tmp = ' Scores2Include{sid} ';'])
         % Take centroid dist > maxdist out
-        %         tmp(CentroidDist==0)=nan;
+        %         tmp(EuclDist>param.NeighbourDist)=nan;
         Predictors = cat(3,Predictors,tmp);
         TotalScore=TotalScore+tmp;
     end
@@ -485,7 +488,7 @@ while flag<2
     subplot(2,2,3)
     tmp = TotalScore;
     % Take centroid dist > maxdist out
-    tmp(CentroidDist==0)=nan;
+    tmp(EuclDist>param.NeighbourDist)=nan;
     % Take between session out
     for did = 1:ndays
         for did2 = 1:ndays
@@ -497,17 +500,19 @@ while flag<2
     end
     hd = histcounts(diag(tmp),0:0.1:length(Scores2Include))./nclus;
     hnd = histcounts(tmp(~eye(size(tmp))),0:0.1:length(Scores2Include))./sum(~isnan(tmp(~eye(size(tmp)))));
-    plot(0.05:0.1:length(Scores2Include)-0.05,hd,'r-'); hold on; plot(0.05:0.1:length(Scores2Include)-0.05,hnd,'b-')
-    line([ThrsOpt ThrsOpt],get(gca,'ylim'),'LineStyle','--','color',[0 0 0])
+    plot(0.05:0.1:length(Scores2Include)-0.05,hd,'-','color',[0.5 0.5 0.5]); hold on; plot(0.05:0.1:length(Scores2Include)-0.05,hnd,'k-')
+    line([ThrsOpt ThrsOpt],get(gca,'ylim'),'LineStyle','--','color',[1 0 0])
+    xlabel('TotalScore')
+    ylabel('Proportion|Group')
     makepretty
     title('Within session cross-validation')
-    legend('Within session diagonal','Within session off-diagonal (<maxdist)','Threshold','Location', 'best')
+    legend('Within session diagonal',['Within session off-diagonal (<' num2str(param.NeighbourDist) ')'],'Threshold','Location', 'best')
 
 
     subplot(2,2,4)
     tmp = TotalScore;
     % Take centroid dist > maxdist out
-    tmp(CentroidDist==0)=nan;
+    tmp(EuclDist>param.NeighbourDist)=nan;
     % Take within session out
     for did = 1:ndays       
         tmp(SessionSwitch(did):SessionSwitch(did+1),SessionSwitch(did):SessionSwitch(did+1))=nan;
@@ -515,12 +520,13 @@ while flag<2
     hb = histcounts(tmp(~isnan(tmp(:))),0:0.1:length(Scores2Include))./sum(tmp(~isnan(tmp(:))));
     hd = histcounts(tmp(tmp(:)>ThrsOpt),0:0.1:length(Scores2Include))./sum(tmp(:)>ThrsOpt);
     hnd = histcounts(tmp(tmp(:)<=ThrsOpt),0:0.1:length(Scores2Include))./sum(tmp(:)<=ThrsOpt);
-    plot(0.05:0.1:length(Scores2Include)-0.05,hb,'k-');
     hold on
-    plot(0.05:0.1:length(Scores2Include)-0.05,hd,'r-'); hold on; plot(0.05:0.1:length(Scores2Include)-0.05,hnd,'b-'); 
+    plot(0.05:0.1:length(Scores2Include)-0.05,hd,'-','color',[0 0.5 0]); hold on; plot(0.05:0.1:length(Scores2Include)-0.05,hnd,'k-'); 
+    xlabel('TotalScore')
+    ylabel('Proportion|Group')
     makepretty
-    title('Across sessions')
-    legend('All units','T>threshold','T<threshold','Location', 'best')
+    title(['Across sessions, EuclDist< ' num2str(param.NeighbourDist) 'um'])
+    legend('T>threshold','T<threshold','Location', 'best')
 
 
     saveas(gcf,fullfile(SaveDir,'TotalScore.fig'))
@@ -595,7 +601,6 @@ while flag<2
 end
 
 %% Assign to workspace
-EuclDist = squeeze(nanmean(EuclDist,2));
 assignin('caller','TotalScore',TotalScore)
 assignin('caller','Predictors',Predictors)
 assignin('caller','drift',drift)
@@ -605,8 +610,8 @@ assignin('caller','sessionCorrelationsAll',sessionCorrelationsAll)
 assignin('caller','Unit2Take',Unit2Take)
 assignin('caller','EuclDist',EuclDist)
 
-
-if 0
+return
+if 0 % THis can be used to look at some example projections
     %% Plot
     Pairs = [2,276,4] % Example
     cols =  jet(length(Pairs));
@@ -675,5 +680,14 @@ if 0
     end
     ylabel('\Deltad_i_j')
     makepretty
+
+    figure
+    for uidx=1:length(Pairs)
+        uid = Pairs(uidx);
+        
+        hold on
+        plot(squeeze(ProjectedWaveform(:,uid,1)),'color',cols(uidx,:))
+     end
+
 
 end

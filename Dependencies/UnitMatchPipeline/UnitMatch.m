@@ -40,6 +40,8 @@ param.maxrun = 1; % This is whether you want to use Bayes' output to create a ne
 drawmax = inf; % Maximum number of drawed matches (otherwise it takes forever!)
 VisibleSetting = 'off'; %Do we want to see the figures being plot online?
 Draw2DMatrixes = 0; % If you find this useful
+param.NeighbourDist = 30; % In micron
+
 global stepsize
 stepsize = 0.01;
 %% Read in from param
@@ -370,45 +372,63 @@ end
 
 
 %% TotalScore Pair versus no pair
-NeighbourDist = 30; % In micron
-SelfScore = MatchProbability(logical(eye(size(MatchProbability))));
-OtherScores = MatchProbability; %First being TotalScore, second being TemplateMatch
-OtherScores(logical(eye(size(MatchProbability)))) = nan; %Get rid of diagonal
-OtherScores(EuclDist>NeighbourDist) = nan;%Remove units that were too far away
-AcrossScores = nan(size(EuclDist));
-WithinScores = nan(size(EuclDist));
-% Divide in within and across scores
-for did = 1:ndays
-    WithinScores(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1) = OtherScores(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1);
-    for did2 = 1:ndays
-        if did==did2
-            continue
-        end
-        AcrossScores(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1) = OtherScores(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1);
+figure('name','TotalScore vs Probability');
+
+for id = 1:2
+    if id == 2
+        SelfScore = MatchProbability(logical(eye(size(MatchProbability))));
+        OtherScores = MatchProbability; %First being TotalScore, second being TemplateMatch
+        ThrsScore = min(MatchProbability(label==1));
+        Edges = [0:0.1:1];
+        Vector = [0.05:0.1:1-0.05];
+    else % TotalScore
+        SelfScore = TotalScore(logical(eye(size(MatchProbability))));
+        OtherScores = TotalScore; %First being TotalScore, second being TemplateMatch
+        ThrsScore = min(TotalScore(label==1));
+        Edges = [0:0.1:6];
+        Vector = [0.05:0.1:6-0.05];
     end
+    OtherScores(logical(eye(size(MatchProbability)))) = nan; %Get rid of diagonal
+    OtherScores(EuclDist>param.NeighbourDist) = nan;%Remove units that were too far away
+    AcrossScores = nan(size(EuclDist));
+    WithinScores = nan(size(EuclDist));
+    % Divide in within and across scores
+    for did = 1:ndays
+        WithinScores(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1) = OtherScores(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1);
+        for did2 = 1:ndays
+            if did==did2
+                continue
+            end
+            AcrossScores(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1) = OtherScores(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1);
+        end
+    end
+
+    subplot(1,2,id)
+    hs = histcounts(SelfScore(:),Edges);
+    hw = histcounts(WithinScores(~isnan(WithinScores)),Edges);
+    ha = histcounts(AcrossScores(~isnan(AcrossScores)),Edges);
+
+    plot(Vector,hs./sum(hs),'-','color',[0.5 0.5 0.5])
+    hold on
+    plot(Vector,ha./sum(ha),'-','color',[0 0.5 0])
+    plot(Vector,hw./sum(hw),'-','color',[0 0 0])
+
+    line([ThrsScore ThrsScore],get(gca,'ylim'),'color',[1 0 0],'LineStyle','--')
+
+    % histogram(scorematches(:,1),[0:0.02:6])
+    if id == 2
+        xlabel('Matching Probability')
+        title('After naive Bayes')
+    else
+        xlabel('Total Score')
+        title('Using total score')
+    end
+    ylabel('Proportion|Group')
+    legend('Self Score',['Across C_i_j<' num2str(param.NeighbourDist)],['Within C_i_j<' num2str(param.NeighbourDist)],'Threshold','Location','best')
+    makepretty
 end
-
-ThrsScore = min(MatchProbability(label==1));
-figure;
-hs = histcounts(SelfScore(:),[0:0.1:1]); 
-hw = histcounts(WithinScores(~isnan(WithinScores)),[0:0.1:1]);
-ha = histcounts(AcrossScores(~isnan(AcrossScores)),[0:0.1:1]);
-
-plot([0.05:0.1:1-0.05],hs./sum(hs),'-','color',[0.5 0.5 0.5])
-hold on
-plot([0.05:0.1:1-.005],ha./sum(ha),'g-')
-plot([0.05:0.1:1-.005],hw./sum(hw),'r-')
-
-line([ThrsScore ThrsScore],get(gca,'ylim'),'color',[1 0 0],'LineStyle','--')
-
-% histogram(scorematches(:,1),[0:0.02:6])
-xlabel('Matching Probability')
-ylabel('Proportion|Group')
-legend('Self Score',['Across C_i_j<' num2str(NeighbourDist)],['Within C_i_j<' num2str(NeighbourDist)],'Threshold','Location','best')
-makepretty
 saveas(gcf,fullfile(SaveDir,'ScoresSelfvsMatch.fig'))
 saveas(gcf,fullfile(SaveDir,'ScoresSelfvsMatch.bmp'))
-
 %% inspect probability distributions
 figure('name','Parameter Scores');
 Edges = [0:0.01:1];

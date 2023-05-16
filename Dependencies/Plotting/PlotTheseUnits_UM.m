@@ -181,6 +181,7 @@ for pairid=1:length(Pairs)
         title(['AutoCorrelogram'])
         makepretty
     end
+    set(tmpfig,'units','normalized','outerposition',[0 0 1 1])
 
     % make subplots pretty
     subplot(3,3,[1,4])
@@ -355,7 +356,6 @@ for pairid=1:length(Pairs)
     xlabel('Finger print r')
     makepretty
 
-    set(tmpfig,'units','normalized','outerposition',[0 0 1 1])
 
     fname = cell2mat(arrayfun(@(X) ['ID' num2str(OriClusID(X)) ', Rec' num2str(recsesGood(X))],Pairs{pairid},'Uni',0));
     saveas(tmpfig,fullfile(param.SaveDir,'MatchFigures',[fname '.fig']))

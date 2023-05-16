@@ -20,7 +20,8 @@ IncludeThesePairs = find(Predictors(:,:,ismember(param.Scores2Include,'CentroidD
 %% Prepare naive bayes - inspect probability distributions
 % Prepare a set INCLUDING the cross-validated self-scores, otherwise the probability
 % distributions are just weird
-priorMatch = 1-(nclus*ndays)./(nclus*nclus); %Now use the actual expected prior for bayes'
+priorMatch = 1-((nclus+nclus.*sqrt(ndays-1))./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days)
+% priorMatch = 1-(nclus*ndays)./(nclus*nclus); %Now use the actual expected prior for bayes'
 ThrsOpt = quantile(TotalScore(:),priorMatch);
 CandidatePairs = TotalScore>ThrsOpt;% 
 % For Célian & Matteo:
@@ -52,6 +53,7 @@ MaxPerf = [0 0];
 npairslatest = 0;
 runid = 0;
 % Priors = [0.5 0.5];
+priorMatch = 1-((nclus+nclus.*sqrt(ndays-1))./nclus^2); %Punish multiple days (unlikely to find as many matches after a few days) %for naive bayes
 Priors = [priorMatch 1-priorMatch];
 BestMdl = [];
 Tbl = array2table(reshape(Predictors,[],size(Predictors,3)),'VariableNames',Scores2Include); %All parameters

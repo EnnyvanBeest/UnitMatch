@@ -9,7 +9,7 @@ storevideopath=fullfile(tmpdatafolder,'Videos');
 HistoFolder = 'E:\Data\Histology'; % Necessary when aligning to histology
 
 %% Information on experiments
-MiceOpt = {'AL032'}; %CB016 %AL032 'AV008' JF067Add all mice you want to analyse
+MiceOpt = {'AL032','AV008','JF067','CB016'}; %CB016 %AL032 'AV008' JF067 Add all mice you want to analyse
 nidq_sync_used = zeros(1,length(MiceOpt)); % Was an external nidq used for syncing (typically sync feeds directly into IMEC)
 nidq_sync_used(ismember(MiceOpt,{'EB001','CB007','CB008'}))=1; % Except for these mice...
 DataDir2Use = repmat(1,[1,length(MiceOpt)]); % In case you have multiple DataDir, index which directory is used for each mouse
@@ -23,7 +23,7 @@ RecordingType(ismember(MiceOpt,{'AL032','EB014','CB016','AV008','JF067'}))={'Chr
 PrepareClusInfoparams.RunPyKSChronicStitched = 0; % if 1, run PyKS chronic recordings stitched when same IMRO table was used
 PrepareClusInfoparams.CopyToTmpFirst = 1; % If 1, copy data to local first, don't run from server (= advised!)
 PrepareClusInfoparams.DecompressLocal = 1; % If 1, uncompress data first if it's currently compressed (= necessary for unitmatch and faster for QualityMetrics))
-PrepareClusInfoparams.RedoQM = 0; %if 1, redo quality metrics if it already exists
+PrepareClusInfoparams.RedoQM = 1; %if 1, redo quality metrics if it already exists
 PrepareClusInfoparams.RunQualityMetrics = 1; % If 1, Run the quality metrics (Bombcell @JulieFabre)
 PrepareClusInfoparams.loadPCs=1; % Do we need the PCs for data analysis (YES IF QM!)? If not you save a lot of time keeping this at 0
 PrepareClusInfoparams.InspectQualityMetrics=0; % If 1, Inspect the quality matrix/data set using the GUI (manual inspection)

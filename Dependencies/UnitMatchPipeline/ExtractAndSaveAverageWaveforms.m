@@ -79,12 +79,12 @@ for uid = 1:nclus
         idx1=(sp.st(sp.spikeTemplates == AllClusterIDs(Good_Idx(uid)) & sp.SessionID == tmpclusinfo.RecSesID(Good_Idx(uid))).*round(sp.sample_rate));  % Spike times in samples;
 
         %Extract raw waveforms on the fly - % Unit uid
-        try
+        if sampleamount<length(idx1)
             spikeIndicestmp = sort(datasample(idx1,sampleamount,'replace',false));
-        catch ME
-            spikeIndicestmp = idx1;
+        else
+            spikeIndicestmp = sort(idx1);
         end
-        spikeMap = nan(spikeWidth,nChannels,sampleamount);
+        spikeMap = nan(spikeWidth,nChannels,length(spikeIndicestmp));
         for iSpike = 1:length(spikeIndicestmp)
             thisSpikeIdx = int32(spikeIndicestmp(iSpike));
             if thisSpikeIdx > halfWidth && (thisSpikeIdx + halfWidth) < size(memMapData,2) % check that it's not out of bounds
