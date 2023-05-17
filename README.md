@@ -7,7 +7,7 @@ This toolbox was created in November 2022-January 2023 by Enny H. van Beest as a
 
 We thank Julie Fabre, who implemented some changes to Bombcell - a toolbox for quality metrics and automated curation.
 We also thank Anna Lebedeva, Flora Takacs, Pip Coen, Kenneth Harris, and Matteo Carandini, as well as the rest of the Carandini-Harris laboratory for their feedback and contributions.
-This work was supported by Marie Sklodowska-Curie 101022757 (Enny H. van Beest)
+This work was supported by Marie Sklodowska-Curie (101022757), Wellcome and NIH
 
 Toolboxes used for matching part:
 - https://github.com/EnnyvanBeest/spikes (forked from https://github.com/cortex-lab/spikes, but also tested with the original spikes)
