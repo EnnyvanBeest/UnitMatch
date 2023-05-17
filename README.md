@@ -23,10 +23,12 @@ Toolboxes that are useful for other parts of analysis pipeline (but not necessar
 - https://github.com/EnnyvanBeest/GeneralNeuropixelAnalysisFunctions
 
 %% Usage %%
+
 The UnitMatch algorithm is called with the function RunUnitMatch.m, with kilosort output directories and parameters as input. 
 It is advised to initially follow MainAnalysis_Example.m to understand how UnitMatch can be used.  
 
 %% Examples %%
+
 Two recording sessions of same IMRO table. In the first recording this unit was oversplit, and UnitMatch will Merge it. Additonally it found it's match in the second recording.
 
 ![image](https://github.com/EnnyvanBeest/UnitMatch/blob/main/LogoAndExamples/Example1.png)
