@@ -1,7 +1,7 @@
 # UnitMatch
 Ephys toolbox to match single units (electrophysiology) either within the same recording (oversplits) or across recordings
 
-![image](https://github.com/EnnyvanBeest/UnitMatch/blob/main/Logo.png)
+![image](https://github.com/EnnyvanBeest/UnitMatch/blob/main/LogoAndExamples/Logo.png)
 
 This toolbox was created in November 2022-January 2023 by Enny H. van Beest with the purpose of creating a tool to match units across multiple recording(day)s, and/or merge oversplit units within the same day. It uses spatial position and quality metrics similarity, both standard and unstandard metrics to the field, to find possible matches. The toolbox was further optimized in February 2023 in collaboration with Célian Bimbard - who sped up the code by a factor of almost infinity.
 
@@ -30,4 +30,4 @@ Alternatively, you can just input a list of Kilosort output directories to those
 %% Examples %%
 Two recording sessions of same IMRO table. In the first recording this unit was oversplit, and UnitMatch will Merge it. Additonally it found it's match in the second recording.
 
-![image](https://github.com/EnnyvanBeest/UnitMatch/blob/main/Example1.png)
+![image](https://github.com/EnnyvanBeest/UnitMatch/blob/main/LogoAndExamples/Example1.png)
