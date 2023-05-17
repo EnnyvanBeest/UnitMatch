@@ -371,7 +371,7 @@ for subsesid=1:length(KiloSortPaths)
             qMetricclusterID = qMetric.clusterID;
 
             unitTypeAcrossRec{id} = unitType;
-            theseuniqueTemplates{id} = unique(sp.spikeTemplates(idx));
+            theseuniqueTemplates{id} = unique(sp.spikeTemplates);
 
             if InspectionFlag % Doesn't currently work: Julie will update bombcell
                 bc_loadMetricsForGUI
@@ -400,6 +400,7 @@ for subsesid=1:length(KiloSortPaths)
             Good_IDtmp(qMetricclusterID(unitType ~= 1)) = 0; % MUA
             Good_IDtmp(qMetricclusterID(unitType == 1)) = 1; % Good
             Good_IDtmp(qMetricclusterID(unitType == 0)) = 0; % MUA
+            Good_IDtmp(isnan(Good_IDtmp)) = 0; % Noise
             %         NoiseUnit = false(size(Good_IDtmp));
             %         NoiseUnit(unitType == 0)=1; % NOISE
 

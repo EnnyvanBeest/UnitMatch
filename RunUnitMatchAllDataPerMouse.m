@@ -11,7 +11,7 @@ DateOpt = cellfun(@(X) {X.name},DateOpt,'UniformOutput',0);
 PlotLFP = 0;
 plotUnitActivity = 0;
 GoodUnits = cell(1,length(MiceOpt));
-for midx = length(MiceOpt)
+for midx = 1:length(MiceOpt)
     %% Loading data from kilosort/phy easily
     myKsDir = fullfile(KilosortDir,MiceOpt{midx});
     subksdirs = dir(fullfile(myKsDir,'**','Probe*')); %This changed because now I suddenly had 2 probes per recording
