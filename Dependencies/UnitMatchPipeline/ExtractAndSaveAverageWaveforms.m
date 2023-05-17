@@ -44,7 +44,7 @@ for uid = 1:nclus
         % Probably stitched:
         tmppath = tmppath(GoodRecSesID(uid));
     end
-    Path4UnitNPY{uid} = fullfile(tmppath.folder,tmppath.name,['Unit' num2str(AllClusterIDs(Good_Idx(uid))+1) '_RawSpikes.npy']); %0 to 1 indexed
+    Path4UnitNPY{uid} = fullfile(tmppath.folder,tmppath.name,['Unit' num2str(AllClusterIDs(Good_Idx(uid))) '_RawSpikes.npy']); %0-indexed
 
     if exist(Path4UnitNPY{uid}) && ~RedoExtraction
         continue

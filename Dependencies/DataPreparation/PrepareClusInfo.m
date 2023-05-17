@@ -355,6 +355,7 @@ for subsesid=1:length(KiloSortPaths)
                 qMetricsPath = d.folder;
                 [~, qMetric, fractionRPVs_allTauR] = bc_loadSavedMetrics(qMetricsPath);
                 unitType = bc_getQualityUnitType(paramBC, qMetric);
+                qMetricclusterID = qMetric.clusterID;
 %                 unitType(:) = 1; ???
                 
                 %{ 
@@ -394,10 +395,10 @@ for subsesid=1:length(KiloSortPaths)
             %% Apply QM findings:
             disp('Only use units that passed the quality metrics parameters')
             % This is necessary inside this loop when running stitched - don't change!!
-            Good_IDtmp = nan(1,length(unitType)); % Replace with unitType
-            Good_IDtmp(unitType ~= 1) = 0; % MUA
-            Good_IDtmp(unitType == 1) = 1; % Good
-            Good_IDtmp(unitType == 0) = 0;
+            Good_IDtmp = nan(1,length(Good_IDtmp)); % Replace with unitType
+            Good_IDtmp(qMetricclusterID(unitType ~= 1)) = 0; % MUA
+            Good_IDtmp(qMetricclusterID(unitType == 1)) = 1; % Good
+            Good_IDtmp(qMetricclusterID(unitType == 0)) = 0; % MUA
             %         NoiseUnit = false(size(Good_IDtmp));
             %         NoiseUnit(unitType == 0)=1; % NOISE
 
@@ -500,10 +501,6 @@ if 0%Params.DecompressLocal && DecompressionFlag
         for id = 1:length(RawDataPaths)
             delete(fullfile(Params.tmpdatafolder,strrep(RawDataPaths(id).name,'cbin','bin')))
             delete(fullfile(Params.tmpdatafolder,strrep(RawDataPaths(id).name,'cbin','meta')))
-
-            % Bombcell takes up a lot of space: delete
-            delete(fullfile(Params.tmpdatafolder,['RawWaveforms_' strrep(RawDataPaths(id).name,'cbin','bin')],'*'))
-            rmdir(fullfile(Params.tmpdatafolder,['RawWaveforms_' strrep(RawDataPaths(id).name,'cbin','bin')]))
         end
     catch ME
         keyboard
