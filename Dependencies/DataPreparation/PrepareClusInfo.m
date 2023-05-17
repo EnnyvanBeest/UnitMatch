@@ -355,7 +355,6 @@ for subsesid=1:length(KiloSortPaths)
                 qMetricsPath = d.folder;
                 [~, qMetric, fractionRPVs_allTauR] = bc_loadSavedMetrics(qMetricsPath);
                 unitType = bc_getQualityUnitType(paramBC, qMetric);
-                qMetricclusterID = qMetric.clusterID;
 %                 unitType(:) = 1; ???
                 
                 %{ 
@@ -369,6 +368,8 @@ for subsesid=1:length(KiloSortPaths)
 
                 %                 load(fullfile(savePath, 'qMetric.mat'))
             end
+            qMetricclusterID = qMetric.clusterID;
+
             unitTypeAcrossRec{id} = unitType;
             theseuniqueTemplates{id} = unique(sp.spikeTemplates(idx));
 
@@ -487,7 +488,6 @@ for subsesid=1:length(KiloSortPaths)
     end
 
     countid=countid+1;
-    close all
 end
 
 Params.AllChannelPos = AllChannelPos;
