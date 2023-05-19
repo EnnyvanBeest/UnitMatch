@@ -7,9 +7,14 @@ from pykilosort import run, add_default_handler, np1_probe, np2_probe, np2_4shan
 def RunPyKS(ThisFile):		
 	print('Starting PyKS2 now')
 	print(ThisFile)
-	ProbeType = neuropixel_probe_from_metafile(ThisFile)
+	try:
+		ProbeType = neuropixel_probe_from_metafile(ThisFile)
+		run(ThisFile, probe=ProbeType, template_snapshots = [0.2, 0.5, 0.8]) #This runs from local
+	except:
+		print('Could not load probetype. Assume np1_probe')
+		run(ThisFile, probe=np1_probe, template_snapshots = [0.2, 0.5, 0.8]) #This runs from local
+
 	# run(data_path, probe=ProbeType, dir_path=OutputDir) #this runs from server, not ideal
-	run(ThisFile, probe=ProbeType, template_snapshots = [0.2, 0.5, 0.8]) #This runs from local
 	print('DONE')
 	success=1
 	return success

@@ -136,8 +136,7 @@ for midx = 1:length(MiceOpt)
                 dat_path(end) = ']'
                 % PyKS2
                 if ~doneflag
-                    RunFromFolder = fullfile(tmpdatafolder,['IMRO_' num2str(id)]);
-                   
+                    RunFromFolder = fullfile(tmpdatafolder,['IMRO_' num2str(id)]);                   
                     success = pyrunfile("RunPyKS2_FileInput.py","success",ThisFile = strrep(fullfile(RunFromFolder),'\','/'))
                     clear success
 

@@ -39,8 +39,15 @@ for id = 1:2 % Loop: first use model that was used, then see if standard model w
     nRows = ceil(sqrt(length(VariableNames)+1));
     nCols = round(sqrt(length(VariableNames)+1));
 
+    UMparam = Output2Evaluate.UMparam;
     %% 'Ground truth' (or as best as we can): Take the set where ID1 == ID2 (False Negatives)
-    GTidx = find(MatchTable.ID1 == MatchTable.ID2 & MatchTable.RecSes1 == MatchTable.RecSes2);
+    if UMparam.RunPyKSChronicStitched
+        disp('Across recording cross-validation: PyKS was ran stitched')
+        GTidx = find(MatchTable.ID1 == MatchTable.ID2 & MatchTable.RecSes1 ~= MatchTable.RecSes2);
+    else
+        disp('Within recording cross-validation: PyKS was ran on individual sessions')
+        GTidx = find(MatchTable.ID1 == MatchTable.ID2 & MatchTable.RecSes1 == MatchTable.RecSes2);
+    end
 
     % What is the match probability of
     MatchIdx = GTidx(find(MatchTable.UID1(GTidx)==MatchTable.UID2(GTidx)));
@@ -128,7 +135,13 @@ for id = 1:2 % Loop: first use model that was used, then see if standard model w
 
 
     %% We should also consider the false positives
-    GTidx = find(MatchTable.ID1~=MatchTable.ID2 & MatchTable.RecSes1 == MatchTable.RecSes2);% Now we find the Ground truth NON-matches; within day NOT the same ID
+    if UMparam.RunPyKSChronicStitched
+        disp('Across recording cross-validation: PyKS was ran stitched')
+        GTidx = find(MatchTable.ID1 ~= MatchTable.ID2 & MatchTable.RecSes1 ~= MatchTable.RecSes2);
+    else
+        disp('Within recording cross-validation: PyKS was ran on individual sessions')
+        GTidx = find(MatchTable.ID1~=MatchTable.ID2 & MatchTable.RecSes1 == MatchTable.RecSes2);% Now we find the Ground truth NON-matches; within day NOT the same ID
+    end
     % What is the match probability of
     MatchIdx = GTidx(find(MatchTable.UID1(GTidx)==MatchTable.UID2(GTidx)));
     NonMatchIDx = GTidx(find(MatchTable.UID1(GTidx)~=MatchTable.UID2(GTidx)));
@@ -255,8 +268,6 @@ for id = 1:2 % Loop: first use model that was used, then see if standard model w
         end
         linkaxes
     end
-
-
 end
 %% Results:
 disp(['Detection rate: '  num2str(round(FoundAsMatchN(1,1)*1000)/10)])
