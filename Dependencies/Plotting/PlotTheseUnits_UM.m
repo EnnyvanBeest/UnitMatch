@@ -1,6 +1,6 @@
 function PlotTheseUnits_UM(Pairs,MatchTable,UniqueIDConversion,WaveformInfo,AllSessionCorrelations,param,VisibleSetting)
 % Plot UM results for groups of units
-if nargin<4
+if nargin<7
     VisibleSetting = 'off';
 end
 
@@ -15,9 +15,9 @@ end
 
 % Load sp
 disp('Loading spike information...')
-ndays = length(param.KSDir);
-sp = cell(1,ndays);
-for did = 1:ndays
+nKSFiles = length(param.KSDir);
+sp = cell(1,nKSFiles);
+for did = 1:nKSFiles
     tmp = matfile(fullfile(param.KSDir{did},'PreparedData.mat'));
     sptmp = tmp.sp;
     clear tmp
@@ -30,6 +30,8 @@ for did = 1:ndays
     sp{did}.RecSes = repmat(did,size(sp{did}.st));
 end
 clear sptmp
+
+ndays = length(param.AllRawPaths);
 
 % Add all spikedata in one spikes struct - can be used for further analysis
 sp = [sp{:}];
@@ -64,6 +66,7 @@ end
 % Find session switch
 recsesGood = UniqueIDConversion.recsesAll(logical(UniqueIDConversion.GoodID)); %Rec session of these units
 OriClusID = UniqueIDConversion.OriginalClusID(logical(UniqueIDConversion.GoodID));
+Path4Unit = UniqueIDConversion.Path4UnitNPY;
 nclus = length(OriClusID);
 SessionSwitch = arrayfun(@(X) find(recsesGood==X,1,'first'),1:ndays,'Uni',0);
 SessionSwitch(cellfun(@isempty,SessionSwitch))=[];
@@ -100,10 +103,14 @@ for pairid=1:length(Pairs)
             cv=2;
         end
         uid = Pairs{pairid}(uidx);
-        channelpos = Allchannelpos{recsesGood(uid)};
+        try
+            channelpos = Allchannelpos{recsesGood(uid)};
+        catch
+            channelpos = Allchannelpos{1}; % Assuming it's the same configuration
+        end
         % Load raw data
         try
-            spikeMap = readNPY(fullfile(param.KSDir{recsesGood(uid)},'RawWaveforms',['Unit' num2str(OriClusID(uid)+1) '_RawSpikes.npy'])); %0-indexed to 1-indexed
+            spikeMap = readNPY(fullfile(Path4Unit{uid})); %0-indexed
         catch
             keyboard
         end
@@ -152,33 +159,35 @@ for pairid=1:length(Pairs)
         % Scatter spikes of each unit
         subplot(3,3,6)
         hold on
-        idx1=find(sp.spikeTemplates == OriClusID(uid)-1 & sp.RecSes == recsesGood(uid));
-        if length(unique(Pairs{pairid}))==1
-            if cv==1
-                idx1 = idx1(1:floor(length(idx1)/2));
-            else
-                idx1 = idx1(ceil(length(idx1)/2):end);
+        idx1=find(sp.spikeTemplates == OriClusID(uid) & sp.RecSes == recsesGood(uid));
+        if ~isempty(idx1)
+            if length(unique(Pairs{pairid}))==1
+                if cv==1
+                    idx1 = idx1(1:floor(length(idx1)/2));
+                else
+                    idx1 = idx1(ceil(length(idx1)/2):end);
+                end
             end
+            scatter(sp.st(idx1)./60,sp.spikeAmps(idx1)+addforamplitude,4,cols(uidx,:),'filled')
+
+            xlims = get(gca,'xlim');
+            % Other axis
+            [h1,edges,binsz]=histcounts(sp.spikeAmps(idx1));
+            %Normalize between 0 and 1
+            h1 = ((h1-nanmin(h1))./(nanmax(h1)-nanmin(h1)))*10+max(sp.st./60);
+            plot(h1,edges(1:end-1)+addforamplitude,'-','color',cols(uidx,:));
+            addforamplitude = addforamplitude+edges(end-1);
+
+            % compute ACG
+            [ccg, t] = CCGBz([double(sp.st(idx1)); double(sp.st(idx1))], [ones(size(sp.st(idx1), 1), 1); ...
+                ones(size(sp.st(idx1), 1), 1) * 2], 'binSize', param.ACGbinSize, 'duration', param.ACGduration, 'norm', 'rate'); %function
+            ACG = ccg(:, 1, 1);
+
+            subplot(3,3,7);
+            hold on
+            plot(t,ACG,'color',cols(uidx,:));
+            title(['AutoCorrelogram'])
         end
-        scatter(sp.st(idx1)./60,sp.spikeAmps(idx1)+addforamplitude,4,cols(uidx,:),'filled')
-
-        xlims = get(gca,'xlim');
-        % Other axis
-        [h1,edges,binsz]=histcounts(sp.spikeAmps(idx1));
-        %Normalize between 0 and 1
-        h1 = ((h1-nanmin(h1))./(nanmax(h1)-nanmin(h1)))*10+max(sp.st./60);
-        plot(h1,edges(1:end-1)+addforamplitude,'-','color',cols(uidx,:));
-        addforamplitude = addforamplitude+edges(end-1);
-
-        % compute ACG
-        [ccg, t] = CCGBz([double(sp.st(idx1)); double(sp.st(idx1))], [ones(size(sp.st(idx1), 1), 1); ...
-            ones(size(sp.st(idx1), 1), 1) * 2], 'binSize', param.ACGbinSize, 'duration', param.ACGduration, 'norm', 'rate'); %function
-        ACG = ccg(:, 1, 1);
-
-        subplot(3,3,7);
-        hold on
-        plot(t,ACG,'color',cols(uidx,:));
-        title(['AutoCorrelogram'])
         makepretty
     end
     set(tmpfig,'units','normalized','outerposition',[0 0 1 1])

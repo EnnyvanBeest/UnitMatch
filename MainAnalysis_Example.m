@@ -6,7 +6,7 @@ tmpdatafolder = 'H:\MatchingUnits\Tmp'; % temporary folder
 KilosortDir = 'H:\MatchingUnits\KilosortOutput';% 'E:\Data\KiloSortOutput';%
 
 %% Information on experiments
-MiceOpt = {'CB016'}%,'AV008','JF067','CB016''EB019'}; %CB016 %AL032 'AV008' JF067 Add all mice you want to analyse
+MiceOpt = {'AL032'}%,'AV008','JF067','CB016''EB019'}; %CB016 %AL032 'AV008' JF067 Add all mice you want to analyse
 % nidq_sync_used = zeros(1,length(MiceOpt)); % Was an external nidq used for syncing (typically sync feeds directly into IMEC)
 % nidq_sync_used(ismember(MiceOpt,{'EB001','CB007','CB008'}))=1; % Except for these mice...
 DataDir2Use = repmat(1,[1,length(MiceOpt)]); % In case you have multiple DataDir, index which directory is used for each mouse
@@ -14,10 +14,10 @@ RecordingType = repmat({'Acute'},1,length(MiceOpt)); % And whether recordings we
 RecordingType(ismember(MiceOpt,{'AL032','EB019','CB016','AV008','JF067'}))={'Chronic'}; %EB014', % Or maybe Chronic?
 
 %% Parameters on how to prepare units/data for analysis
-PrepareClusInfoparams.RunPyKSChronicStitched = 0; % if 1, run PyKS chronic recordings stitched when same IMRO table was used
+PrepareClusInfoparams.RunPyKSChronicStitched = 1; % if 1, run PyKS chronic recordings stitched when same IMRO table was used
 PrepareClusInfoparams.CopyToTmpFirst = 1; % If 1, copy data to local first, don't run from server (= advised!)
 PrepareClusInfoparams.DecompressLocal = 1; % If 1, uncompress data first if it's currently compressed (= necessary for unitmatch and faster for QualityMetrics))
-PrepareClusInfoparams.RedoQM = 1; %if 1, redo quality metrics if it already exists
+PrepareClusInfoparams.RedoQM = 0; %if 1, redo quality metrics if it already exists
 PrepareClusInfoparams.RunQualityMetrics = 1; % If 1, Run the quality metrics (Bombcell @JulieFabre)
 PrepareClusInfoparams.loadPCs=1; % Do we need the PCs for data analysis (YES IF QM!)? If not you save a lot of time keeping this at 0
 PrepareClusInfoparams.InspectQualityMetrics=0; % If 1, Inspect the quality matrix/data set using the GUI (manual inspection)
@@ -35,7 +35,7 @@ PrepareClusInfoparams.saveSp = 1; % Save SP struct for easy loading of preproces
 % %Full set. WavformSim is average of WVCorr and WavformMSE
 PrepareClusInfoparams.Scores2Include = {'AmplitudeSim','spatialdecaySim','WavformSim','CentroidDist','CentroidVar','TrajAngleSim'}; % 
 PrepareClusInfoparams.ApplyExistingBayesModel = 0; %If 1, use probability distributions made available by us
-PrepareClusInfoparams.MakePlotsOfPairs = 0; % Plots pairs for inspection (UnitMatch)
+PrepareClusInfoparams.MakePlotsOfPairs = 1; % Plots pairs for inspection (UnitMatch)
 PrepareClusInfoparams.AssignUniqueID = 1; % Assign UniqueID 
 
 %% All dependencies you want to add (you may need to download these, all available via github)

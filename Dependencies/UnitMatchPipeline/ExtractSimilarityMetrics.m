@@ -16,6 +16,11 @@ OriginalClusterIDs = clusinfo.cluster_id;
 
 recsesAll = clusinfo.RecSesID;
 recsesGood = recsesAll(Good_Idx);
+DepthOnProbe = clusinfo.depth;
+if length(DepthOnProbe) == length(recsesAll)/2
+    DepthOnProbe = [DepthOnProbe DepthOnProbe]; %Stitched
+end
+DepthOnProbe = DepthOnProbe(Good_Idx);
 [X,Y]=meshgrid(recsesAll(Good_Idx));
 nclus = length(Good_Idx);
 ndays = length(unique(recsesAll));
@@ -321,8 +326,12 @@ while flag<2
     makepretty
     disp(['Extracting projected location took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])
 
-    %Average EuclDist
+    % Average EuclDist
     EuclDist = squeeze(nanmean(EuclDist,2));
+    % Plotting order (sort units based on distance)
+    [~,SortingOrder] = arrayfun(@(X) sort(DepthOnProbe(SessionSwitch(X):SessionSwitch(X+1)-1)),1:ndays,'Uni',0);
+    SortingOrder = arrayfun(@(X) SortingOrder{X}+SessionSwitch(X)-1,1:ndays,'Uni',0);
+    SortingOrder = cat(2,SortingOrder{:});
 
     %% These are the parameters to include:
     if drawthis
@@ -333,9 +342,9 @@ while flag<2
 
             subplot(ceil(sqrt(length(Scores2Include))),round(sqrt(length(Scores2Include))),sid)
             try
-                imagesc(tmp);
+                imagesc(tmp(SortingOrder,SortingOrder));
             catch
-                imagesc(tmp,[0 1]);
+                imagesc(tmp(SortingOrder,SortingOrder),[0 1]);
             end
             title(Scores2Include{sid})
             xlabel('Unit_i')
@@ -384,6 +393,7 @@ while flag<2
 
     disp('Computing total score...')
     timercounter = tic;
+%     priorMatch = 1-((nclus+nclus.*sqrt(ndays-1))./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days)
     priorMatch = 1-((nclus+nclus.*sqrt(ndays-1))./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days)
 
     leaveoutmatches = false(nclus,nclus,length(Scores2Include)); %Used later
@@ -457,7 +467,7 @@ while flag<2
    
     figure('name','TotalScore')
     subplot(2,2,1)
-    imagesc(TotalScore,[0 length(Scores2Include)]);
+    imagesc(TotalScore(SortingOrder,SortingOrder),[0 length(Scores2Include)]);
     title('Total Score')
     xlabel('Unit_i')
     ylabel('Unit_j')
@@ -471,7 +481,7 @@ while flag<2
     % Make initial threshold --> to be optimized
     ThrsOpt = quantile(TotalScore(IncludeThesePairs),priorMatch); %Select best ones only later
     subplot(2,2,2)
-    imagesc(TotalScore>ThrsOpt)
+    imagesc(TotalScore(SortingOrder,SortingOrder)>ThrsOpt)
     hold on
     title(['Thresholding at ' num2str(ThrsOpt)])
     xlabel('Unit_i')
@@ -609,6 +619,7 @@ assignin('caller','ProjectedLocation',ProjectedLocation)
 assignin('caller','sessionCorrelationsAll',sessionCorrelationsAll)
 assignin('caller','Unit2Take',Unit2Take)
 assignin('caller','EuclDist',EuclDist)
+assignin('caller','SortingOrder',SortingOrder)
 
 return
 if 0 % THis can be used to look at some example projections

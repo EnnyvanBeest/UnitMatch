@@ -1,4 +1,4 @@
- function [MatchProbability,label,Pairs,Tbl,BestMdl] = RunNaiveBayes(Predictors,TotalScore,Scores2Include,clusinfo,param)
+function [MatchProbability,label,Pairs,Tbl,BestMdl] = RunNaiveBayes(Predictors,TotalScore,Scores2Include,clusinfo,param,SortingOrder)
 
 %% Extract parameters
 FullSetParameters = {'AmplitudeSim','WVCorr','WavformMSE','TrajAngleSim','TrajDistSim','spatialdecaySim','CentroidDist','CentroidVar'};
@@ -29,7 +29,7 @@ CandidatePairs = TotalScore>ThrsOpt;%
 % 
 
 figure('name','Potential Matches')
-imagesc(CandidatePairs)
+imagesc(CandidatePairs(SortingOrder,SortingOrder))
 colormap(flipud(gray))
 %     xlim([SessionSwitch nclus])
 %     ylim([1 SessionSwitch-1])
@@ -233,7 +233,7 @@ Pairs = sortrows(Pairs);
 Pairs = unique(Pairs,'rows');
 
 
-figure; imagesc(MatchProbability,[0.5 1])
+figure; imagesc(MatchProbability(SortingOrder,SortingOrder),[0.5 1])
 colormap(flipud(gray))
 xlabel('Unit_i')
 ylabel('Unit_j')

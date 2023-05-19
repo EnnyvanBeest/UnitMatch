@@ -105,7 +105,7 @@ AllWVBParameters = ExtractParameters(Path4UnitNPY,clusinfo,param);
 ExtractSimilarityMetrics(Scores2Include,AllWVBParameters,clusinfo,param)% All Scores2Include are pushed to the workspace
 
 %% Naive bayes classifier
-[MatchProbability,label,Pairs,Tbl,BestMdl] = RunNaiveBayes(Predictors,TotalScore,Scores2Include,clusinfo,param);
+[MatchProbability,label,Pairs,Tbl,BestMdl] = RunNaiveBayes(Predictors,TotalScore,Scores2Include,clusinfo,param,SortingOrder);
 
 %% Some evaluation:
 % Units on the diagonal are matched by (Py)KS within a day. Very likely to
@@ -252,13 +252,14 @@ if RunPyKSChronicStitched
     end
 end
 
-
+[~,SortingOrder] = arrayfun(@(X) sort(EuclDist(SessionSwitch(X):SessionSwitch(X+1)-1,1)),1:ndays,'Uni',0);
+SortingOrder = cat(1,SortingOrder{:});
 %% Check different probabilities, what does the match graph look like?
 figure;
 takethisprob = [0.5 0.75 0.95 0.99];
 for pid = 1:4
     subplot(2,2,pid)
-    h = imagesc(MatchProbability>takethisprob(pid));
+    h = imagesc(MatchProbability(SortingOrder,SortingOrder)>takethisprob(pid));
     colormap(flipud(gray))
     makepretty
     xlabel('Unit_i')
@@ -274,7 +275,7 @@ saveas(gcf,fullfile(SaveDir,'ProbabilitiesMatches.bmp'))
 %% Compare to functional scores
 figure;
 subplot(1,3,1)
-imagesc(RankScoreAll==1 & SigMask==1)
+imagesc(RankScoreAll(SortingOrder,SortingOrder)==1 & SigMask(SortingOrder,SortingOrder)==1)
 hold on
 arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
 arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
@@ -283,7 +284,7 @@ title('Rankscore == 1*')
 makepretty
 
 subplot(1,3,2)
-imagesc(MatchProbability>param.ProbabilityThreshold)
+imagesc(MatchProbability(SortingOrder,SortingOrder)>param.ProbabilityThreshold)
 hold on
 arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
 arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
@@ -292,7 +293,7 @@ title(['Match Probability>' num2str(param.ProbabilityThreshold)])
 makepretty
 
 subplot(1,3,3)
-imagesc(MatchProbability>=param.ProbabilityThreshold | (MatchProbability>0.05 & RankScoreAll==1 & SigMask==1));
+imagesc(MatchProbability(SortingOrder,SortingOrder)>=param.ProbabilityThreshold | (MatchProbability(SortingOrder,SortingOrder)>0.05 & RankScoreAll(SortingOrder,SortingOrder)==1 & SigMask(SortingOrder,SortingOrder)==1));
 % imagesc(MatchProbability>=0.99 | (MatchProbability>=0.05 & RankScoreAll==1 & SigMask==1))
 hold on
 arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
