@@ -44,10 +44,24 @@ MatchProbability = arrayfun(@(X) MatchTable.MatchProb(ismember(MatchTable.UID1,P
 [~,sortidx] = sort(MatchProbability,'descend');
 Pairs = Pairs(sortidx,:);
 for id = 1:size(Pairs,1)
-    if all((MatchTable.MatchProb(ismember(MatchTable.UID1,UniqueID(Pairs(id,1)))&ismember(MatchTable.UID2,Pairs(id,2)))>param.ProbabilityThreshold) | (MatchTable.MatchProb(ismember(MatchTable.UID1,Pairs(id,2))&ismember(MatchTable.UID2,UniqueID(Pairs(id,1))))>param.ProbabilityThreshold)') %only if all UID have a high enough probability with this second pair, we will include it to have the same UID
-        %     if all((MatchTable.MatchProb(ismember(MatchTable.ID1,AllClusterIDs(AllUID))&ismember(MatchTable.ID2,Pairs(id,2)-1))>param.ProbabilityThreshold) | (MatchTable.MatchProb(ismember(MatchTable.ID1,Pairs(id,2)-1)&ismember(MatchTable.ID2,AllClusterIDs(AllUID)))>param.ProbabilityThreshold)') %only if all UID have a high enough probability with this second pair, we will include it to have the same UID
-        UniqueID(Pairs(id,2)) = UniqueID(Pairs(id,1));
+    % Matchprobability should be high enough
+    tblidx = find(ismember(MatchTable.UID1,UniqueID(Pairs(id,1)))&ismember(MatchTable.UID2,Pairs(id,2)));
+    if length(tblidx)>1
+        keyboard
     end
+    if ~(MatchTable.MatchProb(tblidx) > param.ProbabilityThreshold) %Requirement 1, match probability should be high enough
+        continue
+    end
+    % Find the cross-validated version of this pair
+    tblidx = find(ismember(MatchTable.UID1,UniqueID(Pairs(id,2)))&ismember(MatchTable.UID2,Pairs(id,1)));
+    if length(tblidx)>1
+        keyboard
+    end
+    if ~(MatchTable.MatchProb(tblidx) > param.ProbabilityThreshold) %Requirement 1, match probability should be high enough
+        continue
+    end
+    %     if all((MatchTable.MatchProb(ismember(MatchTable.ID1,AllClusterIDs(AllUID))&ismember(MatchTable.ID2,Pairs(id,2)-1))>param.ProbabilityThreshold) | (MatchTable.MatchProb(ismember(MatchTable.ID1,Pairs(id,2)-1)&ismember(MatchTable.ID2,AllClusterIDs(AllUID)))>param.ProbabilityThreshold)') %only if all UID have a high enough probability with this second pair, we will include it to have the same UID
+    UniqueID(Pairs(id,2)) = UniqueID(Pairs(id,1));
 end
 %% Replace in table
 [PairID3,PairID4]=meshgrid(UniqueID(Good_Idx));

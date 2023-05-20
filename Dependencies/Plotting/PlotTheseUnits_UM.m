@@ -66,6 +66,7 @@ end
 % Find session switch
 recsesGood = UniqueIDConversion.recsesAll(logical(UniqueIDConversion.GoodID)); %Rec session of these units
 OriClusID = UniqueIDConversion.OriginalClusID(logical(UniqueIDConversion.GoodID));
+UniqueID = UniqueIDConversion.UniqueID(logical(UniqueIDConversion.GoodID));
 Path4Unit = UniqueIDConversion.Path4UnitNPY;
 nclus = length(OriClusID);
 SessionSwitch = arrayfun(@(X) find(recsesGood==X,1,'first'),1:ndays,'Uni',0);
@@ -239,7 +240,7 @@ for pairid=1:length(Pairs)
     else
         tmp2 = 'nan';
     end
-    title(['Trajectory length: ' tmp '%, angle: ' tmp2 '%'])
+    title(['Trajectory length: ' tmp ', angle: ' tmp2])
 
     subplot(3,3,5)
     xlabel('X position')
@@ -258,7 +259,7 @@ for pairid=1:length(Pairs)
     else
         tmp2 = 'nan';
     end
-    title(['Centroid Distance: ' tmp '%, Variance: ' tmp2 '%'])
+    title(['Centroid Distance: ' tmp ', Variance: ' tmp2])
 
     subplot(3,3,3)
     ylims = get(gca,'ylim');
@@ -297,7 +298,7 @@ for pairid=1:length(Pairs)
     end
     axis square
 
-    title(['MSE=' tmp '%, corr= ' tmp2 '%' 'SIM=, ' tmp5 '%'])
+    title(['MSE=' tmp ', corr= ' tmp2 'SIM=, ' tmp5])
 
     subplot(3,3,6)
     xlabel('Time (min)')
@@ -306,7 +307,7 @@ for pairid=1:length(Pairs)
     ylabel('Amplitude')
     set(gca,'YTick',[])
     makepretty
-    title(['Ampl=' tmp3 ', decay='  tmp4 '%'])
+    title(['Ampl=' tmp3 ', decay='  tmp4])
 
     subplot(3,3,8)
     idx1=find(ismember(sp.spikeTemplates, OriClusID((Pairs{pairid}))) & ismember(sp.RecSes, recsesGood(Pairs{pairid})));
@@ -366,9 +367,9 @@ for pairid=1:length(Pairs)
     makepretty
 
 
-    fname = cell2mat(arrayfun(@(X) ['ID' num2str(OriClusID(X)) ', Rec' num2str(recsesGood(X))],Pairs{pairid},'Uni',0));
-    saveas(tmpfig,fullfile(param.SaveDir,'MatchFigures',[fname '.fig']))
-    saveas(tmpfig,fullfile(param.SaveDir,'MatchFigures',[fname '.bmp']))
+    fname = cell2mat(arrayfun(@(X) ['UID' num2str(X)],unique(UniqueID(Pairs{pairid})),'Uni',0));
+    saveas(tmpfig,fullfile(param.SaveDir,'MatchFigures',[fname '_x' num2str(length(Pairs{pairid})) '.fig']))
+    saveas(tmpfig,fullfile(param.SaveDir,'MatchFigures',[fname '_x' num2str(length(Pairs{pairid})) '.bmp']))
     if strcmp(VisibleSetting,'off')
         delete(tmpfig)
     end

@@ -414,7 +414,7 @@ for id = 1:2
     plot(Vector,ha./sum(ha),'-','color',[0 0.5 0])
     plot(Vector,hw./sum(hw),'-','color',[0 0 0])
 
-    line([ThrsScore ThrsScore],get(gca,'ylim'),'color',[1 0 0],'LineStyle','--')
+%     line([ThrsScore ThrsScore],get(gca,'ylim'),'color',[1 0 0],'LineStyle','--')
 
     % histogram(scorematches(:,1),[0:0.02:6])
     if id == 2
@@ -425,7 +425,7 @@ for id = 1:2
         title('Using total score')
     end
     ylabel('Proportion|Group')
-    legend('Self Score',['Across C_i_j<' num2str(param.NeighbourDist)],['Within C_i_j<' num2str(param.NeighbourDist)],'Threshold','Location','best')
+    legend('Self Score',['Across C_i_j<' num2str(param.NeighbourDist)],['Within C_i_j<' num2str(param.NeighbourDist)],'Location','best')
     makepretty
 end
 saveas(gcf,fullfile(SaveDir,'ScoresSelfvsMatch.fig'))
