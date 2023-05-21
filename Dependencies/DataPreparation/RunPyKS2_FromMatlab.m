@@ -269,8 +269,14 @@ for midx = 1:length(MiceOpt)
                         end
                     end
                     % PyKS2
-                    success = pyrunfile("RunPyKS2_FromMatlab.py","success",ThisFile = strrep(fullfile(tmpdatafolder,tmpfile(sesid).name),'\','/'))
-                    clear success
+                    try
+                        success = pyrunfile("RunPyKS2_FromMatlab.py","success",ThisFile = strrep(fullfile(tmpdatafolder,tmpfile(sesid).name),'\','/'))
+                        clear success
+                    catch ME
+                        disp(ME)
+                        disp([fullfile(tmpdatafolder,tmpfile(sesid).name) ' not successfull... skip'])
+                        continue
+                    end
 
                     % now copy the output
                     disp('Copying output from temporary directory to KS folder')
