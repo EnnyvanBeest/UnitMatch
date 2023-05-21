@@ -30,13 +30,13 @@ for midx = 1:length(MiceOpt)
 
             %% Loading data from kilosort/phy easily
             myKsDir = fullfile(KilosortDir,MiceOpt{midx},thisdate);
-
-            % Check if there's an ephys folder, if so run pyks2
             tmpephysdir = dir(fullfile(DataDir{DataDir2Use(midx)},MiceOpt{midx},thisdate,'ephys',['*' MiceOpt{midx} '*']));
-%             tmpephysdir(find(cell2mat(cellfun(@(X) any(strfind(X,'NatImages')),{tmpephysdir(:).name},'UniformOutput',0))))=[]; %These are sessions from AV team, do not include for now
-            tmpephysdir(find(cell2mat(cellfun(@(X) any(strfind(X,'Spontaneous')),{tmpephysdir(:).name},'UniformOutput',0))))=[];
-            tmpephysdir(find(cell2mat(cellfun(@(X) any(strfind(X,'ActivePassive')),{tmpephysdir(:).name},'UniformOutput',0))))=[];
-
+            if exist('IgnoreTheseFiles','var')
+                for id = 1:length(IgnoreTheseFiles)
+                    % Check if there's an ephys folder, if so run pyks2
+                    tmpephysdir(find(cell2mat(cellfun(@(X) any(strfind(X,IgnoreTheseFiles{id})),{tmpephysdir(:).name},'UniformOutput',0))))=[];
+                end
+            end
             if isempty(tmpephysdir)
                 continue
             end
@@ -206,9 +206,12 @@ for midx = 1:length(MiceOpt)
 
             % Check if there's an ephys folder, if so run pyks2
             tmpephysdir = dir(fullfile(DataDir{DataDir2Use(midx)},MiceOpt{midx},thisdate,'ephys',['*' MiceOpt{midx} '*']));
-%              tmpephysdir(find(cell2mat(cellfun(@(X) any(strfind(X,'NatImages')),{tmpephysdir(:).name},'UniformOutput',0))))=[]; %These are sessions from AV team, do not include for now
-            tmpephysdir(find(cell2mat(cellfun(@(X) any(strfind(X,'Spontaneous')),{tmpephysdir(:).name},'UniformOutput',0))))=[];
-            tmpephysdir(find(cell2mat(cellfun(@(X) any(strfind(X,'ActivePassive')),{tmpephysdir(:).name},'UniformOutput',0))))=[];
+            if exist('IgnoreTheseFiles','var')
+                for id = 1:length(IgnoreTheseFiles)
+                    % Check if there's an ephys folder, if so run pyks2
+                    tmpephysdir(find(cell2mat(cellfun(@(X) any(strfind(X,IgnoreTheseFiles{id})),{tmpephysdir(:).name},'UniformOutput',0))))=[];
+                end
+            end
 
             if isempty(tmpephysdir)
                 continue
