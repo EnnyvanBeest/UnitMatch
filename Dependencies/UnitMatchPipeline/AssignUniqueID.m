@@ -3,6 +3,7 @@ AllClusterIDs = clusinfo.cluster_id;
 % nses = length(AllDecompPaths);
 % OriginalClusID = AllClusterIDs; % Original cluster ID assigned by KS
 UniqueID = 1:length(AllClusterIDs); % Initial assumption: All clusters are unique
+OriUniqueID = UniqueID;
 Good_Idx = find(clusinfo.Good_ID); %Only care about good units at this point
 GoodRecSesID = clusinfo.RecSesID;
 
@@ -42,31 +43,57 @@ Pairs(ISIViolationsScore>0.05,:)=[];
 disp('Assigning correct Unique ID values now')
 MatchProbability = arrayfun(@(X) MatchTable.MatchProb(ismember(MatchTable.UID1,Pairs(X,1))&ismember(MatchTable.UID2,Pairs(X,2))),1:size(Pairs,1));
 [~,sortidx] = sort(MatchProbability,'descend');
-Pairs = Pairs(sortidx,:);
+Pairs = Pairs(sortidx,:); %Pairs, but now sorted by match probability
 for id = 1:size(Pairs,1)
     % Matchprobability should be high enough
-    tblidx = find(ismember(MatchTable.UID1,UniqueID(Pairs(id,1)))&ismember(MatchTable.UID2,Pairs(id,2)));
-    if length(tblidx)>1
+    tblidx1 = find(ismember(MatchTable.UID1,Pairs(id,1))&ismember(MatchTable.UID2,Pairs(id,2)));
+    if length(tblidx1)>1
         keyboard
     end
-    if ~(MatchTable.MatchProb(tblidx) > param.ProbabilityThreshold) %Requirement 1, match probability should be high enough
-        continue
-    end
-    % Find the cross-validated version of this pair
-    tblidx = find(ismember(MatchTable.UID1,UniqueID(Pairs(id,2)))&ismember(MatchTable.UID2,Pairs(id,1)));
-    if length(tblidx)>1
+    if ~(MatchTable.MatchProb(tblidx1) > param.ProbabilityThreshold) %Requirement 1, match probability should be high enough
         keyboard
     end
-    if ~(MatchTable.MatchProb(tblidx) > param.ProbabilityThreshold) %Requirement 1, match probability should be high enough
+    % Find the cross-validated version of this pair, this should also have
+    % high enough probability
+    tblidx2 = find(ismember(MatchTable.UID1,Pairs(id,2))&ismember(MatchTable.UID2,Pairs(id,1)));
+    if length(tblidx2)>1
+        keyboard
+    end
+    if ~(MatchTable.MatchProb(tblidx2) > param.ProbabilityThreshold) %Requirement 1, match probability should be high enough
         continue
     end
-    %     if all((MatchTable.MatchProb(ismember(MatchTable.ID1,AllClusterIDs(AllUID))&ismember(MatchTable.ID2,Pairs(id,2)-1))>param.ProbabilityThreshold) | (MatchTable.MatchProb(ismember(MatchTable.ID1,Pairs(id,2)-1)&ismember(MatchTable.ID2,AllClusterIDs(AllUID)))>param.ProbabilityThreshold)') %only if all UID have a high enough probability with this second pair, we will include it to have the same UID
-    UniqueID(Pairs(id,2)) = UniqueID(Pairs(id,1));
+    % Extra check: It should also match with all the other pairs that were
+    % already assigned!
+    % All units currently identified as this UniqueID
+    TheseOriUids = OriUniqueID(ismember(UniqueID,UniqueID(Pairs(id,1))));
+    % All of these need to match with the new one, if added
+    tblidx = find((ismember(MatchTable.UID1,TheseOriUids)&ismember(MatchTable.UID2,Pairs(id,2))) | (ismember(MatchTable.UID2,TheseOriUids)&ismember(MatchTable.UID1,Pairs(id,2))));
+    if ~all(MatchTable.MatchProb(tblidx)>param.ProbabilityThreshold)
+        continue
+    end
+    UniqueID(Pairs(id,2)) = UniqueID(Pairs(id,1)); %Survived, assign
+  
 end
 %% Replace in table
 [PairID3,PairID4]=meshgrid(UniqueID(Good_Idx));
 MatchTable.UID1 = PairID3(:);
 MatchTable.UID2 = PairID4(:);
+%% Check
+% [UID,idx1,idx2] = unique(UniqueID(:));
+% for id = 1:length(idx1)
+%     if sum(idx2==id)==1
+%         continue    
+%     end
+% 
+%     tblidx = find(ismember(MatchTable.UID1,UID(id)) & ismember(MatchTable.UID2,UID(id)));
+%     MatchTable(tblidx,:)
+% 
+% 
+% end
+
+
+
+
 
 
 return

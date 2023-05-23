@@ -330,8 +330,8 @@ while flag<2
     EuclDist = squeeze(nanmean(EuclDist,2));
     % Plotting order (sort units based on distance)
     [~,SortingOrder] = arrayfun(@(X) sort(DepthOnProbe(SessionSwitch(X):SessionSwitch(X+1)-1)),1:ndays,'Uni',0);
-    SortingOrder = arrayfun(@(X) SortingOrder{X}+SessionSwitch(X)-1,1:ndays,'Uni',0);
-    SortingOrder = cat(1,SortingOrder{:});
+    SortingOrder = arrayfun(@(X) squeeze(SortingOrder{X}+SessionSwitch(X)-1),1:ndays,'Uni',0);
+    SortingOrder = cat(2,SortingOrder{:});
 
     %% These are the parameters to include:
     if drawthis
