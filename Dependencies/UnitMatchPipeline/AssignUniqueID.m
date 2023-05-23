@@ -10,6 +10,8 @@ GoodRecSesID = clusinfo.RecSesID;
 %% Initial pairing based on matchscore
 Pairs = [MatchTable.UID1(MatchTable.MatchProb>param.ProbabilityThreshold) MatchTable.UID2(MatchTable.MatchProb>param.ProbabilityThreshold)]; % 
 Pairs(diff(Pairs,[],2)==0,:)=[]; %Remove own matches
+Pairs = sort(Pairs,2,'ascend'); % Only use each unique pair once
+Pairs = unique(Pairs,'stable','rows');
 %% ISI violations (for over splits matching)
 CurrentSPPath = [];
 ISIViolationsScore = nan(1,size(Pairs,1));
@@ -47,18 +49,12 @@ Pairs = Pairs(sortidx,:); %Pairs, but now sorted by match probability
 for id = 1:size(Pairs,1)
     % Matchprobability should be high enough
     tblidx1 = find(ismember(MatchTable.UID1,Pairs(id,1))&ismember(MatchTable.UID2,Pairs(id,2)));
-    if length(tblidx1)>1
-        keyboard
-    end
     if ~(MatchTable.MatchProb(tblidx1) > param.ProbabilityThreshold) %Requirement 1, match probability should be high enough
-        keyboard
+        continue
     end
     % Find the cross-validated version of this pair, this should also have
     % high enough probability
     tblidx2 = find(ismember(MatchTable.UID1,Pairs(id,2))&ismember(MatchTable.UID2,Pairs(id,1)));
-    if length(tblidx2)>1
-        keyboard
-    end
     if ~(MatchTable.MatchProb(tblidx2) > param.ProbabilityThreshold) %Requirement 1, match probability should be high enough
         continue
     end
@@ -67,7 +63,9 @@ for id = 1:size(Pairs,1)
     % All units currently identified as this UniqueID
     TheseOriUids = OriUniqueID(ismember(UniqueID,UniqueID(Pairs(id,1))));
     % All of these need to match with the new one, if added
-    tblidx = find((ismember(MatchTable.UID1,TheseOriUids)&ismember(MatchTable.UID2,Pairs(id,2))) | (ismember(MatchTable.UID2,TheseOriUids)&ismember(MatchTable.UID1,Pairs(id,2))));
+    tblidx = find(((ismember(MatchTable.UID1,TheseOriUids)&ismember(MatchTable.UID2,Pairs(id,2))) | (ismember(MatchTable.UID2,TheseOriUids)&ismember(MatchTable.UID1,Pairs(id,2)))) & ~(MatchTable.UID1==MatchTable.UID2) & ...
+        abs(MatchTable.RecSes1-MatchTable.RecSes2)<2); % Don't punish further away recordings!
+    
     if ~all(MatchTable.MatchProb(tblidx)>param.ProbabilityThreshold)
         continue
     end
@@ -78,21 +76,6 @@ end
 [PairID3,PairID4]=meshgrid(UniqueID(Good_Idx));
 MatchTable.UID1 = PairID3(:);
 MatchTable.UID2 = PairID4(:);
-%% Check
-% [UID,idx1,idx2] = unique(UniqueID(:));
-% for id = 1:length(idx1)
-%     if sum(idx2==id)==1
-%         continue    
-%     end
-% 
-%     tblidx = find(ismember(MatchTable.UID1,UID(id)) & ismember(MatchTable.UID2,UID(id)));
-%     MatchTable(tblidx,:)
-% 
-% 
-% end
-
-
-
 
 
 

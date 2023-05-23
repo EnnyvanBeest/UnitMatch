@@ -331,8 +331,11 @@ while flag<2
     % Plotting order (sort units based on distance)
     [~,SortingOrder] = arrayfun(@(X) sort(DepthOnProbe(SessionSwitch(X):SessionSwitch(X+1)-1)),1:ndays,'Uni',0);
     SortingOrder = arrayfun(@(X) squeeze(SortingOrder{X}+SessionSwitch(X)-1),1:ndays,'Uni',0);
-    SortingOrder = cat(2,SortingOrder{:});
-
+    if size(SortingOrder{1},1)==1
+        SortingOrder = cat(2,SortingOrder{:});
+    else
+        SortingOrder = cat(1,SortingOrder{:});
+    end
     %% These are the parameters to include:
     if drawthis
         figure('name','Total Score components');
