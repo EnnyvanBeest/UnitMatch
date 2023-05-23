@@ -40,7 +40,7 @@ param.maxrun = 1; % This is whether you want to use Bayes' output to create a ne
 drawmax = inf; % Maximum number of drawed matches (otherwise it takes forever!)
 VisibleSetting = 'off'; %Do we want to see the figures being plot online?
 Draw2DMatrixes = 0; % If you find this useful
-param.NeighbourDist = 30; % In micron
+param.NeighbourDist = 50; % In micron
 
 global stepsize
 stepsize = 0.01;
@@ -322,53 +322,11 @@ saveas(gcf,fullfile(SaveDir,'RankScoreVSProbabilityScatter.bmp'))
 
 if RunPyKSChronicStitched
 
-    [Int,A,B] = intersect(Pairs,PairsPyKS,'rows');
-    PercDetected = size(Int,1)./size(PairsPyKS,1).*100;
+    PercDetected = sum(PyKSLabel(:) == 1 & label(:) ==1)./sum(PyKSLabel(:)==1)*100;    
     disp(['Detected ' num2str(PercDetected) '% of PyKS matched units'])
 
-    PercOver = (size(Pairs,1)-size(Int,1))./size(PairsPyKS,1)*100;
+    PercOver = sum(label(:)==1 & PyKSLabel(:)==0)./sum(PyKSLabel(:)==1)*100;
     disp(['Detected ' num2str(PercOver) '% more units than just PyKS matched units'])
-
-    % interesting: Not detected
-    NotB = 1:size(PairsPyKS,1);
-    NotB(B) = [];
-    OnlyDetectedByPyKS = PairsPyKS(NotB,:);
-
-    % Figure out what hasn't been detected:
-    % Extract individual parameter scores for these specific 'pairs'
-    TmpSc = cell2mat(arrayfun(@(X) squeeze(Predictors(OnlyDetectedByPyKS(X,1),OnlyDetectedByPyKS(X,2),:)),1:size(OnlyDetectedByPyKS,1),'Uni',0));
-
-    % p(X|Match)
-    [~,minidx] = arrayfun(@(X) min(abs(X-ScoreVector)),TmpSc,'Uni',0); % Find index for observation in score vector
-    minidx=cell2mat(minidx);
-    % Only interested in matches:
-    MatchLkh = cell2mat(arrayfun(@(Y) BestMdl.Parameterkernels(minidx(Y,:),Y,2),1:size(minidx,1),'Uni',0));
-
-    figure;
-    subplot(2,2,1)
-    imagesc(TmpSc')
-    colormap(flipud(gray))
-    title('Scores')
-
-    subplot(2,2,2)
-    imagesc(MatchLkh)
-    colormap(flipud(gray))
-    title('likelihood_Match')
-
-    TmpMP = cell2mat(arrayfun(@(X) squeeze(MatchProbability(OnlyDetectedByPyKS(X,1),OnlyDetectedByPyKS(X,2))),1:size(OnlyDetectedByPyKS,1),'Uni',0));
-
-    figure('name','OnlyDetecedPyKS');
-    for scid=1:length(Scores2Include)
-        subplot(ceil(sqrt(length(Scores2Include))),round(sqrt(length(Scores2Include))),scid)
-        histogram(TmpSc(scid,:),Edges)
-        title(Scores2Include{scid})
-    end
-
-    % Too much detected
-    NotA = 1:size(Pairs,1);
-    NotA(A) = [];
-    NotdetectedByPyKS = Pairs(NotA,:);
-
 end
 
 
@@ -541,8 +499,13 @@ if param.MakePlotsOfPairs
     end
 
     if RunPyKSChronicStitched
-        for id = 1:size(OnlyDetectedByPyKS,1) % Add these for plotting - inspection
-            Pairs{end+1} = [OnlyDetectedByPyKS(id,1) OnlyDetectedByPyKS(id,2)];
+        [r,c] = find(label==0 & PyKSLabel==1);
+        PairsPKS = cat(2,r,c);
+        PairsPKS(r==c,:) = [];
+        PairsPKS = sort(PairsPKS,2,'ascend');
+        PairsPKS = unique(PairsPKS,'stable','rows');
+        for id = 1:size(PairsPKS,1) % Add these for plotting - inspection
+            Pairs{end+1} = [PairsPKS(id,1) PairsPKS(id,2)];
         end
     end
 

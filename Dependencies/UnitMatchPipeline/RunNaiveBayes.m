@@ -30,6 +30,9 @@ CandidatePairs = TotalScore>ThrsOpt;%
 
 figure('name','Potential Matches')
 imagesc(CandidatePairs(SortingOrder,SortingOrder))
+hold on
+arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
 colormap(flipud(gray))
 %     xlim([SessionSwitch nclus])
 %     ylim([1 SessionSwitch-1])
