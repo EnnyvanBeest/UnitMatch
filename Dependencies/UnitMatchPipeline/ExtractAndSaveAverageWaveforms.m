@@ -46,21 +46,11 @@ for uid = 1:nclus
     end
     Path4UnitNPY{uid} = fullfile(tmppath.folder,tmppath.name,['Unit' num2str(AllClusterIDs(Good_Idx(uid))) '_RawSpikes.npy']); %0-indexed
 
-    nFiles = dir(fullfile(tmppath.folder,'RawWaveforms','Unit*_RawSpikes.npy'));
-    if ~isempty(nFiles) & length(nFiles)~=sum(clusinfo.RecSesID==GoodRecSesID(uid))
-        if length(nFiles) == sum(clusinfo.RecSesID==GoodRecSesID(uid))+1
-            delete(fullfile(tmppath.folder,'RawWaveforms',['Unit' num2str(sum(clusinfo.RecSesID==GoodRecSesID(uid))) '_RawSpikes.npy']))
-        else
-            flag = 1; % Figure out what's happening with inconsistent number of files
-        end
-    end
     if exist(Path4UnitNPY{uid}) && ~RedoExtraction
         continue
     else       
         if ~(GoodRecSesID(uid) == Currentlyloaded) % Only load new memmap if not already loaded
-            if flag
-                keyboard
-            end
+
             % Map the data
             clear memMapData
             spikeFile = dir(AllDecompPaths{GoodRecSesID(uid)});
