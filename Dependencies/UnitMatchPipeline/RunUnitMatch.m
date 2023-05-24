@@ -105,7 +105,7 @@ if Params.UnitMatch
         disp(['UnitMatch took ' num2str(round(UMrunTime/60*10)/10) 'minutes to run'])
 
     end
-elseif DecompressionFlag % You might want to at least save out averaged waveforms for every session to get back to later, if they were saved out by bomcell
+elseif Params.DecompressionFlag % You might want to at least save out averaged waveforms for every session to get back to later, if they were saved out by bomcell
     % Extract average waveforms
     ExtractAndSaveAverageWaveforms(clusinfo,UMparam)
 end
