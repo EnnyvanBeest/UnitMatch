@@ -56,7 +56,7 @@ plot([0 1],[0 1],'k--')
 xlabel('False positive rate')
 ylabel('True positive rate')
 legend([h(:)],'Match vs No Match','Match vs Within','Within vs No Match','Location','best')
-title(sprintf('AUC: %.3f, %.3f, %.3f', AUC1,AUC2,AUC3))
+title(sprintf('Cross-Correlation Fingerprint AUC: %.3f, %.3f, %.3f', AUC1,AUC2,AUC3))
 makepretty
 drawnow %Something to look at while ACG calculations are ongoing
 
