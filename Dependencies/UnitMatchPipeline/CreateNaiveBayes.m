@@ -90,7 +90,8 @@ for cv = 1:ncross
         % Save out probability distribution
         for Ck = 1:length(Cond)
             % Probability Distributions
-            ParameterkernelsCV(:,scid,Ck) = smooth(histcounts(ScoresTmp(label(trainidx)==Cond(Ck)),Edges),Smoothtmp)./(sum(label(trainidx)==Cond(Ck)));
+            ParameterkernelsCV(:,scid,Ck) = smooth(histcounts(ScoresTmp(label(trainidx)==Cond(Ck)),Edges),Smoothtmp);
+            ParameterkernelsCV(:,scid,Ck) = ParameterkernelsCV(:,scid,Ck)/sum(ParameterkernelsCV(:,scid,Ck)); % normalize to 1
 
             % Avoid having 0 probability
             Parameterkernels(:,scid,Ck) = Parameterkernels(:,scid,Ck)+addone;
