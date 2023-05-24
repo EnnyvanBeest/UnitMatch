@@ -41,7 +41,8 @@ for scid=1:length(Scores2Include)
     % Save out probability distribution
     for Ck = 1:length(Cond)
         % Probability Distributions
-        Parameterkernels(:,scid,Ck) = smooth(histcounts(ScoresTmp(label==Cond(Ck)),Edges),Smoothtmp)./(sum(label==Cond(Ck)));
+        Parameterkernels(:,scid,Ck) = smooth(histcounts(ScoresTmp(label==Cond(Ck)),Edges),Smoothtmp);
+        Parameterkernels(:,scid,Ck) = Parameterkernels(:,scid,Ck)/sum(Parameterkernels(:,scid,Ck)); % normalize to 1
      
         % Avoid having 0 probability
         Parameterkernels(:,scid,Ck) = Parameterkernels(:,scid,Ck)+addone;
