@@ -1,4 +1,4 @@
-% function QualityMetricsROCs(SaveDir)
+function QualityMetricsROCs(SaveDir)
 
 TmpFile = matfile(fullfile(SaveDir,'UnitMatch','UnitMatch.mat')); % Access saved file
 UMparam = TmpFile.UMparam; % Extract parameters
@@ -59,3 +59,9 @@ for qmid = 1:size(qMetricAllGoodUnits,2)
     drawnow %Something to look at while ACG calculations are ongoing
 
 end
+
+
+% save
+set(gcf,'units','normalized','outerposition',[0 0 1 1])
+saveas(gcf,fullfile(SaveDir,'QMetricsROCs.fig'))
+saveas(gcf,fullfile(SaveDir,'QMetricsROCs.png'))
