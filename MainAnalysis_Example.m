@@ -45,12 +45,12 @@ addpath(genpath(cd))
 addpath(genpath('C:\Users\EnnyB\Documents\GitHub\AP_histology'))
 addpath(genpath('C:\Users\EnnyB\Documents\Github\rastermap'))
 addpath(genpath('C:\Users\EnnyB\Documents\GitHub\allenCCF')) 
+addpath(genpath('C:\Users\EnnyB\Documents\GitHub\bombcell')) % https://github.com/Julie-Fabre/bombcell, branch 'enny'
 
 % Required (for using UnitMatch):
 addpath(genpath('C:\Users\EnnyB\Documents\GitHub\spikes'))% please use https://github.com/EnnyvanBeest/spikes
 addpath(genpath('C:\Users\EnnyB\Documents\GitHub\npy-matlab'))
 addpath(genpath('C:\Users\EnnyB\Documents\GitHub\mtscomp'))  % https://github.com/int-brain-lab/mtscomp
-addpath(genpath('C:\Users\EnnyB\Documents\GitHub\bombcell')) % https://github.com/Julie-Fabre/bombcell, branch 'enny'
 addpath(genpath('C:\Users\EnnyB\Documents\GitHub\UnitMatch')) % Make sure to have this one fresh in the path (so run this last)
 
 try

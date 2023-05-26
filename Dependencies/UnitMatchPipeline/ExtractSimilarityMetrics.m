@@ -329,7 +329,7 @@ while flag<2
     % Average EuclDist
     EuclDist = squeeze(nanmean(EuclDist,2));
     % Plotting order (sort units based on distance)
-    [~,SortingOrder] = arrayfun(@(X) sort(DepthOnProbe(SessionSwitch(X):SessionSwitch(X+1)-1)),1:ndays,'Uni',0);
+    [~,SortingOrder] = arrayfun(@(X) sort(EuclDist(1,SessionSwitch(X):SessionSwitch(X+1)-1)),1:ndays,'Uni',0);
     SortingOrder = arrayfun(@(X) squeeze(SortingOrder{X}+SessionSwitch(X)-1),1:ndays,'Uni',0);
     if size(SortingOrder{1},1)==1
         SortingOrder = cat(2,SortingOrder{:});
@@ -541,43 +541,9 @@ while flag<2
     title(['Across sessions, EuclDist< ' num2str(param.NeighbourDist) 'um'])
     legend('T>threshold','T<threshold','Location', 'best')
 
-
     saveas(gcf,fullfile(SaveDir,'TotalScore.fig'))
     saveas(gcf,fullfile(SaveDir,'TotalScore.bmp'))
-    % Find all pairs
-    % first factor authentication: score above threshold
-    % Take into account:
-    label = TotalScore>ThrsOpt;
-    [uid,uid2] = find(label);
-    Pairs = cat(2,uid,uid2);
-    Pairs = sortrows(Pairs);
-    Pairs = unique(Pairs,'rows');
-    Pairs(Pairs(:,1) == Pairs(:,2),:)=[];
 
-    %% Get correlation matrics for fingerprint correlations
-    Unit2Take = OriginalClusterIDs(Good_Idx);
-    sessionCorrelationsAll = cell(1,ndays);
-    for did = 1:ndays
-        % Load sp for correct day
-        if length(param.KSDir)>1
-            tmp = matfile(fullfile(param.KSDir{did},'PreparedData.mat'));
-        else %Stitched
-            tmp = matfile(fullfile(param.KSDir{1},'PreparedData.mat'));
-        end
-        SessionCorrelations = tmp.SessionCorrelations;
-        if length(tmp.SessionCorrelations)==ndays
-            sessionCorrelationsAll{did} = SessionCorrelations{did};
-        elseif length(tmp.SessionCorrelations)==1  %Normal situation
-            if iscell(SessionCorrelations)
-                sessionCorrelationsAll{did} = SessionCorrelations{1};
-            else
-                sessionCorrelationsAll{did} = SessionCorrelations;
-            end
-        else
-            disp('This is a weird situation...')
-            keyboard
-        end
-    end
   
     %% three ways to define candidate scores
     % Total score larger than threshold
@@ -619,13 +585,20 @@ assignin('caller','Predictors',Predictors)
 assignin('caller','drift',drift)
 assignin('caller','ProjectedLocationPerTP',ProjectedLocationPerTP)
 assignin('caller','ProjectedLocation',ProjectedLocation)
-assignin('caller','sessionCorrelationsAll',sessionCorrelationsAll)
-assignin('caller','Unit2Take',Unit2Take)
 assignin('caller','EuclDist',EuclDist)
 assignin('caller','SortingOrder',SortingOrder)
 
 return
 if 0 % THis can be used to look at some example projections
+    % Find all pairs
+    % first factor authentication: score above threshold
+    % Take into account:
+    label = TotalScore>ThrsOpt;
+    [uid,uid2] = find(label);
+    Pairs = cat(2,uid,uid2);
+    Pairs = sortrows(Pairs);
+    Pairs = unique(Pairs,'rows');
+    Pairs(Pairs(:,1) == Pairs(:,2),:)=[];
     %% Plot
     Pairs = [2,276,4] % Example
     cols =  jet(length(Pairs));

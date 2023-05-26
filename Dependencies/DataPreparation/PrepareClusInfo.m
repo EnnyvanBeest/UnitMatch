@@ -429,32 +429,6 @@ for subsesid=1:length(KiloSortPaths)
     end
     sp.RecSes = sp.SessionID+countid-1; %Keep track of recording session, as cluster IDs are not unique across sessions
 
-    %% Compute cross-correlation matrices for individual recordings    
-    nRec = length(recsesAlltmp);
-    SessionCorrelations = cell(1,nRec);
-    for rid = 1:nRec
-        % Define edges for this dataset
-        edges = floor(min(sp.st(sp.SessionID==rid)))-Params.binsz/2:Params.binsz:ceil(max(sp.st(sp.SessionID==rid)))+Params.binsz/2;
-        Good_Idx = find(Good_ID & recsesAll'==rid); % Only care about good units at this point
-
-        % bin data to create PSTH
-        sr = nan(numel(Good_Idx),numel(edges)-1);
-        for uid = 1:numel(Good_Idx)
-            sr(uid,:) =  histcounts(sp.st(sp.spikeTemplates == AllUniqueTemplates(Good_Idx(uid)) & sp.SessionID == recsesAll(Good_Idx(uid))),edges);
-        end
-
-        % Define folds (two halves)
-        idx_fold1 = 1:floor(size(sr,2)./2);
-        idx_fold2 = floor(size(sr,2)./2)+1:floor(size(sr,2)./2)*2;
-
-        % Find cross-correlation in first and second half of session
-        SessionCorrelations{rid}.fold1 = corr(sr(:,idx_fold1)',sr(:,idx_fold1)')';
-        SessionCorrelations{rid}.fold2 = corr(sr(:,idx_fold2)',sr(:,idx_fold2)')';
-
-        % Nan the diagonal
-        SessionCorrelations{rid}.fold1(logical(eye(size(SessionCorrelations{rid}.fold1)))) = nan;
-        SessionCorrelations{rid}.fold2(logical(eye(size(SessionCorrelations{rid}.fold2)))) = nan;
-    end
     %% Save out sp and clusinfo for this session in the correct folder
     ShankOpt = unique(Shank);
     ShankID = nan(size(Shank));
@@ -483,7 +457,7 @@ for subsesid=1:length(KiloSortPaths)
     sp = rmfield(sp,'tempsUnW');
     sp = rmfield(sp,'templateDuration');
     sp = rmfield(sp,'waveforms');
-    save(fullfile(KiloSortPaths{subsesid},'PreparedData.mat'),'clusinfo','Params','SessionCorrelations','-v7.3')
+    save(fullfile(KiloSortPaths{subsesid},'PreparedData.mat'),'clusinfo','Params','-v7.3')
     if Params.saveSp
         save(fullfile(KiloSortPaths{subsesid},'PreparedData.mat'),'sp','-append')
     end

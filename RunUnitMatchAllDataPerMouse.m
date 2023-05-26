@@ -81,7 +81,13 @@ for midx = 1:length(MiceOpt)
     UMparam = RunUnitMatch(subsesoptAll,PrepareClusInfoparams);
 
     %% Function analysis
-    ComputeFunctionalScores%(PrepareClusInfoparams.SaveDir)
+    ComputeFunctionalScores(PrepareClusInfoparams.SaveDir)
+
+    %% Evaluate (within unit ID cross-validation)
+    EvaluatingUnitMatch(UMparam.SaveDir);
+
+    %% QM
+    QualityMetricsROCs(UMparam.SaveDir);
 
     %% 
     disp(['Preprocessed data for ' MiceOpt{midx}])

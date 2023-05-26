@@ -1,4 +1,4 @@
-function [MatchProbability,label,Pairs,Tbl,BestMdl] = RunNaiveBayes(Predictors,TotalScore,Scores2Include,clusinfo,param,SortingOrder)
+function [MatchProbability,label,Pairs,Tbl,BestMdl] = RunNaiveBayes(Predictors,TotalScore,Scores2Include,clusinfo,param,SortingOrder,EuclDist)
 
 %% Extract parameters
 FullSetParameters = {'AmplitudeSim','WVCorr','WavformMSE','TrajAngleSim','TrajDistSim','spatialdecaySim','CentroidDist','CentroidVar'};
@@ -15,18 +15,15 @@ ndays = length(unique(recsesAll));
 SessionSwitch = arrayfun(@(X) find(GoodRecSesID==X,1,'first'),1:ndays,'Uni',0);
 SessionSwitch(cellfun(@isempty,SessionSwitch))=[];
 SessionSwitch = [cell2mat(SessionSwitch) nclus+1];
-IncludeThesePairs = find(Predictors(:,:,ismember(param.Scores2Include,'CentroidDist'))>0);
 
 %% Prepare naive bayes - inspect probability distributions
+IncludeThesePairs = find(EuclDist<param.maxdist)
 % Prepare a set INCLUDING the cross-validated self-scores, otherwise the probability
 % distributions are just weird
 priorMatch = 1-((nclus+nclus.*sqrt(ndays-1))./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days)
 % priorMatch = 1-(nclus*ndays)./(nclus*nclus); %Now use the actual expected prior for bayes'
-ThrsOpt = quantile(TotalScore(:),priorMatch);
+ThrsOpt = quantile(TotalScore(IncludeThesePairs),priorMatch);
 CandidatePairs = TotalScore>ThrsOpt;% 
-% For Célian & Matteo:
-% CandidatePairs = eye(size(TotalScore));
-% 
 
 figure('name','Potential Matches')
 imagesc(CandidatePairs(SortingOrder,SortingOrder))
