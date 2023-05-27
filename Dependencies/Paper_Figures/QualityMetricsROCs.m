@@ -1,6 +1,6 @@
 function QualityMetricsROCs(SaveDir)
 
-TmpFile = matfile(fullfile(SaveDir,'UnitMatch','UnitMatch.mat')); % Access saved file
+TmpFile = matfile(fullfile(SaveDir,'UnitMatch.mat')); % Access saved file
 UMparam = TmpFile.UMparam; % Extract parameters
 UMparam.binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
 
@@ -8,7 +8,11 @@ MatchTable = TmpFile.MatchTable; % Load Matchtable
 
 % Extract cluster information
 UniqueIDConversion = TmpFile.UniqueIDConversion;
-GoodId = logical(UniqueIDConversion.GoodID);
+if UMparam.GoodUnitsOnly
+    GoodId = logical(UniqueIDConversion.GoodID);
+else
+    GoodId = true(1,length(UniqueIDConversion.GoodID));
+end
 UniqueID = UniqueIDConversion.UniqueID(GoodId);
 OriID = UniqueIDConversion.OriginalClusID(GoodId);
 OriIDAll = UniqueIDConversion.OriginalClusID;

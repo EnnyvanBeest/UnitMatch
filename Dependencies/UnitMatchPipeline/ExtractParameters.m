@@ -8,7 +8,13 @@ waveidx = param.waveidx;
 NewPeakLoc = param.NewPeakLoc;
 
 recsesAll = clusinfo.RecSesID;
-Good_Idx = find(clusinfo.Good_ID); %Only care about good units at this point
+if param.GoodUnitsOnly
+    Good_Idx = find(clusinfo.Good_ID); %Only care about good units at this point
+else
+    Good_Idx = 1:length(clusinfo.Good_ID);
+    disp('Use all units including MUA and noise')
+
+end
 recsesGood = recsesAll(Good_Idx);
 
 %% Initialize

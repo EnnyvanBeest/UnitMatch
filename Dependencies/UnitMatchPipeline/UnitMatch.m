@@ -76,7 +76,13 @@ OriginalClusterIDs = clusinfo.cluster_id;
 % nses = length(AllDecompPaths);
 % OriginalClusID = AllClusterIDs; % Original cluster ID assigned by KS
 UniqueID = 1:length(OriginalClusterIDs); % Initial assumption: All clusters are unique
-Good_Idx = find(clusinfo.Good_ID); %Only care about good units at this point
+if param.GoodUnitsOnly
+    Good_Idx = find(clusinfo.Good_ID); %Only care about good units at this point
+else
+    Good_Idx = 1:length(clusinfo.Good_ID);
+    disp('Use all units including MUA and noise')
+
+end
 GoodRecSesID = clusinfo.RecSesID(Good_Idx);
 
 % Define day stucture
@@ -105,7 +111,7 @@ AllWVBParameters = ExtractParameters(Path4UnitNPY,clusinfo,param);
 ExtractSimilarityMetrics(Scores2Include,AllWVBParameters,clusinfo,param)% All Scores2Include are pushed to the workspace
 
 %% Naive bayes classifier
-[MatchProbability,label,Pairs,Tbl,BestMdl] = RunNaiveBayes(Predictors,TotalScore,Scores2Include,clusinfo,param,SortingOrder,EuclDist);
+[MatchProbability,label,Tbl,BestMdl] = RunNaiveBayes(Predictors,TotalScore,Scores2Include,clusinfo,param,SortingOrder,EuclDist);
 
 %% Some evaluation:
 % Units on the diagonal are matched by (Py)KS within a day. Very likely to

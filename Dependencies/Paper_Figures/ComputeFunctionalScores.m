@@ -1,6 +1,6 @@
 function ComputeFunctionalScores(SaveDir)
 
-TmpFile = matfile(fullfile(SaveDir,'UnitMatch','UnitMatch.mat')); % Access saved file
+TmpFile = matfile(fullfile(SaveDir,'UnitMatch.mat')); % Access saved file
 UMparam = TmpFile.UMparam; % Extract parameters
 UMparam.binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
 
@@ -13,7 +13,11 @@ NonMatchIdx = find((MatchTable.UID1 ~= MatchTable.UID2)); % Not the same unit
 
 % Extract cluster information
 UniqueIDConversion = TmpFile.UniqueIDConversion;
-GoodId = logical(UniqueIDConversion.GoodID);
+if UMparam.GoodUnitsOnly
+    GoodId = logical(UniqueIDConversion.GoodID);
+else
+    GoodId = true(1,length(UniqueIDConversion.GoodID));
+end
 UniqueID = UniqueIDConversion.UniqueID(GoodId);
 OriID = UniqueIDConversion.OriginalClusID(GoodId);
 OriIDAll = UniqueIDConversion.OriginalClusID;
@@ -63,11 +67,24 @@ end
 sp = spnew;
 clear spnew
 
+nRec = length(unique(UniqueIDConversion.recsesAll));
+EuclDist = reshape(MatchTable.EucledianDistance,nclus,nclus);
+SessionSwitch = arrayfun(@(X) find(recses==X,1,'first'),1:nRec,'Uni',0);
+SessionSwitch(cellfun(@isempty,SessionSwitch))=[];
+SessionSwitch = [cell2mat(SessionSwitch) nclus+1];
+
+% Plotting order (sort units based on distance)
+[~,SortingOrder] = arrayfun(@(X) sort(EuclDist(1,SessionSwitch(X):SessionSwitch(X+1)-1)),1:nRec,'Uni',0);
+SortingOrder = arrayfun(@(X) squeeze(SortingOrder{X}+SessionSwitch(X)-1),1:nRec,'Uni',0);
+if size(SortingOrder{1},1)==1
+    SortingOrder = cat(2,SortingOrder{:});
+else
+    SortingOrder = cat(1,SortingOrder{:});
+end
 if ~any(ismember(MatchTable.Properties.VariableNames,'FingerprintCor')) % If it already exists in table, skip this entire thing
 
     %% Compute cross-correlation matrices for individual recordings
     disp('Computing cross-correlation fingerprint')
-    nRec = length(unique(UniqueIDConversion.recsesAll));
     SessionCorrelations = cell(1,nRec);
     for rid = 1:nRec
         % Define edges for this dataset
@@ -139,19 +156,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames,'FingerprintCor')) % If it 
     TmpFile.Properties.Writable = false;
 
     %% Compare to functional scores
-    EuclDist = reshape(MatchTable.EucledianDistance,nclus,nclus);
-    SessionSwitch = arrayfun(@(X) find(recses==X,1,'first'),1:nRec,'Uni',0);
-    SessionSwitch(cellfun(@isempty,SessionSwitch))=[];
-    SessionSwitch = [cell2mat(SessionSwitch) nclus+1];
-
-    % Plotting order (sort units based on distance)
-    [~,SortingOrder] = arrayfun(@(X) sort(EuclDist(1,SessionSwitch(X):SessionSwitch(X+1)-1)),1:nRec,'Uni',0);
-    SortingOrder = arrayfun(@(X) squeeze(SortingOrder{X}+SessionSwitch(X)-1),1:nRec,'Uni',0);
-    if size(SortingOrder{1},1)==1
-        SortingOrder = cat(2,SortingOrder{:});
-    else
-        SortingOrder = cat(1,SortingOrder{:});
-    end
+  
     figure;
     
     subplot(1,3,1)
@@ -268,7 +273,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames,'ACGCorr')) % If it already
     parfor clusid = 1:nclus
         for cv = 1:2
             idx1=find(sp.spikeTemplates == OriID(clusid) & sp.RecSes == recses(clusid));
-            if ~isempty(idx1)
+            if ~isempty(idx1) && length(idx1)>UMparam.sampleamount
                 if cv==1
                     idx1 = idx1(1:floor(length(idx1)/2));
                 else

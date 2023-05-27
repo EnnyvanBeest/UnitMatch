@@ -1,9 +1,15 @@
-function [MatchProbability,label,Pairs,Tbl,BestMdl] = RunNaiveBayes(Predictors,TotalScore,Scores2Include,clusinfo,param,SortingOrder,EuclDist)
+function [MatchProbability,label,Tbl,BestMdl] = RunNaiveBayes(Predictors,TotalScore,Scores2Include,clusinfo,param,SortingOrder,EuclDist)
 
 %% Extract parameters
 FullSetParameters = {'AmplitudeSim','WVCorr','WavformMSE','TrajAngleSim','TrajDistSim','spatialdecaySim','CentroidDist','CentroidVar'};
 
-Good_Idx = find(clusinfo.Good_ID); %Only care about good units at this point
+if param.GoodUnitsOnly
+    Good_Idx = find(clusinfo.Good_ID); %Only care about good units at this point
+else
+    Good_Idx = 1:length(clusinfo.Good_ID);
+    disp('Use all units including MUA and noise')
+
+end
 GoodRecSesID = clusinfo.RecSesID(Good_Idx);
 OriginalClusterIDs = clusinfo.cluster_id;
 
@@ -17,7 +23,7 @@ SessionSwitch(cellfun(@isempty,SessionSwitch))=[];
 SessionSwitch = [cell2mat(SessionSwitch) nclus+1];
 
 %% Prepare naive bayes - inspect probability distributions
-IncludeThesePairs = find(EuclDist<param.maxdist)
+IncludeThesePairs = find(EuclDist<param.maxdist);
 % Prepare a set INCLUDING the cross-validated self-scores, otherwise the probability
 % distributions are just weird
 priorMatch = 1-((nclus+nclus.*sqrt(ndays-1))./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days)

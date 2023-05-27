@@ -37,7 +37,7 @@ PrepareClusInfoparams.Scores2Include = {'AmplitudeSim','spatialdecaySim','Wavfor
 PrepareClusInfoparams.ApplyExistingBayesModel = 0; %If 1, use probability distributions made available by us
 PrepareClusInfoparams.MakePlotsOfPairs = 0; % Plots pairs for inspection (UnitMatch)
 PrepareClusInfoparams.AssignUniqueID = 1; % Assign UniqueID 
-
+PrepareClusInfoparams.GoodUnitsOnly = 1; % Include only good untis in the UnitMatch analysis
 %% All dependencies you want to add (you may need to download these, all available via github)
 addpath(genpath(cd))
 

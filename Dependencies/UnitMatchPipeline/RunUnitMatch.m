@@ -64,6 +64,7 @@ UMparam.Scores2Include = Params.Scores2Include; %
 UMparam.ApplyExistingBayesModel = Params.ApplyExistingBayesModel; %If 1, use probability distributions made available by us
 UMparam.MakePlotsOfPairs = Params.MakePlotsOfPairs; % Plot all pairs
 UMparam.AssignUniqueID = Params.AssignUniqueID; %Assign Unique ID
+UMparam.GoodUnitsOnly = Params.GoodUnitsOnly;
 if Params.UnitMatch
     UnitMatchExist = dir(fullfile(UMparam.SaveDir,'UnitMatch.mat'));
     if ~isempty(UnitMatchExist) && ~Params.RedoUnitMatch
@@ -90,7 +91,7 @@ if Params.UnitMatch
                         %                         % Also copy metafile
                         copyfile(strrep(fullfile(Params.RawDataPaths(id).folder,Params.RawDataPaths(id).name),'cbin','meta'),strrep(fullfile(Params.tmpdatafolder,Params.RawDataPaths(id).name),'cbin','meta'))
                     end
-                    ephysap_tmp = fullfile(Params.tmpdatafolder,strrep(RawDataPaths(id).name,'cbin','bin'));
+                    ephysap_tmp = fullfile(Params.tmpdatafolder,strrep(Params.RawDataPaths(id).name,'cbin','bin'));
                     %                     DecompressionFlag = 1;
                 end
             end

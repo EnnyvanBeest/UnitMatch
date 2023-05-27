@@ -14,7 +14,12 @@ flag = 0; % For debugging
 %% Extract all cluster info
 AllClusterIDs = clusinfo.cluster_id;
 UniqueID = 1:length(AllClusterIDs); % Initial assumption: All clusters are unique
-Good_Idx = find(clusinfo.Good_ID); %Only care about good units at this point
+if param.GoodUnitsOnly
+    Good_Idx = find(clusinfo.Good_ID); %Only care about good units at this point
+else
+    Good_Idx = 1:length(clusinfo.Good_ID);
+    disp('Use all units including MUA and noise')
+end
 GoodRecSesID = clusinfo.RecSesID(Good_Idx);
 
 % Define day stucture
