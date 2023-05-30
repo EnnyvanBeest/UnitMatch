@@ -60,6 +60,7 @@ for qmid = 1:size(qMetricAllGoodUnits,2)
     ylabel('True positive rate')
     title([qMetricAllGoodUnits.Properties.VariableNames{qmid} ', AUC = ' num2str(AUC3)])
     makepretty
+    axis square
     drawnow %Something to look at while ACG calculations are ongoing
 
 end

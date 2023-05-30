@@ -25,9 +25,6 @@ GoodRecSesID = clusinfo.RecSesID(Good_Idx);
 % Define day stucture
 recsesAll = clusinfo.RecSesID;
 nclus = length(Good_Idx);
-ndays = length(unique(recsesAll));
-OriSessionSwitch = cell2mat(arrayfun(@(X) find(recsesAll==X,1,'first'),1:ndays,'Uni',0));
-OriSessionSwitch = [OriSessionSwitch nclus+1];
 
 %% Actual extraction
 dataTypeNBytes = numel(typecast(cast(0, 'uint16'), 'uint8')); % Define datatype

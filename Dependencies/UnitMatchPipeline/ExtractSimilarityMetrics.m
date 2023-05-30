@@ -29,10 +29,10 @@ end
 DepthOnProbe = DepthOnProbe(Good_Idx);
 [X,Y]=meshgrid(recsesAll(Good_Idx));
 nclus = length(Good_Idx);
-ndays = length(unique(recsesAll));
-SessionSwitch = arrayfun(@(X) find(GoodRecSesID==X,1,'first'),1:ndays,'Uni',0);
+ndays = length(unique(GoodRecSesID));
+SessionSwitch = arrayfun(@(X) find(GoodRecSesID==X,1,'first'),unique(GoodRecSesID),'Uni',0);
 SessionSwitch(cellfun(@isempty,SessionSwitch))=[];
-SessionSwitch = [cell2mat(SessionSwitch) nclus+1];
+SessionSwitch = [cell2mat(SessionSwitch); nclus+1];
 
 %% Compute Metrics
 disp('Computing Metric similarity between pairs of units...')

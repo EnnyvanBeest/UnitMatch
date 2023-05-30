@@ -17,10 +17,10 @@ recsesAll = clusinfo.RecSesID;
 recsesGood = recsesAll(Good_Idx);
 [X,Y]=meshgrid(recsesAll(Good_Idx));
 nclus = length(Good_Idx);
-ndays = length(unique(recsesAll));
-SessionSwitch = arrayfun(@(X) find(GoodRecSesID==X,1,'first'),1:ndays,'Uni',0);
+ndays = length(unique(recsesGood));
+SessionSwitch = arrayfun(@(X) find(GoodRecSesID==X,1,'first'),unique(recsesGood),'Uni',0);
 SessionSwitch(cellfun(@isempty,SessionSwitch))=[];
-SessionSwitch = [cell2mat(SessionSwitch) nclus+1];
+SessionSwitch = [cell2mat(SessionSwitch); nclus+1];
 
 %% Prepare naive bayes - inspect probability distributions
 IncludeThesePairs = find(EuclDist<param.maxdist);

@@ -41,7 +41,11 @@ for did = 1:nKSFiles
     sp{did}.spikeTemplates = sptmp.spikeTemplates;
     sp{did}.spikeAmps = sptmp.spikeAmps;
     % Replace recsesid with subsesid
-    sp{did}.RecSes = repmat(did,size(sp{did}.st));
+    if UMparam.RunPyKSChronicStitched
+        sp{did}.RecSes = sptmp.RecSes;
+    else
+        sp{did}.RecSes = repmat(did,size(sp{did}.st));
+    end
 end
 clear sptmp
 
@@ -67,11 +71,12 @@ end
 sp = spnew;
 clear spnew
 
-nRec = length(unique(UniqueIDConversion.recsesAll));
+nRec = length(unique(UniqueIDConversion.recsesAll(logical(UniqueIDConversion.GoodID))));
+RecOpt = unique(UniqueIDConversion.recsesAll(logical(UniqueIDConversion.GoodID)));
 EuclDist = reshape(MatchTable.EucledianDistance,nclus,nclus);
-SessionSwitch = arrayfun(@(X) find(recses==X,1,'first'),1:nRec,'Uni',0);
+SessionSwitch = arrayfun(@(X) find(recses==X,1,'first'),unique(UniqueIDConversion.recsesAll(logical(UniqueIDConversion.GoodID))),'Uni',0);
 SessionSwitch(cellfun(@isempty,SessionSwitch))=[];
-SessionSwitch = [cell2mat(SessionSwitch) nclus+1];
+SessionSwitch = [cell2mat(SessionSwitch); nclus+1];
 
 % Plotting order (sort units based on distance)
 [~,SortingOrder] = arrayfun(@(X) sort(EuclDist(1,SessionSwitch(X):SessionSwitch(X+1)-1)),1:nRec,'Uni',0);
@@ -88,8 +93,8 @@ if ~any(ismember(MatchTable.Properties.VariableNames,'FingerprintCor')) % If it 
     SessionCorrelations = cell(1,nRec);
     for rid = 1:nRec
         % Define edges for this dataset
-        edges = floor(min(sp.st(sp.RecSes==rid)))-UMparam.binsz/2:UMparam.binsz:ceil(max(sp.st(sp.RecSes==rid)))+UMparam.binsz/2;
-        Good_Idx = find(GoodId & recsesall'==rid); % Only care about good units at this point
+        edges = floor(min(sp.st(sp.RecSes==RecOpt(rid))))-UMparam.binsz/2:UMparam.binsz:ceil(max(sp.st(sp.RecSes==RecOpt(rid))))+UMparam.binsz/2;
+        Good_Idx = find(GoodId & recsesall'==RecOpt(rid)); % Only care about good units at this point
 
         % bin data to create PSTH
         sr = nan(numel(Good_Idx),numel(edges)-1);
@@ -102,8 +107,12 @@ if ~any(ismember(MatchTable.Properties.VariableNames,'FingerprintCor')) % If it 
         idx_fold2 = floor(size(sr,2)./2)+1:floor(size(sr,2)./2)*2;
 
         % Find cross-correlation in first and second half of session
-        SessionCorrelations{rid}.fold1 = corr(sr(:,idx_fold1)',sr(:,idx_fold1)')';
-        SessionCorrelations{rid}.fold2 = corr(sr(:,idx_fold2)',sr(:,idx_fold2)')';
+        try
+            SessionCorrelations{rid}.fold1 = corr(sr(:,idx_fold1)',sr(:,idx_fold1)')';
+            SessionCorrelations{rid}.fold2 = corr(sr(:,idx_fold2)',sr(:,idx_fold2)')';
+        catch
+            keyboard
+        end
 
         % Nan the diagonal
         SessionCorrelations{rid}.fold1(logical(eye(size(SessionCorrelations{rid}.fold1)))) = nan;
@@ -148,12 +157,15 @@ if ~any(ismember(MatchTable.Properties.VariableNames,'FingerprintCor')) % If it 
         
     % Save in table
     MatchTable.FingerprintCor = FingerprintR(:);
-    MatchTable.RankScoreAll = RankScoreAll(:);
+    MatchTable.RankScore = RankScoreAll(:);
     MatchTable.SigFingerprintR = SigMask(:);
 
     TmpFile.Properties.Writable = true;
     TmpFile.MatchTable = MatchTable; % Overwrite
+    % add AllSessionCorrelations
+    TmpFile.AllSessionCorrelations = AllSessionCorrelations;
     TmpFile.Properties.Writable = false;
+
 
     %% Compare to functional scores
   
@@ -218,11 +230,13 @@ ylabel('Unit_j')
 hold on
 arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
 arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+title('Cross-correlation Fingerprint')
+axis square
 freezeColors 
 
 FingerprintCor = reshape(MatchTable.FingerprintCor,nclus,nclus);
-Subtr = repmat(diag(FingerprintCor),1,size(FingerprintCor,1));
-FingerprintCor = FingerprintCor - Subtr; % Subtract diagonalcorrelations  
+% Subtr = repmat(diag(FingerprintCor),1,size(FingerprintCor,1));
+% FingerprintCor = FingerprintCor - Subtr; % Subtract diagonalcorrelations  
 
 subplot(3,3,2)
 bins = min(FingerprintCor(:)):0.1:max(FingerprintCor(:));
@@ -237,6 +251,7 @@ plot(Vector,hn,'color',[0 0 0])
 xlabel('Cross-correlation Fingerprint')
 ylabel('Proportion|Group')
 legend('i=j; within recording','matches','non-matches','Location','best')
+axis square
 makepretty
 
 subplot(3,3,3)
@@ -253,6 +268,7 @@ labels = [ones(1,numel(WithinIdx)), zeros(1,numel(NonMatchIdx))];
 scores = [FingerprintCor(WithinIdx)', FingerprintCor(NonMatchIdx)'];
 [X,Y,~,AUC3] = perfcurve(labels,scores,1);
 h(3) = plot(X,Y,'color',[0.25 0.25 0.25]);
+axis square
 
 plot([0 1],[0 1],'k--')
 xlabel('False positive rate')
@@ -319,12 +335,15 @@ ylabel('Unit_j')
 hold on
 arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
 arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+title('Autocorrelogram Correlation')
+axis square
+
 freezeColors 
 
 subplot(3,3,5)
 ACGCor = reshape(MatchTable.ACGCorr,nclus,nclus);
-Subtr = repmat(diag(ACGCor),1,size(ACGCor,1));
-ACGCor = ACGCor - Subtr; % Subtract diagonalcorrelations  
+% Subtr = repmat(diag(ACGCor),1,size(ACGCor,1));
+% ACGCor = ACGCor - Subtr; % Subtract diagonalcorrelations  
 bins = min(ACGCor(:)):0.1:max(ACGCor(:));
 Vector = [bins(1)+0.1/2:0.1:bins(end)-0.1/2];
 hw = histcounts(ACGCor(WithinIdx),bins)./length(WithinIdx);
@@ -337,6 +356,8 @@ plot(Vector,hn,'color',[0 0 0])
 xlabel('Autocorrelogram Correlation')
 ylabel('Proportion|Group')
 legend('i=j; within recording','matches','non-matches','Location','best')
+axis square
+
 makepretty
 
 subplot(3,3,6)
@@ -360,6 +381,8 @@ ylabel('True positive rate')
 legend([h(:)],'Match vs No Match','Match vs Within','Within vs No Match','Location','best')
 title(sprintf('Autocorrelogram AUC: %.3f, %.3f, %.3f', AUC1,AUC2,AUC3))
 makepretty
+axis square
+
 freezeColors 
 
 %% Plot FR
@@ -373,6 +396,8 @@ ylabel('Unit_j')
 hold on
 arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
 arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+title('Firing rate differences')
+axis square
 
 FRDiff = reshape(MatchTable.FRDiff,nclus,nclus);
 Subtr = repmat(diag(FRDiff),1,size(FRDiff,1));
@@ -392,6 +417,7 @@ xlabel('Firing rate differences')
 ylabel('Proportion|Group')
 legend('i=j; within recording','matches','non-matches','Location','best')
 makepretty
+axis square
 
 subplot(3,3,9)
 labels = [zeros(1,numel(MatchIdx)), ones(1,numel(NonMatchIdx))];
@@ -407,6 +433,7 @@ labels = [zeros(1,numel(WithinIdx)), ones(1,numel(NonMatchIdx))];
 scores = [FRDiff(WithinIdx)', FRDiff(NonMatchIdx)'];
 [X,Y,~,AUC3] = perfcurve(labels,scores,1);
 h(3) = plot(X,Y,'color',[0.25 0.25 0.25]);
+axis square
 
 plot([0 1],[0 1],'k--')
 xlabel('False positive rate')
@@ -419,3 +446,4 @@ makepretty
 set(gcf,'units','normalized','outerposition',[0 0 1 1])
 saveas(gcf,fullfile(SaveDir,'FunctionalScoreSeparability.fig'))
 saveas(gcf,fullfile(SaveDir,'FunctionalScoreSeparability.png'))
+return

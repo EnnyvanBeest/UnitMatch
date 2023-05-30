@@ -1,8 +1,5 @@
-function PlotTheseUnits_UM(Pairs,MatchTable,UniqueIDConversion,WaveformInfo,AllSessionCorrelations,param,VisibleSetting)
+function PlotTheseUnits_UM(Pairs,MatchTable,UniqueIDConversion,WaveformInfo,AllSessionCorrelations,param)
 % Plot UM results for groups of units
-if nargin<7
-    VisibleSetting = 'off';
-end
 
 if ~isfield(param,'TakeChannelRadius')
         param.TakeChannelRadius = 200;
@@ -31,7 +28,6 @@ for did = 1:nKSFiles
 end
 clear sptmp
 
-ndays = length(param.AllRawPaths);
 
 % Add all spikedata in one spikes struct - can be used for further analysis
 sp = [sp{:}];
@@ -56,6 +52,7 @@ clear spnew
 
 
 % Calculations for ISI!
+ndays = length(param.AllRawPaths);
 tmpst=sp.st;
 maxtime = 0;
 for did=1:ndays
@@ -64,14 +61,22 @@ for did=1:ndays
 end
 
 % Find session switch
-recsesGood = UniqueIDConversion.recsesAll(logical(UniqueIDConversion.GoodID)); %Rec session of these units
-OriClusID = UniqueIDConversion.OriginalClusID(logical(UniqueIDConversion.GoodID));
-UniqueID = UniqueIDConversion.UniqueID(logical(UniqueIDConversion.GoodID));
+if param.GoodUnitsOnly
+    GoodId = logical(UniqueIDConversion.GoodID);
+else
+    GoodId = true(1,length(UniqueIDConversion.GoodID));
+end
+recsesGood = UniqueIDConversion.recsesAll(GoodId); %Rec session of these units
+OriClusID = UniqueIDConversion.OriginalClusID(GoodId);
+UniqueID = UniqueIDConversion.UniqueID(GoodId);
 Path4Unit = UniqueIDConversion.Path4UnitNPY;
 nclus = length(OriClusID);
-SessionSwitch = arrayfun(@(X) find(recsesGood==X,1,'first'),1:ndays,'Uni',0);
+DayOpt = unique(recsesGood);
+ndays = length(DayOpt);
+
+SessionSwitch = arrayfun(@(X) find(recsesGood==X,1,'first'),DayOpt,'Uni',0);
 SessionSwitch(cellfun(@isempty,SessionSwitch))=[];
-SessionSwitch = [cell2mat(SessionSwitch) nclus+1];
+SessionSwitch = [cell2mat(SessionSwitch); nclus+1];
 
 ncellsperrecording = diff(SessionSwitch);
 
@@ -92,7 +97,7 @@ timercounter = tic;
 disp('Plotting pairs...')
 cv=1;
 for pairid=1:length(Pairs)
-    tmpfig = figure('visible',VisibleSetting);
+    tmpfig = figure('visible',param.VisibleSetting);
 
     cols =  jet(length(Pairs{pairid}));
     clear hleg
@@ -326,12 +331,12 @@ for pairid=1:length(Pairs)
     for uidx = 1:length(Pairs{pairid})-1
         uid = Pairs{pairid}(uidx);
         uid2 = Pairs{pairid}(uidx+1);
-        SessionCorrelations = AllSessionCorrelations{recsesGood(uid),recsesGood(uid2)};
-        addthis3=-SessionSwitch(recsesGood(uid))+1;
+        SessionCorrelations = AllSessionCorrelations{ismember(DayOpt,recsesGood(uid)),ismember(DayOpt,recsesGood(uid2))};
+        addthis3=-SessionSwitch(ismember(DayOpt,recsesGood(uid)))+1;
         if recsesGood(uid2)>recsesGood(uid)
-            addthis4=-SessionSwitch(recsesGood(uid2))+1+ncellsperrecording(recsesGood(uid));
+            addthis4=-SessionSwitch(find(ismember(DayOpt,recsesGood(uid2))))+1+ncellsperrecording(ismember(DayOpt,recsesGood(uid)));
         else
-            addthis4=-SessionSwitch(recsesGood(uid2))+1;
+            addthis4=-SessionSwitch(find(ismember(DayOpt,recsesGood(uid2))))+1;
         end
         plot(SessionCorrelations(uid+addthis3,:),'-','color',cols(uidx,:)); hold on; plot(SessionCorrelations(uid2+addthis4,:),'-','color',cols(uidx+1,:))
 
@@ -370,7 +375,7 @@ for pairid=1:length(Pairs)
     fname = cell2mat(arrayfun(@(X) ['UID' num2str(X)],unique(UniqueID(Pairs{pairid})),'Uni',0));
     saveas(tmpfig,fullfile(param.SaveDir,'MatchFigures',[fname '_x' num2str(length(Pairs{pairid})) '.fig']))
     saveas(tmpfig,fullfile(param.SaveDir,'MatchFigures',[fname '_x' num2str(length(Pairs{pairid})) '.bmp']))
-    if strcmp(VisibleSetting,'off')
+    if strcmp(param.VisibleSetting,'off')
         delete(tmpfig)
     end
 
