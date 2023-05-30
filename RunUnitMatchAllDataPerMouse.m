@@ -80,6 +80,20 @@ for midx = 1:length(MiceOpt)
     %% Run UnitMatch
     UMparam = RunUnitMatch(subsesoptAll,PrepareClusInfoparams);
 
+    %% Evaluate (within unit ID cross-validation)
+    EvaluatingUnitMatch(UMparam.SaveDir);
+
+    %% Function analysis
+    ComputeFunctionalScores(UMparam.SaveDir)
+
+    %% QM
+    QualityMetricsROCs(UMparam.SaveDir);
+
+    %% Figures
+    if UMparam.MakePlotsOfPairs
+        DrawPairsUnitMatch(UMparam.SaveDir);
+    end
+    
     %% 
     disp(['Preprocessed data for ' MiceOpt{midx}])
     

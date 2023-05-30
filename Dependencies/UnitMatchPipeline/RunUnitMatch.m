@@ -6,7 +6,7 @@ for subsesid=1:length(AllKiloSortPaths)
     if isempty(dir(fullfile(AllKiloSortPaths{subsesid},'*.npy')))
         continue
     end
-   
+
     disp(['Loading clusinfo for ' AllKiloSortPaths{subsesid}])
     tmp = matfile(fullfile(AllKiloSortPaths{subsesid},'PreparedData.mat'));
     clusinfo{subsesid} = tmp.clusinfo;
@@ -41,7 +41,7 @@ if Params.RunQualityMetrics
     UMparam.sampleamount = paramBC.nRawSpikesToExtract; %500; % Nr. waveforms to include
     UMparam.spikeWidth =paramBC.spikeWidth; %82; % in sample space (time)
 else
-    UMparam.sampleamount = 200; %500; % Nr. waveforms to include
+    UMparam.sampleamount = 1000; % 
     UMparam.spikeWidth = 82; %82; % in sample space (time)
 end
 
@@ -58,12 +58,13 @@ UMparam.channelpos = Params.AllChannelPos;
 UMparam.AllRawPaths = Params.RawDataPaths;
 UMparam.AllDecompPaths = arrayfun(@(X) fullfile(Params.tmpdatafolder,strrep(Params.RawDataPaths(X).name,'cbin','bin')),1:length(Params.RawDataPaths),'Uni',0);
 UMparam.RedoExtraction = 0; % Only necessary if KS was redone!
-UMparam.ProbabilityThreshold = 0.8; %Typically where noise splits from real matches
+UMparam.ProbabilityThreshold = 0.5; %Increase a bit for being more strict
 UMparam.binsize = Params.binsz;
 UMparam.Scores2Include = Params.Scores2Include; %
 UMparam.ApplyExistingBayesModel = Params.ApplyExistingBayesModel; %If 1, use probability distributions made available by us
 UMparam.MakePlotsOfPairs = Params.MakePlotsOfPairs; % Plot all pairs
 UMparam.AssignUniqueID = Params.AssignUniqueID; %Assign Unique ID
+UMparam.GoodUnitsOnly = Params.GoodUnitsOnly;
 if Params.UnitMatch
     UnitMatchExist = dir(fullfile(UMparam.SaveDir,'UnitMatch.mat'));
     if ~isempty(UnitMatchExist) && ~Params.RedoUnitMatch
@@ -85,22 +86,22 @@ if Params.UnitMatch
                             [], [], 0, fullfile(Params.tmpdatafolder,strrep(Params.RawDataPaths(id).name,'cbin','bin')));
                         paramBC.rawFile = decompDataFile;
                         % Decompression
-%                         success = pyrunfile("MTSDecomp_From_Matlab.py","success",datapath = strrep(fullfile(RawDataPaths(id).folder,RawDataPaths(id).name),'\','/'),...
-%                             JsonPath =  strrep(fullfile(RawDataPaths(id).folder,strrep(RawDataPaths(id).name,'cbin','ch')),'\','/'), savepath = strrep(fullfile(Params.tmpdatafolder,strrep(RawDataPaths(id).name,'cbin','bin')),'\','/'));
-%                         % Also copy metafile
+                        %                         success = pyrunfile("MTSDecomp_From_Matlab.py","success",datapath = strrep(fullfile(RawDataPaths(id).folder,RawDataPaths(id).name),'\','/'),...
+                        %                             JsonPath =  strrep(fullfile(RawDataPaths(id).folder,strrep(RawDataPaths(id).name,'cbin','ch')),'\','/'), savepath = strrep(fullfile(Params.tmpdatafolder,strrep(RawDataPaths(id).name,'cbin','bin')),'\','/'));
+                        %                         % Also copy metafile
                         copyfile(strrep(fullfile(Params.RawDataPaths(id).folder,Params.RawDataPaths(id).name),'cbin','meta'),strrep(fullfile(Params.tmpdatafolder,Params.RawDataPaths(id).name),'cbin','meta'))
                     end
-                    ephysap_tmp = fullfile(Params.tmpdatafolder,strrep(RawDataPaths(id).name,'cbin','bin'));
-%                     DecompressionFlag = 1;
+                    ephysap_tmp = fullfile(Params.tmpdatafolder,strrep(Params.RawDataPaths(id).name,'cbin','bin'));
+                    %                     DecompressionFlag = 1;
                 end
             end
         end
 
-        % Run UnitMatch
+        %% Run UnitMatch
         GlobalUnitMatchClock = tic;
-        [UniqueIDConversion, MatchTable, WaveformInfo, AllSessionCorrelations, UMparam] = UnitMatch(clusinfo,UMparam);
+        [UniqueIDConversion, MatchTable, WaveformInfo, UMparam] = UnitMatch(clusinfo,UMparam);
         UMrunTime = toc(GlobalUnitMatchClock);
-        save(fullfile(UMparam.SaveDir,'UnitMatch.mat'),'UniqueIDConversion','MatchTable','WaveformInfo','AllSessionCorrelations','UMparam','UMrunTime')
+        save(fullfile(UMparam.SaveDir,'UnitMatch.mat'),'UniqueIDConversion','MatchTable','WaveformInfo','UMparam','UMrunTime')
         DataSizeParam = CalculateDuration(Params.SaveDir);
         disp(['UnitMatch took ' num2str(round(UMrunTime/60*10)/10) 'minutes to run'])
 
@@ -109,8 +110,5 @@ elseif Params.DecompressionFlag % You might want to at least save out averaged w
     % Extract average waveforms
     ExtractAndSaveAverageWaveforms(clusinfo,UMparam)
 end
-
-%% Evaluate
-EvaluatingUnitMatch(UMparam.SaveDir);
 
 return

@@ -10,7 +10,13 @@ Allchannelpos = param.channelpos;
 SaveDir = param.SaveDir;
 maxdist = param.maxdist;
 
-Good_Idx = find(clusinfo.Good_ID); %Only care about good units at this point
+if param.GoodUnitsOnly
+    Good_Idx = find(clusinfo.Good_ID); %Only care about good units at this point
+else
+    Good_Idx = 1:length(clusinfo.Good_ID);
+    disp('Use all units including MUA and noise')
+
+end
 GoodRecSesID = clusinfo.RecSesID(Good_Idx);
 OriginalClusterIDs = clusinfo.cluster_id;
 
@@ -23,10 +29,10 @@ end
 DepthOnProbe = DepthOnProbe(Good_Idx);
 [X,Y]=meshgrid(recsesAll(Good_Idx));
 nclus = length(Good_Idx);
-ndays = length(unique(recsesAll));
-SessionSwitch = arrayfun(@(X) find(GoodRecSesID==X,1,'first'),1:ndays,'Uni',0);
+ndays = length(unique(GoodRecSesID));
+SessionSwitch = arrayfun(@(X) find(GoodRecSesID==X,1,'first'),unique(GoodRecSesID),'Uni',0);
 SessionSwitch(cellfun(@isempty,SessionSwitch))=[];
-SessionSwitch = [cell2mat(SessionSwitch) nclus+1];
+SessionSwitch = [cell2mat(SessionSwitch); nclus+1];
 
 %% Compute Metrics
 disp('Computing Metric similarity between pairs of units...')
@@ -329,7 +335,7 @@ while flag<2
     % Average EuclDist
     EuclDist = squeeze(nanmean(EuclDist,2));
     % Plotting order (sort units based on distance)
-    [~,SortingOrder] = arrayfun(@(X) sort(DepthOnProbe(SessionSwitch(X):SessionSwitch(X+1)-1)),1:ndays,'Uni',0);
+    [~,SortingOrder] = arrayfun(@(X) sort(EuclDist(1,SessionSwitch(X):SessionSwitch(X+1)-1)),1:ndays,'Uni',0);
     SortingOrder = arrayfun(@(X) squeeze(SortingOrder{X}+SessionSwitch(X)-1),1:ndays,'Uni',0);
     if size(SortingOrder{1},1)==1
         SortingOrder = cat(2,SortingOrder{:});
@@ -541,43 +547,9 @@ while flag<2
     title(['Across sessions, EuclDist< ' num2str(param.NeighbourDist) 'um'])
     legend('T>threshold','T<threshold','Location', 'best')
 
-
     saveas(gcf,fullfile(SaveDir,'TotalScore.fig'))
     saveas(gcf,fullfile(SaveDir,'TotalScore.bmp'))
-    % Find all pairs
-    % first factor authentication: score above threshold
-    % Take into account:
-    label = TotalScore>ThrsOpt;
-    [uid,uid2] = find(label);
-    Pairs = cat(2,uid,uid2);
-    Pairs = sortrows(Pairs);
-    Pairs = unique(Pairs,'rows');
-    Pairs(Pairs(:,1) == Pairs(:,2),:)=[];
 
-    %% Get correlation matrics for fingerprint correlations
-    Unit2Take = OriginalClusterIDs(Good_Idx);
-    sessionCorrelationsAll = cell(1,ndays);
-    for did = 1:ndays
-        % Load sp for correct day
-        if length(param.KSDir)>1
-            tmp = matfile(fullfile(param.KSDir{did},'PreparedData.mat'));
-        else %Stitched
-            tmp = matfile(fullfile(param.KSDir{1},'PreparedData.mat'));
-        end
-        SessionCorrelations = tmp.SessionCorrelations;
-        if length(tmp.SessionCorrelations)==ndays
-            sessionCorrelationsAll{did} = SessionCorrelations{did};
-        elseif length(tmp.SessionCorrelations)==1  %Normal situation
-            if iscell(SessionCorrelations)
-                sessionCorrelationsAll{did} = SessionCorrelations{1};
-            else
-                sessionCorrelationsAll{did} = SessionCorrelations;
-            end
-        else
-            disp('This is a weird situation...')
-            keyboard
-        end
-    end
   
     %% three ways to define candidate scores
     % Total score larger than threshold
@@ -619,13 +591,20 @@ assignin('caller','Predictors',Predictors)
 assignin('caller','drift',drift)
 assignin('caller','ProjectedLocationPerTP',ProjectedLocationPerTP)
 assignin('caller','ProjectedLocation',ProjectedLocation)
-assignin('caller','sessionCorrelationsAll',sessionCorrelationsAll)
-assignin('caller','Unit2Take',Unit2Take)
 assignin('caller','EuclDist',EuclDist)
 assignin('caller','SortingOrder',SortingOrder)
 
 return
 if 0 % THis can be used to look at some example projections
+    % Find all pairs
+    % first factor authentication: score above threshold
+    % Take into account:
+    label = TotalScore>ThrsOpt;
+    [uid,uid2] = find(label);
+    Pairs = cat(2,uid,uid2);
+    Pairs = sortrows(Pairs);
+    Pairs = unique(Pairs,'rows');
+    Pairs(Pairs(:,1) == Pairs(:,2),:)=[];
     %% Plot
     Pairs = [2,276,4] % Example
     cols =  jet(length(Pairs));

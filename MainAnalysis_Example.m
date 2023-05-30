@@ -6,7 +6,7 @@ tmpdatafolder = 'H:\MatchingUnits\Tmp'; % temporary folder
 KilosortDir = 'H:\MatchingUnits\KilosortOutput';% 'E:\Data\KiloSortOutput';%
 
 %% Information on experiments
-MiceOpt = {'AV008'}%,'AV008','JF067','CB016''EB019'}; %CB016 %AL032 'AV008' JF067 Add all mice you want to analyse
+MiceOpt = {'AL032'}%,'AV008','JF067','CB016''EB019'}; %CB016 %AL032 'AV008' JF067 Add all mice you want to analyse
 % nidq_sync_used = zeros(1,length(MiceOpt)); % Was an external nidq used for syncing (typically sync feeds directly into IMEC)
 % nidq_sync_used(ismember(MiceOpt,{'EB001','CB007','CB008'}))=1; % Except for these mice...
 DataDir2Use = repmat(1,[1,length(MiceOpt)]); % In case you have multiple DataDir, index which directory is used for each mouse
@@ -37,7 +37,7 @@ PrepareClusInfoparams.Scores2Include = {'AmplitudeSim','spatialdecaySim','Wavfor
 PrepareClusInfoparams.ApplyExistingBayesModel = 0; %If 1, use probability distributions made available by us
 PrepareClusInfoparams.MakePlotsOfPairs = 0; % Plots pairs for inspection (UnitMatch)
 PrepareClusInfoparams.AssignUniqueID = 1; % Assign UniqueID 
-
+PrepareClusInfoparams.GoodUnitsOnly = 1; % Include only good untis in the UnitMatch analysis
 %% All dependencies you want to add (you may need to download these, all available via github)
 addpath(genpath(cd))
 
@@ -45,12 +45,12 @@ addpath(genpath(cd))
 addpath(genpath('C:\Users\EnnyB\Documents\GitHub\AP_histology'))
 addpath(genpath('C:\Users\EnnyB\Documents\Github\rastermap'))
 addpath(genpath('C:\Users\EnnyB\Documents\GitHub\allenCCF')) 
+addpath(genpath('C:\Users\EnnyB\Documents\GitHub\bombcell')) % https://github.com/Julie-Fabre/bombcell, branch 'enny'
 
 % Required (for using UnitMatch):
 addpath(genpath('C:\Users\EnnyB\Documents\GitHub\spikes'))% please use https://github.com/EnnyvanBeest/spikes
 addpath(genpath('C:\Users\EnnyB\Documents\GitHub\npy-matlab'))
 addpath(genpath('C:\Users\EnnyB\Documents\GitHub\mtscomp'))  % https://github.com/int-brain-lab/mtscomp
-addpath(genpath('C:\Users\EnnyB\Documents\GitHub\bombcell')) % https://github.com/Julie-Fabre/bombcell, branch 'enny'
 addpath(genpath('C:\Users\EnnyB\Documents\GitHub\UnitMatch')) % Make sure to have this one fresh in the path (so run this last)
 
 try
@@ -62,7 +62,7 @@ end
 
 %% Automatic from here
 %% PyKS - run pykilosort from Matlab/Python integration
-% RunPyKS2_FromMatlab
+RunPyKS2_FromMatlab
 
 %% Runs unitmatch across all data from a mouse to generate a table
 RunUnitMatchAllDataPerMouse

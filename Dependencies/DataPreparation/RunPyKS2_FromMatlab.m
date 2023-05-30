@@ -206,6 +206,9 @@ for midx = 1:length(MiceOpt)
 
             % Check if there's an ephys folder, if so run pyks2
             tmpephysdir = dir(fullfile(DataDir{DataDir2Use(midx)},MiceOpt{midx},thisdate,'ephys',['*' MiceOpt{midx} '*']));
+            if isempty(tmpephysdir)
+                continue
+            end
             if exist('IgnoreTheseFiles','var')
                 for id = 1:length(IgnoreTheseFiles)
                     % Check if there's an ephys folder, if so run pyks2

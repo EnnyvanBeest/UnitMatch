@@ -1,4 +1,4 @@
-function  [UniqueIDConversion, MatchTable, WaveformInfo, AllSessionCorrelations, param] = UnitMatch(clusinfo,param)
+function  [UniqueIDConversion, MatchTable, WaveformInfo, param] = UnitMatch(clusinfo,param)
 %% Match units on neurophysiological evidence
 % Input:
 % - clusinfo (this is phy output, see also prepareinfo/spikes toolbox)
@@ -34,11 +34,12 @@ function  [UniqueIDConversion, MatchTable, WaveformInfo, AllSessionCorrelations,
 Scores2Include = param.Scores2Include % Good to show for failure prevention
 TakeChannelRadius = 75; %in micron around max channel
 maxdist = 200; % Maximum distance at which units are considered as potential matches
+param.removeoversplits = 0; % Remove oversplits based on ISI violations or not?
 param.MakeOwnNaiveBayes = 1; % if 0, use standard matlab version, which assumes normal distributions --> not recommended
 SaveScoresAsProbability = 0; %If 1, the individual scores are converted to probabiliti
 param.maxrun = 1; % This is whether you want to use Bayes' output to create a new potential candidate set to optimize the probability distributions. Probably we don't want to keep optimizing?, as this can be a bit circular (?)
-drawmax = inf; % Maximum number of drawed matches (otherwise it takes forever!)
-VisibleSetting = 'off'; %Do we want to see the figures being plot online?
+param.drawmax = inf; % Maximum number of drawed matches (otherwise it takes forever!)
+param.VisibleSetting = 'off'; %Do we want to see the figures being plot online?
 Draw2DMatrixes = 0; % If you find this useful
 param.NeighbourDist = 50; % In micron
 
@@ -76,7 +77,13 @@ OriginalClusterIDs = clusinfo.cluster_id;
 % nses = length(AllDecompPaths);
 % OriginalClusID = AllClusterIDs; % Original cluster ID assigned by KS
 UniqueID = 1:length(OriginalClusterIDs); % Initial assumption: All clusters are unique
-Good_Idx = find(clusinfo.Good_ID); %Only care about good units at this point
+if param.GoodUnitsOnly
+    Good_Idx = find(clusinfo.Good_ID); %Only care about good units at this point
+else
+    Good_Idx = 1:length(clusinfo.Good_ID);
+    disp('Use all units including MUA and noise')
+
+end
 GoodRecSesID = clusinfo.RecSesID(Good_Idx);
 
 % Define day stucture
@@ -84,14 +91,14 @@ recsesAll = clusinfo.RecSesID;
 recsesGood = recsesAll(Good_Idx);
 [X,Y]=meshgrid(recsesAll(Good_Idx));
 nclus = length(Good_Idx);
-ndays = length(unique(recsesAll));
+ndays = length(unique(recsesGood));
 % x = repmat(GoodRecSesID,[1 numel(GoodRecSesID)]);
 % SameSesMat = x == x';
 % OriSessionSwitch = cell2mat(arrayfun(@(X) find(recsesAll==X,1,'first'),1:ndays,'Uni',0));
 % OriSessionSwitch = [OriSessionSwitch nclus+1];
-SessionSwitch = arrayfun(@(X) find(GoodRecSesID==X,1,'first'),1:ndays,'Uni',0);
+SessionSwitch = arrayfun(@(X) find(GoodRecSesID==X,1,'first'),unique(recsesGood),'Uni',0);
 SessionSwitch(cellfun(@isempty,SessionSwitch))=[];
-SessionSwitch = [cell2mat(SessionSwitch) nclus+1];
+SessionSwitch = [cell2mat(SessionSwitch); nclus+1];
 
 %% Extract raw waveforms
 % This script does the actual extraction (if necessary) and saves out paths
@@ -105,7 +112,7 @@ AllWVBParameters = ExtractParameters(Path4UnitNPY,clusinfo,param);
 ExtractSimilarityMetrics(Scores2Include,AllWVBParameters,clusinfo,param)% All Scores2Include are pushed to the workspace
 
 %% Naive bayes classifier
-[MatchProbability,label,Pairs,Tbl,BestMdl] = RunNaiveBayes(Predictors,TotalScore,Scores2Include,clusinfo,param,SortingOrder);
+[MatchProbability,label,Tbl,BestMdl] = RunNaiveBayes(Predictors,TotalScore,Scores2Include,clusinfo,param,SortingOrder,EuclDist);
 
 %% Some evaluation:
 % Units on the diagonal are matched by (Py)KS within a day. Very likely to
@@ -142,26 +149,13 @@ if SaveScoresAsProbability
     end
 end
 
-%% Compute functional score (cross-correlation fingerprint)
-if ndays<5
-    drawdrosscorr = 1;
-else
-    drawdrosscorr = 0;
-end
-[r, c] = find(MatchProbability>param.ProbabilityThreshold); %Find matches
-Pairs = cat(2,r,c);
-Pairs = sortrows(Pairs);
-Pairs = unique(Pairs,'rows');
-[FingerprintR,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCorrelationFingerPrint(sessionCorrelationsAll,Pairs,Unit2Take,recsesGood,drawdrosscorr);
-
-
 %% Assign same Unique ID
 OriUniqueID = UniqueID; %need for plotting
 [PairID1,PairID2]=meshgrid(OriginalClusterIDs(Good_Idx));
 [recses1,recses2] = meshgrid(recsesAll(Good_Idx));
 [PairID3,PairID4]=meshgrid(OriUniqueID(Good_Idx));
 
-MatchTable = table(PairID1(:),PairID2(:),recses1(:),recses2(:),PairID3(:),PairID4(:),MatchProbability(:),RankScoreAll(:),FingerprintR(:),TotalScore(:),EuclDist(:),'VariableNames',{'ID1','ID2','RecSes1','RecSes2','UID1','UID2','MatchProb','RankScore','FingerprintCor','TotalScore','EucledianDistance'});
+MatchTable = table(PairID1(:),PairID2(:),recses1(:),recses2(:),PairID3(:),PairID4(:),MatchProbability(:),TotalScore(:),EuclDist(:),'VariableNames',{'ID1','ID2','RecSes1','RecSes2','UID1','UID2','MatchProb','TotalScore','EucledianDistance'});
 if param.AssignUniqueID
     [UniqueID, MatchTable] = AssignUniqueID(MatchTable,clusinfo,Path4UnitNPY,param);
 end
@@ -250,12 +244,17 @@ if RunPyKSChronicStitched
         FPEst(did) = sum(tmpprob(:)==1)./sum(~isnan(tmpprob(:)))*100;
         disp(['False positive estimate recording ' num2str(did) ': ' num2str(round(FPEst(did)*100)/100) '%'])
     end
+
+
+    PercDetected = sum(PyKSLabel(:) == 1 & label(:) ==1)./sum(PyKSLabel(:)==1)*100;    
+    disp(['Detected ' num2str(PercDetected) '% of PyKS matched units'])
+
+    PercOver = sum(label(:)==1 & PyKSLabel(:)==0)./sum(PyKSLabel(:)==1)*100;
+    disp(['Detected ' num2str(PercOver) '% more units than just PyKS matched units'])
 end
 
-[~,SortingOrder] = arrayfun(@(X) sort(EuclDist(SessionSwitch(X):SessionSwitch(X+1)-1,1)),1:ndays,'Uni',0);
-SortingOrder = cat(1,SortingOrder{:});
 %% Check different probabilities, what does the match graph look like?
-figure;
+figure('name','Different Posterior probability Thresholds');
 takethisprob = [0.5 0.75 0.95 0.99];
 for pid = 1:4
     subplot(2,2,pid)
@@ -271,64 +270,6 @@ for pid = 1:4
 end
 saveas(gcf,fullfile(SaveDir,'ProbabilitiesMatches.fig'))
 saveas(gcf,fullfile(SaveDir,'ProbabilitiesMatches.bmp'))
-
-%% Compare to functional scores
-figure;
-subplot(1,3,1)
-imagesc(RankScoreAll(SortingOrder,SortingOrder)==1 & SigMask(SortingOrder,SortingOrder)==1)
-hold on
-arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
-arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
-colormap(flipud(gray))
-title('Rankscore == 1*')
-makepretty
-
-subplot(1,3,2)
-imagesc(MatchProbability(SortingOrder,SortingOrder)>param.ProbabilityThreshold)
-hold on
-arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
-arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
-colormap(flipud(gray))
-title(['Match Probability>' num2str(param.ProbabilityThreshold)])
-makepretty
-
-subplot(1,3,3)
-imagesc(MatchProbability(SortingOrder,SortingOrder)>=param.ProbabilityThreshold | (MatchProbability(SortingOrder,SortingOrder)>0.05 & RankScoreAll(SortingOrder,SortingOrder)==1 & SigMask(SortingOrder,SortingOrder)==1));
-% imagesc(MatchProbability>=0.99 | (MatchProbability>=0.05 & RankScoreAll==1 & SigMask==1))
-hold on
-arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
-arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
-colormap(flipud(gray))
-title('Matching probability + rank')
-makepretty
-saveas(gcf,fullfile(SaveDir,'RankScoreVSProbability.fig'))
-saveas(gcf,fullfile(SaveDir,'RankScoreVSProbability.bmp'))
-
-tmpf = triu(FingerprintR);
-tmpm = triu(MatchProbability);
-tmpr = triu(RankScoreAll);
-tmpr = tmpr(tmpf~=0);
-tmpm = tmpm(tmpf~=0);
-tmpf = tmpf(tmpf~=0);
-figure;
-scatter(tmpm,tmpf,14,tmpr,'filled')
-colormap(cat(1,[0 0 0],winter))
-xlabel('Match Probability')
-ylabel('Cross-correlation fingerprint')
-makepretty
-saveas(gcf,fullfile(SaveDir,'RankScoreVSProbabilityScatter.fig'))
-saveas(gcf,fullfile(SaveDir,'RankScoreVSProbabilityScatter.bmp'))
-
-
-if RunPyKSChronicStitched
-
-    PercDetected = sum(PyKSLabel(:) == 1 & label(:) ==1)./sum(PyKSLabel(:)==1)*100;    
-    disp(['Detected ' num2str(PercDetected) '% of PyKS matched units'])
-
-    PercOver = sum(label(:)==1 & PyKSLabel(:)==0)./sum(PyKSLabel(:)==1)*100;
-    disp(['Detected ' num2str(PercOver) '% more units than just PyKS matched units'])
-end
-
 
 %% TotalScore Pair versus no pair
 figure('name','TotalScore vs Probability');
@@ -388,6 +329,7 @@ for id = 1:2
 end
 saveas(gcf,fullfile(SaveDir,'ScoresSelfvsMatch.fig'))
 saveas(gcf,fullfile(SaveDir,'ScoresSelfvsMatch.bmp'))
+
 %% inspect probability distributions
 figure('name','Parameter Scores');
 Edges = [0:0.01:1];
@@ -411,6 +353,7 @@ for scid=1:length(Scores2Include)
     end
     makepretty
 end
+
 
 if Draw2DMatrixes
     figure('name','Projected Location Distance to [0 0]')
@@ -488,34 +431,7 @@ if Draw2DMatrixes
     zlabel('Counts')
     title('Identified Matches')
 end
-%% Figures
-if param.MakePlotsOfPairs
-    % Pairs redefined:
-    uId = unique(UniqueID(Good_Idx));
-    Pairs = arrayfun(@(X) find(UniqueID(Good_Idx)==X),uId,'Uni',0);
-    Pairs(cellfun(@length,Pairs)==1) = [];
-    for id =1:length(lowselfscores) % Add these for plotting - inspection
-        Pairs{end+1} = [lowselfscores(id) lowselfscores(id)];
-    end
 
-    if RunPyKSChronicStitched
-        [r,c] = find(label==0 & PyKSLabel==1);
-        PairsPKS = cat(2,r,c);
-        PairsPKS(r==c,:) = [];
-        PairsPKS = sort(PairsPKS,2,'ascend');
-        PairsPKS = unique(PairsPKS,'stable','rows');
-        for id = 1:size(PairsPKS,1) % Add these for plotting - inspection
-            Pairs{end+1} = [PairsPKS(id,1) PairsPKS(id,2)];
-        end
-    end
 
-    if size(Pairs,2)>drawmax
-        DrawPairs = randsample(1:size(Pairs,2),drawmax,'false');
-    else
-        DrawPairs = 1:size(Pairs,2);
-    end
-
-    PlotTheseUnits_UM(Pairs(DrawPairs),MatchTable,UniqueIDConversion,WaveformInfo,AllSessionCorrelations,param,VisibleSetting)
-end
 return
 

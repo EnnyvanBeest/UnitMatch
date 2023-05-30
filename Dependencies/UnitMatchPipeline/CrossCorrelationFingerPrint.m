@@ -8,6 +8,7 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelationsFingerprint
     %% Parameters
     nclus = numel(Unit2Take);
     ndays = numel(sessionCorrelationsAll);
+    RecOpt = unique(recsesGood);
     SessionSwitch = [1 1+cumsum(cell2mat(cellfun(@(x) size(x.fold1,1), sessionCorrelationsAll, 'uni', 0)))];
     AllSessionCorrelationsFingerprints = cell(ndays,ndays); % Used for plotting only
     FingerprintR_plt = cell(ndays,ndays);
@@ -47,7 +48,7 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelationsFingerprint
                 for did = 1:length(dayopt)
                     % We need a group of units that is likely to be a pair across at least two days
                     if did==1
-                        pairidx = recsesGood(Pairs(:,1)) == dayopt(did) & recsesGood(Pairs(:,2))==dayopt(did+1);
+                        pairidx = recsesGood(Pairs(:,1)) == RecOpt(dayopt(did)) & recsesGood(Pairs(:,2))==RecOpt(dayopt(did+1));
                         PairsTmp = Pairs(pairidx,:);
                         % Only use every 'unit' once --> take the highest scoring matches
                         [~,id1,~]=unique(PairsTmp(:,1),'stable');
@@ -59,7 +60,7 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelationsFingerprint
                         Unit2TakeIdx = [];
                     end
                     if did==2
-                        pairidx = recsesGood(Pairs(:,2)) == dayopt(did) & recsesGood(Pairs(:,1))==dayopt(did-1);
+                        pairidx = recsesGood(Pairs(:,2)) == RecOpt(dayopt(did)) & recsesGood(Pairs(:,1))==RecOpt(dayopt(did-1));
                         PairsTmp = Pairs(pairidx,:);
                         % Only use every 'unit' once --> take the highest scoring matches
                         [~,id1,~]=unique(PairsTmp(:,1),'stable');
@@ -68,7 +69,7 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelationsFingerprint
                         PairsTmp = PairsTmp(id1,:);
                         Unit2TakeIdx = [Unit2TakeIdx; PairsTmp(:,2)];
                     end
-                    Unit2TakeIdxAll = find(recsesGood == dayopt(did));
+                    Unit2TakeIdxAll = find(recsesGood == RecOpt(dayopt(did)));
     
                     % Extract the part of the correlation matrix with these
                     % pairs
