@@ -403,7 +403,7 @@ while flag<2
     disp('Computing total score...')
     timercounter = tic;
 %     priorMatch = 1-((nclus+nclus.*sqrt(ndays-1))./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days)
-    priorMatch = 1-((nclus+nclus.*sqrt(ndays-1))./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days)
+    priorMatch = 1-((nclus+nclus.*sqrt(ndays-1)*param.ExpectMatches)./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days)
 
     leaveoutmatches = false(nclus,nclus,length(Scores2Include)); %Used later
     figure;

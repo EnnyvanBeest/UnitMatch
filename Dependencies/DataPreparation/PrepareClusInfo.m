@@ -322,6 +322,24 @@ for subsesid=1:length(KiloSortPaths)
             qMetricsExist = ~isempty(dir(fullfile(savePath, '**', 'templates._bc_qMetrics.parquet'))); % ~isempty(dir(fullfile(savePath, 'qMetric*.mat'))) not used anymore?
             idx = sp.SessionID==id;
             InspectionFlag = 0;
+            if ~exist(fullfile(rawD(id).folder,strrep(rawD(id).name,'.cbin','_sync.dat')))
+                disp('Extracting sync file...')
+                % detect whether data is compressed, decompress locally if necessary
+                if ~exist(fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')))
+                    disp('This is compressed data and we do not want to use Python integration... uncompress temporarily')
+                    decompDataFile = bc_extractCbinData(fullfile(rawD(id).folder,rawD(id).name),...
+                        [], [], 0,  fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')));
+                    copyfile(strrep(fullfile(rawD(id).folder,rawD(id).name),'cbin','meta'),strrep(fullfile(Params.tmpdatafolder,rawD(id).name),'cbin','meta'))
+                end
+                DecompressionFlag = 1;
+                [Imecmeta] = ReadMeta2(fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','meta')),'ap');
+                nchan = strsplit(Imecmeta.acqApLfSy,',');
+                nChansInFile = str2num(nchan{1})+str2num(nchan{3});
+          
+                syncDatImec = extractSyncChannel(fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')), nChansInFile, nChansInFile); %Last channel is sync
+                copyfile(fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'.cbin','_sync.dat')),fullfile(rawD(id).folder,strrep(rawD(id).name,'.cbin','_sync.dat')))
+
+            end
             if ~qMetricsExist || Params.RedoQM
                 % First check if we want to use python for compressed data. If not, uncompress data first
                 if any(strfind(rawD(id).name,'cbin')) && Params.DecompressLocal
@@ -332,6 +350,7 @@ for subsesid=1:length(KiloSortPaths)
                             [], [], 0,  fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')));
                         copyfile(strrep(fullfile(rawD(id).folder,rawD(id).name),'cbin','meta'),strrep(fullfile(Params.tmpdatafolder,rawD(id).name),'cbin','meta'))
                     end
+                  
                     DecompressionFlag = 1;
                     if Params.InspectQualityMetrics
                         InspectionFlag=1;
@@ -459,7 +478,11 @@ for subsesid=1:length(KiloSortPaths)
     sp = rmfield(sp,'waveforms');
     save(fullfile(KiloSortPaths{subsesid},'PreparedData.mat'),'clusinfo','Params','-v7.3')
     if Params.saveSp
+        try
         save(fullfile(KiloSortPaths{subsesid},'PreparedData.mat'),'sp','-append')
+        catch ME
+            disp(ME)
+        end
     end
 
     countid=countid+1;

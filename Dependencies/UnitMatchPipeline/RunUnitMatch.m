@@ -65,6 +65,11 @@ UMparam.ApplyExistingBayesModel = Params.ApplyExistingBayesModel; %If 1, use pro
 UMparam.MakePlotsOfPairs = Params.MakePlotsOfPairs; % Plot all pairs
 UMparam.AssignUniqueID = Params.AssignUniqueID; %Assign Unique ID
 UMparam.GoodUnitsOnly = Params.GoodUnitsOnly;
+if isfield(Params,'RecType') && strcmpi(Params.RecType,'Acute')
+    UMparam.ExpectMatches = 0; %We do actually not expect any matches. Change prior accordingly
+else
+    UMparam.ExpectMatches = 1;
+end
 if Params.UnitMatch
     UnitMatchExist = dir(fullfile(UMparam.SaveDir,'UnitMatch.mat'));
     if ~isempty(UnitMatchExist) && ~Params.RedoUnitMatch

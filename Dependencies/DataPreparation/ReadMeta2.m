@@ -9,6 +9,9 @@ file = dir(fullfile(binName,['*' aporlfp '.meta']));
 if isempty(file)
     file = dir(fullfile(binName,['*.meta']));
 end
+if isempty(file)
+    file = dir(binName);
+end
 
 % Parse ini file into cell entries C{1}{i} = C{2}{i}
 fid = fopen(fullfile(file(1).folder, file(1).name), 'r');

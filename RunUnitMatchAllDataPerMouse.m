@@ -76,8 +76,12 @@ for midx = 1:length(MiceOpt)
 
     %% Prepare cluster information
     PrepareClusInfoparams = PrepareClusInfo(subsesoptAll,PrepareClusInfoparams);
-
+    PrepareClusInfoparams.RecType = RecordingType{midx};%
     %% Run UnitMatch
+    UnitMatchExist = dir(fullfile(PrepareClusInfoparams.SaveDir,'**','UnitMatch.mat'));
+    if ~isempty(UnitMatchExist) && ~PrepareClusInfoparams.RedoUnitMatch
+        continue
+    end
     UMparam = RunUnitMatch(subsesoptAll,PrepareClusInfoparams);
 
     %% Evaluate (within unit ID cross-validation)
