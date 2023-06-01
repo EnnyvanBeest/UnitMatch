@@ -33,7 +33,7 @@ ndays = length(unique(GoodRecSesID));
 SessionSwitch = arrayfun(@(X) find(GoodRecSesID==X,1,'first'),unique(GoodRecSesID),'Uni',0);
 SessionSwitch(cellfun(@isempty,SessionSwitch))=[];
 SessionSwitch = [cell2mat(SessionSwitch); nclus+1];
-
+drift = nan;
 %% Compute Metrics
 disp('Computing Metric similarity between pairs of units...')
 timercounter = tic;
