@@ -182,26 +182,28 @@ for midx = 1:length(MiceOpt)
 
 end
 %% Now we make histograms for the Area Under the Curve scores
+edges = [0:0.1:1];
 subplot(3,3,3)
 hold on
-h1 = histogram(FingerprintAUC(1,:));
+h1 = histogram(FingerprintAUC(1,:),edges);
 h1.FaceColor = [0.25 0.25 0];
 % h1.FaceAlpha = 0.5;
 h1.EdgeColor = [0.25 0.25 0];
 
-h2 = histogram(FingerprintAUC(2,:));
+h2 = histogram(FingerprintAUC(2,:),edges);
 h2.FaceColor = [0 0.5 0.5];
 % h2.FaceAlpha = 0.5;
 h2.EdgeColor = [0 0.5 0.5];
 
-h3 = histogram(FingerprintAUC(3,:));
+
+h3 = histogram(FingerprintAUC(3,:),edges);
 h3.FaceColor = [0.5 0 0.5];
 % h2.FaceAlpha = 0.5;
 h3.EdgeColor = [0.5 0 0.5];
 
-line([median(FingerprintAUC(1,:)) median(FingerprintAUC(1,:))],get(gca,'ylim'),'Color',[0.25 0.25 0])
-line([median(FingerprintAUC(2,:)) median(FingerprintAUC(2,:))],get(gca,'ylim'),'Color',[0 0.5 0.5])
-line([median(FingerprintAUC(3,:)) median(FingerprintAUC(3,:))],get(gca,'ylim'),'Color',[0.5 0 0.5])
+line([nanmedian(FingerprintAUC(1,:)) nanmedian(FingerprintAUC(1,:))],get(gca,'ylim'),'Color',[0.25 0.25 0])
+line([nanmedian(FingerprintAUC(2,:)) nanmedian(FingerprintAUC(2,:))],get(gca,'ylim'),'Color',[0 0.5 0.5])
+line([nanmedian(FingerprintAUC(3,:)) nanmedian(FingerprintAUC(3,:))],get(gca,'ylim'),'Color',[0.5 0 0.5])
 
 xlabel('AUC cross-correlation')
 ylabel('Nr sessions')
@@ -210,24 +212,24 @@ makepretty
 %% 
 subplot(3,3,6)
 hold on
-h1 = histogram(ACGAUC(1,:));
+h1 = histogram(ACGAUC(1,:),edges);
 h1.FaceColor = [0.25 0.25 0];
 % h1.FaceAlpha = 0.5;
 h1.EdgeColor = [0.25 0.25 0];
 
-h2 = histogram(ACGAUC(2,:));
+h2 = histogram(ACGAUC(2,:),edges);
 h2.FaceColor = [0 0.5 0.5];
 % h2.FaceAlpha = 0.5;
 h2.EdgeColor = [0 0.5 0.5];
 
-h3 = histogram(ACGAUC(3,:));
+h3 = histogram(ACGAUC(3,:),edges);
 h3.FaceColor = [0.5 0 0.5];
 % h2.FaceAlpha = 0.5;
 h3.EdgeColor = [0.5 0 0.5];
 
-line([median(ACGAUC(1,:)) median(ACGAUC(1,:))],get(gca,'ylim'),'Color',[0.25 0.25 0])
-line([median(ACGAUC(2,:)) median(ACGAUC(2,:))],get(gca,'ylim'),'Color',[0 0.5 0.5])
-line([median(ACGAUC(3,:)) median(ACGAUC(3,:))],get(gca,'ylim'),'Color',[0.5 0 0.5])
+line([nanmedian(ACGAUC(1,:)) nanmedian(ACGAUC(1,:))],get(gca,'ylim'),'Color',[0.25 0.25 0])
+line([nanmedian(ACGAUC(2,:)) nanmedian(ACGAUC(2,:))],get(gca,'ylim'),'Color',[0 0.5 0.5])
+line([nanmedian(ACGAUC(3,:)) nanmedian(ACGAUC(3,:))],get(gca,'ylim'),'Color',[0.5 0 0.5])
 
 xlabel('AUC ACG correlation')
 ylabel('Nr sessions')
@@ -236,24 +238,24 @@ makepretty
 %%
 subplot(3,3,9)
 hold on
-h1 = histogram(RFAUC(1,:));
+h1 = histogram(RFAUC(1,:),edges);
 h1.FaceColor = [0.25 0.25 0];
 % h1.FaceAlpha = 0.5;
 h1.EdgeColor = [0.25 0.25 0];
 
-h2 = histogram(RFAUC(2,:));
+
+h2 = histogram(RFAUC(2,:),edges);
 h2.FaceColor = [0 0.5 0.5];
 % h2.FaceAlpha = 0.5;
 h2.EdgeColor = [0 0.5 0.5];
 
-h3 = histogram(RFAUC(3,:));
+h3 = histogram(RFAUC(3,:),edges);
 h3.FaceColor = [0.5 0 0.5];
 % h2.FaceAlpha = 0.5;
 h3.EdgeColor = [0.5 0 0.5];
-
-line([median(RFAUC(1,:)) median(RFAUC(1,:))],get(gca,'ylim'),'Color',[0.25 0.25 0])
-line([median(RFAUC(2,:)) median(RFAUC(2,:))],get(gca,'ylim'),'Color',[0 0.5 0.5])
-line([median(RFAUC(3,:)) median(RFAUC(3,:))],get(gca,'ylim'),'Color',[0.5 0 0.5])
+line([nanmedian(RFAUC(1,:)) nanmedian(RFAUC(1,:))],get(gca,'ylim'),'Color',[0.25 0.25 0])
+line([nanmedian(RFAUC(2,:)) nanmedian(RFAUC(2,:))],get(gca,'ylim'),'Color',[0 0.5 0.5])
+line([nanmedian(RFAUC(3,:)) nanmedian(RFAUC(3,:))],get(gca,'ylim'),'Color',[0.5 0 0.5])
 
 xlabel('AUC RF distance')
 ylabel('Nr sessions')

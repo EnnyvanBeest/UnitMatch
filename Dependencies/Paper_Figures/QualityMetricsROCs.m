@@ -24,7 +24,7 @@ nclus = length(UniqueID);
 
 % Load qparams
 for recid = 1:length(AllKSDir)
-    d = dir(fullfile(AllKSDir{recid}, 'templates._bc_qMetrics.parquet'));
+    d = dir(fullfile(AllKSDir{recid}, '**', 'templates._bc_qMetrics.parquet'));
     qMetricsPath = d.folder;
     [~, qMetric, fractionRPVs_allTauR] = bc_loadSavedMetrics(qMetricsPath);
 
