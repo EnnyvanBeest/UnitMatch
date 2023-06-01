@@ -11,6 +11,10 @@ WithinIdx = find((MatchTable.UID1 == MatchTable.UID2) & (MatchTable.RecSes1 == M
 MatchIdx = find((MatchTable.UID1 == MatchTable.UID2) & (MatchTable.RecSes1 ~= MatchTable.RecSes2)); %Across session, same unit (cross-validation)
 NonMatchIdx = find((MatchTable.UID1 ~= MatchTable.UID2)); % Not the same unit
 
+if isempty(MatchIdx)
+    disp('No Matches found... return')
+    return
+end
 % Extract cluster information
 UniqueIDConversion = TmpFile.UniqueIDConversion;
 if UMparam.GoodUnitsOnly

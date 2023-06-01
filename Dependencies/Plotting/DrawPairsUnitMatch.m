@@ -3,7 +3,12 @@ function DrawPairsUnitMatch(SaveDir)
 TmpFile = matfile(fullfile(SaveDir,'UnitMatch.mat')); % Access saved file
 UMparam = TmpFile.UMparam; % Extract parameters
 MatchTable = TmpFile.MatchTable; % Load Matchtable
+try
 AllSessionCorrelations = TmpFile.AllSessionCorrelations;
+catch ME
+    disp('Run ComputeFunctionalScores first')
+    return
+end
 WaveformInfo = TmpFile.WaveformInfo;
 
 % Extract cluster information
