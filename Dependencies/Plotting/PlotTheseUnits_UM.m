@@ -95,9 +95,10 @@ end
 %% Plot figures
 timercounter = tic;
 disp('Plotting pairs...')
-cv=1;
+cv=2;
 for pairid=1:length(Pairs)
     tmpfig = figure('visible',param.VisibleSetting);
+
 
     cols =  jet(length(Pairs{pairid}));
     clear hleg
@@ -130,12 +131,12 @@ for pairid=1:length(Pairs)
     
         subplot(3,3,[1,4])
         hold on
-         scatter(Locs(:,1)*10,Locs(:,2)*10,20,[0.5 0.5 0.5],'filled') % Indicate sites
+         scatter(Locs(:,1)*10,Locs(:,2)*20,20,[0.5 0.5 0.5],'filled') % Indicate sites
         for id = 1:length(Locs)
-            plot(Locs(id,1)*10+[1:size(spikeMap,1)],Locs(id,2)*10+spikeMap(:,ChanIdx(id),cv),'-','color',cols(uidx,:),'LineWidth',1)
+            plot(Locs(id,1)*10+[1:size(spikeMap,1)],Locs(id,2)*20+spikeMap(:,ChanIdx(id),cv),'-','color',cols(uidx,:),'LineWidth',1)
         end
-        scatter(WaveformInfo.ProjectedLocation(1,uid,cv)*10,WaveformInfo.ProjectedLocation(2,uid,cv)*10,20,[0 0 0],'filled') %Indicate Centroid
-        hleg(uidx) = plot(WaveformInfo.ProjectedLocation(1,uid,cv)*10+[1:size(spikeMap,1)],WaveformInfo.ProjectedLocation(2,uid,cv)*10+WaveformInfo.ProjectedWaveform(:,uid,cv),'-','color',cols(uidx,:),'LineWidth',2);
+        scatter(WaveformInfo.ProjectedLocation(1,uid,cv)*10,WaveformInfo.ProjectedLocation(2,uid,cv)*20,20,[0 0 0],'filled') %Indicate Centroid
+        hleg(uidx) = plot(WaveformInfo.ProjectedLocation(1,uid,cv)*10+[1:size(spikeMap,1)],WaveformInfo.ProjectedLocation(2,uid,cv)*20+WaveformInfo.ProjectedWaveform(:,uid,cv),'-','color',cols(uidx,:),'LineWidth',2);
 
 
         subplot(3,3,[2])
@@ -193,6 +194,7 @@ for pairid=1:length(Pairs)
             hold on
             plot(t,ACG,'color',cols(uidx,:));
             title(['AutoCorrelogram'])
+            xlim([-0.1 0.1])
         end
         makepretty
     end
@@ -202,7 +204,7 @@ for pairid=1:length(Pairs)
     subplot(3,3,[1,4])
     subplot
     makepretty
-    set(gca,'yticklabel',arrayfun(@(X) num2str(X./10),arrayfun(@(X) X,get(gca,'ytick')),'UniformOutput',0))
+    set(gca,'yticklabel',arrayfun(@(X) num2str(X./20),get(gca,'ytick'),'UniformOutput',0))
     xlabel('Xpos (um)')
     ylabel('Ypos (um)')
     ylimcur = get(gca,'ylim');
@@ -326,27 +328,47 @@ for pairid=1:length(Pairs)
     makepretty
 
 
+
+    tmpfp = FingerprintR(Pairs{pairid},Pairs{pairid}); % It's symmetric, take best cross-validation for illustration
+    tmpfp(logical(eye(size(tmpfp)))) = nan;
+
     subplot(3,3,9)
     hold on
-    for uidx = 1:length(Pairs{pairid})-1
-        uid = Pairs{pairid}(uidx);
-        uid2 = Pairs{pairid}(uidx+1);
-        SessionCorrelations = AllSessionCorrelations{ismember(DayOpt,recsesGood(uid)),ismember(DayOpt,recsesGood(uid2))};
-        addthis3=-SessionSwitch(ismember(DayOpt,recsesGood(uid)))+1;
-        if recsesGood(uid2)>recsesGood(uid)
-            addthis4=-SessionSwitch(find(ismember(DayOpt,recsesGood(uid2))))+1+ncellsperrecording(ismember(DayOpt,recsesGood(uid)));
-        else
-            addthis4=-SessionSwitch(find(ismember(DayOpt,recsesGood(uid2))))+1;
-        end
-        plot(SessionCorrelations(uid+addthis3,:),'-','color',cols(uidx,:)); hold on; plot(SessionCorrelations(uid2+addthis4,:),'-','color',cols(uidx+1,:))
+    tmp = [];
+    tmp2 = [];
+    for uidx = 1:length(Pairs{pairid})
+        for uidx2 = 1:length(Pairs{pairid})
+            if uidx2<=uidx
+                continue
+            end
 
+            [r,c] = find(tmpfp == max([tmpfp(uidx,uidx2),tmpfp(uidx2,uidx)']));
+
+            uid = Pairs{pairid}(r);
+            uid2 = Pairs{pairid}(c);
+            tmp = [tmp round(FingerprintR(uid,uid2)*10)/10];
+            tmp2 = [tmp2 round(RankScoreAll(uid,uid2)*10)/10];
+            SessionCorrelations = AllSessionCorrelations{ismember(DayOpt,recsesGood(uid)),ismember(DayOpt,recsesGood(uid2))};
+            addthis3=-SessionSwitch(ismember(DayOpt,recsesGood(uid)))+1;
+            if recsesGood(uid2)>recsesGood(uid)
+                addthis4=-SessionSwitch(find(ismember(DayOpt,recsesGood(uid2))))+1+ncellsperrecording(ismember(DayOpt,recsesGood(uid)));
+            else
+                addthis4=-SessionSwitch(find(ismember(DayOpt,recsesGood(uid2))))+1;
+            end
+            if r == 1
+                plot(SessionCorrelations(uid+addthis3,:),'-','color',cols(uidx,:)); %hold on; plot(SessionCorrelations(uid2+addthis4,:),'-','color',cols(uidx2,:))
+            else
+                plot(SessionCorrelations(uid2+addthis4,:),'-','color',cols(uidx2,:))
+            end
+        end
     end
     xlabel('Unit')
     ylabel('Cross-correlation')
-    tmp = cell2mat(arrayfun(@(X) [num2str(round(FingerprintR(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
-    tmp(end)=[];
-    tmp2 = cell2mat(arrayfun(@(X) [num2str(round(RankScoreAll(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
-    tmp2(end)=[];
+    tmp = cell2mat(arrayfun(@(X) [num2str(X) ','],tmp,'Uni',0));
+    tmp(end) = [];
+    tmp2 = cell2mat(arrayfun(@(X) [num2str(X) ','],tmp2,'Uni',0));
+    tmp2(end) = [];
+
     title(['Fingerprint r=' tmp ', rank=' tmp2])
     ylims = get(gca,'ylim');
     set(gca,'ylim',[ylims(1) ylims(2)*1.2])
@@ -357,16 +379,29 @@ for pairid=1:length(Pairs)
     axes('Position',[PosMain(1)+(PosMain(3)*0.8) PosMain(2)+(PosMain(4)*0.8) PosMain(3)*0.2 PosMain(4)*0.2])
     box on
     hold on
-    for uidx = 1:length(Pairs{pairid})-1
-        uid = Pairs{pairid}(uidx);
-        uid2 = Pairs{pairid}(uidx+1);
-        tmp1 = FingerprintR(uid,:);
-        tmp1(uid2)=nan;
-        tmp2 = FingerprintR(uid2,:);
-        tmp2(uid)=nan;
-        tmp = cat(2,tmp1,tmp2);
-        histogram(tmp,'EdgeColor','none','FaceColor',[0.5 0.5 0.5])
-        line([FingerprintR(uid,uid2) FingerprintR(uid,uid2)],get(gca,'ylim'),'color',[1 0 0])
+    for uidx = 1:length(Pairs{pairid})
+        for uidx2 = 1:length(Pairs{pairid})
+            if uidx2<=uidx
+                continue
+            end
+            [r,c] = find(tmpfp == max([tmpfp(uidx,uidx2),tmpfp(uidx2,uidx)']));
+
+            uid = Pairs{pairid}(r);
+            uid2 = Pairs{pairid}(c);
+
+           
+            tmp1 = FingerprintR(uid,:);
+            tmp1(uid2)=nan;
+            tmp2 = FingerprintR(uid2,:);
+            tmp2(uid)=nan;
+            tmp = cat(2,tmp1,tmp2);
+            histogram(tmp,'EdgeColor','none','FaceColor',[0.5 0.5 0.5])
+            if r == 1
+            line([FingerprintR(uid,uid2) FingerprintR(uid,uid2)],get(gca,'ylim'),'color',cols(uidx,:))
+            else
+            line([FingerprintR(uid,uid2) FingerprintR(uid,uid2)],get(gca,'ylim'),'color',cols(uidx2,:))
+            end
+        end
     end
     xlabel('Finger print r')
     makepretty
