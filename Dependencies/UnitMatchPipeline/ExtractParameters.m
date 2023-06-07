@@ -117,12 +117,18 @@ for uid = 1:nclus
         %     % Mean waveform - first extract the 'weight' for each channel, based on
         %     % how close they are to the projected location (closer = better)
         Distance2MaxChan = sqrt(nansum(abs(Locs-channelpos(MaxChannel(uid,cv),:)).^2,2));
+        % Remove zero
+        Distance2MaxChan(Distance2MaxChan==0) = [];
         % Difference in amplitude from maximum amplitude
         spdctmp = (nanmax(abs(spikeMap(:,MaxChannel(uid,cv),cv)),[],1)-nanmax(abs(spikeMap(:,ChanIdx,cv)),[],1))./nanmax(abs(spikeMap(:,MaxChannel(uid,cv),cv)),[],1);
+        spdctmp(spdctmp==0) = [];
         % Spatial decay (average oer micron)
         spatialdecay(uid,cv) = nanmean(spdctmp./Distance2MaxChan');
-%         p = lsqcurvefit(expFun,[1 1],Distance2MaxChan',spdctmp,[],[],opts);
-%         spatialdecay(uid,cv) = p(1);
+        %         p = lsqcurvefit(expFun,[1 1],Distance2MaxChan',spdctmp,[],[],opts);
+        %         spatialdecay(uid,cv) = p(1); % Average better
+        %         p = polyfit(Distance2MaxChan',spdctmp,1); %Just a linear fit?
+        %         spatialdecay(uid,cv) = p(1); % Still average is better
+
         Peakval = ProjectedWaveform(PeakTime(uid,cv),uid,cv);
         Amplitude(uid,cv) = Peakval;
 
@@ -159,3 +165,126 @@ AllWVBParameters.waveformduration = waveformduration;
 AllWVBParameters.Amplitude = Amplitude;
 AllWVBParameters.spatialdecay = spatialdecay;
 AllWVBParameters.WaveIdx = WaveIdx;
+
+return
+% Images for example neuron
+if 0 
+    uid = [10] % Example
+     fprintf(1,'\b\b\b\b%3.0f%%',uid/nclus*100)
+    % load data
+    spikeMap = readNPY(Path4UnitNPY{uid});
+
+    % Detrending
+    spikeMap = permute(spikeMap,[2,1,3]); %detrend works over columns
+    spikeMap = detrend(spikeMap,1); % Detrend (linearly) to be on the safe side. OVER TIME!
+    spikeMap = permute(spikeMap,[2,1,3]);  % Put back in order
+
+    try
+        channelpos = Allchannelpos{recsesGood(uid)};
+    catch ME
+        % assume they all have the same configuration
+        channelpos = Allchannelpos{recsesGood(uid)-1};
+    end
+
+    % Extract channel positions that are relevant and extract mean location
+    [~,MaxChanneltmp] = nanmax(nanmax(abs(nanmean(spikeMap(35:70,:,:),3)),[],1));
+    ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChanneltmp,:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius*3); %Averaging over 10 channels helps with drift
+    Locs = channelpos(ChanIdx,:);
+
+    % Plot
+    tmp = nanmean(spikeMap(:,ChanIdx(channelpos(ChanIdx,1)==0),:),3);
+    timevec = [-(param.NewPeakLoc-(1:size(spikeMap,1)))].*(1/30000)*1000; % In MS
+    lims = [-150 150];
+    figure; 
+    subplot(2,3,1)
+    imagesc(timevec,channelpos(ChanIdx(channelpos(ChanIdx,1)==0),2),tmp',lims)
+    xlabel('Time (ms)')
+    ylabel('depth (micron)')
+    title('sites at 0um')
+    set(gca,'ydir','normal')
+  
+    subplot(2,3,2) % Peak profile
+    tmp = nanmean(spikeMap(param.NewPeakLoc,ChanIdx(channelpos(ChanIdx,1)==0),:),3);
+    plot(tmp,channelpos(ChanIdx(channelpos(ChanIdx,1)==0),2),'k-')
+    xlabel('mV at peak')
+    ylabel('Depth (micron)')
+    makepretty
+
+    subplot(2,3,3) % average waveform
+    tmp = nanmean(spikeMap(:,MaxChannel(uid,1),:),3);
+    plot(timevec,tmp,'k-')
+    xlabel('Time (ms)')
+    ylabel('mV at peak channel')
+    makepretty
+
+
+    tmp = nanmean(spikeMap(:,ChanIdx(channelpos(ChanIdx,1)==32),:),3);
+
+    subplot(2,3,4)
+    imagesc(timevec,channelpos(ChanIdx(channelpos(ChanIdx,1)==32),2),tmp',lims)
+    xlabel('Time (ms)')
+    ylabel('Depth (micron)')
+    title('Sites at 32um')
+    set(gca,'ydir','normal')
+    makepretty
+    subplot(2,3,5) % Peak profile
+    tmp = nanmean(spikeMap(param.NewPeakLoc,ChanIdx(channelpos(ChanIdx,1)==32),:),3);
+    plot(tmp,channelpos(ChanIdx(channelpos(ChanIdx,1)==0),2),'k-')
+    xlabel('mV at peak')
+    ylabel('Depth (micron)')
+    makepretty
+
+    subplot(2,3,6) % average waveform
+    tmp = nanmean(spikeMap(:,MaxChannel(uid,1),:),3);
+    plot(timevec,tmp,'k-')
+    xlabel('Time (ms)')
+    ylabel('mV at peak channel')
+    makepretty
+
+
+
+    % Spatial decay plot
+    figure('name','Spatial Decay Plot')
+    ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChanneltmp,:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius); %Averaging over 10 channels helps with drift
+    Locs = channelpos(ChanIdx,:);
+    Distance2MaxChan = sqrt(nansum(abs(Locs-channelpos(MaxChannel(uid,cv),:)).^2,2));
+    Distance2MaxChan(Distance2MaxChan==0) = [];
+    % Difference in amplitude from maximum amplitude
+    spdctmp = (nanmax(abs(spikeMap(:,MaxChannel(uid,cv),cv)),[],1)-nanmax(abs(spikeMap(:,ChanIdx,cv)),[],1))./nanmax(abs(spikeMap(:,MaxChannel(uid,cv),cv)),[],1);
+        spdctmp(spdctmp==0) = [];
+
+    % Spatial decay (average oer micron)
+    subplot(1,4,[1:3])
+    scatter(Distance2MaxChan,spdctmp,20,[0 0 0],'filled')
+    xlabel('\DeltaS_x_,_y')
+    ylabel('(a_s_i*-a_s)/a_s_i*')
+    hold on
+    for chid = 1:length(spdctmp./Distance2MaxChan')
+        plot([0 Distance2MaxChan(chid)],[0 spdctmp(chid)],'k--')
+    end
+    nanmean(spdctmp./Distance2MaxChan')
+
+    subplot(1,4,4)
+    hold on
+    for chid = 1:length(spdctmp./Distance2MaxChan')
+    scatter(1,spdctmp(chid)./Distance2MaxChan(chid),20,[ 0 0 0
+        ],'filled')
+    end
+    hold on
+    scatter(1,nanmean(spdctmp./Distance2MaxChan'),50,[0 0 1],'filled')
+
+
+
+
+
+
+%     p = lsqcurvefit(expFun,[1 1],Distance2MaxChan',spdctmp,[],[],opts)
+%     hold on
+%     plot(sort(Distance2MaxChan)',expFun(p,sort(Distance2MaxChan)'))
+%     Error1 = nansum((expFun(p,sort(Distance2MaxChan)') - spdctmp).^2);
+%     p = polyfit(Distance2MaxChan',spdctmp,1)
+%     hold on
+%     plot(sort(Distance2MaxChan)',polyval(p,sort(Distance2MaxChan)'))
+%     Error2 = nansum(polyval(p,sort(Distance2MaxChan)' - spdctmp).^2);
+
+end

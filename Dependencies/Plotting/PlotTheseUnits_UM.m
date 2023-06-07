@@ -23,8 +23,12 @@ for did = 1:nKSFiles
     sp{did}.st = sptmp.st;
     sp{did}.spikeTemplates = sptmp.spikeTemplates;
     sp{did}.spikeAmps = sptmp.spikeAmps;
-     % Replace recsesid with subsesid
-    sp{did}.RecSes = repmat(did,size(sp{did}.st));
+    % Replace recsesid with subsesid
+    if param.RunPyKSChronicStitched
+        sp{did}.RecSes = sptmp.RecSes;
+    else
+        sp{did}.RecSes = repmat(did,size(sp{did}.st));
+    end
 end
 clear sptmp
 
@@ -222,8 +226,8 @@ for pairid=1:length(Pairs)
     subplot(3,3,[2])
     xlabel('Xpos (um)')
     ylabel('Ypos (um)')
-    xlims = [WaveformInfo.ProjectedLocation(1,uid,cv)-25 WaveformInfo.ProjectedLocation(1,uid,cv)+25];
-    ylims = [WaveformInfo.ProjectedLocation(2,uid,cv)-25 WaveformInfo.ProjectedLocation(2,uid,cv)+25];  
+    xlims = [min(WaveformInfo.ProjectedLocation(1,Pairs{pairid},cv))-25 max(WaveformInfo.ProjectedLocation(1,Pairs{pairid},cv))+25];
+    ylims = [min(WaveformInfo.ProjectedLocation(2,Pairs{pairid},cv))-25 max(WaveformInfo.ProjectedLocation(2,Pairs{pairid},cv))+25];  
     set(gca,'xlim',xlims,'ylim',ylims)
     axis square
     %     legend([h(1),h(2)],{['Unit ' num2str(uid)],['Unit ' num2str(uid2)]})
@@ -337,7 +341,7 @@ for pairid=1:length(Pairs)
     tmp = [];
     tmp2 = [];
     for uidx = 1:length(Pairs{pairid})
-        for uidx2 = 1:length(Pairs{pairid})
+        for uidx2 = 2:length(Pairs{pairid})
             if uidx2<=uidx
                 continue
             end
@@ -355,11 +359,8 @@ for pairid=1:length(Pairs)
             else
                 addthis4=-SessionSwitch(find(ismember(DayOpt,recsesGood(uid2))))+1;
             end
-            if r == 1
-                plot(SessionCorrelations(uid+addthis3,:),'-','color',cols(uidx,:)); %hold on; plot(SessionCorrelations(uid2+addthis4,:),'-','color',cols(uidx2,:))
-            else
-                plot(SessionCorrelations(uid2+addthis4,:),'-','color',cols(uidx2,:))
-            end
+            plot(SessionCorrelations(uid+addthis3,:),'-','color',cols(uidx,:)); hold on; plot(SessionCorrelations(uid2+addthis4,:),'-','color',cols(uidx2,:))
+           
         end
     end
     xlabel('Unit')
@@ -380,7 +381,7 @@ for pairid=1:length(Pairs)
     box on
     hold on
     for uidx = 1:length(Pairs{pairid})
-        for uidx2 = 1:length(Pairs{pairid})
+        for uidx2 = 2:length(Pairs{pairid})
             if uidx2<=uidx
                 continue
             end
@@ -396,11 +397,7 @@ for pairid=1:length(Pairs)
             tmp2(uid)=nan;
             tmp = cat(2,tmp1,tmp2);
             histogram(tmp,'EdgeColor','none','FaceColor',[0.5 0.5 0.5])
-            if r == 1
-            line([FingerprintR(uid,uid2) FingerprintR(uid,uid2)],get(gca,'ylim'),'color',cols(uidx,:))
-            else
-            line([FingerprintR(uid,uid2) FingerprintR(uid,uid2)],get(gca,'ylim'),'color',cols(uidx2,:))
-            end
+            line([FingerprintR(uid,uid2) FingerprintR(uid,uid2)],get(gca,'ylim'),'color',nanmean(cols([uidx,uidx2],:),1))
         end
     end
     xlabel('Finger print r')

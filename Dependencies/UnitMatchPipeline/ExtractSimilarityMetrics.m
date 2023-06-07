@@ -188,8 +188,9 @@ while flag<2
     % the trajectory is consistenly separate
     CentroidVar = squeeze(nanvar(EuclDist,[],2));%./nanmean(EuclDist,2)+nanmean(EuclDist,2));
     CentroidVar = sqrt(CentroidVar);
-    CentroidVar = 1-((CentroidVar-nanmin(CentroidVar(:)))./(nanmax(CentroidVar(:))-nanmin(CentroidVar(:)))); %Average difference
-
+    CentroidVar = 1-((CentroidVar-nanmin(CentroidVar(:)))./(quantile(CentroidVar(:),0.99)-nanmin(CentroidVar(:)))); %Average difference
+    CentroidVar(CentroidVar<0) = 0;
+    CentroidVar(isnan(CentroidVar)) = 0;
     % @Célian suggestion: recenter to 0 first, then calculate the
     % difference in distance (to account for uncorrected drift)
     ProjectedLocationPerTPRecentered = permute(permute(ProjectedLocationPerTP,[1,2,4,3]) - ProjectedLocation,[1,2,4,3]);
@@ -217,7 +218,7 @@ while flag<2
     AngleSubtraction = abs(x1-x2);
     AngleSubtraction(isnan(abs(x1-x2))) = 0.5*pi; %punish points with nan
     TrajAngleSim = squeeze(nansum(AngleSubtraction,2)); % sum of angles
-    TrajAngleSim = 1-((TrajAngleSim-nanmin(TrajAngleSim(:)))./(nanmax(TrajAngleSim(:))-nanmin(TrajAngleSim(:))));
+    TrajAngleSim = 1-((TrajAngleSim-nanmin(TrajAngleSim(:)))./(quantile(TrajAngleSim(:),0.99)-nanmin(TrajAngleSim(:))));
     TrajAngleSim(TrajAngleSim<0 | isnan(TrajAngleSim))=0;
 
     % Continue distance traveled
@@ -227,11 +228,11 @@ while flag<2
     TrajDistCompared = abs(x1-x2);%
     TrajDistSim = squeeze(nansum(TrajDistCompared,2));
     TrajDistSim = sqrt(TrajDistSim); % Make more normal
-    TrajDistSim = 1-((TrajDistSim-nanmin(TrajDistSim(:)))./(nanmax(TrajDistSim(:))-nanmin(TrajDistSim(:))));
+    TrajDistSim = 1-((TrajDistSim-nanmin(TrajDistSim(:)))./(quantile(TrajDistSim(:),0.99)-nanmin(TrajDistSim(:))));
 
 
     LocTrajectorySim = (TrajAngleSim+TrajDistSim)./2; % Trajectory Similarity is sum of distance + sum of angles
-    LocTrajectorySim = (LocTrajectorySim-nanmin(LocTrajectorySim(:))./(nanmax(LocTrajectorySim(:))-nanmin(LocTrajectorySim(:))));
+    LocTrajectorySim = (LocTrajectorySim-nanmin(LocTrajectorySim(:))./(quantile(LocTrajectorySim(:),0.99)-nanmin(LocTrajectorySim(:))));
     %
     figure('name','Distance Measures')
     subplot(5,2,1)
@@ -682,5 +683,7 @@ if 0 % THis can be used to look at some example projections
         plot(squeeze(ProjectedWaveform(:,uid,1)),'color',cols(uidx,:))
      end
 
+     %% 
+     
 
 end
