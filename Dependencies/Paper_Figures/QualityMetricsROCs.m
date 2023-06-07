@@ -21,14 +21,20 @@ recsesall = UniqueIDConversion.recsesAll;
 
 AllKSDir = UMparam.KSDir; %original KS Dir
 nclus = length(UniqueID);
-
+nRec = length(unique(recses));
 % Load qparams
-for recid = 1:length(AllKSDir)
-    d = dir(fullfile(AllKSDir{recid}, '**', 'templates._bc_qMetrics.parquet'));
+for recid = 1:nRec
+    if UMparam.RunPyKSChronicStitched
+        d = dir(fullfile(AllKSDir{1}, '**', 'templates._bc_qMetrics.parquet'));
+    else
+        d = dir(fullfile(AllKSDir{recid}, '**', 'templates._bc_qMetrics.parquet'));
+    end
     qMetricsPath = d.folder;
     [~, qMetric, fractionRPVs_allTauR] = bc_loadSavedMetrics(qMetricsPath);
 
-    ThisIdx = find(GoodId(recsesall==recid));
+    ThisIdx = find(GoodId(recsesall==recid)); % Only take good units of this round
+    qMclusterID = qMetric.clusterID-1; %0-index
+    ThisIdx = ismember(qMclusterID,OriIDAll(ThisIdx)); % Find the same cluster IDs
 
     if recid==1
         qMetricAllGoodUnits = qMetric(ThisIdx,:); % Add sessions together, only take good units
