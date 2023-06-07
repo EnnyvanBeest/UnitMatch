@@ -84,7 +84,7 @@ for midx = 1:length(MiceOpt)
     ComputeFunctionalScores(UMparam.SaveDir)
     %% Figures
     if UMparam.MakePlotsOfPairs
-        DrawBlind = 1; %1 for blind drawing (for manual judging of pairs)
+        DrawBlind = 1; %Default 0. 1 for blind drawing (for manual judging of pairs)
         DrawPairsUnitMatch(UMparam.SaveDir,DrawBlind);
     end
     

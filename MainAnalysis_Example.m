@@ -6,7 +6,7 @@ tmpdatafolder = 'H:\MatchingUnits\Tmp'; % temporary folder
 KilosortDir = 'H:\MatchingUnits\KilosortOutput';% 'E:\Data\KiloSortOutput';%
 
 %% Information on experiments
-MiceOpt = {'AL032'}%,'AV008','JF067','CB016''EB019'}; %CB016 %AL032 'AV008' JF067 Add all mice you want to analyse
+MiceOpt = {'AL032'};%{'AV009','AV015','EB014','EB019','AL032','AV008','JF067','CB016'}%,'AV008','JF067','CB016''EB019'}; %CB016 %AL032 'AV008' JF067 Add all mice you want to analyse
 % nidq_sync_used = zeros(1,length(MiceOpt)); % Was an external nidq used for syncing (typically sync feeds directly into IMEC)
 % nidq_sync_used(ismember(MiceOpt,{'EB001','CB007','CB008'}))=1; % Except for these mice...
 DataDir2Use = repmat(1,[1,length(MiceOpt)]); % In case you have multiple DataDir, index which directory is used for each mouse
