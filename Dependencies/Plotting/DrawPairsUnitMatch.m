@@ -1,5 +1,7 @@
-function DrawPairsUnitMatch(SaveDir)
-
+function DrawPairsUnitMatch(SaveDir,DrawBlind)
+if nargin<2
+    DrawBlind = 0;
+end
 TmpFile = matfile(fullfile(SaveDir,'UnitMatch.mat')); % Access saved file
 UMparam = TmpFile.UMparam; % Extract parameters
 MatchTable = TmpFile.MatchTable; % Load Matchtable
@@ -37,8 +39,10 @@ for id =1:length(lowselfscores) % Add these for plotting - inspection
     Pairs{end+1} = [lowselfscores(id) lowselfscores(id)];
 end
 
+PyKSLabel = false(nclus,nclus);
+label = MatchProb>UMparam.ProbabilityThreshold;
+
 if UMparam.RunPyKSChronicStitched
-    label = MatchProb>UMparam.ProbabilityThreshold;
     PairsPyKS = [];
     for uid = 1:nclus
         pairstmp = find(OriID==OriID(uid))';
@@ -47,7 +51,6 @@ if UMparam.RunPyKSChronicStitched
         end
     end
 
-    PyKSLabel = false(nclus,nclus);
     for pid = 1:size(PairsPyKS,1)
         PyKSLabel(PairsPyKS(pid,1),PairsPyKS(pid,2)) = true;
         PyKSLabel(PairsPyKS(pid,2),PairsPyKS(pid,1)) = true;
@@ -58,9 +61,7 @@ if UMparam.RunPyKSChronicStitched
     PairsPKS(r==c,:) = [];
     PairsPKS = sort(PairsPKS,2,'ascend');
     PairsPKS = unique(PairsPKS,'stable','rows');
-    for id = 1:size(PairsPKS,1) % Add these for plotting - inspection
-        Pairs{end+1} = [PairsPKS(id,1) PairsPKS(id,2)];
-    end
+    Pairs = cat(2,Pairs,arrayfun(@(X) PairsPKS(X,:),1:length(PairsPKS),'Uni',0));% Add these for plotting - inspection
 end
 
 if size(Pairs,2)>UMparam.drawmax
@@ -68,9 +69,26 @@ if size(Pairs,2)>UMparam.drawmax
 else
     DrawPairs = 1:size(Pairs,2);
 end
-
-PlotTheseUnits_UM(Pairs(DrawPairs),MatchTable,UniqueIDConversion,WaveformInfo,AllSessionCorrelations,UMparam)
-
+if DrawBlind
+    % Keep length 2 for each pair
+    Pairs = cellfun(@(X) X(1:2),Pairs,'Uni',0);
+    % Need to add some low probabilities, but around same location
+    EucledianDistance = reshape(MatchTable.EucledianDistance,nclus,nclus);
+    [r,c] = find(label==0 & PyKSLabel == 0 & EucledianDistance < UMparam.NeighbourDist);
+    LowProb = cat(2,r,c);
+    LowProb(r==c,:) = [];
+    LowProb = sort(LowProb,2,'ascend');
+    LowProb = unique(LowProb,'stable','rows');
+    % Match number of pairs for equal set
+    npairs = length(Pairs);
+    LowProb = LowProb(randsample(length(LowProb),npairs,0),:);
+    Pairs = cat(2,Pairs,arrayfun(@(X) LowProb(X,:),1:length(LowProb),'Uni',0));
+    % Randomly shuffle Pairs so we don't have matches grouped together
+    Pairs = Pairs(randsample(length(Pairs),length(Pairs),0));
+    PlotTheseUnits_UM_Blind(Pairs(DrawPairs),MatchTable,UniqueIDConversion,WaveformInfo,AllSessionCorrelations,UMparam)
+else
+    PlotTheseUnits_UM(Pairs(DrawPairs),MatchTable,UniqueIDConversion,WaveformInfo,AllSessionCorrelations,UMparam)
+end
 
 
 return
