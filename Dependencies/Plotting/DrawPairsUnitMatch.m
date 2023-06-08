@@ -83,6 +83,11 @@ if DrawBlind
     npairs = length(Pairs);
     LowProb = LowProb(randsample(length(LowProb),npairs,0),:);
     Pairs = cat(2,Pairs,arrayfun(@(X) LowProb(X,:),1:length(LowProb),'Uni',0));
+
+    % add some diagonal (i=j within)
+    addIisJ = randsample(nclus,round(0.1*npairs),0);
+    addIisJ = repmat(addIisJ,1,2);
+    Pairs = cat(2,Pairs,arrayfun(@(X) addIisJ(X,:),1:length(addIisJ),'Uni',0));
     % Randomly shuffle Pairs so we don't have matches grouped together
     Pairs = Pairs(randsample(length(Pairs),length(Pairs),0));
     PlotTheseUnits_UM_Blind(Pairs(DrawPairs),MatchTable,UniqueIDConversion,WaveformInfo,AllSessionCorrelations,UMparam)
