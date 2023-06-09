@@ -25,24 +25,36 @@ function blindFlick(pathFiles,user,recompute)
         recompute = 0;
     end
     
+    % Get list of pair IDs
     d = dir(fullfile(pathFiles,'*.fig'));
+    IDs = cell2mat(cellfun(@(y) str2num(y{1}(2:end-1)), cellfun(@(x) regexp(x,'_\d+.','match'), {d.name}, 'uni',0),'uni',0));
+    [~,sortIdx] = sort(IDs,'ascend');
+    d = d(sortIdx);
+    IDs = IDs(sortIdx);
     
-    blindFlickGUI = figure('color','w');
+    % Fill in GUI data
     guiData = struct;
-
-    guiData.d = d; 
-    guiData.curr.pairList = 1:numel(d);
-    guiData.curr.pair = 1;
-    guiData.curr.updateFig = 1;
+    guiData.d = d;
     guiData.matchPath = fullfile(pathFiles,sprintf('manualCuration_%s.mat',user));
     if exist(guiData.matchPath,'file') && ~recompute
         tmp = load(guiData.matchPath);
         guiData.match = tmp.match;
+        if (numel(tmp.IDs) ~= numel(IDs)) || ~all(tmp.IDs == IDs)
+            error('Saved IDs don''t match current IDs in the folder. Recheck?')
+        else
+            guiData.pairIDs = tmp.IDs;
+        end
     else
         guiData.match = zeros(1,numel(d));
+        guiData.pairIDs = IDs;
+        save(guiData.matchPath,'IDs')
     end
-    guiData.curr.match = guiData.match(1);
+    guiData.curr.pair = guiData.pairIDs(1); % Start at first
+    guiData.curr.updateFig = 1;
+    guiData.curr.match = guiData.match(guiData.pairIDs == guiData.curr.pair);
 
+    % Create figure
+    blindFlickGUI = figure('color','w');
     guidata(blindFlickGUI, guiData);
     updatePlot(blindFlickGUI);
 end
@@ -51,23 +63,27 @@ function updatePlot(blindFlickGUI)
     % Get guidata
     guiData = guidata(blindFlickGUI);
 
+    % Slow -- to change
     if guiData.curr.updateFig == 1
         % Clear previous fig
         clf(blindFlickGUI)
 
-        % Load and copy new one (slow -- to change asap)
-        fig = openfig(fullfile(guiData.d(guiData.curr.pair).folder,guiData.d(guiData.curr.pair).name),'invisible');
+        % Load and copy new one
+        currPairPosition = guiData.pairIDs == guiData.curr.pair;
+        fig = openfig(fullfile(guiData.d(currPairPosition).folder,guiData.d(currPairPosition).name),'invisible');
         axNew = findobj(fig,'type','axes');
         copyobj(axNew,blindFlickGUI)
         close(fig)
     end
 
-    % Update title with label -- hacky
+    % Update title with label -- hacky, should be predefined (but clear
+    % fig prevents from doing that...)
     if ~isfield(guiData,'titleMain')
-        guiData.titleMain = annotation('textbox', [0, 1, 1, 0], 'string', 'My Text', 'EdgeColor', 'none',...
+        guiData.titleMain = annotation(blindFlickGUI,'textbox', [0, 1, 1, 0], 'string', 'My Text', 'EdgeColor', 'none',...
             'HorizontalAlignment', 'center', 'FontSize', 10, 'FontWeight', 'bold');
     end
-    set(guiData.titleMain, 'String', sprintf('pair %d: match? %d',guiData.curr.pair,guiData.curr.match))
+    set(guiData.titleMain, 'String', sprintf('pair ID %d: match? %d (%d/%d left)', ...
+        guiData.curr.pair,guiData.curr.match,sum(guiData.match == 0),numel(guiData.pairIDs)));
 
     % Set functions for key presses
     set(blindFlickGUI,'WindowKeyPressFcn',@keyPress);
@@ -80,47 +96,52 @@ function keyPress(blindFlickGUI,eventdata)
     guiData.curr.updateFig = 0;
     switch eventdata.Key
         case 'rightarrow' % Next pair
-            currPairPosition = guiData.curr.pairList == guiData.curr.pair;
-            newPair = guiData.curr.pairList(circshift(currPairPosition,1));
+            currPairPosition = guiData.pairIDs == guiData.curr.pair;
+            newPair = guiData.pairIDs(circshift(currPairPosition,1));
             guiData.curr.pair = newPair;
             guiData.curr.updateFig = 1;
         case 'leftarrow' % Previous pair
-            currPairPosition = guiData.curr.pairList == guiData.curr.pair;
-            newPair = guiData.curr.pairList(circshift(currPairPosition,-1));
+            currPairPosition = guiData.pairIDs == guiData.curr.pair;
+            newPair = guiData.pairIDs(circshift(currPairPosition,-1));
             guiData.curr.pair = newPair;
             guiData.curr.updateFig = 1;
         case 'uparrow' % It's a match
-            currPairPosition = guiData.curr.pairList == guiData.curr.pair;
+            currPairPosition = guiData.pairIDs == guiData.curr.pair;
             guiData.match(currPairPosition) = 1;
-            currPairPosition = guiData.curr.pairList == guiData.curr.pair;
-            newPair = guiData.curr.pairList(circshift(currPairPosition,1));
+            currPairPosition = guiData.pairIDs == guiData.curr.pair;
+            newPair = guiData.pairIDs(circshift(currPairPosition,1));
             guiData.curr.pair = newPair;
             guiData.curr.updateFig = 1;
         case 'downarrow' % It's not a match
-            currPairPosition = guiData.curr.pairList == guiData.curr.pair;
+            currPairPosition = guiData.pairIDs == guiData.curr.pair;
             guiData.match(currPairPosition) = -1;
-            currPairPosition = guiData.curr.pairList == guiData.curr.pair;
-            newPair = guiData.curr.pairList(circshift(currPairPosition,1));
+            currPairPosition = guiData.pairIDs == guiData.curr.pair;
+            newPair = guiData.pairIDs(circshift(currPairPosition,1));
             guiData.curr.pair = newPair;
             guiData.curr.updateFig = 1;
-        case 'o'
-            currPairPosition = guiData.curr.pairList == guiData.curr.pair;
+        case 'o' % Back to uncurated
+            currPairPosition = guiData.pairIDs == guiData.curr.pair;
             guiData.match(currPairPosition) = 0;
-        case 'm'
-            guiData.curr.pair = find(guiData.match == 0,1);
-            guiData.curr.updateFig = 1;
-        case 'p'
+        case 'm' % Go to first uncurated
+            firstUncuratedPair = find(guiData.match == 0,1);
+            if ~isempty(firstUncuratedPair)
+                guiData.curr.pair = firstUncuratedPair;
+                guiData.curr.updateFig = 1;
+            else
+                msgbox('All pairs have been curated.')
+            end
+        case 'p' % Go to specific pair
             newPair = str2double(cell2mat(inputdlg('Go to pair:')));
-            if ~ismember(newPair,unique(guiData.curr.pairList))
+            if ~ismember(newPair,unique(guiData.pairIDs))
                 error(['Pair ' num2str(newPair) ' not present'])
             end
             guiData.curr.pair = newPair;
             guiData.curr.updateFig = 1;
     end
-    currPairPosition = guiData.curr.pairList == guiData.curr.pair;
+    currPairPosition = guiData.pairIDs == guiData.curr.pair;
     guiData.curr.match = guiData.match(currPairPosition);
     match = guiData.match;
-    save(guiData.matchPath,'match')
+    save(guiData.matchPath,'match','-append')
 
     guidata(blindFlickGUI,guiData);
     updatePlot(blindFlickGUI);
