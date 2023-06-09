@@ -79,23 +79,23 @@ for midx = 1:length(MiceOpt)
     PrepareClusInfoparams.RecType = RecordingType{midx};%
     %% Run UnitMatch
     UnitMatchExist = dir(fullfile(PrepareClusInfoparams.SaveDir,'**','UnitMatch.mat'));
-    if ~isempty(UnitMatchExist) && ~PrepareClusInfoparams.RedoUnitMatch
-        continue
+    if isempty(UnitMatchExist) || PrepareClusInfoparams.RedoUnitMatch
+       UMparam = RunUnitMatch(subsesoptAll,PrepareClusInfoparams);
+    else
+        UMparam = PrepareClusInfoparams;
+        UMparam.SaveDir = fullfile(PrepareClusInfoparams.SaveDir,'UnitMatch');
     end
-    UMparam = RunUnitMatch(subsesoptAll,PrepareClusInfoparams);
-
-      %% Function analysis
+    %% Function analysis
     ComputeFunctionalScores(UMparam.SaveDir)
+
     %% Figures
     if UMparam.MakePlotsOfPairs
-        DrawBlind = 1; %1 for blind drawing (for manual judging of pairs)
+        DrawBlind = 0; %1 for blind drawing (for manual judging of pairs)
         DrawPairsUnitMatch(UMparam.SaveDir,DrawBlind);
     end
     
     %% Evaluate (within unit ID cross-validation)
     EvaluatingUnitMatch(UMparam.SaveDir);
-
-  
 
     %% QM
     QualityMetricsROCs(UMparam.SaveDir);

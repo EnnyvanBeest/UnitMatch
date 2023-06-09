@@ -10,6 +10,7 @@ ACGRAcrossMice = nan(length(Vector),3,length(MiceOpt)); % Vector / within,Match,
 ACGAUC = nan(3,length(MiceOpt));
 RFDistAcrossMice = nan(length(Vector),3,length(MiceOpt)); % Vector / within,Match,Non-match / mice
 RFAUC = nan(3,length(MiceOpt));
+UseKSLabels = 0;
 
 for midx = 1:length(MiceOpt)
     tmpfile = dir(fullfile(SaveDir,MiceOpt{midx},'UnitMatch','UnitMatch.mat'));
@@ -21,10 +22,15 @@ for midx = 1:length(MiceOpt)
     UMparam = tmpFile.UMparam; % Extract parameters
 
     % Extract groups
-    WithinIdx = find((MatchTable.UID1 == MatchTable.UID2) & (MatchTable.RecSes1 == MatchTable.RecSes2)); %Within session, same unit (cross-validation)
-    MatchIdx = find((MatchTable.UID1 == MatchTable.UID2) & (MatchTable.RecSes1 ~= MatchTable.RecSes2)); %Across session, same unit (cross-validation)
-    NonMatchIdx = find((MatchTable.UID1 ~= MatchTable.UID2)); % Not the same unit
-
+    if ~UseKSLabels
+        WithinIdx = find((MatchTable.UID1 == MatchTable.UID2) & (MatchTable.RecSes1 == MatchTable.RecSes2)); %Within session, same unit (cross-validation)
+        MatchIdx = find((MatchTable.UID1 == MatchTable.UID2) & (MatchTable.RecSes1 ~= MatchTable.RecSes2)); %Across session, same unit (cross-validation)
+        NonMatchIdx = find((MatchTable.UID1 ~= MatchTable.UID2)); % Not the same unit
+    else
+        WithinIdx = find((MatchTable.ID1 == MatchTable.ID2) & (MatchTable.RecSes1 == MatchTable.RecSes2)); %Within session, same unit (cross-validation)
+        MatchIdx = find((MatchTable.ID1 == MatchTable.ID2) & (MatchTable.RecSes1 ~= MatchTable.RecSes2)); %Across session, same unit (cross-validation)
+        NonMatchIdx = find((MatchTable.ID1 ~= MatchTable.ID2)); % Not the same unit
+    end
     % Extract cluster information
     UniqueIDConversion = tmpFile.UniqueIDConversion;
     if UMparam.GoodUnitsOnly
@@ -37,9 +43,37 @@ for midx = 1:length(MiceOpt)
     OriIDAll = UniqueIDConversion.OriginalClusID;
     recses = UniqueIDConversion.recsesAll(GoodId);
     recsesall = UniqueIDConversion.recsesAll;
-
+    ndays = length(unique(recses));
     AllKSDir = UMparam.KSDir; %original KS Dir
     nclus = length(UniqueID);
+
+    %% How many units vs number of units were tracked?
+    TrackingPerformance = nan(3,0); % Difference between recording number, % Tracked units %maximum possibility
+    TrackingPerformanceKS = nan(3,0); % Difference between recording number, % Tracked units %maximum possibility
+
+    MatchProb = reshape(MatchTable.MatchProb,nclus,nclus);
+    for did1 = 1:ndays
+        for did2 = 1:ndays
+            if did2<=did1
+                continue
+            end
+            thesedaysidx = find(ismember(recses,[did1,did2]));
+            % can possibly only track these many units:
+            nMax = min([sum(recses(thesedaysidx)==did1) sum(recses(thesedaysidx)==did2)]);
+            nMatches = length((thesedaysidx)) - length(unique(UniqueID(thesedaysidx)));
+            TrackingPerformance = cat(2,TrackingPerformance,[did2-did1,nMatches,nMax]');
+            nMatches = length((thesedaysidx)) - length(unique(OriID(thesedaysidx)));
+            if UseKSLabels
+            TrackingPerformanceKS = cat(2,TrackingPerformanceKS,[did2-did1,nMatches,nMax]');
+            end
+        end
+    end
+
+    UMTrackingPerformancePerMouse{midx} = TrackingPerformance;
+    if UseKSLabels
+        KSTrackingPerformancePerMouse{midx} = TrackingPerformanceKS;
+    end
+
 
     %% Fingerprint correlation
     FingerprintCor = reshape(MatchTable.FingerprintCor,nclus,nclus);
@@ -179,7 +213,7 @@ for midx = 1:length(MiceOpt)
 
     end
 
-
+    
 end
 %% Now we make histograms for the Area Under the Curve scores
 edges = [0:0.1:1];
@@ -259,4 +293,27 @@ line([nanmedian(RFAUC(3,:)) nanmedian(RFAUC(3,:))],get(gca,'ylim'),'Color',[0.5 
 
 xlabel('AUC RF distance')
 ylabel('Nr sessions')
+makepretty
+
+%% Tracking performance
+% UMTrackingPerformancePerMouse{midx} = TrackingPerformance;
+%     KSTrackingPerformancePerMouse{midx} = TrackingPerformanceKS;
+tmpUM = cat(2,UMTrackingPerformancePerMouse{:});
+if UseKSLabels
+tmpKS =  cat(2,KSTrackingPerformancePerMouse{:});
+end
+figure('name','Tracking Performance')
+scatter(1:length(MiceOpt),tmpUM(3,:),20,[0 0 0],'filled')
+hold on
+if UseKSLabels
+scatter(1:length(MiceOpt),tmpKS(2,:),20,[1 0 0],'filled')
+end
+scatter(1:length(MiceOpt),tmpUM(2,:),20,[0 0 1],'filled')
+
+set(gca,'XTick',1:length(MiceOpt),'XTickLabel',MiceOpt,'XTickLabelRotation',90)
+if UseKSLabels
+    legend('maximum possible','Kilosort tracked','UnitMatch tracked (concatenated)')
+end
+xlim([0.5 length(MiceOpt)+0.5])
+ylabel('nUnits')
 makepretty

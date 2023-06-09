@@ -40,6 +40,50 @@ for id = 1:2 % Loop: first use model that was used, then see if standard model w
     nCols = round(sqrt(length(VariableNames)+1));
 
     UMparam = Output2Evaluate.UMparam;
+
+    %% Assuming UnitMatch worked, how many units were tracked?
+    if id==1
+        if UMparam.GoodUnitsOnly
+            if UMparam.GoodUnitsOnly
+                GoodId = logical(UniqueIDConversion.GoodID);
+            else
+                GoodId = true(1,length(UniqueIDConversion.GoodID));
+            end
+            UniqueID = UniqueIDConversion.UniqueID(GoodId);
+            OriID = UniqueIDConversion.OriginalClusID(GoodId);
+            OriIDAll = UniqueIDConversion.OriginalClusID;
+            recses = UniqueIDConversion.recsesAll(GoodId);
+            recsesall = UniqueIDConversion.recsesAll;
+        end
+        TrackingPerformance = nan(3,0); % Difference between recording number, % Tracked units %maximum possibility
+        MatchProb = reshape(MatchTable.MatchProb,nclus,nclus);
+        for did1 = 1:ndays
+            for did2 = 1:ndays
+                if did2<=did1
+                    continue
+                end
+                thesedaysidx = find(ismember(recses,[did1,did2]));
+                % can possibly only track these many units:
+                nMax = min([sum(recses(thesedaysidx)==did1) sum(recses(thesedaysidx)==did2)]);
+                nMatches = length((thesedaysidx)) - length(unique(UniqueID(thesedaysidx)));              
+                TrackingPerformance = cat(2,TrackingPerformance,[did2-did1,nMatches,nMax]');
+            end
+        end
+
+        figure('name',['TrackingPerformance ' UMparam.SaveDir])
+        subplot(1,2,1)
+        scatter(TrackingPerformance(3,:),TrackingPerformance(2,:),20,[0 0 0],'filled')
+        hold on
+        ylims = get(gca,'ylim');
+        line([0 max(ylims)],[0 max(ylims)],'color',[0 0 0])
+        xlabel('Number Units Available')
+        ylabel('Number Units Tracked')
+
+        subplot(1,2,2)
+        scatter(TrackingPerformance(1,:),TrackingPerformance(2,:)./TrackingPerformance(3,:),20,[0 0 0],'filled')
+        xlabel('\Delta Recordings')
+        ylabel('Proportion tracked cells')
+    end
     %% 'Ground truth' (or as best as we can): Take the set where ID1 == ID2 (False Negatives)
     if UMparam.RunPyKSChronicStitched
         disp('Across recording cross-validation: PyKS was ran stitched')

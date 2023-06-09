@@ -6,15 +6,7 @@ UMparam.binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprin
 
 MatchTable = TmpFile.MatchTable; % Load Matchtable
 
-% Extract groups
-WithinIdx = find((MatchTable.UID1 == MatchTable.UID2) & (MatchTable.RecSes1 == MatchTable.RecSes2)); %Within session, same unit (cross-validation)
-MatchIdx = find((MatchTable.UID1 == MatchTable.UID2) & (MatchTable.RecSes1 ~= MatchTable.RecSes2)); %Across session, same unit (cross-validation)
-NonMatchIdx = find((MatchTable.UID1 ~= MatchTable.UID2)); % Not the same unit
 
-if isempty(MatchIdx)
-    disp('No Matches found... return')
-    return
-end
 % Extract cluster information
 UniqueIDConversion = TmpFile.UniqueIDConversion;
 if UMparam.GoodUnitsOnly
@@ -158,7 +150,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames,'FingerprintCor')) % If it 
     Pairs = sortrows(Pairs);
     Pairs = unique(Pairs,'rows');
     [FingerprintR,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCorrelationFingerPrint(sessionCorrelationsAll,Pairs,OriID,recses,drawdrosscorr);
-        
+
     % Save in table
     MatchTable.FingerprintCor = FingerprintR(:);
     MatchTable.RankScore = RankScoreAll(:);
@@ -172,9 +164,9 @@ if ~any(ismember(MatchTable.Properties.VariableNames,'FingerprintCor')) % If it 
 
 
     %% Compare to functional scores
-  
+
     figure;
-    
+
     subplot(1,3,1)
     imagesc(RankScoreAll(SortingOrder,SortingOrder)==1 & SigMask(SortingOrder,SortingOrder)==1)
     hold on
@@ -220,234 +212,256 @@ if ~any(ismember(MatchTable.Properties.VariableNames,'FingerprintCor')) % If it 
     saveas(gcf,fullfile(SaveDir,'RankScoreVSProbabilityScatter.fig'))
     saveas(gcf,fullfile(SaveDir,'RankScoreVSProbabilityScatter.bmp'))
 end
+% Extract groups
+if UMparam.RunPyKSChronicStitched
+    ntimes = 2;
+else
+    ntimes = 1;
+end
+for id = 1:ntimes
+    if id == 1 %Normal situation
+        WithinIdx = find((MatchTable.UID1 == MatchTable.UID2) & (MatchTable.RecSes1 == MatchTable.RecSes2)); %Within session, same unit (cross-validation)
+        MatchIdx = find((MatchTable.UID1 == MatchTable.UID2) & (MatchTable.RecSes1 ~= MatchTable.RecSes2)); %Across session, same unit (cross-validation)
+        NonMatchIdx = find((MatchTable.UID1 ~= MatchTable.UID2)); % Not the same unit
+        addname = [];
+    elseif id == 2 % USE KS labels instead
+        WithinIdx = find((MatchTable.ID1 == MatchTable.ID2) & (MatchTable.RecSes1 == MatchTable.RecSes2)); %Within session, same unit (cross-validation)
+        MatchIdx = find((MatchTable.ID1 == MatchTable.ID2) & (MatchTable.RecSes1 ~= MatchTable.RecSes2)); %Across session, same unit (cross-validation)
+        NonMatchIdx = find((MatchTable.ID1 ~= MatchTable.ID2)); % Not the same unit
+        addname = 'KSlabels';
+    end
+    if isempty(MatchIdx)
+        disp('No Matches found... return')
+        return
+    end
+    %% Cross-correlation ROC?
+    figure('name',['Functional score separatability ' addname])
 
-%% Cross-correlation ROC?
-figure('name','Functional score separatability')
+    subplot(3,3,1)
+    imagesc(reshape(MatchTable.FingerprintCor,nclus,nclus))
+    hold on
+    colormap(flipud(gray))
+    makepretty
+    xlabel('Unit_i')
+    ylabel('Unit_j')
+    hold on
+    arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+    arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+    title('Cross-correlation Fingerprint')
+    axis square
+    freezeColors
 
-subplot(3,3,1)
-imagesc(reshape(MatchTable.FingerprintCor,nclus,nclus))
-hold on
-colormap(flipud(gray))
-makepretty
-xlabel('Unit_i')
-ylabel('Unit_j')
-hold on
-arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
-arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
-title('Cross-correlation Fingerprint')
-axis square
-freezeColors 
+    FingerprintCor = reshape(MatchTable.FingerprintCor,nclus,nclus);
+    % Subtr = repmat(diag(FingerprintCor),1,size(FingerprintCor,1));
+    % FingerprintCor = FingerprintCor - Subtr; % Subtract diagonalcorrelations
 
-FingerprintCor = reshape(MatchTable.FingerprintCor,nclus,nclus);
-% Subtr = repmat(diag(FingerprintCor),1,size(FingerprintCor,1));
-% FingerprintCor = FingerprintCor - Subtr; % Subtract diagonalcorrelations  
+    subplot(3,3,2)
+    bins = min(FingerprintCor(:)):0.1:max(FingerprintCor(:));
+    Vector = [bins(1)+0.1/2:0.1:bins(end)-0.1/2];
+    hw = histcounts(FingerprintCor(WithinIdx),bins)./length(WithinIdx);
+    hm = histcounts(FingerprintCor(MatchIdx),bins)./length(MatchIdx);
+    hn = histcounts(FingerprintCor(NonMatchIdx),bins)./length(NonMatchIdx);
+    plot(Vector,hw,'color',[0.5 0.5 0.5])
+    hold on
+    plot(Vector,hm,'color',[0 0.5 0])
+    plot(Vector,hn,'color',[0 0 0])
+    xlabel('Cross-correlation Fingerprint')
+    ylabel('Proportion|Group')
+    legend('i=j; within recording','matches','non-matches','Location','best')
+    axis square
+    makepretty
 
-subplot(3,3,2)
-bins = min(FingerprintCor(:)):0.1:max(FingerprintCor(:));
-Vector = [bins(1)+0.1/2:0.1:bins(end)-0.1/2];
-hw = histcounts(FingerprintCor(WithinIdx),bins)./length(WithinIdx);
-hm = histcounts(FingerprintCor(MatchIdx),bins)./length(MatchIdx);
-hn = histcounts(FingerprintCor(NonMatchIdx),bins)./length(NonMatchIdx);
-plot(Vector,hw,'color',[0.5 0.5 0.5])
-hold on
-plot(Vector,hm,'color',[0 0.5 0])
-plot(Vector,hn,'color',[0 0 0])
-xlabel('Cross-correlation Fingerprint')
-ylabel('Proportion|Group')
-legend('i=j; within recording','matches','non-matches','Location','best')
-axis square
-makepretty
+    subplot(3,3,3)
+    labels = [ones(1,numel(MatchIdx)), zeros(1,numel(NonMatchIdx))];
+    scores = [FingerprintCor(MatchIdx)', FingerprintCor(NonMatchIdx)'];
+    [X,Y,~,AUC1] = perfcurve(labels,scores,1);
+    h(1) = plot(X,Y,'color',[0 0.25 0]);
+    hold all
+    labels = [ones(1,numel(MatchIdx)), zeros(1,numel(WithinIdx))];
+    scores = [FingerprintCor(MatchIdx)', FingerprintCor(WithinIdx)'];
+    [X,Y,~,AUC2] = perfcurve(labels,scores,1);
+    h(2) = plot(X,Y,'color',[0 0.5 0]);
+    labels = [ones(1,numel(WithinIdx)), zeros(1,numel(NonMatchIdx))];
+    scores = [FingerprintCor(WithinIdx)', FingerprintCor(NonMatchIdx)'];
+    [X,Y,~,AUC3] = perfcurve(labels,scores,1);
+    h(3) = plot(X,Y,'color',[0.25 0.25 0.25]);
+    axis square
 
-subplot(3,3,3)
-labels = [ones(1,numel(MatchIdx)), zeros(1,numel(NonMatchIdx))];
-scores = [FingerprintCor(MatchIdx)', FingerprintCor(NonMatchIdx)'];
-[X,Y,~,AUC1] = perfcurve(labels,scores,1);
-h(1) = plot(X,Y,'color',[0 0.25 0]);
-hold all
-labels = [ones(1,numel(MatchIdx)), zeros(1,numel(WithinIdx))];
-scores = [FingerprintCor(MatchIdx)', FingerprintCor(WithinIdx)'];
-[X,Y,~,AUC2] = perfcurve(labels,scores,1);
-h(2) = plot(X,Y,'color',[0 0.5 0]);
-labels = [ones(1,numel(WithinIdx)), zeros(1,numel(NonMatchIdx))];
-scores = [FingerprintCor(WithinIdx)', FingerprintCor(NonMatchIdx)'];
-[X,Y,~,AUC3] = perfcurve(labels,scores,1);
-h(3) = plot(X,Y,'color',[0.25 0.25 0.25]);
-axis square
+    plot([0 1],[0 1],'k--')
+    xlabel('False positive rate')
+    ylabel('True positive rate')
+    legend([h(:)],'Match vs No Match','Match vs Within','Within vs No Match','Location','best')
+    title(sprintf('Cross-Correlation Fingerprint AUC: %.3f, %.3f, %.3f', AUC1,AUC2,AUC3))
+    makepretty
+    drawnow %Something to look at while ACG calculations are ongoing
 
-plot([0 1],[0 1],'k--')
-xlabel('False positive rate')
-ylabel('True positive rate')
-legend([h(:)],'Match vs No Match','Match vs Within','Within vs No Match','Location','best')
-title(sprintf('Cross-Correlation Fingerprint AUC: %.3f, %.3f, %.3f', AUC1,AUC2,AUC3))
-makepretty
-drawnow %Something to look at while ACG calculations are ongoing
+    if ~any(ismember(MatchTable.Properties.VariableNames,'ACGCorr')) % If it already exists in table, skip this entire thing
 
-if ~any(ismember(MatchTable.Properties.VariableNames,'ACGCorr')) % If it already exists in table, skip this entire thing
+        %% Compute ACG and correlate them between units
+        % This is very time consuming
+        disp('Computing ACG, this will take some time...')
+        tvec =  -UMparam.ACGduration/2:UMparam.ACGbinSize:UMparam.ACGduration/2;
+        ACGMat = nan(length(tvec),2,nclus);
+        FR = nan(2,nclus);
+        parfor clusid = 1:nclus
+            for cv = 1:2
+                idx1=find(sp.spikeTemplates == OriID(clusid) & sp.RecSes == recses(clusid));
+                if ~isempty(idx1) && length(idx1)>UMparam.sampleamount
+                    if cv==1
+                        idx1 = idx1(1:floor(length(idx1)/2));
+                    else
+                        idx1 = idx1(ceil(length(idx1)/2):end);
+                    end
 
-    %% Compute ACG and correlate them between units
-    % This is very time consuming
-    disp('Computing ACG, this will take some time...')
-    tvec =  -UMparam.ACGduration/2:UMparam.ACGbinSize:UMparam.ACGduration/2;
-    ACGMat = nan(length(tvec),2,nclus);
-    FR = nan(2,nclus);
-    parfor clusid = 1:nclus
-        for cv = 1:2
-            idx1=find(sp.spikeTemplates == OriID(clusid) & sp.RecSes == recses(clusid));
-            if ~isempty(idx1) && length(idx1)>UMparam.sampleamount
-                if cv==1
-                    idx1 = idx1(1:floor(length(idx1)/2));
-                else
-                    idx1 = idx1(ceil(length(idx1)/2):end);
+                    % Compute Firing rate
+                    nspkspersec = histcounts(sp.st(idx1),[min(sp.st(idx1)):1:max(sp.st(idx1))]);
+                    FR(cv,clusid) = nanmean(nspkspersec);
+
+                    % compute ACG
+                    [ccg, t] = CCGBz([double(sp.st(idx1)); double(sp.st(idx1))], [ones(size(sp.st(idx1), 1), 1); ...
+                        ones(size(sp.st(idx1), 1), 1) * 2], 'binSize', UMparam.ACGbinSize, 'duration', UMparam.ACGduration, 'norm', 'rate'); %function
+                    ACGMat(:,cv,clusid) = ccg(:, 1, 1);
                 end
-
-                % Compute Firing rate
-                nspkspersec = histcounts(sp.st(idx1),[min(sp.st(idx1)):1:max(sp.st(idx1))]);
-                FR(cv,clusid) = nanmean(nspkspersec);
-
-                % compute ACG
-                [ccg, t] = CCGBz([double(sp.st(idx1)); double(sp.st(idx1))], [ones(size(sp.st(idx1), 1), 1); ...
-                    ones(size(sp.st(idx1), 1), 1) * 2], 'binSize', UMparam.ACGbinSize, 'duration', UMparam.ACGduration, 'norm', 'rate'); %function
-                ACGMat(:,cv,clusid) = ccg(:, 1, 1);
             end
         end
+
+        %% Correlation between ACG
+        ACGCorr = corr(squeeze(ACGMat(:,1,:)),squeeze(ACGMat(:,2,:)));
+        MatchTable.ACGCorr = ACGCorr(:);
+
+        %% FR difference
+        FR = repmat(permute(FR,[2,1]),[1,1,nclus]);
+        FRDiff = abs(squeeze(FR(:,2,:) - permute(FR(:,1,:),[3,2,1])));
+        MatchTable.FRDiff = FRDiff(:);
+
+        % Write to table
+        TmpFile.Properties.Writable = true;
+        TmpFile.MatchTable = MatchTable; % Overwrite
+        TmpFile.Properties.Writable = false;
+
     end
 
-    %% Correlation between ACG
-    ACGCorr = corr(squeeze(ACGMat(:,1,:)),squeeze(ACGMat(:,2,:)));
-    MatchTable.ACGCorr = ACGCorr(:);
+    %% Plot ACG
+    subplot(3,3,4)
+    imagesc(reshape(MatchTable.ACGCorr,nclus,nclus))
+    hold on
+    colormap(flipud(gray))
+    makepretty
+    xlabel('Unit_i')
+    ylabel('Unit_j')
+    hold on
+    arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+    arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+    title('Autocorrelogram Correlation')
+    axis square
 
-    %% FR difference
-    FR = repmat(permute(FR,[2,1]),[1,1,nclus]);
-    FRDiff = abs(squeeze(FR(:,2,:) - permute(FR(:,1,:),[3,2,1])));
-    MatchTable.FRDiff = FRDiff(:);
+    freezeColors
 
-    % Write to table
-    TmpFile.Properties.Writable = true;
-    TmpFile.MatchTable = MatchTable; % Overwrite
-    TmpFile.Properties.Writable = false;
+    subplot(3,3,5)
+    ACGCor = reshape(MatchTable.ACGCorr,nclus,nclus);
+    % Subtr = repmat(diag(ACGCor),1,size(ACGCor,1));
+    % ACGCor = ACGCor - Subtr; % Subtract diagonalcorrelations
+    bins = min(ACGCor(:)):0.1:max(ACGCor(:));
+    Vector = [bins(1)+0.1/2:0.1:bins(end)-0.1/2];
+    hw = histcounts(ACGCor(WithinIdx),bins)./length(WithinIdx);
+    hm = histcounts(ACGCor(MatchIdx),bins)./length(MatchIdx);
+    hn = histcounts(ACGCor(NonMatchIdx),bins)./length(NonMatchIdx);
+    plot(Vector,hw,'color',[0.5 0.5 0.5])
+    hold on
+    plot(Vector,hm,'color',[0 0.5 0])
+    plot(Vector,hn,'color',[0 0 0])
+    xlabel('Autocorrelogram Correlation')
+    ylabel('Proportion|Group')
+    legend('i=j; within recording','matches','non-matches','Location','best')
+    axis square
 
+    makepretty
+
+    subplot(3,3,6)
+    labels = [ones(1,numel(MatchIdx)), zeros(1,numel(NonMatchIdx))];
+    scores = [ACGCor(MatchIdx)', ACGCor(NonMatchIdx)'];
+    [X,Y,~,AUC1] = perfcurve(labels,scores,1);
+    h(1) = plot(X,Y,'color',[0 0.25 0]);
+    hold all
+    labels = [ones(1,numel(MatchIdx)), zeros(1,numel(WithinIdx))];
+    scores = [ACGCor(MatchIdx)', ACGCor(WithinIdx)'];
+    [X,Y,~,AUC2] = perfcurve(labels,scores,1);
+    h(2) = plot(X,Y,'color',[0 0.5 0]);
+    labels = [ones(1,numel(WithinIdx)), zeros(1,numel(NonMatchIdx))];
+    scores = [ACGCor(WithinIdx)', ACGCor(NonMatchIdx)'];
+    [X,Y,~,AUC3] = perfcurve(labels,scores,1);
+    h(3) = plot(X,Y,'color',[0.25 0.25 0.25]);
+
+    plot([0 1],[0 1],'k--')
+    xlabel('False positive rate')
+    ylabel('True positive rate')
+    legend([h(:)],'Match vs No Match','Match vs Within','Within vs No Match','Location','best')
+    title(sprintf('Autocorrelogram AUC: %.3f, %.3f, %.3f', AUC1,AUC2,AUC3))
+    makepretty
+    axis square
+
+    freezeColors
+
+    %% Plot FR
+    subplot(3,3,7)
+    imagesc(reshape(MatchTable.FRDiff,nclus,nclus))
+    hold on
+    colormap(gray)
+    makepretty
+    xlabel('Unit_i')
+    ylabel('Unit_j')
+    hold on
+    arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+    arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+    title('Firing rate differences')
+    axis square
+
+    FRDiff = reshape(MatchTable.FRDiff,nclus,nclus);
+    Subtr = repmat(diag(FRDiff),1,size(FRDiff,1));
+    FRDiff = FRDiff - Subtr; % Subtract diagonalcorrelations
+
+    subplot(3,3,8)
+    bins = min(FRDiff(:)):0.1:5;
+    Vector = [bins(1)+0.1/2:0.1:bins(end)-0.1/2];
+    hw = histcounts(FRDiff(WithinIdx),bins)./length(WithinIdx);
+    hm = histcounts(FRDiff(MatchIdx),bins)./length(MatchIdx);
+    hn = histcounts(FRDiff(NonMatchIdx),bins)./length(NonMatchIdx);
+    plot(Vector,hw,'color',[0.5 0.5 0.5])
+    hold on
+    plot(Vector,hm,'color',[0 0.5 0])
+    plot(Vector,hn,'color',[0 0 0])
+    xlabel('Firing rate differences')
+    ylabel('Proportion|Group')
+    legend('i=j; within recording','matches','non-matches','Location','best')
+    makepretty
+    axis square
+
+    subplot(3,3,9)
+    labels = [zeros(1,numel(MatchIdx)), ones(1,numel(NonMatchIdx))];
+    scores = [FRDiff(MatchIdx)', FRDiff(NonMatchIdx)'];
+    [X,Y,~,AUC1] = perfcurve(labels,scores,1);
+    h(1) = plot(X,Y,'color',[0 0.25 0]);
+    hold all
+    labels = [zeros(1,numel(MatchIdx)), ones(1,numel(WithinIdx))];
+    scores = [FRDiff(MatchIdx)', FRDiff(WithinIdx)'];
+    [X,Y,~,AUC2] = perfcurve(labels,scores,1);
+    h(2) = plot(X,Y,'color',[0 0.5 0]);
+    labels = [zeros(1,numel(WithinIdx)), ones(1,numel(NonMatchIdx))];
+    scores = [FRDiff(WithinIdx)', FRDiff(NonMatchIdx)'];
+    [X,Y,~,AUC3] = perfcurve(labels,scores,1);
+    h(3) = plot(X,Y,'color',[0.25 0.25 0.25]);
+    axis square
+
+    plot([0 1],[0 1],'k--')
+    xlabel('False positive rate')
+    ylabel('True positive rate')
+    legend([h(:)],'Match vs No Match','Match vs Within','Within vs No Match','Location','best')
+    title(sprintf('Firing rate differences AUC: %.3f, %.3f, %.3f', AUC1,AUC2,AUC3))
+    makepretty
+
+    % save
+    set(gcf,'units','normalized','outerposition',[0 0 1 1])
+    saveas(gcf,fullfile(SaveDir,[addname 'FunctionalScoreSeparability.fig']))
+    saveas(gcf,fullfile(SaveDir,[addname 'FunctionalScoreSeparability.png']))
 end
-
-%% Plot ACG
-subplot(3,3,4)
-imagesc(reshape(MatchTable.ACGCorr,nclus,nclus))
-hold on
-colormap(flipud(gray))
-makepretty
-xlabel('Unit_i')
-ylabel('Unit_j')
-hold on
-arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
-arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
-title('Autocorrelogram Correlation')
-axis square
-
-freezeColors 
-
-subplot(3,3,5)
-ACGCor = reshape(MatchTable.ACGCorr,nclus,nclus);
-% Subtr = repmat(diag(ACGCor),1,size(ACGCor,1));
-% ACGCor = ACGCor - Subtr; % Subtract diagonalcorrelations  
-bins = min(ACGCor(:)):0.1:max(ACGCor(:));
-Vector = [bins(1)+0.1/2:0.1:bins(end)-0.1/2];
-hw = histcounts(ACGCor(WithinIdx),bins)./length(WithinIdx);
-hm = histcounts(ACGCor(MatchIdx),bins)./length(MatchIdx);
-hn = histcounts(ACGCor(NonMatchIdx),bins)./length(NonMatchIdx);
-plot(Vector,hw,'color',[0.5 0.5 0.5])
-hold on
-plot(Vector,hm,'color',[0 0.5 0])
-plot(Vector,hn,'color',[0 0 0])
-xlabel('Autocorrelogram Correlation')
-ylabel('Proportion|Group')
-legend('i=j; within recording','matches','non-matches','Location','best')
-axis square
-
-makepretty
-
-subplot(3,3,6)
-labels = [ones(1,numel(MatchIdx)), zeros(1,numel(NonMatchIdx))];
-scores = [ACGCor(MatchIdx)', ACGCor(NonMatchIdx)'];
-[X,Y,~,AUC1] = perfcurve(labels,scores,1);
-h(1) = plot(X,Y,'color',[0 0.25 0]);
-hold all
-labels = [ones(1,numel(MatchIdx)), zeros(1,numel(WithinIdx))];
-scores = [ACGCor(MatchIdx)', ACGCor(WithinIdx)'];
-[X,Y,~,AUC2] = perfcurve(labels,scores,1);
-h(2) = plot(X,Y,'color',[0 0.5 0]);
-labels = [ones(1,numel(WithinIdx)), zeros(1,numel(NonMatchIdx))];
-scores = [ACGCor(WithinIdx)', ACGCor(NonMatchIdx)'];
-[X,Y,~,AUC3] = perfcurve(labels,scores,1);
-h(3) = plot(X,Y,'color',[0.25 0.25 0.25]);
-
-plot([0 1],[0 1],'k--')
-xlabel('False positive rate')
-ylabel('True positive rate')
-legend([h(:)],'Match vs No Match','Match vs Within','Within vs No Match','Location','best')
-title(sprintf('Autocorrelogram AUC: %.3f, %.3f, %.3f', AUC1,AUC2,AUC3))
-makepretty
-axis square
-
-freezeColors 
-
-%% Plot FR
-subplot(3,3,7)
-imagesc(reshape(MatchTable.FRDiff,nclus,nclus))
-hold on
-colormap(gray)
-makepretty
-xlabel('Unit_i')
-ylabel('Unit_j')
-hold on
-arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
-arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
-title('Firing rate differences')
-axis square
-
-FRDiff = reshape(MatchTable.FRDiff,nclus,nclus);
-Subtr = repmat(diag(FRDiff),1,size(FRDiff,1));
-FRDiff = FRDiff - Subtr; % Subtract diagonalcorrelations 
-
-subplot(3,3,8)
-bins = min(FRDiff(:)):0.1:5;
-Vector = [bins(1)+0.1/2:0.1:bins(end)-0.1/2];
-hw = histcounts(FRDiff(WithinIdx),bins)./length(WithinIdx);
-hm = histcounts(FRDiff(MatchIdx),bins)./length(MatchIdx);
-hn = histcounts(FRDiff(NonMatchIdx),bins)./length(NonMatchIdx);
-plot(Vector,hw,'color',[0.5 0.5 0.5])
-hold on
-plot(Vector,hm,'color',[0 0.5 0])
-plot(Vector,hn,'color',[0 0 0])
-xlabel('Firing rate differences')
-ylabel('Proportion|Group')
-legend('i=j; within recording','matches','non-matches','Location','best')
-makepretty
-axis square
-
-subplot(3,3,9)
-labels = [zeros(1,numel(MatchIdx)), ones(1,numel(NonMatchIdx))];
-scores = [FRDiff(MatchIdx)', FRDiff(NonMatchIdx)'];
-[X,Y,~,AUC1] = perfcurve(labels,scores,1);
-h(1) = plot(X,Y,'color',[0 0.25 0]);
-hold all
-labels = [zeros(1,numel(MatchIdx)), ones(1,numel(WithinIdx))];
-scores = [FRDiff(MatchIdx)', FRDiff(WithinIdx)'];
-[X,Y,~,AUC2] = perfcurve(labels,scores,1);
-h(2) = plot(X,Y,'color',[0 0.5 0]);
-labels = [zeros(1,numel(WithinIdx)), ones(1,numel(NonMatchIdx))];
-scores = [FRDiff(WithinIdx)', FRDiff(NonMatchIdx)'];
-[X,Y,~,AUC3] = perfcurve(labels,scores,1);
-h(3) = plot(X,Y,'color',[0.25 0.25 0.25]);
-axis square
-
-plot([0 1],[0 1],'k--')
-xlabel('False positive rate')
-ylabel('True positive rate')
-legend([h(:)],'Match vs No Match','Match vs Within','Within vs No Match','Location','best')
-title(sprintf('Firing rate differences AUC: %.3f, %.3f, %.3f', AUC1,AUC2,AUC3))
-makepretty
-
-% save
-set(gcf,'units','normalized','outerposition',[0 0 1 1])
-saveas(gcf,fullfile(SaveDir,'FunctionalScoreSeparability.fig'))
-saveas(gcf,fullfile(SaveDir,'FunctionalScoreSeparability.png'))
 return
