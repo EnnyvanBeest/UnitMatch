@@ -15,6 +15,7 @@ function blindFlick(pathFiles,user,recompute)
     %   o: label as I don't know (=uncurated)
     %   m: go to first uncurated pair
     %   p: select pair number
+    %   f: toggle functional scores
 
     if ~exist('user','var')
         warning('No user specified. Will use default.')
@@ -39,7 +40,7 @@ function blindFlick(pathFiles,user,recompute)
     if exist(guiData.matchPath,'file') && ~recompute
         tmp = load(guiData.matchPath);
         guiData.match = tmp.match;
-        if (numel(tmp.IDs) ~= numel(IDs)) || ~all(tmp.IDs == IDs)
+        if isfield(tmp,'IDs') && ((numel(tmp.IDs) ~= numel(IDs)) || ~all(tmp.IDs == IDs))
             error('Saved IDs don''t match current IDs in the folder. Recheck?')
         else
             guiData.pairIDs = tmp.IDs;
@@ -137,6 +138,8 @@ function keyPress(blindFlickGUI,eventdata)
             end
             guiData.curr.pair = newPair;
             guiData.curr.updateFig = 1;
+        case 'f' % Toggle functional scores
+           keyboard %To be made
     end
     currPairPosition = guiData.pairIDs == guiData.curr.pair;
     guiData.curr.match = guiData.match(currPairPosition);

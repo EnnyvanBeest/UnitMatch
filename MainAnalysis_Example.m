@@ -1,12 +1,12 @@
 %% User Input
 %% Path information
 DataDir = {'H:\MatchingUnits\RawData'};% Check DataDir2Use
-SaveDir = 'H:\MatchingUnits\Output'
+SaveDir = 'H:\MatchingUnits\Output\Concatenated1day'
 tmpdatafolder = 'H:\MatchingUnits\Tmp'; % temporary folder 
 KilosortDir = 'H:\MatchingUnits\KilosortOutput';% 'E:\Data\KiloSortOutput';%
 
 %% Information on experiments
-MiceOpt = {'AL032','AV008','CB016','EB019','JF067'};%{'AV009','AV015','EB014','EB019','AL032','AV008','JF067','CB016'}%,'AV008','JF067','CB016''EB019'}; %CB016 %AL032 'AV008' JF067 Add all mice you want to analyse
+MiceOpt = {'AV008','CB016','EB019','JF067'};%{'AV009','AV015','EB014','EB019','AL032','AV008','JF067','CB016'}%,'AV008','JF067','CB016''EB019'}; %CB016 %AL032 'AV008' JF067 Add all mice you want to analyse
 % nidq_sync_used = zeros(1,length(MiceOpt)); % Was an external nidq used for syncing (typically sync feeds directly into IMEC)
 % nidq_sync_used(ismember(MiceOpt,{'EB001','CB007','CB008'}))=1; % Except for these mice...
 DataDir2Use = repmat(1,[1,length(MiceOpt)]); % In case you have multiple DataDir, index which directory is used for each mouse
@@ -26,7 +26,7 @@ PrepareClusInfoparams.RedoUnitMatch = 0; % if 1, Redo unitmatch
 PrepareClusInfoparams.SaveDir = SaveDir; % Save results here
 PrepareClusInfoparams.tmpdatafolder = tmpdatafolder; % use this as a local directory (should be large enough to handle all sessions you want to combine)
 PrepareClusInfoparams.separateIMRO = 0; % Run for every IMRO separately (for memory reasons this might be a good idea)
-PrepareClusInfoparams.ReLoadAlways = 0; % If 1, SP & Clusinfo are always loaded from KS output
+PrepareClusInfoparams.ReLoadAlways = 1; % If 1, SP & Clusinfo are always loaded from KS output
 PrepareClusInfoparams.binsz = 0.01; %Binsz for unitmatch PSTHs
 PrepareClusInfoparams.saveSp = 1; % Save SP struct for easy loading of preprocessed data
 % UnitMatch Parameters:

@@ -346,7 +346,7 @@ for pairid=1:length(Pairs)
                 continue
             end
 
-            [r,c] = find(tmpfp == max([tmpfp(uidx,uidx2),tmpfp(uidx2,uidx)']));
+            [r,c] = find(tmpfp == max([tmpfp(uidx,uidx2),tmpfp(uidx2,uidx)']),1,'first');
 
             uid = Pairs{pairid}(r);
             uid2 = Pairs{pairid}(c);

@@ -11,8 +11,59 @@ if ~isfolder(fullfile(param.SaveDir,'BlindFigures'))
     mkdir(fullfile(param.SaveDir,'BlindFigures'))
 end
 
+% Load sp
+disp('Loading spike information...')
+nKSFiles = length(param.KSDir);
+sp = cell(1,nKSFiles);
+for did = 1:nKSFiles
+    tmp = matfile(fullfile(param.KSDir{did},'PreparedData.mat'));
+    sptmp = tmp.sp;
+    clear tmp
+
+    % Only keep parameters used
+    sp{did}.st = sptmp.st;
+    sp{did}.spikeTemplates = sptmp.spikeTemplates;
+    sp{did}.spikeAmps = sptmp.spikeAmps;
+    % Replace recsesid with subsesid
+    if param.RunPyKSChronicStitched
+        sp{did}.RecSes = sptmp.RecSes;
+    else
+        sp{did}.RecSes = repmat(did,size(sp{did}.st));
+    end
+end
+clear sptmp
+
+
+% Add all spikedata in one spikes struct - can be used for further analysis
+sp = [sp{:}];
+spnew = struct;
+fields = fieldnames(sp(1));
+for fieldid=1:length(fields)
+    try
+        eval(['spnew.' fields{fieldid} '= cat(1,sp(:).' fields{fieldid} ');'])
+    catch ME
+        if strcmp(ME.message,'Out of memory.')
+            eval(['spnew.' fields{fieldid} ' = sp(1).' fields{fieldid} ';'])
+            for tmpid = 2:length(sp)
+                eval(['spnew.' fields{fieldid} ' = cat(1,spnew.' fields{fieldid} ', sp(tmpid).' fields{fieldid} ');'])
+            end
+        else
+            eval(['spnew.' fields{fieldid} '= cat(2,sp(:).' fields{fieldid} ');'])
+        end
+    end
+end
+sp = spnew;
+clear spnew
+
 % Calculations for ISI!
 ndays = length(param.AllRawPaths);
+tmpst=sp.st;
+maxtime = 0;
+for did=1:ndays
+    tmpst(sp.RecSes==did)= tmpst(sp.RecSes==did)+maxtime;
+    maxtime = max(tmpst(sp.RecSes==did));
+end
+
 
 % Find session switch
 if param.GoodUnitsOnly
@@ -41,6 +92,8 @@ end
 
 % Extract matchtable scores
 MatchProbability = reshape(MatchTable.MatchProb,nclus,nclus);
+FingerprintR = reshape(MatchTable.FingerprintCor,nclus,nclus);
+RankScoreAll = reshape(MatchTable.RankScore,nclus,nclus);
 for scid = 1:length(param.Scores2Include)
     eval([param.Scores2Include{scid} ' = reshape(MatchTable.' param.Scores2Include{scid} ',nclus,nclus);'])
 end
@@ -88,7 +141,7 @@ for pairid=1:length(Pairs)
         ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(WaveformInfo.MaxChannel(uid,cv),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius); %Averaging over 10 channels helps with drift
         Locs = channelpos(ChanIdx,:);
     
-        subplot(2,3,[1,4])
+        subplot(3,3,[1,4])
         hold on
          scatter(Locs(:,1)*10,Locs(:,2)*20,20,[0.5 0.5 0.5],'filled') % Indicate sites
         for id = 1:length(Locs)
@@ -98,7 +151,7 @@ for pairid=1:length(Pairs)
         hleg(uidx) = plot(WaveformInfo.ProjectedLocation(1,uid,cv)*10+[1:size(spikeMap,1)],WaveformInfo.ProjectedLocation(2,uid,cv)*20+WaveformInfo.ProjectedWaveform(:,uid,cv),'-','color',cols(uidx,:),'LineWidth',2);
 
 
-        subplot(2,3,[2])
+        subplot(3,3,[2])
         hold on
         scatter(Locs(:,1),Locs(:,2),20,[0.5 0.5 0.5],'filled')
         scatter(WaveformInfo.ProjectedLocation(1,uid,cv),WaveformInfo.ProjectedLocation(2,uid,cv),20,[0 0 0],'filled')
@@ -110,7 +163,7 @@ for pairid=1:length(Pairs)
         colormap(hot)
 
 
-        subplot(2,3,5)
+        subplot(3,3,5)
         if uidx==1
             plot(channelpos(:,1),channelpos(:,2),'k.')
             hold on
@@ -118,16 +171,48 @@ for pairid=1:length(Pairs)
         h(1)=plot(channelpos(WaveformInfo.MaxChannel(uid,cv),1),channelpos(WaveformInfo.MaxChannel(uid,cv),2),'.','color',cols(uidx,:),'MarkerSize',15);
 
 
-        subplot(2,3,3)
+        subplot(3,3,3)
         hold on
         h(1)=plot(spikeMap(:,WaveformInfo.MaxChannel(uid,cv),cv),'-','color',cols(uidx,:));
+   % Scatter spikes of each unit
+        subplot(3,3,6)
+        hold on
+        idx1=find(sp.spikeTemplates == OriClusID(uid) & sp.RecSes == recsesGood(uid));
+        if ~isempty(idx1)
+            if length(unique(Pairs{pairid}))==1
+                if cv==1
+                    idx1 = idx1(1:floor(length(idx1)/2));
+                else
+                    idx1 = idx1(ceil(length(idx1)/2):end);
+                end
+            end
+            scatter(sp.st(idx1)./60,sp.spikeAmps(idx1)+addforamplitude,4,cols(uidx,:),'filled')
 
+            xlims = get(gca,'xlim');
+            % Other axis
+            [h1,edges,binsz]=histcounts(sp.spikeAmps(idx1));
+            %Normalize between 0 and 1
+            h1 = ((h1-nanmin(h1))./(nanmax(h1)-nanmin(h1)))*10+max(sp.st./60);
+            plot(h1,edges(1:end-1)+addforamplitude,'-','color',cols(uidx,:));
+            addforamplitude = addforamplitude+edges(end-1);
+
+            % compute ACG
+            [ccg, t] = CCGBz([double(sp.st(idx1)); double(sp.st(idx1))], [ones(size(sp.st(idx1), 1), 1); ...
+                ones(size(sp.st(idx1), 1), 1) * 2], 'binSize', param.ACGbinSize, 'duration', param.ACGduration, 'norm', 'rate'); %function
+            ACG = ccg(:, 1, 1);
+
+            subplot(3,3,7);
+            hold on
+            plot(t,ACG,'color',cols(uidx,:));
+            title(['AutoCorrelogram'])
+            xlim([-0.1 0.1])
+        end
         makepretty
     end
     set(tmpfig,'units','normalized','outerposition',[0 0 1 1])
 
     % make subplots pretty
-    subplot(2,3,[1,4])
+    subplot(3,3,[1,4])
     makepretty
     set(gca,'yticklabel',arrayfun(@(X) num2str(X./20),get(gca,'ytick'),'UniformOutput',0))
     xlabel('Xpos (um)')
@@ -143,7 +228,7 @@ for pairid=1:length(Pairs)
     title(['BlindID=' num2str(pairid)])
 
 
-    subplot(2,3,[2])
+    subplot(3,3,[2])
     xlabel('Xpos (um)')
     ylabel('Ypos (um)')
     xlims = [min(WaveformInfo.ProjectedLocation(1,Pairs{pairid},cv))-25 max(WaveformInfo.ProjectedLocation(1,Pairs{pairid},cv))+25];
@@ -160,13 +245,13 @@ for pairid=1:length(Pairs)
     end
     makepretty
 
-    subplot(2,3,5)
+    subplot(3,3,5)
     xlabel('X position')
     ylabel('um from tip')
     makepretty
 
 
-    subplot(2,3,3)
+    subplot(3,3,3)
     ylims = get(gca,'ylim');
     patch([param.waveidx(1) param.waveidx(end) param.waveidx(end) param.waveidx(1)],[ylims(1) ylims(1) ylims(2) ylims(2)],[0.5 0.5 0.5],'FaceAlpha',0.2,'EdgeColor','none')
 
@@ -174,6 +259,95 @@ for pairid=1:length(Pairs)
 
     axis square
 
+
+    subplot(3,3,6)
+    xlabel('Time (min)')
+    ylabel('Abs(Amplitude)')
+    title(['Amplitude distribution'])
+    ylabel('Amplitude')
+    set(gca,'YTick',[])
+    makepretty
+
+    subplot(3,3,8)
+    idx1=find(ismember(sp.spikeTemplates, OriClusID((Pairs{pairid}))) & ismember(sp.RecSes, recsesGood(Pairs{pairid})));
+    isitot = diff(sort([tmpst(idx1)]));
+    histogram(isitot,'FaceColor',[0 0 0])
+    hold on
+    line([1.5/1000 1.5/1000],get(gca,'ylim'),'color',[1 0 0],'LineStyle','--')
+    title([num2str(round(sum(isitot*1000<1.5)./length(isitot)*1000)/10) '% ISI violations']); %The higher the worse (subtract this percentage from the Total score)
+    xlabel('ISI (ms)')
+    ylabel('Nr. Spikes')
+    makepretty
+
+    tmpfp = FingerprintR(Pairs{pairid},Pairs{pairid}); % It's symmetric, take best cross-validation for illustration
+    tmpfp(logical(eye(size(tmpfp)))) = nan;
+
+    subplot(3,3,9)
+    hold on
+    tmp = [];
+    tmp2 = [];
+    for uidx = 1:length(Pairs{pairid})
+        for uidx2 = 2:length(Pairs{pairid})
+            if uidx2<=uidx
+                continue
+            end
+
+            [r,c] = find(tmpfp == max([tmpfp(uidx,uidx2),tmpfp(uidx2,uidx)']),1,'first');
+
+            uid = Pairs{pairid}(r);
+            uid2 = Pairs{pairid}(c);
+            tmp = [tmp round(FingerprintR(uid,uid2)*10)/10];
+            tmp2 = [tmp2 round(RankScoreAll(uid,uid2)*10)/10];
+            SessionCorrelations = AllSessionCorrelations{ismember(DayOpt,recsesGood(uid)),ismember(DayOpt,recsesGood(uid2))};
+            addthis3=-SessionSwitch(ismember(DayOpt,recsesGood(uid)))+1;
+            if recsesGood(uid2)>recsesGood(uid)
+                addthis4=-SessionSwitch(find(ismember(DayOpt,recsesGood(uid2))))+1+ncellsperrecording(ismember(DayOpt,recsesGood(uid)));
+            else
+                addthis4=-SessionSwitch(find(ismember(DayOpt,recsesGood(uid2))))+1;
+            end
+            plot(SessionCorrelations(uid+addthis3,:),'-','color',cols(uidx,:)); hold on; plot(SessionCorrelations(uid2+addthis4,:),'-','color',cols(uidx2,:))
+           
+        end
+    end
+    xlabel('Unit')
+    ylabel('Cross-correlation')
+    tmp = cell2mat(arrayfun(@(X) [num2str(X) ','],tmp,'Uni',0));
+    tmp(end) = [];
+    tmp2 = cell2mat(arrayfun(@(X) [num2str(X) ','],tmp2,'Uni',0));
+    tmp2(end) = [];
+
+     title(['Fingerprint r=' tmp ', rank=' tmp2])
+    ylims = get(gca,'ylim');
+    set(gca,'ylim',[ylims(1) ylims(2)*1.2])
+    PosMain = get(gca,'Position');
+    makepretty
+    hold off
+
+    axes('Position',[PosMain(1)+(PosMain(3)*0.8) PosMain(2)+(PosMain(4)*0.8) PosMain(3)*0.2 PosMain(4)*0.2])
+    box on
+    hold on
+    for uidx = 1:length(Pairs{pairid})
+        for uidx2 = 2:length(Pairs{pairid})
+            if uidx2<=uidx
+                continue
+            end
+            [r,c] = find(tmpfp == max([tmpfp(uidx,uidx2),tmpfp(uidx2,uidx)']));
+
+            uid = Pairs{pairid}(r);
+            uid2 = Pairs{pairid}(c);
+
+           
+            tmp1 = FingerprintR(uid,:);
+            tmp1(uid2)=nan;
+            tmp2 = FingerprintR(uid2,:);
+            tmp2(uid)=nan;
+            tmp = cat(2,tmp1,tmp2);
+            histogram(tmp,'EdgeColor','none','FaceColor',[0.5 0.5 0.5])
+            line([FingerprintR(uid,uid2) FingerprintR(uid,uid2)],get(gca,'ylim'),'color',nanmean(cols([uidx,uidx2],:),1))
+        end
+    end
+    xlabel('Finger print r')
+    makepretty
 
     fname = ['BlindID_' num2str(pairid)];
     saveas(tmpfig,fullfile(param.SaveDir,'BlindFigures',[fname '.fig']))

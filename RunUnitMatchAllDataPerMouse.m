@@ -8,9 +8,7 @@ end
 DateOpt = cat(2,DateOpt{:});
 DateOpt = cellfun(@(X) X([X.isdir]),DateOpt,'UniformOutput',0);
 DateOpt = cellfun(@(X) {X.name},DateOpt,'UniformOutput',0);
-PlotLFP = 0;
-plotUnitActivity = 0;
-GoodUnits = cell(1,length(MiceOpt));
+
 for midx = 1:length(MiceOpt)
     %% Loading data from kilosort/phy easily
     myKsDir = fullfile(KilosortDir,MiceOpt{midx});
@@ -90,7 +88,7 @@ for midx = 1:length(MiceOpt)
 
     %% Figures
     if UMparam.MakePlotsOfPairs
-        DrawBlind = 0; %1 for blind drawing (for manual judging of pairs)
+        DrawBlind = 1; %1 for blind drawing (for manual judging of pairs)
         DrawPairsUnitMatch(UMparam.SaveDir,DrawBlind);
     end
     
@@ -98,8 +96,11 @@ for midx = 1:length(MiceOpt)
     EvaluatingUnitMatch(UMparam.SaveDir);
 
     %% QM
+    try
     QualityMetricsROCs(UMparam.SaveDir);
-
+    catch ME
+        disp(['Couldn''t do Quality metrics for ' MiceOpt{midx}])
+    end
 
     %% 
     disp(['Preprocessed data for ' MiceOpt{midx}])
