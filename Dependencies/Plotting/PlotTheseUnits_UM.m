@@ -88,7 +88,6 @@ Allchannelpos = param.channelpos;
 if ~iscell(Allchannelpos)
     Allchannelpos = {Allchannelpos};
 end
-
 % Extract matchtable scores
 MatchProbability = reshape(MatchTable.MatchProb,nclus,nclus);
 FingerprintR = reshape(MatchTable.FingerprintCor,nclus,nclus);
@@ -96,12 +95,41 @@ RankScoreAll = reshape(MatchTable.RankScore,nclus,nclus);
 for scid = 1:length(param.Scores2Include)
     eval([param.Scores2Include{scid} ' = reshape(MatchTable.' param.Scores2Include{scid} ',nclus,nclus);'])
 end
+
+%% Flip trajectory if necessary?
+% for which dimensions do we allow flipping?
+channelpos_AllCat = cat(1,Allchannelpos{:});
+AllowFlipping = false(size(channelpos_AllCat,2),nclus); % Dimension x channel
+for uid = 1:nclus
+    channelpos = Allchannelpos{recsesGood(uid)};
+    %Load channels
+    ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(WaveformInfo.MaxChannel(uid,1),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius); %Averaging over 10 channels helps with drift
+    Locs = channelpos(ChanIdx,:);
+    AllowFlipping(cell2mat(arrayfun(@(X) length(unique(Locs(:,X))),1:size(Locs,2),'Uni',0))<=2,:) = true;
+end
+FlipDim = find(any(AllowFlipping,2));
+
+% Flip trajectory for flip dimensions
+ProjectedLocationPerTPAllFlips = nan(size(WaveformInfo.ProjectedLocationPerTP,1),size(WaveformInfo.ProjectedLocationPerTP,2),size(WaveformInfo.ProjectedLocationPerTP,3),size(WaveformInfo.ProjectedLocationPerTP,4),length(FlipDim));
+for flipid = 1:length(FlipDim)
+    tmpdat = squeeze(WaveformInfo.ProjectedLocationPerTP(FlipDim(flipid),:,:,:));
+    range = cat(2,nanmin(tmpdat,[],2), nanmax(tmpdat,[],2));
+
+    % change values
+    newvals = nanmin(tmpdat,[],2) + (nanmax(tmpdat,[],2) - tmpdat);
+    ProjectedLocationPerTPAllFlips(:,:,:,:,flipid) = WaveformInfo.ProjectedLocationPerTP;
+    ProjectedLocationPerTPAllFlips(FlipDim(flipid),:,:,:,flipid) = newvals;
+end
+
+ProjectedLocationPerTPAllFlips = cat(5,WaveformInfo.ProjectedLocationPerTP,ProjectedLocationPerTPAllFlips); % add them all together
+
 %% Plot figures
 timercounter = tic;
 disp('Plotting pairs...')
 cv=2;
 for pairid=1:length(Pairs)
     tmpfig = figure('visible',param.VisibleSetting);
+    
 
 
     cols =  jet(length(Pairs{pairid}));
@@ -150,8 +178,17 @@ for pairid=1:length(Pairs)
 
         takesamples = param.waveidx;
         takesamples = unique(takesamples(~isnan(takesamples)));
-        h(1) = plot(squeeze(WaveformInfo.ProjectedLocationPerTP(1,uid,takesamples,cv)),squeeze(WaveformInfo.ProjectedLocationPerTP(2,uid,takesamples,cv)),'-','color',cols(uidx,:));
-        scatter(squeeze(WaveformInfo.ProjectedLocationPerTP(1,uid,takesamples,cv)),squeeze(WaveformInfo.ProjectedLocationPerTP(2,uid,takesamples,cv)),30,takesamples,'filled')
+        if uidx > 1 % To flip or not to flip?
+            tmptr = squeeze(ProjectedLocationPerTPAllFlips(:,uid,takesamples,cv,:));
+            [~,flipidx] = nanmin(nanmean(sqrt(nansum((tmptr-repmat(tmptmpl,1,1,size(tmptr,3))).^2,1)),2),[],3);
+
+        else
+            tmptmpl = squeeze(ProjectedLocationPerTPAllFlips(:,uid,takesamples,cv,1));
+            flipidx = 1;
+        end
+
+        h(1) = plot(squeeze(ProjectedLocationPerTPAllFlips(1,uid,takesamples,cv,flipidx)),squeeze(ProjectedLocationPerTPAllFlips(2,uid,takesamples,cv,flipidx)),'-','color',cols(uidx,:));
+        scatter(squeeze(ProjectedLocationPerTPAllFlips(1,uid,takesamples,cv,flipidx)),squeeze(ProjectedLocationPerTPAllFlips(2,uid,takesamples,cv,flipidx)),30,takesamples,'filled')
         colormap(hot)
 
 
@@ -264,13 +301,13 @@ for pairid=1:length(Pairs)
     else
         tmp = 'nan';
     end
-    if exist('CentroidVar')
-        tmp2 = cell2mat(arrayfun(@(X) [num2str(round(CentroidVar(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
+    if exist('CentroidRecentered')
+        tmp2 = cell2mat(arrayfun(@(X) [num2str(round(CentroidDistRecentered(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
         tmp2(end)=[];
     else
         tmp2 = 'nan';
     end
-    title(['Centroid Distance: ' tmp ', Variance: ' tmp2])
+    title(['Centroid Distance: ' tmp ', CentroidRecentered: ' tmp2])
 
     subplot(3,3,3)
     ylims = get(gca,'ylim');

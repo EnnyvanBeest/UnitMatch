@@ -83,17 +83,20 @@ for midx = 1:length(MiceOpt)
         UMparam = PrepareClusInfoparams;
         UMparam.SaveDir = fullfile(PrepareClusInfoparams.SaveDir,'UnitMatch');
     end
+
+    %% Evaluate (within unit ID cross-validation)
+    EvaluatingUnitMatch(UMparam.SaveDir);
+
     %% Function analysis
     ComputeFunctionalScores(UMparam.SaveDir)
 
     %% Figures
     if UMparam.MakePlotsOfPairs
-        DrawBlind = 1; %1 for blind drawing (for manual judging of pairs)
+        DrawBlind = 0; %1 for blind drawing (for manual judging of pairs)
         DrawPairsUnitMatch(UMparam.SaveDir,DrawBlind);
     end
     
-    %% Evaluate (within unit ID cross-validation)
-    EvaluatingUnitMatch(UMparam.SaveDir);
+
 
     %% QM
     try

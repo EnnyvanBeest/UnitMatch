@@ -106,6 +106,33 @@ tbl = array2table(tbldat','VariableNames',{'BlindID','ClusID1','ClusID2','RecID1
 tbl.MatchProb = cell2mat(cellfun(@(X) MatchProbability(X(1),X(2)),Pairs,'Uni',0))';
 save(fullfile(param.SaveDir,'BlindFigures','BlindTable.mat'),'tbl');
 
+%% Flip trajectory if necessary?
+% for which dimensions do we allow flipping?
+channelpos_AllCat = cat(1,Allchannelpos{:});
+AllowFlipping = false(size(channelpos_AllCat,2),nclus); % Dimension x channel
+for uid = 1:nclus
+    channelpos = Allchannelpos{recsesGood(uid)};
+    %Load channels
+    ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(WaveformInfo.MaxChannel(uid,1),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius); %Averaging over 10 channels helps with drift
+    Locs = channelpos(ChanIdx,:);
+    AllowFlipping(cell2mat(arrayfun(@(X) length(unique(Locs(:,X))),1:size(Locs,2),'Uni',0))<=2,:) = true;
+end
+FlipDim = find(any(AllowFlipping,2));
+
+% Flip trajectory for flip dimensions
+ProjectedLocationPerTPAllFlips = nan(size(WaveformInfo.ProjectedLocationPerTP,1),size(WaveformInfo.ProjectedLocationPerTP,2),size(WaveformInfo.ProjectedLocationPerTP,3),size(WaveformInfo.ProjectedLocationPerTP,4),length(FlipDim));
+for flipid = 1:length(FlipDim)
+    tmpdat = squeeze(WaveformInfo.ProjectedLocationPerTP(FlipDim(flipid),:,:,:));
+    range = cat(2,nanmin(tmpdat,[],2), nanmax(tmpdat,[],2));
+
+    % change values
+    newvals = nanmin(tmpdat,[],2) + (nanmax(tmpdat,[],2) - tmpdat);
+    ProjectedLocationPerTPAllFlips(:,:,:,:,flipid) = WaveformInfo.ProjectedLocationPerTP;
+    ProjectedLocationPerTPAllFlips(FlipDim(flipid),:,:,:,flipid) = newvals;
+end
+
+ProjectedLocationPerTPAllFlips = cat(5,WaveformInfo.ProjectedLocationPerTP,ProjectedLocationPerTPAllFlips); % add them all together
+
 %% Plot figures
 timercounter = tic;
 disp('Plotting pairs...')
@@ -158,8 +185,17 @@ for pairid=1:length(Pairs)
 
         takesamples = param.waveidx;
         takesamples = unique(takesamples(~isnan(takesamples)));
-        h(1) = plot(squeeze(WaveformInfo.ProjectedLocationPerTP(1,uid,takesamples,cv)),squeeze(WaveformInfo.ProjectedLocationPerTP(2,uid,takesamples,cv)),'-','color',cols(uidx,:));
-        scatter(squeeze(WaveformInfo.ProjectedLocationPerTP(1,uid,takesamples,cv)),squeeze(WaveformInfo.ProjectedLocationPerTP(2,uid,takesamples,cv)),30,takesamples,'filled')
+        if uidx > 1 % To flip or not to flip?
+            tmptr = squeeze(ProjectedLocationPerTPAllFlips(:,uid,takesamples,cv,:));
+            [~,flipidx] = nanmin(nanmean(sqrt(nansum((tmptr-repmat(tmptmpl,1,1,size(tmptr,3))).^2,1)),2),[],3);
+
+        else
+            tmptmpl = squeeze(ProjectedLocationPerTPAllFlips(:,uid,takesamples,cv,1));
+            flipidx = 1;
+        end
+
+        h(1) = plot(squeeze(ProjectedLocationPerTPAllFlips(1,uid,takesamples,cv,flipidx)),squeeze(ProjectedLocationPerTPAllFlips(2,uid,takesamples,cv,flipidx)),'-','color',cols(uidx,:));
+        scatter(squeeze(ProjectedLocationPerTPAllFlips(1,uid,takesamples,cv,flipidx)),squeeze(ProjectedLocationPerTPAllFlips(2,uid,takesamples,cv,flipidx)),30,takesamples,'filled')
         colormap(hot)
 
 

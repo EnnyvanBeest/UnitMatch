@@ -169,7 +169,7 @@ AllWVBParameters.WaveIdx = WaveIdx;
 return
 % Images for example neuron
 if 0 
-    uid = [10] % Example
+    uid = [10] % Example (AL032, take 10)
      fprintf(1,'\b\b\b\b%3.0f%%',uid/nclus*100)
     % load data
     spikeMap = readNPY(Path4UnitNPY{uid});
@@ -198,23 +198,25 @@ if 0
     figure; 
     subplot(2,3,1)
     imagesc(timevec,channelpos(ChanIdx(channelpos(ChanIdx,1)==0),2),tmp',lims)
+    colormap redblue
+    makepretty
     xlabel('Time (ms)')
-    ylabel('depth (micron)')
+    ylabel('depth (\mum)')
     title('sites at 0um')
     set(gca,'ydir','normal')
   
     subplot(2,3,2) % Peak profile
     tmp = nanmean(spikeMap(param.NewPeakLoc,ChanIdx(channelpos(ChanIdx,1)==0),:),3);
     plot(tmp,channelpos(ChanIdx(channelpos(ChanIdx,1)==0),2),'k-')
-    xlabel('mV at peak')
-    ylabel('Depth (micron)')
+    xlabel('\muV at peak')
+    ylabel('depth (\mum)')
     makepretty
 
     subplot(2,3,3) % average waveform
     tmp = nanmean(spikeMap(:,MaxChannel(uid,1),:),3);
     plot(timevec,tmp,'k-')
     xlabel('Time (ms)')
-    ylabel('mV at peak channel')
+    ylabel('\muV at peak channel')
     makepretty
 
 
@@ -223,22 +225,24 @@ if 0
     subplot(2,3,4)
     imagesc(timevec,channelpos(ChanIdx(channelpos(ChanIdx,1)==32),2),tmp',lims)
     xlabel('Time (ms)')
-    ylabel('Depth (micron)')
+    ylabel('Depth (\mum)')
     title('Sites at 32um')
     set(gca,'ydir','normal')
+    colormap redblue
+
     makepretty
     subplot(2,3,5) % Peak profile
     tmp = nanmean(spikeMap(param.NewPeakLoc,ChanIdx(channelpos(ChanIdx,1)==32),:),3);
     plot(tmp,channelpos(ChanIdx(channelpos(ChanIdx,1)==0),2),'k-')
-    xlabel('mV at peak')
-    ylabel('Depth (micron)')
+    xlabel('\muV at peak')
+    ylabel('Depth (\mum)')
     makepretty
 
     subplot(2,3,6) % average waveform
     tmp = nanmean(spikeMap(:,MaxChannel(uid,1),:),3);
     plot(timevec,tmp,'k-')
     xlabel('Time (ms)')
-    ylabel('mV at peak channel')
+    ylabel('\muV at peak channel')
     makepretty
 
 

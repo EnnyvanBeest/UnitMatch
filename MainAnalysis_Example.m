@@ -1,12 +1,12 @@
 %% User Input
 %% Path information
 DataDir = {'H:\MatchingUnits\RawData'};% Check DataDir2Use
-SaveDir = 'H:\MatchingUnits\Output\Concatenated1day'
+SaveDir = 'H:\MatchingUnits\Output\NotConcatenated'
 tmpdatafolder = 'H:\MatchingUnits\Tmp'; % temporary folder 
 KilosortDir = 'H:\MatchingUnits\KilosortOutput';% 'E:\Data\KiloSortOutput';%
 
 %% Information on experiments
-MiceOpt = {'AV008','CB016','EB019','JF067'};%{'AV009','AV015','EB014','EB019','AL032','AV008','JF067','CB016'}%,'AV008','JF067','CB016''EB019'}; %CB016 %AL032 'AV008' JF067 Add all mice you want to analyse
+MiceOpt = {'AL032','AV008','CB016','EB019','JF067'};%{'AV009','AV015','EB014','EB019','AL032','AV008','JF067','CB016'}%,'AV008','JF067','CB016''EB019'}; %CB016 %AL032 'AV008' JF067 Add all mice you want to analyse
 % nidq_sync_used = zeros(1,length(MiceOpt)); % Was an external nidq used for syncing (typically sync feeds directly into IMEC)
 % nidq_sync_used(ismember(MiceOpt,{'EB001','CB007','CB008'}))=1; % Except for these mice...
 DataDir2Use = repmat(1,[1,length(MiceOpt)]); % In case you have multiple DataDir, index which directory is used for each mouse
@@ -14,7 +14,7 @@ RecordingType = repmat({'Acute'},1,length(MiceOpt)); % And whether recordings we
 RecordingType(ismember(MiceOpt,{'AL032','EB019','CB016','AV008','JF067'}))={'Chronic'}; %EB014', % Or maybe Chronic?
 
 %% Parameters on how to prepare units/data for analysis
-PrepareClusInfoparams.RunPyKSChronicStitched = 1; % Default 0. if 1, run PyKS chronic recordings stitched when same IMRO table was used
+PrepareClusInfoparams.RunPyKSChronicStitched = 0; % Default 0. if 1, run PyKS chronic recordings stitched when same IMRO table was used
 PrepareClusInfoparams.CopyToTmpFirst = 1; % If 1, copy data to local first, don't run from server (= advised!)
 PrepareClusInfoparams.DecompressLocal = 1; % If 1, uncompress data first if it's currently compressed (= necessary for unitmatch and faster for QualityMetrics))
 PrepareClusInfoparams.RedoQM = 0; %if 1, redo quality metrics if it already exists
@@ -22,18 +22,18 @@ PrepareClusInfoparams.RunQualityMetrics = 1; % If 1, Run the quality metrics (Bo
 PrepareClusInfoparams.loadPCs=1; % Do we need the PCs for data analysis (YES IF QM!)? If not you save a lot of time keeping this at 0
 PrepareClusInfoparams.InspectQualityMetrics=0; % If 1, Inspect the quality matrix/data set using the GUI (manual inspection)
 PrepareClusInfoparams.UnitMatch = 1; % If 1, find identical units across sessions or oversplits
-PrepareClusInfoparams.RedoUnitMatch = 0; % if 1, Redo unitmatch
+PrepareClusInfoparams.RedoUnitMatch = 1; % if 1, Redo unitmatch
 PrepareClusInfoparams.SaveDir = SaveDir; % Save results here
 PrepareClusInfoparams.tmpdatafolder = tmpdatafolder; % use this as a local directory (should be large enough to handle all sessions you want to combine)
 PrepareClusInfoparams.separateIMRO = 0; % Run for every IMRO separately (for memory reasons this might be a good idea)
-PrepareClusInfoparams.ReLoadAlways = 1; % If 1, SP & Clusinfo are always loaded from KS output
+PrepareClusInfoparams.ReLoadAlways = 0; % If 1, SP & Clusinfo are always loaded from KS output
 PrepareClusInfoparams.binsz = 0.01; %Binsz for unitmatch PSTHs
 PrepareClusInfoparams.saveSp = 1; % Save SP struct for easy loading of preprocessed data
 % UnitMatch Parameters:
 % PrepareClusInfoparams.Scores2Include =
-% {'AmplitudeSim','spatialdecaySim','WavformMSE','WVCorr','CentroidDist','CentroidVar','TrajAngleSim','TrajDistSim'};
+% {'AmplitudeSim','spatialdecaySim','WavformMSE','WVCorr','CentroidDist','CentroidVar','CentroidDistRecentered','TrajAngleSim','TrajDistSim'};
 % %Full set. WavformSim is average of WVCorr and WavformMSE
-PrepareClusInfoparams.Scores2Include = {'AmplitudeSim','spatialdecaySim','WavformSim','CentroidDist','CentroidVar','TrajAngleSim'}; % 
+PrepareClusInfoparams.Scores2Include = {'AmplitudeSim','spatialdecaySim','WavformSim','CentroidDist','CentroidDistRecentered','TrajAngleSim'}; % 
 PrepareClusInfoparams.ApplyExistingBayesModel = 0; %If 1, use probability distributions made available by us
 PrepareClusInfoparams.MakePlotsOfPairs = 1; % Plots pairs for inspection (UnitMatch)
 PrepareClusInfoparams.AssignUniqueID = 1; % Assign UniqueID 
