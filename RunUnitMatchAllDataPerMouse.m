@@ -85,10 +85,10 @@ for midx = 1:length(MiceOpt)
     end
 
     %% Evaluate (within unit ID cross-validation)
-%     EvaluatingUnitMatch(UMparam.SaveDir);
+    EvaluatingUnitMatch(UMparam.SaveDir);
 
     %% Function analysis
-%     ComputeFunctionalScores(UMparam.SaveDir)
+    ComputeFunctionalScores(UMparam.SaveDir)
 
     %% Figures
     if UMparam.MakePlotsOfPairs
