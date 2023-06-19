@@ -2,6 +2,7 @@ function DrawPairsUnitMatch(SaveDir,DrawBlind)
 if nargin<2
     DrawBlind = 0;
 end
+Redo = 0;
 TmpFile = matfile(fullfile(SaveDir,'UnitMatch.mat')); % Access saved file
 UMparam = TmpFile.UMparam; % Extract parameters
 MatchTable = TmpFile.MatchTable; % Load Matchtable
@@ -64,15 +65,12 @@ if UMparam.RunPyKSChronicStitched
     Pairs = cat(2,Pairs,arrayfun(@(X) PairsPKS(X,:),1:length(PairsPKS),'Uni',0));% Add these for plotting - inspection
 end
 
-if size(Pairs,2)>UMparam.drawmax
-    DrawPairs = randsample(1:size(Pairs,2),UMparam.drawmax,'false');
-else
-    DrawPairs = 1:size(Pairs,2);
-end
 if DrawBlind
     % Keep length 2 for each pair
-    if exist(fullfile(UMparam.SaveDir,'BlindFigures','BlindTable.mat'))
-        tmptbl = load(fullfile(UMparam.SaveDir,'BlindFigures','BlindTable.mat'));
+    tmptbl = dir(fullfile(UMparam.SaveDir,'BlindFigures*','BlindTable.mat'));
+
+    if ~Redo &&  ~isempty(tmptbl)
+        tmptbl = load(fullfile(tmptbl(1).folder,tmptbl(1).name));
         Pair1 = cell2mat(arrayfun(@(X) find(ismember(OriID,tmptbl.tbl.ClusID1(X)) & ismember(recses,tmptbl.tbl.RecID1(X))),1:height(tmptbl.tbl),'Uni',0));
         Pair2 = cell2mat(arrayfun(@(X) find(ismember(OriID,tmptbl.tbl.ClusID2(X)) & ismember(recses,tmptbl.tbl.RecID2(X))),1:height(tmptbl.tbl),'Uni',0));
         Pairs = arrayfun(@(X) [Pair1(X) Pair2(X)],1:length(Pair1),'Uni',0);
@@ -99,6 +97,12 @@ if DrawBlind
     % Randomly shuffle Pairs so we don't have matches grouped together and
     % different order for different runs
     Pairs = Pairs(randsample(length(Pairs),length(Pairs),0));
+
+    if size(Pairs,2)>UMparam.drawmax
+        DrawPairs = randsample(1:size(Pairs,2),UMparam.drawmax,'false');
+    else
+        DrawPairs = 1:size(Pairs,2);
+    end
     PlotTheseUnits_UM_Blind(Pairs(DrawPairs),MatchTable,UniqueIDConversion,WaveformInfo,AllSessionCorrelations,UMparam)
 else
     PlotTheseUnits_UM(Pairs(DrawPairs),MatchTable,UniqueIDConversion,WaveformInfo,AllSessionCorrelations,UMparam)

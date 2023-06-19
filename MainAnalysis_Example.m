@@ -1,7 +1,7 @@
 %% User Input
 %% Path information
 DataDir = {'H:\MatchingUnits\RawData'};% Check DataDir2Use
-SaveDir = 'H:\MatchingUnits\Output\NotConcatenated'
+SaveDir = 'H:\MatchingUnits\Output\Concatenated1Day'
 tmpdatafolder = 'H:\MatchingUnits\Tmp'; % temporary folder 
 KilosortDir = 'H:\MatchingUnits\KilosortOutput';% 'E:\Data\KiloSortOutput';%
 
@@ -14,7 +14,7 @@ RecordingType = repmat({'Acute'},1,length(MiceOpt)); % And whether recordings we
 RecordingType(ismember(MiceOpt,{'AL032','EB019','CB016','AV008','JF067'}))={'Chronic'}; %EB014', % Or maybe Chronic?
 
 %% Parameters on how to prepare units/data for analysis
-PrepareClusInfoparams.RunPyKSChronicStitched = 0; % Default 0. if 1, run PyKS chronic recordings stitched when same IMRO table was used
+PrepareClusInfoparams.RunPyKSChronicStitched = 1; % Default 0. if 1, run PyKS chronic recordings stitched when same IMRO table was used
 PrepareClusInfoparams.CopyToTmpFirst = 1; % If 1, copy data to local first, don't run from server (= advised!)
 PrepareClusInfoparams.DecompressLocal = 1; % If 1, uncompress data first if it's currently compressed (= necessary for unitmatch and faster for QualityMetrics))
 PrepareClusInfoparams.RedoQM = 0; %if 1, redo quality metrics if it already exists
@@ -26,14 +26,14 @@ PrepareClusInfoparams.RedoUnitMatch = 1; % if 1, Redo unitmatch
 PrepareClusInfoparams.SaveDir = SaveDir; % Save results here
 PrepareClusInfoparams.tmpdatafolder = tmpdatafolder; % use this as a local directory (should be large enough to handle all sessions you want to combine)
 PrepareClusInfoparams.separateIMRO = 0; % Run for every IMRO separately (for memory reasons this might be a good idea)
-PrepareClusInfoparams.ReLoadAlways = 0; % If 1, SP & Clusinfo are always loaded from KS output
+PrepareClusInfoparams.ReLoadAlways = 1; % If 1, SP & Clusinfo are always loaded from KS output
 PrepareClusInfoparams.binsz = 0.01; %Binsz for unitmatch PSTHs
 PrepareClusInfoparams.saveSp = 1; % Save SP struct for easy loading of preprocessed data
 % UnitMatch Parameters:
 % PrepareClusInfoparams.Scores2Include =
 % {'AmplitudeSim','spatialdecaySim','WavformMSE','WVCorr','CentroidDist','CentroidVar','CentroidDistRecentered','TrajAngleSim','TrajDistSim'};
 % %Full set. WavformSim is average of WVCorr and WavformMSE
-PrepareClusInfoparams.Scores2Include = {'AmplitudeSim','spatialdecaySim','WavformSim','CentroidDist','CentroidDistRecentered','TrajAngleSim'}; % 
+PrepareClusInfoparams.Scores2Include = {'AmplitudeSim','spatialdecaySim','WavformSim','CentroidDist','CentroidVar','TrajAngleSim'}; % 
 PrepareClusInfoparams.ApplyExistingBayesModel = 0; %If 1, use probability distributions made available by us
 PrepareClusInfoparams.MakePlotsOfPairs = 1; % Plots pairs for inspection (UnitMatch)
 PrepareClusInfoparams.AssignUniqueID = 1; % Assign UniqueID 

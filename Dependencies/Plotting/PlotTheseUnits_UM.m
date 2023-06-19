@@ -101,7 +101,11 @@ end
 channelpos_AllCat = cat(1,Allchannelpos{:});
 AllowFlipping = false(size(channelpos_AllCat,2),nclus); % Dimension x channel
 for uid = 1:nclus
-    channelpos = Allchannelpos{recsesGood(uid)};
+     if param.RunPyKSChronicStitched
+        channelpos = Allchannelpos{1};
+    else
+        channelpos = Allchannelpos{recsesGood(uid)};
+    end
     %Load channels
     ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(WaveformInfo.MaxChannel(uid,1),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius); %Averaging over 10 channels helps with drift
     Locs = channelpos(ChanIdx,:);
@@ -301,13 +305,13 @@ for pairid=1:length(Pairs)
     else
         tmp = 'nan';
     end
-    if exist('CentroidRecentered')
-        tmp2 = cell2mat(arrayfun(@(X) [num2str(round(CentroidDistRecentered(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
+    if exist('CentroidVar')
+        tmp2 = cell2mat(arrayfun(@(X) [num2str(round(CentroidVar(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
         tmp2(end)=[];
     else
         tmp2 = 'nan';
     end
-    title(['Centroid Distance: ' tmp ', CentroidRecentered: ' tmp2])
+    title(['Centroid Distance: ' tmp ', CentroidVar: ' tmp2])
 
     subplot(3,3,3)
     ylims = get(gca,'ylim');

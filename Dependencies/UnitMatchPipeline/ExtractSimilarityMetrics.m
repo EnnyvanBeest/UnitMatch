@@ -152,7 +152,11 @@ channelpos_AllCat = unique(cat(1,Allchannelpos{:}),'rows');
 % for which dimensions do we allow flipping?
 AllowFlipping = false(size(channelpos_AllCat,2),nclus); % Dimension x channel
 for uid = 1:nclus
-    channelpos = Allchannelpos{recsesGood(uid)};
+    if param.RunPyKSChronicStitched
+        channelpos = Allchannelpos{1};
+    else
+        channelpos = Allchannelpos{recsesGood(uid)};
+    end
     %Load channels
     ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChannel(uid,1),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius); %Averaging over 10 channels helps with drift
     Locs = channelpos(ChanIdx,:);
