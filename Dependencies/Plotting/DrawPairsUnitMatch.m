@@ -67,7 +67,7 @@ end
 
 if DrawBlind
     % Keep length 2 for each pair
-    tmptbl = dir(fullfile(UMparam.SaveDir,'BlindFigures*','BlindTable.mat'));
+    tmptbl = dir(fullfile(UMparam.SaveDir,'BlindFigures','BlindTable.mat'));
 
     if ~Redo &&  ~isempty(tmptbl)
         tmptbl = load(fullfile(tmptbl(1).folder,tmptbl(1).name));
@@ -96,7 +96,7 @@ if DrawBlind
     end
     % Randomly shuffle Pairs so we don't have matches grouped together and
     % different order for different runs
-    Pairs = Pairs(randsample(length(Pairs),length(Pairs),0));
+%     Pairs = Pairs(randsample(length(Pairs),length(Pairs),0));
 
     if size(Pairs,2)>UMparam.drawmax
         DrawPairs = randsample(1:size(Pairs,2),UMparam.drawmax,'false');

@@ -3,6 +3,21 @@ for midx = 1:length(MiceOpt)
     tmpdir = dir(fullfile(SaveDir,MiceOpt{midx},'UnitMatch','UnitMatch.mat'));
     tmpMatchTbl = matfile(fullfile(tmpdir.folder,tmpdir.name));
     MatchTable = tmpMatchTbl.MatchTable;
+    nclus = sqrt(height(MatchTable));
+    MatchProbability = reshape(MatchTable.MatchProb,nclus,nclus);
+    RankScore = reshape(MatchTable.RankScore,nclus,nclus);
+    UMparam = tmpMatchTbl.UMparam;
+    UniqueIDConversion = tmpMatchTbl.UniqueIDConversion;
+    if UMparam.GoodUnitsOnly
+        GoodId = logical(UniqueIDConversion.GoodID);
+    else
+        GoodId = true(1,length(UniqueIDConversion.GoodID));
+    end
+    UniqueID = UniqueIDConversion.UniqueID(GoodId);
+    OriID = UniqueIDConversion.OriginalClusID(GoodId);
+    OriIDAll = UniqueIDConversion.OriginalClusID;
+    recses = UniqueIDConversion.recsesAll(GoodId);
+    recsesall = UniqueIDConversion.recsesAll;
 
     for fid = 1:2
         % Now load manual curation
@@ -20,12 +35,13 @@ for midx = 1:length(MiceOpt)
             tbl = tmpmanual.tbl;
 
             % UM results
-            RowIdx = cell2mat(arrayfun(@(X) find(MatchTable.ID1 == tbl.ClusID1(X) & MatchTable.ID2 == tbl.ClusID2(X) & ...
-                MatchTable.RecSes1 == tbl.RecID1(X) & MatchTable.RecSes2 == tbl.RecID2(X)),1:height(tbl),'Uni',0));
+            Pair1 = cell2mat(arrayfun(@(X) find(ismember(OriID,tbl.ClusID1(X)) & ismember(recses,tbl.RecID1(X))),1:height(tbl),'Uni',0));
+            Pair2 = cell2mat(arrayfun(@(X) find(ismember(OriID,tbl.ClusID2(X)) & ismember(recses,tbl.RecID2(X))),1:height(tbl),'Uni',0));
+            Pairs = arrayfun(@(X) [Pair1(X) Pair2(X)],1:length(Pair1),'Uni',0);
+            MatchProb = cell2mat(cellfun(@(X) MatchProbability(X(1),X(2)),Pairs,'Uni',0))';
+            Rank = cell2mat(cellfun(@(X) RankScore(X(1),X(2)),Pairs,'Uni',0))';
 
-            Rank = MatchTable.RankScore(RowIdx);
-            MatchProb = MatchTable.MatchProb(RowIdx);
-            PyKS = MatchTable.ID1(RowIdx) == MatchTable.ID2(RowIdx);
+            PyKS = cell2mat(cellfun(@(X) OriID(X(1)) == OriID(X(2)),Pairs,'Uni',0));
             Order =  1:height(tbl);
         else
             tmpmanual = dir(fullfile(SaveDir,MiceOpt{midx},'UnitMatch','BlindFigures','BlindTable.mat'));
@@ -204,6 +220,9 @@ for midx = 1:length(MiceOpt)
     ylabel('Defined as match (proportion)')
     title(['Average manual score match'])
     ylim([0 1])
+
+    xlabel('Dataset')
+
     makepretty
 
     subplot(1,3,2)
@@ -224,6 +243,9 @@ for midx = 1:length(MiceOpt)
 
     title('Average manual score non-match')
     ylim([0 1])
+
+    xlabel('Dataset')
+
     makepretty
 
     subplot(1,3,3)
@@ -247,6 +269,8 @@ for midx = 1:length(MiceOpt)
 
     title('Average manual score uncertain')
     ylim([0 1])
+
+    xlabel('Dataset')
     makepretty
 
 
@@ -265,5 +289,4 @@ for midx = 1:length(MiceOpt)
         legend(h,{'Everyone says match','Everyone says no match','Uncertain'})
     end
 
-    find(AvgMan>0.5 & MatchProb'<0.5)
 end

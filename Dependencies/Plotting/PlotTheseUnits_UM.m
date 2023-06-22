@@ -2,8 +2,8 @@ function PlotTheseUnits_UM(Pairs,MatchTable,UniqueIDConversion,WaveformInfo,AllS
 % Plot UM results for groups of units
 
 if ~isfield(param,'TakeChannelRadius')
-        param.TakeChannelRadius = 200;
-        param.waveidx = 41-7:41+15;
+    param.TakeChannelRadius = 200;
+    param.waveidx = 41-7:41+15;
 end
 %% Extracting all relevant data/parameters
 if ~isdir(fullfile(param.SaveDir,'MatchFigures'))
@@ -101,7 +101,7 @@ end
 channelpos_AllCat = cat(1,Allchannelpos{:});
 AllowFlipping = false(size(channelpos_AllCat,2),nclus); % Dimension x channel
 for uid = 1:nclus
-     if param.RunPyKSChronicStitched
+    if param.RunPyKSChronicStitched
         channelpos = Allchannelpos{1};
     else
         channelpos = Allchannelpos{recsesGood(uid)};
@@ -133,12 +133,10 @@ disp('Plotting pairs...')
 cv=2;
 for pairid=1:length(Pairs)
     tmpfig = figure('visible',param.VisibleSetting);
-    
-
-
     cols =  jet(length(Pairs{pairid}));
     clear hleg
     addforamplitude=0;
+    addforspace = 0;
     for uidx = 1:length(Pairs{pairid})
         if cv==2 %Alternate between CVs
             cv=1;
@@ -164,18 +162,24 @@ for pairid=1:length(Pairs)
         %Load channels
         ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(WaveformInfo.MaxChannel(uid,cv),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius); %Averaging over 10 channels helps with drift
         Locs = channelpos(ChanIdx,:);
-    
-        subplot(3,3,[1,4])
+
+        subplot(3,6,[1,2,7,8])
         hold on
-         scatter(Locs(:,1)*10,Locs(:,2)*20,20,[0.5 0.5 0.5],'filled') % Indicate sites
+        scatter(Locs(:,1)*10,Locs(:,2)*20,20,[0.5 0.5 0.5],'filled') % Indicate sites
         for id = 1:length(Locs)
             plot(Locs(id,1)*10+[1:size(spikeMap,1)],Locs(id,2)*20+spikeMap(:,ChanIdx(id),cv),'-','color',cols(uidx,:),'LineWidth',1)
         end
         scatter(WaveformInfo.ProjectedLocation(1,uid,cv)*10,WaveformInfo.ProjectedLocation(2,uid,cv)*20,20,[0 0 0],'filled') %Indicate Centroid
         hleg(uidx) = plot(WaveformInfo.ProjectedLocation(1,uid,cv)*10+[1:size(spikeMap,1)],WaveformInfo.ProjectedLocation(2,uid,cv)*20+WaveformInfo.ProjectedWaveform(:,uid,cv),'-','color',cols(uidx,:),'LineWidth',2);
 
+        subplot(3,6,3)
+        if uidx==1
+            plot(channelpos(:,1),channelpos(:,2),'k.')
+            hold on
+        end
+        h(1)=plot(channelpos(WaveformInfo.MaxChannel(uid,cv),1),channelpos(WaveformInfo.MaxChannel(uid,cv),2),'.','color',cols(uidx,:),'MarkerSize',15);
 
-        subplot(3,3,[2])
+        subplot(3,6,4)
         hold on
         scatter(Locs(:,1),Locs(:,2),20,[0.5 0.5 0.5],'filled')
         scatter(WaveformInfo.ProjectedLocation(1,uid,cv),WaveformInfo.ProjectedLocation(2,uid,cv),20,[0 0 0],'filled')
@@ -196,20 +200,41 @@ for pairid=1:length(Pairs)
         colormap(hot)
 
 
-        subplot(3,3,5)
-        if uidx==1
-            plot(channelpos(:,1),channelpos(:,2),'k.')
-            hold on
-        end
-        h(1)=plot(channelpos(WaveformInfo.MaxChannel(uid,cv),1),channelpos(WaveformInfo.MaxChannel(uid,cv),2),'.','color',cols(uidx,:),'MarkerSize',15);
-
-
-        subplot(3,3,3)
+        subplot(3,6,[9,10])
         hold on
-        h(1)=plot(spikeMap(:,WaveformInfo.MaxChannel(uid,cv),cv),'-','color',cols(uidx,:));
+        scatter(Locs(:,1)+addforspace,Locs(:,2),20,[0.5 0.5 0.5],'filled')
+        scatter(WaveformInfo.ProjectedLocation(1,uid,cv)+addforspace,WaveformInfo.ProjectedLocation(2,uid,cv),20,[0 0 0],'filled')
+
+        takesamples = param.waveidx;
+        takesamples = unique(takesamples(~isnan(takesamples)));
+        if uidx > 1 % To flip or not to flip?
+            tmptr = squeeze(ProjectedLocationPerTPAllFlips(:,uid,takesamples,cv,:));
+            [~,flipidx] = nanmin(nanmean(sqrt(nansum((tmptr-repmat(tmptmpl,1,1,size(tmptr,3))).^2,1)),2),[],3);
+
+        else
+            tmptmpl = squeeze(ProjectedLocationPerTPAllFlips(:,uid,takesamples,cv,1));
+            flipidx = 1;
+        end
+
+        h(1) = plot(squeeze(ProjectedLocationPerTPAllFlips(1,uid,takesamples,cv,flipidx))+addforspace,squeeze(ProjectedLocationPerTPAllFlips(2,uid,takesamples,cv,flipidx)),'-','color',cols(uidx,:));
+        scatter(squeeze(ProjectedLocationPerTPAllFlips(1,uid,takesamples,cv,flipidx))+addforspace,squeeze(ProjectedLocationPerTPAllFlips(2,uid,takesamples,cv,flipidx)),30,takesamples,'filled')
+        colormap(hot)
+        addforspace = addforspace+2*max(diff(Locs(:,1)));
+
+
+        % Waveforms
+        subplot(3,6,5)
+        hold on
+        ProjectedWaveform = spikeMap(:,WaveformInfo.MaxChannel(uid,cv),cv);
+        h(1)=plot(ProjectedWaveform,'-','color',cols(uidx,:));
+        subplot(3,6,6)
+        hold on
+        ProjectedWaveform = (ProjectedWaveform-nanmin(ProjectedWaveform,[],1))./(nanmax(ProjectedWaveform,[],1)-nanmin(ProjectedWaveform,[],1));
+        h(1)=plot(ProjectedWaveform,'-','color',cols(uidx,:));
+
 
         % Scatter spikes of each unit
-        subplot(3,3,6)
+        subplot(3,6,[11,12])
         hold on
         idx1=find(sp.spikeTemplates == OriClusID(uid) & sp.RecSes == recsesGood(uid));
         if ~isempty(idx1)
@@ -235,7 +260,7 @@ for pairid=1:length(Pairs)
                 ones(size(sp.st(idx1), 1), 1) * 2], 'binSize', param.ACGbinSize, 'duration', param.ACGduration, 'norm', 'rate'); %function
             ACG = ccg(:, 1, 1);
 
-            subplot(3,3,7);
+            subplot(3,6,[13,14]);
             hold on
             plot(t,ACG,'color',cols(uidx,:));
             title(['AutoCorrelogram'])
@@ -246,7 +271,7 @@ for pairid=1:length(Pairs)
     set(tmpfig,'units','normalized','outerposition',[0 0 1 1])
 
     % make subplots pretty
-    subplot(3,3,[1,4])
+    subplot(3,6,[1,2,7,8])
     subplot
     makepretty
     set(gca,'yticklabel',arrayfun(@(X) num2str(X./20),get(gca,'ytick'),'UniformOutput',0))
@@ -264,11 +289,11 @@ for pairid=1:length(Pairs)
     title(['Probability=' Probs '%'])
 
 
-    subplot(3,3,[2])
+    subplot(3,6,4)
     xlabel('Xpos (um)')
     ylabel('Ypos (um)')
     xlims = [min(WaveformInfo.ProjectedLocation(1,Pairs{pairid},cv))-25 max(WaveformInfo.ProjectedLocation(1,Pairs{pairid},cv))+25];
-    ylims = [min(WaveformInfo.ProjectedLocation(2,Pairs{pairid},cv))-25 max(WaveformInfo.ProjectedLocation(2,Pairs{pairid},cv))+25];  
+    ylims = [min(WaveformInfo.ProjectedLocation(2,Pairs{pairid},cv))-25 max(WaveformInfo.ProjectedLocation(2,Pairs{pairid},cv))+25];
     set(gca,'xlim',xlims,'ylim',ylims)
     axis square
     %     legend([h(1),h(2)],{['Unit ' num2str(uid)],['Unit ' num2str(uid2)]})
@@ -294,7 +319,7 @@ for pairid=1:length(Pairs)
     end
     title(['Trajectory length: ' tmp ', angle: ' tmp2])
 
-    subplot(3,3,5)
+    subplot(3,6,3)
     xlabel('X position')
     ylabel('um from tip')
     makepretty
@@ -313,7 +338,7 @@ for pairid=1:length(Pairs)
     end
     title(['Centroid Distance: ' tmp ', CentroidVar: ' tmp2])
 
-    subplot(3,3,3)
+    subplot(3,6,5)
     ylims = get(gca,'ylim');
     patch([param.waveidx(1) param.waveidx(end) param.waveidx(end) param.waveidx(1)],[ylims(1) ylims(1) ylims(2) ylims(2)],[0.5 0.5 0.5],'FaceAlpha',0.2,'EdgeColor','none')
 
@@ -325,13 +350,13 @@ for pairid=1:length(Pairs)
         tmp = 'nan';
     end
     if exist('WVCorr')
-         tmp2 = cell2mat(arrayfun(@(X) [num2str(round(WVCorr(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp2 = cell2mat(arrayfun(@(X) [num2str(round(WVCorr(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
         tmp2(end)=[];
     else
         tmp2 = 'nan';
     end
-     if exist('WavformSim')
-         tmp5 = cell2mat(arrayfun(@(X) [num2str(round(WavformSim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
+    if exist('WavformSim')
+        tmp5 = cell2mat(arrayfun(@(X) [num2str(round(WavformSim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
         tmp5(end)=[];
     else
         tmp5 = 'nan';
@@ -350,9 +375,16 @@ for pairid=1:length(Pairs)
     end
     axis square
 
-    title(['MSE=' tmp ', corr= ' tmp2 'SIM=, ' tmp5])
+    title(['corr= ' tmp2])
 
-    subplot(3,3,6)
+    subplot(3,6,6)
+    ylims = get(gca,'ylim');
+    patch([param.waveidx(1) param.waveidx(end) param.waveidx(end) param.waveidx(1)],[ylims(1) ylims(1) ylims(2) ylims(2)],[0.5 0.5 0.5],'FaceAlpha',0.2,'EdgeColor','none')
+    axis square
+    makepretty
+    title(['MSE=' tmp  ', SIM=, ' tmp5])
+
+    subplot(3,6,[11,12])
     xlabel('Time (min)')
     ylabel('Abs(Amplitude)')
     title(['Amplitude distribution'])
@@ -361,7 +393,7 @@ for pairid=1:length(Pairs)
     makepretty
     title(['Ampl=' tmp3 ', decay='  tmp4])
 
-    subplot(3,3,8)
+    subplot(3,6,15)
     idx1=find(ismember(sp.spikeTemplates, OriClusID((Pairs{pairid}))) & ismember(sp.RecSes, recsesGood(Pairs{pairid})));
     isitot = diff(sort([tmpst(idx1)]));
     histogram(isitot,'FaceColor',[0 0 0])
@@ -372,15 +404,12 @@ for pairid=1:length(Pairs)
     ylabel('Nr. Spikes')
     makepretty
 
-
-
     tmpfp = FingerprintR(Pairs{pairid},Pairs{pairid}); % It's symmetric, take best cross-validation for illustration
     tmpfp(logical(eye(size(tmpfp)))) = nan;
 
-    subplot(3,3,9)
+    subplot(3,6,[16,17])
     hold on
     tmp = [];
-    tmp2 = [];
     for uidx = 1:length(Pairs{pairid})
         for uidx2 = 2:length(Pairs{pairid})
             if uidx2<=uidx
@@ -392,56 +421,56 @@ for pairid=1:length(Pairs)
             uid = Pairs{pairid}(r);
             uid2 = Pairs{pairid}(c);
             tmp = [tmp round(FingerprintR(uid,uid2)*10)/10];
-            tmp2 = [tmp2 round(RankScoreAll(uid,uid2)*10)/10];
             SessionCorrelations = AllSessionCorrelations{ismember(DayOpt,recsesGood(uid)),ismember(DayOpt,recsesGood(uid2))};
-            addthis3=-SessionSwitch(ismember(DayOpt,recsesGood(uid)))+1;
-            if recsesGood(uid2)>recsesGood(uid)
-                addthis4=-SessionSwitch(find(ismember(DayOpt,recsesGood(uid2))))+1+ncellsperrecording(ismember(DayOpt,recsesGood(uid)));
-            else
-                addthis4=-SessionSwitch(find(ismember(DayOpt,recsesGood(uid2))))+1;
-            end
+            addthis4 = -SessionSwitch(find(ismember(DayOpt,recsesGood(uid2))))+1+ncellsperrecording(ismember(DayOpt,recsesGood(uid)));
+            addthis3 = -SessionSwitch(ismember(DayOpt,recsesGood(uid)))+1;
             plot(SessionCorrelations(uid+addthis3,:),'-','color',cols(uidx,:)); hold on; plot(SessionCorrelations(uid2+addthis4,:),'-','color',cols(uidx2,:))
-           
         end
     end
-    xlabel('Unit')
+    xlabel('Reference Units')
     ylabel('Cross-correlation')
     tmp = cell2mat(arrayfun(@(X) [num2str(X) ','],tmp,'Uni',0));
     tmp(end) = [];
-    tmp2 = cell2mat(arrayfun(@(X) [num2str(X) ','],tmp2,'Uni',0));
-    tmp2(end) = [];
 
-    title(['Fingerprint r=' tmp ', rank=' tmp2])
+    title(['Fingerprint r=' tmp ])
     ylims = get(gca,'ylim');
-    set(gca,'ylim',[ylims(1) ylims(2)*1.2])
     PosMain = get(gca,'Position');
     makepretty
     hold off
 
-    axes('Position',[PosMain(1)+(PosMain(3)*0.8) PosMain(2)+(PosMain(4)*0.8) PosMain(3)*0.2 PosMain(4)*0.2])
+    subplot(3,6,[18])
+
     box on
     hold on
+    tmpR = [];
+
     for uidx = 1:length(Pairs{pairid})
         for uidx2 = 2:length(Pairs{pairid})
             if uidx2<=uidx
                 continue
             end
-            [r,c] = find(tmpfp == max([tmpfp(uidx,uidx2),tmpfp(uidx2,uidx)']));
+            [r,c] = find(tmpfp == max([tmpfp(uidx,uidx2),tmpfp(uidx2,uidx)']),1,'first');
 
             uid = Pairs{pairid}(r);
             uid2 = Pairs{pairid}(c);
 
-           
-            tmp1 = FingerprintR(uid,:);
+            tmpR = [tmpR round(RankScoreAll(uid,uid2)*10)/10];
+
+            % Take only from the correct sessions
+            Idx = SessionSwitch(ismember(DayOpt,recsesGood(uid2))):SessionSwitch(ismember(DayOpt,recsesGood(uid2)))-1+ncellsperrecording(ismember(DayOpt,recsesGood(uid2)));
+
+            tmp1 = FingerprintR(uid,Idx);
             tmp1(uid2)=nan;
-            tmp2 = FingerprintR(uid2,:);
-            tmp2(uid)=nan;
-            tmp = cat(2,tmp1,tmp2);
-            histogram(tmp,'EdgeColor','none','FaceColor',[0.5 0.5 0.5])
+
+            histogram(tmp1,'EdgeColor','none','FaceColor',[0.5 0.5 0.5])
             line([FingerprintR(uid,uid2) FingerprintR(uid,uid2)],get(gca,'ylim'),'color',nanmean(cols([uidx,uidx2],:),1))
         end
     end
+    tmpR = cell2mat(arrayfun(@(X) [num2str(X) ','],tmpR,'Uni',0));
+    tmpR(end) = [];
+
     xlabel('Finger print r')
+    title(['rank=' tmpR])
     makepretty
 
 

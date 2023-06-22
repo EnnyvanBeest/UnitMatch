@@ -36,7 +36,7 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelationsFingerprint
                 FingerprintR = corr(sessionCorrelationsAll{did1}.fold1,sessionCorrelationsAll{did1}.fold2,'rows','pairwise'); % cross-validated
 
                 % Save correlation matrix
-                AllSessionCorrelationsFingerprints{did1,did2} = SessionCorrelations_perDay{did1}; % for plotting
+                AllSessionCorrelationsFingerprints{did1,did2} = cat(2,sessionCorrelationsAll{did1}.fold1,sessionCorrelationsAll{did1}.fold2)'; % for plotting save both folds
 
             else
                 % Across days, compute correlations across days

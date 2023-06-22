@@ -78,17 +78,17 @@ for midx = 1:length(MiceOpt)
     %% Run UnitMatch
     UnitMatchExist = dir(fullfile(PrepareClusInfoparams.SaveDir,'**','UnitMatch.mat'));
     if isempty(UnitMatchExist) || PrepareClusInfoparams.RedoUnitMatch
-       UMparam = RunUnitMatch(subsesoptAll,PrepareClusInfoparams);
+        UMparam = RunUnitMatch(subsesoptAll,PrepareClusInfoparams);
     else
         UMparam = PrepareClusInfoparams;
         UMparam.SaveDir = fullfile(PrepareClusInfoparams.SaveDir,'UnitMatch');
     end
 
     %% Evaluate (within unit ID cross-validation)
-    EvaluatingUnitMatch(UMparam.SaveDir);
+%     EvaluatingUnitMatch(UMparam.SaveDir);
 
     %% Function analysis
-    ComputeFunctionalScores(UMparam.SaveDir)
+%     ComputeFunctionalScores(UMparam.SaveDir)
 
     %% Figures
     if UMparam.MakePlotsOfPairs
