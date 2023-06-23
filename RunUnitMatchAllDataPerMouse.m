@@ -85,23 +85,23 @@ for midx = 1:length(MiceOpt)
     end
 
     %% Evaluate (within unit ID cross-validation)
-%     EvaluatingUnitMatch(UMparam.SaveDir);
+    EvaluatingUnitMatch(UMparam.SaveDir);
 
     %% Function analysis
-%     ComputeFunctionalScores(UMparam.SaveDir)
+    ComputeFunctionalScores(UMparam.SaveDir)
 
     %% Figures
     if UMparam.MakePlotsOfPairs
-        DrawBlind = 1; %1 for blind drawing (for manual judging of pairs)
+        DrawBlind = 0; %1 for blind drawing (for manual judging of pairs)
         DrawPairsUnitMatch(UMparam.SaveDir,DrawBlind);
     end
 
     %% QM
-    try
-    QualityMetricsROCs(UMparam.SaveDir);
-    catch ME
-        disp(['Couldn''t do Quality metrics for ' MiceOpt{midx}])
-    end
+%     try
+%     QualityMetricsROCs(UMparam.SaveDir);
+%     catch ME
+%         disp(['Couldn''t do Quality metrics for ' MiceOpt{midx}])
+%     end
 
     %% 
     disp(['Preprocessed data for ' MiceOpt{midx}])

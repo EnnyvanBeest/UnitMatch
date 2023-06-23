@@ -421,7 +421,11 @@ for pairid=1:length(Pairs)
             uid = Pairs{pairid}(r);
             uid2 = Pairs{pairid}(c);
             tmp = [tmp round(FingerprintR(uid,uid2)*10)/10];
+            try
             SessionCorrelations = AllSessionCorrelations{ismember(DayOpt,recsesGood(uid)),ismember(DayOpt,recsesGood(uid2))};
+            catch ME
+                keyboard
+            end
             addthis4 = -SessionSwitch(find(ismember(DayOpt,recsesGood(uid2))))+1+ncellsperrecording(ismember(DayOpt,recsesGood(uid)));
             addthis3 = -SessionSwitch(ismember(DayOpt,recsesGood(uid)))+1;
             plot(SessionCorrelations(uid+addthis3,:),'-','color',cols(uidx,:)); hold on; plot(SessionCorrelations(uid2+addthis4,:),'-','color',cols(uidx2,:))
