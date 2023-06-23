@@ -1,7 +1,7 @@
 %% User Input
 %% Path information
 DataDir = {'H:\MatchingUnits\RawData'};% Check DataDir2Use
-SaveDir = 'H:\MatchingUnits\Output\Concatenated1Day'
+SaveDir = 'H:\MatchingUnits\Output\'
 tmpdatafolder = 'H:\MatchingUnits\Tmp'; % temporary folder 
 KilosortDir = 'H:\MatchingUnits\KilosortOutput';% 'E:\Data\KiloSortOutput';%
 
@@ -22,7 +22,7 @@ PrepareClusInfoparams.RunQualityMetrics = 1; % If 1, Run the quality metrics (Bo
 PrepareClusInfoparams.loadPCs=1; % Do we need the PCs for data analysis (YES IF QM!)? If not you save a lot of time keeping this at 0
 PrepareClusInfoparams.InspectQualityMetrics=0; % If 1, Inspect the quality matrix/data set using the GUI (manual inspection)
 PrepareClusInfoparams.UnitMatch = 1; % If 1, find identical units across sessions or oversplits
-PrepareClusInfoparams.RedoUnitMatch = 0; % if 1, Redo unitmatch
+PrepareClusInfoparams.RedoUnitMatch = 1; % if 1, Redo unitmatch
 PrepareClusInfoparams.SaveDir = SaveDir; % Save results here
 PrepareClusInfoparams.tmpdatafolder = tmpdatafolder; % use this as a local directory (should be large enough to handle all sessions you want to combine)
 PrepareClusInfoparams.separateIMRO = 0; % Run for every IMRO separately (for memory reasons this might be a good idea)

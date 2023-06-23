@@ -28,7 +28,8 @@ Amplitude = nan(nclus,2); % Maximum (weighted) amplitude, first versus second ha
 spatialdecay = nan(nclus,2); % how fast does the unit decay across space, first versus second half
 WaveIdx = false(nclus,spikeWidth,2);
 A0Distance = nan(nclus,2); % Distance at which amplitudes are 0
-expFun = @(p,d) -exp(-p(1)*d)+p(2); % for spatial decay
+expFun = @(p,d) p(2)*(1-exp(-p(1)*d)); % for spatial decay
+expFun2 = @(p,d) p(1)*exp(-p(2)*d); % For SNR Decay
 opts = optimset('Display','off');
 
 %% Take geographically close channels (within 50 microns!), not just index!
@@ -53,22 +54,51 @@ for uid = 1:nclus
 
     % Extract channel positions that are relevant and extract mean location
     [~,MaxChanneltmp] = nanmax(nanmax(abs(nanmean(spikeMap(35:70,:,:),3)),[],1));
-    ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChanneltmp,:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius); %Averaging over 10 channels helps with drift
-    Locs = channelpos(ChanIdx,:);
+    OriChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChanneltmp,:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius); %Averaging over 10 channels helps with drift
+    OriLocs = channelpos(OriChanIdx,:);
 
     % Extract unit parameters -
     % Cross-validate: first versus second half of session
     for cv = 1:2
+        ChanIdx = OriChanIdx;
+        Locs = OriLocs;
         % Find maximum channels:
         [~,MaxChannel(uid,cv)] = nanmax(nanmax(abs(spikeMap(35:70,ChanIdx,cv)),[],1)); %Only over relevant channels, in case there's other spikes happening elsewhere simultaneously
         MaxChannel(uid,cv) = ChanIdx(MaxChannel(uid,cv));
 
+
+        %     % Mean waveform - first extract the 'weight' for each channel, based on
+        %     % how close they are to the projected location (closer = better)
+        Distance2MaxChan = sqrt(nansum(abs(Locs-channelpos(MaxChannel(uid,cv),:)).^2,2));
+
+        % Determine distance at which it's just noise
+        SNR = (nanmean(abs(spikeMap(waveidx,ChanIdx,cv)),1)./nanstd((spikeMap(1:20,ChanIdx,cv)),[],1));
+        p = lsqcurvefit(expFun2,[1 1],Distance2MaxChan',SNR,[],[],opts);
+        tmpmin = 2*(log(2)/p(2));
+
+        %         figure; scatter(Distance2MaxChan',SNR); hold on
+        %             plot(sort(Distance2MaxChan)',expFun2(p,sort(Distance2MaxChan)'))
+        %
+        %
+        %         tmpmin = max(Distance2MaxChan(SNR>3 & nanmax(abs(spikeMap(waveidx,ChanIdx,cv)),[],1)>20));
+        %
+        %         if isempty(tmpmin)
+        %             if ~any(~isnan(SNR))
+        %                 tmpmin = nan;
+        %             else
+        %                 tmpmin = max(Distance2MaxChan);
+        %             end
+        %         end
+
+        A0Distance(uid,cv) = tmpmin;
+        ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChanneltmp,:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))< A0Distance(uid,cv)); %Averaging over 10 channels helps with drift
+        Locs = channelpos(ChanIdx,:);
         % Mean location:
         mu = sum(repmat(nanmax(abs(spikeMap(:,ChanIdx,cv)),[],1),size(Locs,2),1).*Locs',2)./sum(repmat(nanmax(abs(spikeMap(:,ChanIdx,cv)),[],1),size(Locs,2),1),2);
         ProjectedLocation(:,uid,cv) = mu;
         % Use this waveform - weighted average across channels:
         Distance2MaxProj = sqrt(nansum(abs(Locs-ProjectedLocation(:,uid,cv)').^2,2));
-        weight = (param.TakeChannelRadius-Distance2MaxProj)./param.TakeChannelRadius;
+        weight = (A0Distance(uid,cv)-Distance2MaxProj)./A0Distance(uid,cv);
         ProjectedWaveform(:,uid,cv) = nansum(spikeMap(:,ChanIdx,cv).*repmat(weight,1,size(spikeMap,1))',2)./sum(weight);
         % Find significant timepoints
         wvdurtmp = find(abs(ProjectedWaveform(:,uid,cv) - nanmean(ProjectedWaveform(1:20,uid,cv)))>2.5*nanstd(ProjectedWaveform(1:20,uid,cv))); % More than 2. std from baseline
@@ -101,6 +131,8 @@ for uid = 1:nclus
         spikeMap(spikeWidth+lags(maxid):spikeWidth,:,2) = nan;
     end
     for cv = 1:2
+        ChanIdx = OriChanIdx;
+        Locs = channelpos(ChanIdx,:);
         % Shift data so that peak is at timepoint x
         if PeakTime(uid,1)~=NewPeakLoc % Yes, take the 1st CV on purpose!
             ProjectedWaveform(:,uid,cv) = circshift(ProjectedWaveform(:,uid,cv),-(PeakTime(uid,1)-NewPeakLoc));
@@ -118,37 +150,24 @@ for uid = 1:nclus
         %     % how close they are to the projected location (closer = better)
         Distance2MaxChan = sqrt(nansum(abs(Locs-channelpos(MaxChannel(uid,cv),:)).^2,2));
 
-        % Determine distance at which it's just noise
-        SNR = abs(nanmean((spikeMap(waveidx,ChanIdx,cv)),1)./nanstd((spikeMap(1:20,ChanIdx,cv)),[],1));
-        tmpmin = min(Distance2MaxChan(SNR<nanmedian(SNR)));
-       
-        if isempty(tmpmin)
-            if ~any(~isnan(SNR))
-                tmpmin = nan;
-            else
-                tmpmin = max(Distance2MaxChan);
-            end
-        end
-
-        A0Distance(uid,cv) = tmpmin;
         % Difference in amplitude from maximum amplitude
-        spdctmp = (nanmax(abs(spikeMap(:,MaxChannel(uid,cv),cv)),[],1)-nanmax(abs(spikeMap(:,ChanIdx,cv)),[],1))./nanmax(abs(spikeMap(:,MaxChannel(uid,cv),cv)),[],1);
+        spdctmp = (abs(spikeMap(NewPeakLoc,MaxChannel(uid,cv),cv))-abs(spikeMap(NewPeakLoc,ChanIdx,cv)))./abs(spikeMap(NewPeakLoc,MaxChannel(uid,cv),cv));
         % Remove zero
         spdctmp(Distance2MaxChan==0) = [];
         Distance2MaxChan(Distance2MaxChan==0) = [];
 
-        % Spatial decay (average oer micron)
-        spatialdecay(uid,cv) = nanmean(spdctmp./Distance2MaxChan');
-        
-        %         p = lsqcurvefit(expFun,[1 1],Distance2MaxChan',spdctmp,[],[],opts);
-        %         spatialdecay(uid,cv) = p(1); % Average better
-        %         p = polyfit(Distance2MaxChan',spdctmp,1); %Just a linear fit?
-        %         spatialdecay(uid,cv) = p(1); % Still average is better
+        try
+            p = lsqcurvefit(expFun,[1 1],Distance2MaxChan',spdctmp,[],[],opts);
+        catch
+            keyboard
+        end
 
-        Peakval = ProjectedWaveform(PeakTime(uid,cv),uid,cv);
+        spatialdecay(uid,cv) = p(1); % 
+        Peakval = ProjectedWaveform(NewPeakLoc,uid,cv);
         Amplitude(uid,cv) = Peakval;
 
-       
+        ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChanneltmp,:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))< A0Distance(uid,cv)); %Averaging over 10 channels helps with drift
+        Locs = channelpos(ChanIdx,:);
         % Full width half maximum
         wvdurtmp = find(abs(sign(Peakval)*ProjectedWaveform(waveidx,uid,cv))>0.25*sign(Peakval)*Peakval);
         if ~isempty(wvdurtmp)
@@ -173,6 +192,7 @@ fprintf('\n')
 disp(['Extracting raw waveforms and parameters took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])
 if nanmedian(A0Distance(:))>0.5*param.TakeChannelRadius
     disp('Warning, consider larger channel radius')
+    keyboard
 end
 %% Put in struct
 AllWVBParameters.ProjectedLocation = ProjectedLocation;

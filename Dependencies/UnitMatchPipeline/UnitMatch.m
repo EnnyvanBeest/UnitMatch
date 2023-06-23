@@ -32,7 +32,7 @@ function  [UniqueIDConversion, MatchTable, WaveformInfo, param] = UnitMatch(clus
 
 %% Parameters - tested on these values, but feel free to try others
 Scores2Include = param.Scores2Include % Good to show for failure prevention
-TakeChannelRadius = 150; %in micron around max channel
+TakeChannelRadius = 120; %in micron around max channel
 maxdist = 300; % Maximum distance at which units are considered as potential matches
 param.removeoversplits = 0; % Remove oversplits based on ISI violations or not?
 param.MakeOwnNaiveBayes = 1; % if 0, use standard matlab version, which assumes normal distributions --> not recommended

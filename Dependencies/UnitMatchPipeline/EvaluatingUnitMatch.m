@@ -86,8 +86,8 @@ for id = 1:2 % Loop: first use model that was used, then see if standard model w
     end
     %% 'Ground truth' (or as best as we can): Take the set where ID1 == ID2 (False Negatives)
     if UMparam.RunPyKSChronicStitched
-        disp('Across recording cross-validation: PyKS was ran stitched')
-        GTidx = find(MatchTable.ID1 == MatchTable.ID2 & MatchTable.RecSes1 ~= MatchTable.RecSes2);
+        disp('Across and within recording cross-validation: PyKS was ran stitched')
+        GTidx = find(MatchTable.ID1 == MatchTable.ID2);% & MatchTable.RecSes1 ~= MatchTable.RecSes2);
     else
         disp('Within recording cross-validation: PyKS was ran on individual sessions')
         GTidx = find(MatchTable.ID1 == MatchTable.ID2 & MatchTable.RecSes1 == MatchTable.RecSes2);
@@ -180,8 +180,8 @@ for id = 1:2 % Loop: first use model that was used, then see if standard model w
 
     %% We should also consider the false positives
     if UMparam.RunPyKSChronicStitched
-        disp('Across recording cross-validation: PyKS was ran stitched')
-        GTidx = find(MatchTable.ID1 ~= MatchTable.ID2 & MatchTable.RecSes1 ~= MatchTable.RecSes2);
+        disp('Across and within recording cross-validation: PyKS was ran stitched')
+        GTidx = find(MatchTable.ID1 ~= MatchTable.ID2);% & MatchTable.RecSes1 ~= MatchTable.RecSes2);
     else
         disp('Within recording cross-validation: PyKS was ran on individual sessions')
         GTidx = find(MatchTable.ID1~=MatchTable.ID2 & MatchTable.RecSes1 == MatchTable.RecSes2);% Now we find the Ground truth NON-matches; within day NOT the same ID
