@@ -27,7 +27,7 @@ waveformduration = nan(nclus,2); % Waveformduration first versus second half
 Amplitude = nan(nclus,2); % Maximum (weighted) amplitude, first versus second half
 spatialdecay = nan(nclus,2); % how fast does the unit decay across space, first versus second half
 WaveIdx = false(nclus,spikeWidth,2);
-
+A0Distance = nan(nclus,2); % Distance at which amplitudes are 0
 expFun = @(p,d) -exp(-p(1)*d)+p(2); % for spatial decay
 opts = optimset('Display','off');
 
@@ -117,13 +117,29 @@ for uid = 1:nclus
         %     % Mean waveform - first extract the 'weight' for each channel, based on
         %     % how close they are to the projected location (closer = better)
         Distance2MaxChan = sqrt(nansum(abs(Locs-channelpos(MaxChannel(uid,cv),:)).^2,2));
-        % Remove zero
-        Distance2MaxChan(Distance2MaxChan==0) = [];
+
+        % Determine distance at which it's just noise
+        SNR = abs(nanmean((spikeMap(waveidx,ChanIdx,cv)),1)./nanstd((spikeMap(1:20,ChanIdx,cv)),[],1));
+        tmpmin = min(Distance2MaxChan(SNR<nanmedian(SNR)));
+       
+        if isempty(tmpmin)
+            if ~any(~isnan(SNR))
+                tmpmin = nan;
+            else
+                tmpmin = max(Distance2MaxChan);
+            end
+        end
+
+        A0Distance(uid,cv) = tmpmin;
         % Difference in amplitude from maximum amplitude
         spdctmp = (nanmax(abs(spikeMap(:,MaxChannel(uid,cv),cv)),[],1)-nanmax(abs(spikeMap(:,ChanIdx,cv)),[],1))./nanmax(abs(spikeMap(:,MaxChannel(uid,cv),cv)),[],1);
-        spdctmp(spdctmp==0) = [];
+        % Remove zero
+        spdctmp(Distance2MaxChan==0) = [];
+        Distance2MaxChan(Distance2MaxChan==0) = [];
+
         % Spatial decay (average oer micron)
         spatialdecay(uid,cv) = nanmean(spdctmp./Distance2MaxChan');
+        
         %         p = lsqcurvefit(expFun,[1 1],Distance2MaxChan',spdctmp,[],[],opts);
         %         spatialdecay(uid,cv) = p(1); % Average better
         %         p = polyfit(Distance2MaxChan',spdctmp,1); %Just a linear fit?
@@ -132,6 +148,7 @@ for uid = 1:nclus
         Peakval = ProjectedWaveform(PeakTime(uid,cv),uid,cv);
         Amplitude(uid,cv) = Peakval;
 
+       
         % Full width half maximum
         wvdurtmp = find(abs(sign(Peakval)*ProjectedWaveform(waveidx,uid,cv))>0.25*sign(Peakval)*Peakval);
         if ~isempty(wvdurtmp)
@@ -154,7 +171,9 @@ for uid = 1:nclus
 end
 fprintf('\n')
 disp(['Extracting raw waveforms and parameters took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])
-
+if nanmedian(A0Distance(:))>0.5*param.TakeChannelRadius
+    disp('Warning, consider larger channel radius')
+end
 %% Put in struct
 AllWVBParameters.ProjectedLocation = ProjectedLocation;
 AllWVBParameters.ProjectedLocationPerTP = ProjectedLocationPerTP;
@@ -192,9 +211,9 @@ if 0
     Locs = channelpos(ChanIdx,:);
 
     % Plot
-    tmp = nanmean(spikeMap(:,ChanIdx(channelpos(ChanIdx,1)==0),:),3);
+    tmp = nanmean(spikeMap(:,ChanIdx(channelpos(ChanIdx,1)==250),:),3);
     timevec = [-(param.NewPeakLoc-(1:size(spikeMap,1)))].*(1/30000)*1000; % In MS
-    lims = [-150 150];
+    lims = [-20 20];
     figure; 
     subplot(2,3,1)
     imagesc(timevec,channelpos(ChanIdx(channelpos(ChanIdx,1)==0),2),tmp',lims)

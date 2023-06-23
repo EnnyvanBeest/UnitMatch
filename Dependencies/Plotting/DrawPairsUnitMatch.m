@@ -92,11 +92,11 @@ if DrawBlind
         addIisJ = randsample(nclus,round(0.1*npairs),0);
         addIisJ = repmat(addIisJ,1,2);
         Pairs = cat(2,Pairs,arrayfun(@(X) addIisJ(X,:),1:length(addIisJ),'Uni',0));
+        % Randomly shuffle Pairs so we don't have matches grouped together and
+        % different order for different runs
+        Pairs = Pairs(randsample(length(Pairs),length(Pairs),0));
 
     end
-    % Randomly shuffle Pairs so we don't have matches grouped together and
-    % different order for different runs
-%     Pairs = Pairs(randsample(length(Pairs),length(Pairs),0));
 
     if size(Pairs,2)>UMparam.drawmax
         DrawPairs = randsample(1:size(Pairs,2),UMparam.drawmax,'false');
@@ -105,6 +105,11 @@ if DrawBlind
     end
     PlotTheseUnits_UM_Blind(Pairs(DrawPairs),MatchTable,UniqueIDConversion,WaveformInfo,AllSessionCorrelations,UMparam)
 else
+    if size(Pairs,2)>UMparam.drawmax
+        DrawPairs = randsample(1:size(Pairs,2),UMparam.drawmax,'false');
+    else
+        DrawPairs = 1:size(Pairs,2);
+    end
     PlotTheseUnits_UM(Pairs(DrawPairs),MatchTable,UniqueIDConversion,WaveformInfo,AllSessionCorrelations,UMparam)
 end
 
