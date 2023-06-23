@@ -128,8 +128,6 @@ function keyPress(blindFlickGUI,eventdata)
             if ~isempty(firstUncuratedPair)
                 guiData.curr.pair = firstUncuratedPair;
                 guiData.curr.updateFig = 1;
-            else
-                msgbox('All pairs have been curated.')
             end
         case 'p' % Go to specific pair
             newPair = str2double(cell2mat(inputdlg('Go to pair:')));
@@ -145,6 +143,10 @@ function keyPress(blindFlickGUI,eventdata)
     guiData.curr.match = guiData.match(currPairPosition);
     match = guiData.match;
     save(guiData.matchPath,'match','-append')
+
+    if ~(guiData.match == 0)
+        msgbox('All pairs have been curated.')
+    end
 
     guidata(blindFlickGUI,guiData);
     updatePlot(blindFlickGUI);
