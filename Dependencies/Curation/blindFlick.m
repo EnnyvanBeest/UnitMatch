@@ -53,6 +53,7 @@ function blindFlick(pathFiles,user,recompute)
     guiData.curr.pair = guiData.pairIDs(1); % Start at first
     guiData.curr.updateFig = 1;
     guiData.curr.match = guiData.match(guiData.pairIDs == guiData.curr.pair);
+    guiData.showFinishBox = 1;
 
     % Create figure
     blindFlickGUI = figure('color','w');
@@ -128,6 +129,8 @@ function keyPress(blindFlickGUI,eventdata)
             if ~isempty(firstUncuratedPair)
                 guiData.curr.pair = firstUncuratedPair;
                 guiData.curr.updateFig = 1;
+            else
+                guiData.showFinishBox = 1;
             end
         case 'p' % Go to specific pair
             newPair = str2double(cell2mat(inputdlg('Go to pair:')));
@@ -144,8 +147,9 @@ function keyPress(blindFlickGUI,eventdata)
     match = guiData.match;
     save(guiData.matchPath,'match','-append')
 
-    if ~(guiData.match == 0)
+    if ~any(guiData.match == 0) && guiData.showFinishBox
         msgbox('All pairs have been curated.')
+        guiData.showFinishBox = 0;
     end
 
     guidata(blindFlickGUI,guiData);
