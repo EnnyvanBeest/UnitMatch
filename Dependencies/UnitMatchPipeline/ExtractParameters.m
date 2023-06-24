@@ -75,10 +75,13 @@ for uid = 1:nclus
         SNR = (nanmean(abs(spikeMap(waveidx,ChanIdx,cv)),1)./nanstd((spikeMap(1:20,ChanIdx,cv)),[],1));
         p = lsqcurvefit(expFun2,[1 1],Distance2MaxChan',SNR,[],[],opts);
         tmpmin = 2*(log(2)/p(2));
+        if tmpmin>param.TakeChannelRadius || tmpmin<0
+            tmpmin = param.TakeChannelRadius;
+        end
 
-        %         figure; scatter(Distance2MaxChan',SNR); hold on
-        %             plot(sort(Distance2MaxChan)',expFun2(p,sort(Distance2MaxChan)'))
-        %
+%                 figure; scatter(Distance2MaxChan',SNR); hold on
+%                     plot(sort(Distance2MaxChan)',expFun2(p,sort(Distance2MaxChan)'))
+%         %
         %
         %         tmpmin = max(Distance2MaxChan(SNR>3 & nanmax(abs(spikeMap(waveidx,ChanIdx,cv)),[],1)>20));
         %
