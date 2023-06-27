@@ -25,7 +25,8 @@ PeakTime = nan(nclus,2); % Peak time first versus second half
 MaxChannel = nan(nclus,2); % Max channel first versus second half
 waveformduration = nan(nclus,2); % Waveformduration first versus second half
 Amplitude = nan(nclus,2); % Maximum (weighted) amplitude, first versus second half
-spatialdecay = nan(nclus,2); % how fast does the unit decay across space, first versus second half
+spatialdecay = nan(nclus,2); % how fast does the unit decay across space, first versus second halfs
+spatialdecayfit = nan(nclus,2); % Same but now exponential fit
 WaveIdx = false(nclus,spikeWidth,2);
 A0Distance = nan(nclus,2); % Distance at which amplitudes are 0
 expFun = @(p,d) p(2)*(1-exp(-p(1)*d)); % for spatial decay
@@ -74,7 +75,8 @@ for uid = 1:nclus
         % Determine distance at which it's just noise
         SNR = (nanmean(abs(spikeMap(waveidx,ChanIdx,cv)),1)./nanstd((spikeMap(1:20,ChanIdx,cv)),[],1));
         p = lsqcurvefit(expFun2,[1 1],Distance2MaxChan',SNR,[],[],opts);
-        tmpmin = 2*(log(2)/p(2));
+%         tmpmin = param.TakeChannelRadius;
+        tmpmin = (log(5)/p(2)); %use 'quarter-distance'
         if tmpmin>param.TakeChannelRadius || tmpmin<0
             tmpmin = param.TakeChannelRadius;
         end
@@ -165,7 +167,8 @@ for uid = 1:nclus
             keyboard
         end
 
-        spatialdecay(uid,cv) = p(1); % 
+        spatialdecayfit(uid,cv) = p(1); % The fit?
+        spatialdecay(uid,cv) = nanmean(spdctmp./Distance2MaxChan'); % Or just the average?
         Peakval = ProjectedWaveform(NewPeakLoc,uid,cv);
         Amplitude(uid,cv) = Peakval;
 
@@ -193,9 +196,8 @@ for uid = 1:nclus
 end
 fprintf('\n')
 disp(['Extracting raw waveforms and parameters took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])
-if nanmedian(A0Distance(:))>0.5*param.TakeChannelRadius
+if nanmedian(A0Distance(:))>0.75*param.TakeChannelRadius
     disp('Warning, consider larger channel radius')
-    keyboard
 end
 %% Put in struct
 AllWVBParameters.ProjectedLocation = ProjectedLocation;
@@ -206,6 +208,7 @@ AllWVBParameters.MaxChannel = MaxChannel;
 AllWVBParameters.waveformduration = waveformduration;
 AllWVBParameters.Amplitude = Amplitude;
 AllWVBParameters.spatialdecay = spatialdecay;
+AllWVBParameters.spatialdecayfit = spatialdecayfit;
 AllWVBParameters.WaveIdx = WaveIdx;
 
 return

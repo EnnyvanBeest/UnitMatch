@@ -378,7 +378,7 @@ for midx = 1:length(MiceOpt)
      subplot(2,length(MiceOpt),midx)
     
      tmpscores = AllScoringMethods(WithinSameSession,:);
-     [~,sortidx] = sort(tmpscores(:,strcmp(AllScorerNames,'AvgScorer')));
+     [~,sortidx] = sort(nansum(tmpscores(:,ismember(AllScorerNames,{'AvgScorer','KS','UM')));
      tmpscores = cat(2,tmpscores(sortidx,strcmp(AllScorerNames,'AvgScorer')),tmpscores(sortidx,~strcmp(AllScorerNames,'AvgScorer')));
      h = imagesc(tmpscores);
 
@@ -427,6 +427,20 @@ for midx = 1:length(MiceOpt)
      Check{4,midx} =  ReOrderedTbl.BlindID(idx)
 
 end
-midx = 1
+midx = 5
 Check{1,midx}(ismember(Check{1,midx},Check{3,midx}))
 Check{2,midx}(ismember(Check{2,midx},Check{4,midx}))
+
+idx = find(ismember(ReOrderedTbl.BlindID,37));
+pairid1 = find(ismember(OriID,ReOrderedTbl.ClusID1(idx)) & ismember(recses,ReOrderedTbl.RecID1(idx)));
+pairid2 = find(ismember(OriID,ReOrderedTbl.ClusID2(idx)) & ismember(recses,ReOrderedTbl.RecID2(idx)));
+Pairs = {[pairid1 pairid2]};
+pairid1 = find(ismember(OriID,ReOrderedTbl.ClusID2(idx)) & ismember(recses,ReOrderedTbl.RecID2(idx)));
+pairid2 = find(ismember(OriID,ReOrderedTbl.ClusID1(idx)) & ismember(recses,ReOrderedTbl.RecID1(idx)));
+Pairs{2} = [pairid1 pairid2];
+MatchProb = cell2mat(cellfun(@(X) MatchProbability(X(1),X(2)),Pairs,'Uni',0))'
+Rank = cell2mat(cellfun(@(X) RankScore(X(1),X(2)),Pairs,'Uni',0))'
+RankThr = cell2mat(cellfun(@(X) RankThreshold(X(1),X(2)),Pairs,'Uni',0))'
+WithinSameSession = cell2mat(cellfun(@(X) recses(X(1)) == recses(X(2)),Pairs,'Uni',0))
+
+PyKS = cell2mat(cellfun(@(X) OriID(X(1)) == OriID(X(2)),Pairs,'Uni',0))

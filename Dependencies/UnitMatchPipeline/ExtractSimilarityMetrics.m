@@ -35,46 +35,82 @@ SessionSwitch(cellfun(@isempty,SessionSwitch))=[];
 SessionSwitch = [cell2mat(SessionSwitch); nclus+1];
 drift = nan;
 
+% Save AUCs to help find best parameters
+disp('Computing location distances between pairs of units...')
+LocDist = sqrt((ProjectedLocation(1,:,1)'-ProjectedLocation(1,:,2)).^2 + ...
+    (ProjectedLocation(2,:,1)'-ProjectedLocation(2,:,2)).^2);
+
+
+SameIdx = logical(eye(nclus));
+WithinIdx = false(nclus,nclus);
+for did = 1:ndays
+    WithinIdx(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1) = true;
+end
+WithinIdx(LocDist>param.NeighbourDist) = false;
+labels = [ones(1,sum(SameIdx(:))), zeros(1,sum(WithinIdx(:)))];
+paramNames = {'waveformTimePointSim','spatialdecaySim','spatialdecayfitSim','AmplitudeSim','WVCorr','WavformMSE','WavformSim','CentroidDist','CentroidVar','CentroidDistRecentered','CentroidOverlord','TrajAngleSim','TrajDistSim','LocTrajectorySim'};
+AUC = nan(1,length(paramNames));
 %% Compute Metrics
 disp('Computing Metric similarity between pairs of units...')
 timercounter = tic;
-x1 = repmat(PeakTime(:,1),[1 numel(PeakTime(:,1))]);
-x2 = repmat(PeakTime(:,2),[1 numel(PeakTime(:,2))]);
-PeakTimeSim = abs(x1 - x2');
-%Normalize between 0 and 1 (values that make sense after testing, without having outliers influence this)
-PeakTimeSim =1-PeakTimeSim./quantile(PeakTimeSim(:),0.99);
-PeakTimeSim(PeakTimeSim<0)=0;
+% x1 = repmat(PeakTime(:,1),[1 numel(PeakTime(:,1))]);
+% x2 = repmat(PeakTime(:,2),[1 numel(PeakTime(:,2))]);
+% PeakTimeSim = abs(x1 - x2');
+% %Normalize between 0 and 1 (values that make sense after testing, without having outliers influence this)
+% PeakTimeSim =1-PeakTimeSim./quantile(PeakTimeSim(:),0.99);
+% PeakTimeSim(PeakTimeSim<0)=0;
 
-if any(ismember(Scores2Include,'waveformTimePointSim'))
-    % can't find much better for this one
-    waveformTimePointSim = nan(nclus,nclus);
-    for uid = 1:nclus
-        for uid2 = 1:nclus
-            waveformTimePointSim(uid,uid2) = sum(ismember(find(WaveIdx(uid,:,1)),find(WaveIdx(uid2,:,2))))./sum((WaveIdx(uid,:,1)));
-        end
-    end
-end
+% % can't find much better for this one
+% waveformTimePointSim = nan(nclus,nclus);
+% for uid = 1:nclus
+%     for uid2 = 1:nclus
+%         waveformTimePointSim(uid,uid2) = sum(ismember(find(WaveIdx(uid,:,1)),find(WaveIdx(uid2,:,2))))./sum((WaveIdx(uid,:,1)));
+%     end
+% end
+% 
+% scores = [waveformTimePointSim(SameIdx(:))', waveformTimePointSim(WithinIdx(:))'];
+% paramid = find(ismember(paramNames,'waveformTimePointSim'));
+% [~,~,~,AUC(paramid)] = perfcurve(labels,scores,1);
 
-if any(ismember(Scores2Include,'spatialdecaySim'))
-    x1 = repmat(spatialdecay(:,1),[1 numel(spatialdecay(:,1))]);
-    x2 = repmat(spatialdecay(:,2),[1 numel(spatialdecay(:,2))]);
-    spatialdecaySim = abs(x1 - x2');
-    % Make (more) normal
-    spatialdecaySim = sqrt(spatialdecaySim);
-    spatialdecaySim = 1-((spatialdecaySim-nanmin(spatialdecaySim(:)))./(quantile(spatialdecaySim(:),0.99)-nanmin(spatialdecaySim(:))));
-    spatialdecaySim(spatialdecaySim<0)=0;
-end
+% Spatial decay
+x1 = repmat(spatialdecay(:,1),[1 numel(spatialdecay(:,1))]);
+x2 = repmat(spatialdecay(:,2),[1 numel(spatialdecay(:,2))]);
+spatialdecaySim = abs(x1 - x2');
+% Make (more) normal
+spatialdecaySim = sqrt(spatialdecaySim);
+spatialdecaySim = 1-((spatialdecaySim-nanmin(spatialdecaySim(:)))./(quantile(spatialdecaySim(:),0.99)-nanmin(spatialdecaySim(:))));
+spatialdecaySim(spatialdecaySim<0)=0;
 
-if any(ismember(Scores2Include,'AmplitudeSim'))
-    % Ampitude difference
-    x1 = repmat(Amplitude(:,1),[1 numel(Amplitude(:,1))]);
-    x2 = repmat(Amplitude(:,2),[1 numel(Amplitude(:,2))]);
-    AmplitudeSim = abs(x1 - x2');
-    % Make (more) normal
-    AmplitudeSim = sqrt(AmplitudeSim);
-    AmplitudeSim = 1-((AmplitudeSim-nanmin(AmplitudeSim(:)))./(quantile(AmplitudeSim(:),.99)-nanmin(AmplitudeSim(:))));
-    AmplitudeSim(AmplitudeSim<0)=0;
-end
+scores = [spatialdecaySim(SameIdx(:))', spatialdecaySim(WithinIdx(:))'];
+paramid = find(ismember(paramNames,'spatialdecaySim'));
+[~,~,~,AUC(paramid)] = perfcurve(labels,scores,1);
+
+% spatial decay fit
+x1 = repmat(spatialdecayfit(:,1),[1 numel(spatialdecayfit(:,1))]);
+x2 = repmat(spatialdecayfit(:,2),[1 numel(spatialdecayfit(:,2))]);
+spatialdecayfitSim = abs(x1 - x2');
+% Make (more) normal
+spatialdecayfitSim = sqrt(spatialdecayfitSim);
+spatialdecayfitSim = 1-((spatialdecayfitSim-nanmin(spatialdecayfitSim(:)))./(quantile(spatialdecayfitSim(:),0.99)-nanmin(spatialdecayfitSim(:))));
+spatialdecayfitSim(spatialdecayfitSim<0 | isnan(spatialdecayfitSim))=0;
+
+
+scores = [spatialdecayfitSim(SameIdx(:))', spatialdecayfitSim(WithinIdx(:))'];
+paramid = find(ismember(paramNames,'spatialdecayfitSim'));
+[~,~,~,AUC(paramid)] = perfcurve(labels,scores,1);
+
+% Ampitude difference
+x1 = repmat(Amplitude(:,1),[1 numel(Amplitude(:,1))]);
+x2 = repmat(Amplitude(:,2),[1 numel(Amplitude(:,2))]);
+AmplitudeSim = abs(x1 - x2');
+% Make (more) normal
+AmplitudeSim = sqrt(AmplitudeSim);
+AmplitudeSim = 1-((AmplitudeSim-nanmin(AmplitudeSim(:)))./(quantile(AmplitudeSim(:),.99)-nanmin(AmplitudeSim(:))));
+AmplitudeSim(AmplitudeSim<0)=0;
+
+scores = [AmplitudeSim(SameIdx(:))', AmplitudeSim(WithinIdx(:))'];
+paramid = find(ismember(paramNames,'AmplitudeSim'));
+[~,~,~,AUC(paramid)] = perfcurve(labels,scores,1);
 
 %% Waveform similarity
 timercounter = tic;
@@ -93,6 +129,10 @@ WVCorr = atanh(WVCorr);
 WVCorr = (WVCorr-quantile(WVCorr(:),0.005))./(quantile(WVCorr(:),0.995)-quantile(WVCorr(:),0.005)); %Give WVCorr a better chance
 WVCorr(WVCorr<0)=0;
 WVCorr(WVCorr>1)=1;
+scores = [WVCorr(SameIdx(:))', WVCorr(WithinIdx(:))'];
+paramid = find(ismember(paramNames,'WVCorr'));
+[x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
+
 
 ProjectedWaveformNorm = cat(3,x1,x2);
 ProjectedWaveformNorm = (ProjectedWaveformNorm-nanmin(ProjectedWaveformNorm,[],1))./(nanmax(ProjectedWaveformNorm,[],1)-nanmin(ProjectedWaveformNorm,[],1));
@@ -105,6 +145,9 @@ RawWVMSENorm = sqrt(RawWVMSE);
 WavformMSE = (RawWVMSENorm-nanmin(RawWVMSENorm(:)))./(quantile(RawWVMSENorm(:),0.99)-nanmin(RawWVMSENorm(:)));
 WavformMSE = 1-WavformMSE;
 WavformMSE(WavformMSE<0) = 0;
+scores = [WavformMSE(SameIdx(:))', WavformMSE(WithinIdx(:))'];
+paramid = find(ismember(paramNames,'WavformMSE'));
+[x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
 
 disp(['Calculating waveform similarity took ' num2str(round(toc(timercounter))) ' seconds for ' num2str(nclus) ' units'])
 figure('name','Waveform similarity measures')
@@ -133,6 +176,10 @@ colorbar
 makepretty
 
 WavformSim = (WVCorr+WavformMSE)/2;
+scores = [WavformSim(SameIdx(:))', WavformSim(WithinIdx(:))'];
+paramid = find(ismember(paramNames,'WavformSim'));
+[x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
+
 subplot(1,3,3)
 imagesc(WavformSim,[0.5 0.9]);
 title('Average Waveform scores')
@@ -194,12 +241,6 @@ while flag<2
     saveas(gcf,fullfile(SaveDir,'ProjectedLocation.fig'))
     saveas(gcf,fullfile(SaveDir,'ProjectedLocation.bmp'))
 
-    disp('Computing location distances between pairs of units...')
-    LocDist = sqrt((ProjectedLocation(1,:,1)'-ProjectedLocation(1,:,2)).^2 + ...
-        (ProjectedLocation(2,:,1)'-ProjectedLocation(2,:,2)).^2);
-    LocDist = 1-((LocDist-nanmin(LocDist(:)))./(maxdist-nanmin(LocDist(:))));
-    LocDist(LocDist<0)=0;
-
     disp('Computing location distances between pairs of units, per individual time point of the waveform...')
     % Difference in distance between centroids of two halfs of the recording
 
@@ -218,6 +259,11 @@ while flag<2
     CentroidDist(CentroidDist<0)=0;
     CentroidDist(isnan(CentroidDist))=0;
 
+    scores = [CentroidDist(SameIdx(:))', CentroidDist(WithinIdx(:))'];
+    paramid = find(ismember(paramNames,'CentroidDist'));
+    [x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
+
+
     % Variance in error, corrected by average error. This captures whether
     % the trajectory is consistenly separate
     CentroidVar = squeeze(min(squeeze(nanvar(EuclDist,[],2)),[],2));%./nanmean(EuclDist,2)+nanmean(EuclDist,2));
@@ -225,6 +271,9 @@ while flag<2
     CentroidVar = 1-((CentroidVar-nanmin(CentroidVar(:)))./(quantile(CentroidVar(:),0.99)-nanmin(CentroidVar(:)))); %Average difference
     CentroidVar(CentroidVar<0) = 0;
     CentroidVar(isnan(CentroidVar)) = 0;
+    scores = [CentroidVar(SameIdx(:))', CentroidVar(WithinIdx(:))'];
+    paramid = find(ismember(paramNames,'CentroidVar'));
+    [x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
     % @Célian suggestion: recenter to 0 first, then calculate the
     % difference in distance (to account for uncorrected drift)
     %     ProjectedLocationPerTPRecentered = permute(permute(ProjectedLocationPerTP,[1,2,4,3]) - ProjectedLocation,[1,2,4,3]);
@@ -242,11 +291,19 @@ while flag<2
     % Average location
     CentroidDistRecentered = squeeze(nanmin(nanmean(EuclDist2,2),[],3));% minimum across flips
     CentroidDistRecentered = 1-(CentroidDistRecentered-nanmin(CentroidDistRecentered(:)))./(nanmax(CentroidDistRecentered(:))-nanmin(CentroidDistRecentered(:)));
+    scores = [CentroidDistRecentered(SameIdx(:))', CentroidDistRecentered(WithinIdx(:))'];
+    paramid = find(ismember(paramNames,'CentroidDistRecentered'));
+    [x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
+
+
 
     CentroidOverlord = (CentroidDistRecentered+CentroidVar)/2;
+    scores = [CentroidOverlord(SameIdx(:))', CentroidOverlord(WithinIdx(:))'];
+    paramid = find(ismember(paramNames,'CentroidOverlord'));
+    [x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
 
     disp('Computing location angle (direction) differences between pairs of units, per individual time point of the waveform...')
-   
+
     x1 = ProjectedLocationPerTPAllFlips(:,:,waveidx(2):waveidx(end),:,:);
     x2 = ProjectedLocationPerTPAllFlips(:,:,waveidx(1):waveidx(end-1),:,:);
     % The distance traveled (Eucledian)
@@ -262,6 +319,9 @@ while flag<2
     TrajAngleSim = squeeze(nanmin(nansum(AngleSubtraction,2),[],3)); % sum of angles, minimum across flips
     TrajAngleSim = 1-((TrajAngleSim-nanmin(TrajAngleSim(:)))./(quantile(TrajAngleSim(:),0.99)-nanmin(TrajAngleSim(:))));
     TrajAngleSim(TrajAngleSim<0 | isnan(TrajAngleSim))=0;
+    scores = [TrajAngleSim(SameIdx(:))', TrajAngleSim(WithinIdx(:))'];
+    paramid = find(ismember(paramNames,'TrajAngleSim'));
+    [x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
 
     % Continue distance traveled
     x1 = repmat(squeeze(TrajDist(:,:,1,:)),[1 1 1 nclus]);
@@ -271,10 +331,18 @@ while flag<2
     TrajDistSim = squeeze(nanmin(nansum(TrajDistCompared,2),[],3)); %and take minimum across flips
     TrajDistSim = sqrt(TrajDistSim); % Make more normal
     TrajDistSim = 1-((TrajDistSim-nanmin(TrajDistSim(:)))./(quantile(TrajDistSim(:),0.99)-nanmin(TrajDistSim(:))));
+    scores = [TrajDistSim(SameIdx(:))', TrajDistSim(WithinIdx(:))'];
+    paramid = find(ismember(paramNames,'TrajDistSim'));
+    [x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
+
 
 
     LocTrajectorySim = (TrajAngleSim+TrajDistSim)./2; % Trajectory Similarity is sum of distance + sum of angles
     LocTrajectorySim = (LocTrajectorySim-nanmin(LocTrajectorySim(:))./(quantile(LocTrajectorySim(:),0.99)-nanmin(LocTrajectorySim(:))));
+    scores = [LocTrajectorySim(SameIdx(:))', LocTrajectorySim(WithinIdx(:))'];
+    paramid = find(ismember(paramNames,'LocTrajectorySim'));
+    [x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
+
     %
     figure('name','Distance Measures')
     subplot(5,2,1)
@@ -636,7 +704,9 @@ assignin('caller','ProjectedLocationPerTP',ProjectedLocationPerTP)
 assignin('caller','ProjectedLocation',ProjectedLocation)
 assignin('caller','EuclDist',EuclDist)
 assignin('caller','SortingOrder',SortingOrder)
-
+AUCStruct.AUC = AUC;
+AUCStruct.ParamNames = paramNames;
+save(fullfile(SaveDir,'AUC.mat'),'AUCStruct')
 return
 if 0 % THis can be used to look at some example projections
     % Find all pairs

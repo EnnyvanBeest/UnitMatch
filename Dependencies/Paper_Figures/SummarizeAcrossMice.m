@@ -21,6 +21,15 @@ for midx = 1:length(MiceOpt)
     MatchTable = tmpFile.MatchTable; %Extract matchtable
     UMparam = tmpFile.UMparam; % Extract parameters
 
+    % Load AUCS
+    AUC = load(fullfile(SaveDir,MiceOpt{midx},'UnitMatch','AUC.mat'))';
+    if midx == 1
+    AUCParams = AUC.AUCStruct.ParamNames;
+    AUCVals = nan(length(AUCParams),length(MiceOpt));
+    end
+    AUCVals(:,midx) = AUC.AUCStruct.AUC;
+
+
     % Extract groups
     if ~UseKSLabels
         WithinIdx = find((MatchTable.UID1 == MatchTable.UID2) & (MatchTable.RecSes1 == MatchTable.RecSes2)); %Within session, same unit (cross-validation)
@@ -215,6 +224,15 @@ for midx = 1:length(MiceOpt)
 
     
 end
+%% AUC
+meanAUC = nanmean(AUCVals,2);
+[~,sortidx] = sort(meanAUC,'descend');
+figure; h=barwitherr(nanstd(AUCVals(sortidx,:),[],2),nanmean(AUCVals(sortidx,:),2));
+
+set(gca,'XTick',1:size(AUCVals,1),'XTickLabel',AUCParams(sortidx))
+ylabel('AUC')
+makepretty
+
 %% Now we make histograms for the Area Under the Curve scores
 edges = [0:0.1:1];
 subplot(3,3,3)
