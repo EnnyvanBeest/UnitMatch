@@ -180,6 +180,12 @@ for subsesid=1:length(KiloSortPaths)
         end
     end
 
+    %% Load histology if available
+    tmphisto = dir(fullfile(KiloSortPaths{subsesid},'HistoEphysAlignment.mat'));
+    clear Depth2AreaPerUnit
+    histodat = load(fullfile(tmphisto.folder,tmphisto.name));
+    Depth2AreaPerUnit = histodat.Depth2AreaPerUnit;
+
     %% Load Spike Data
     sp = loadKSdir(fullfile(KiloSortPaths{subsesid}),Params); % Load Spikes with PCs
     [sp.spikeAmps, sp.spikeDepths, sp.templateDepths, sp.templateXpos, sp.tempAmps, sp.tempsUnW, sp.templateDuration, sp.waveforms] = templatePositionsAmplitudes(sp.temps, sp.winv, sp.ycoords, sp.xcoords, sp.spikeTemplates, sp.tempScalingAmps); %from the spikes toolbox
@@ -462,6 +468,11 @@ for subsesid=1:length(KiloSortPaths)
     clusinfo.cluster_id = AllUniqueTemplates;
     clusinfo.group = Label;
     clusinfo.Good_ID = Good_ID;
+    if exist('Depth2AreaPerUnit','var') % Add area information
+        Idx = cell2mat(arrayfun(@(X) find(Depth2AreaPerUnit.Cluster_ID == X),clusinfo.cluster_id,'Uni',0));
+        clusinfo.Area = Depth2AreaPerUnit.Area(Idx);
+        clusinfo.Coordinates = Depth2AreaPerUnit.Coordinates(Idx);
+    end
     % clusinfo.Noise_ID = NoiseUnit;
 
     sp.sample_rate = sp.sample_rate(1);

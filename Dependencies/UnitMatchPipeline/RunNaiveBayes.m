@@ -1,8 +1,6 @@
 function [MatchProbability,label,Tbl,BestMdl] = RunNaiveBayes(Predictors,TotalScore,Scores2Include,clusinfo,param,SortingOrder,EuclDist)
 
 %% Extract parameters
-FullSetParameters = {'AmplitudeSim','WVCorr','WavformMSE','TrajAngleSim','TrajDistSim','spatialdecaySim','CentroidDist','CentroidVar'};
-
 if param.GoodUnitsOnly
     Good_Idx = find(clusinfo.Good_ID); %Only care about good units at this point
 else
@@ -11,8 +9,6 @@ else
 
 end
 GoodRecSesID = clusinfo.RecSesID(Good_Idx);
-OriginalClusterIDs = clusinfo.cluster_id;
-
 recsesAll = clusinfo.RecSesID;
 recsesGood = recsesAll(Good_Idx);
 [X,Y]=meshgrid(recsesAll(Good_Idx));

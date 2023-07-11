@@ -7,6 +7,7 @@ end
 ExtractFields({AllWVBParameters})
 waveidx = param.waveidx;
 Allchannelpos = param.channelpos;
+AllchannelCoord = param.Coordinates;
 SaveDir = param.SaveDir;
 maxdist = param.maxdist;
 
@@ -27,6 +28,7 @@ if length(DepthOnProbe) == length(recsesAll)/2
     DepthOnProbe = [DepthOnProbe DepthOnProbe]; %Stitched
 end
 DepthOnProbe = DepthOnProbe(Good_Idx);
+
 [X,Y]=meshgrid(recsesAll(Good_Idx));
 nclus = length(Good_Idx);
 ndays = length(unique(GoodRecSesID));
@@ -193,7 +195,7 @@ colorbar
 makepretty
 
 %% Location differences between pairs of units: - This is done twice to account for large drift between sessions
-channelpos_AllCat = unique(cat(1,Allchannelpos{:}),'rows');
+channelpos_AllCat = unique(cat(1,AllchannelCoord{:}),'rows');
 
 %% Flip trajectory if necessary?
 % for which dimensions do we allow flipping?
@@ -229,13 +231,16 @@ flag=0;
 while flag<2
     timercounter = tic;
     figure('name','Projection locations all units')
-    scatter(channelpos_AllCat(:,1),channelpos_AllCat(:,2),10,[0 0 0],'filled')
+    scatter3(channelpos_AllCat(:,3),channelpos_AllCat(:,1),channelpos_AllCat(:,2),10,[0 0 0],'filled')
     hold on
-    scatter(nanmean(ProjectedLocation(1,:,:),3),nanmean(ProjectedLocation(2,:,:),3),10,GoodRecSesID)
+    scatter3(nanmean(ProjectedLocation(3,:,:),3),nanmean(ProjectedLocation(1,:,:),3),nanmean(ProjectedLocation(2,:,:),3),10,GoodRecSesID)
     colormap jet
+%     set(gca,'CameraPosition',[-1.9009e+04 -3.7880e+04 1.0753e+04])
     makepretty
-    xlabel('XPos (um)')
     ylabel('YPos (um)')
+    zlabel('Depth (um)')
+    xlabel('XPos (um)')
+
     xlim([min(channelpos_AllCat(:,1))-50 max(channelpos_AllCat(:,1))+50])
     drawnow
     saveas(gcf,fullfile(SaveDir,'ProjectedLocation.fig'))
@@ -246,7 +251,7 @@ while flag<2
 
     x1 = repmat(squeeze(ProjectedLocationPerTPAllFlips(:,:,waveidx,1,:)),[1 1 1 1 nclus]);
     x2 = permute(repmat(squeeze(ProjectedLocationPerTPAllFlips(:,:,waveidx,2,:)),[1 1 1 1 nclus]),[1 5 3 4 2]); %Switch the two nclus around
-    EuclDist = squeeze(sqrt(nansum((x1-x2).^2,1))); % Euclidean distance
+    EuclDist = squeeze(vecnorm(x1-x2,2,1)); % Euclidean distance
     w = squeeze(isnan(abs(x1(1,:,:,:,:)-x2(1,:,:,:,:))));
     EuclDist(w) = nan;
     % Average location
@@ -743,21 +748,22 @@ if 0 % THis can be used to look at some example projections
 
         scatter(Locs(:,1),Locs(:,2),20,[0.5 0.5 0.5],'filled')
         hold on
-        scatter(ProjectedLocation(1,uid,1),ProjectedLocation(2,uid,1),20,cols(uidx,:),'filled')
 
         takesamples = param.waveidx;
         takesamples = unique(takesamples(~isnan(takesamples)));
         h(1) = plot(squeeze(ProjectedLocationPerTP(1,uid,takesamples,1)),squeeze(ProjectedLocationPerTP(2,uid,takesamples,1)),'-','color',cols(uidx,:));
         scatter(squeeze(ProjectedLocationPerTP(1,uid,takesamples,1)),squeeze(ProjectedLocationPerTP(2,uid,takesamples,1)),30,takesamples,'filled')
+            plot(ProjectedLocation(1,uid,1),ProjectedLocation(2,uid,1),'*','MarkerSize',12,'color',cols(uidx,:))
+
     end
-    colormap(hot)
+    colormap(flipud(hot))
 
     xlabel('Xpos (\mum)')
     ylabel('Ypos (\mum)')
     xlims = [min(ProjectedLocation(1,Pairs,1))-30 max(ProjectedLocation(1,Pairs,1))+30];
-    ylims = [min(ProjectedLocation(2,Pairs,1))-30 max(ProjectedLocation(2,Pairs,1))+30];
+    ylims = [min(ProjectedLocation(2,Pairs,1))-15 max(ProjectedLocation(2,Pairs,1))+5];
     ylabel('')
-    set(gca,'xlim',xlims,'ylim',ylims,'YTickLabel',[])
+    set(gca,'xlim',xlims,'ylim',ylims)
     axis square
     hpos = get(gca,'Position')
     %     legend([h(1),h(2)],{['Unit ' num2str(uid)],['Unit ' num2str(uid2)]})
@@ -773,38 +779,52 @@ if 0 % THis can be used to look at some example projections
     makepretty
 
 
+
     subplot(1,3,2)
     for uidx=1:length(Pairs)
         uid = Pairs(uidx);
-        channelpos = Allchannelpos{recsesGood(uid)};
-        % Load raw data
-        try
-            spikeMap = readNPY(fullfile(param.KSDir{recsesGood(uid)},'RawWaveforms',['Unit' num2str(OriginalClusterIDs(Good_Idx(uid))) '_RawSpikes.npy'])); %0-indexed
-        catch
-            keyboard
-        end
-        % Detrending
-        spikeMap = permute(spikeMap,[2,1,3]); %detrend works over columns
-        spikeMap = detrend(spikeMap,1); % Detrend (linearly) to be on the safe side. OVER TIME!
-        spikeMap = permute(spikeMap,[2,1,3]);  % Put back in order
-        %Load channels
-        ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChannel(uid,1),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius); %Averaging over 10 channels helps with drift
-        Locs = channelpos(ChanIdx,:);
 
-        scatter(Locs(:,1),Locs(:,2),20,[0.5 0.5 0.5],'filled')
         hold on
-        scatter(ProjectedLocation(1,uid,1),ProjectedLocation(2,uid,1),20,cols(uidx,:),'filled')
-        plot(ProjectedLocation(1,uid,1)+0.1*[1:size(ProjectedWaveform,1)],ProjectedLocation(2,uid,1)+0.1*ProjectedWaveform(:,uid,1),'color',cols(uidx,:))
+        plot(-(1/30)*(41-(1:size(ProjectedWaveform,1))),squeeze(ProjectedWaveform(:,uid,1)),'color',cols(uidx,:))
     end
-
-    xlabel('Xpos (\mum)')
-    ylabel('')
-    set(gca,'xlim',xlims,'ylim',ylims,'YTickLabel',[])
-
-
     axis square
-    title('Average waveforms')
+    xlabel('Time (ms)')
+    ylabel('\muV')
     makepretty
+    title('Average Waveforms')
+
+%     subplot(1,3,2)
+%     for uidx=1:length(Pairs)
+%         uid = Pairs(uidx);
+%         channelpos = Allchannelpos{recsesGood(uid)};
+%         % Load raw data
+%         try
+%             spikeMap = readNPY(fullfile(param.KSDir{recsesGood(uid)},'RawWaveforms',['Unit' num2str(OriginalClusterIDs(Good_Idx(uid))) '_RawSpikes.npy'])); %0-indexed
+%         catch
+%             keyboard
+%         end
+%         % Detrending
+%         spikeMap = permute(spikeMap,[2,1,3]); %detrend works over columns
+%         spikeMap = detrend(spikeMap,1); % Detrend (linearly) to be on the safe side. OVER TIME!
+%         spikeMap = permute(spikeMap,[2,1,3]);  % Put back in order
+%         %Load channels
+%         ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChannel(uid,1),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius); %Averaging over 10 channels helps with drift
+%         Locs = channelpos(ChanIdx,:);
+% 
+%         scatter(Locs(:,1),Locs(:,2),20,[0.5 0.5 0.5],'filled')
+%         hold on
+%         scatter(ProjectedLocation(1,uid,1),ProjectedLocation(2,uid,1),20,cols(uidx,:),'filled')
+%         plot(ProjectedLocation(1,uid,1)+0.1*[1:size(ProjectedWaveform,1)],ProjectedLocation(2,uid,1)+0.1*ProjectedWaveform(:,uid,1),'color',cols(uidx,:))
+%     end
+% 
+%     xlabel('Xpos (\mum)')
+%     ylabel('')
+%     set(gca,'xlim',xlims,'ylim',ylims,'YTickLabel',[])
+% 
+% 
+%     axis square
+%     title('Average waveforms')
+%     makepretty
 
     subplot(1,3,1)
     for uidx=1:length(Pairs)
@@ -859,13 +879,6 @@ if 0 % THis can be used to look at some example projections
     ylabel('\Deltad_i_j')
     makepretty
 
-    figure
-    for uidx=1:length(Pairs)
-        uid = Pairs(uidx);
-
-        hold on
-        plot(squeeze(ProjectedWaveform(:,uid,1)),'color',cols(uidx,:))
-    end
 
     %% Draw at the different channels
 

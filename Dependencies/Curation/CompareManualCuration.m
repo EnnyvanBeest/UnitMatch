@@ -98,7 +98,7 @@ for midx = 1:length(MiceOpt)
     disp('User scoring correlations:')
     AllScoringMethods = cat(2,Manual',AvgMan',MatchProb,PyKS',Rank==1,RankThreshold);
     % Normalize between 0 and 1
-    AllScoringMethods = (AllScoringMethods - nanmin(AllScoringMethods,[],1))./(nanmax(AllScoringMethods,[],1)-nanmin(AllScoringMethods,[],1))
+    AllScoringMethods = (AllScoringMethods - nanmin(AllScoringMethods,[],1))./(nanmax(AllScoringMethods,[],1)-nanmin(AllScoringMethods,[],1));
     tmpcor = corr(AllScoringMethods);
     AllScorerNames = {ScorerNames{:},'AvgScorer','UM','KS','Rank1','RankTr'};
     if midx == 1
@@ -378,7 +378,9 @@ for midx = 1:length(MiceOpt)
      subplot(2,length(MiceOpt),midx)
     
      tmpscores = AllScoringMethods(WithinSameSession,:);
-     [~,sortidx] = sort(nansum(tmpscores(:,ismember(AllScorerNames,{'AvgScorer','KS','UM')));
+     tmp = tmpscores(:,ismember(AllScorerNames,{'AvgScorer','UM','KS'}));
+     tmp(:,1) = 20*(tmp(:,1)+0.1);
+     [~,sortidx] = sort(nansum(tmp,2));
      tmpscores = cat(2,tmpscores(sortidx,strcmp(AllScorerNames,'AvgScorer')),tmpscores(sortidx,~strcmp(AllScorerNames,'AvgScorer')));
      h = imagesc(tmpscores);
 
@@ -394,7 +396,9 @@ for midx = 1:length(MiceOpt)
      subplot(2,length(MiceOpt),length(MiceOpt)+midx)
     
      tmpscores = AllScoringMethods(~WithinSameSession,:);
-     [~,sortidx] = sort(tmpscores(:,strcmp(AllScorerNames,'AvgScorer')));
+     tmp = tmpscores(:,ismember(AllScorerNames,{'AvgScorer','UM','KS'}));
+     tmp(:,1) = 20*(tmp(:,1)+0.1);
+     [~,sortidx] = sort(nansum(tmp,2));
      tmpscores = cat(2,tmpscores(sortidx,strcmp(AllScorerNames,'AvgScorer')),tmpscores(sortidx,~strcmp(AllScorerNames,'AvgScorer')));
      h = imagesc(tmpscores);
      colormap redblue

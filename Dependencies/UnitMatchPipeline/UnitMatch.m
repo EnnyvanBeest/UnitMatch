@@ -32,7 +32,7 @@ function  [UniqueIDConversion, MatchTable, WaveformInfo, param] = UnitMatch(clus
 
 %% Parameters - tested on these values, but feel free to try others
 Scores2Include = param.Scores2Include % Good to show for failure prevention
-TakeChannelRadius = 120; %in micron around max channel; 120 so far best tested
+TakeChannelRadius = 200; %in micron around max channel; 120 so far best tested
 maxdist = 100; % Maximum distance at which units are considered as potential matches %best tested so far 100
 param.removeoversplits = 0; % Remove oversplits based on ISI violations or not?
 param.MakeOwnNaiveBayes = 1; % if 0, use standard matlab version, which assumes normal distributions --> not recommended
@@ -106,7 +106,7 @@ SessionSwitch = [cell2mat(SessionSwitch); nclus+1];
 Path4UnitNPY = ExtractAndSaveAverageWaveforms(clusinfo,param);
 
 %% Extract parameters used in UnitMatch
-AllWVBParameters = ExtractParameters(Path4UnitNPY,clusinfo,param);
+[AllWVBParameters,param] = ExtractParameters(Path4UnitNPY,clusinfo,param);
 
 %% Metrics
 ExtractSimilarityMetrics(Scores2Include,AllWVBParameters,clusinfo,param)% All Scores2Include are pushed to the workspace

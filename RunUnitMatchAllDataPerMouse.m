@@ -80,33 +80,35 @@ for midx = 1:length(MiceOpt)
     UnitMatchExist = dir(fullfile(PrepareClusInfoparams.SaveDir,'**','UnitMatch.mat'));
     if isempty(UnitMatchExist) || PrepareClusInfoparams.RedoUnitMatch
         UMparam = RunUnitMatch(subsesoptAll,PrepareClusInfoparams);
+        
+        %% Evaluate (within unit ID cross-validation)
+        EvaluatingUnitMatch(UMparam.SaveDir);
+
+        %% Function analysis
+        ComputeFunctionalScores(UMparam.SaveDir)
+
+        %% Figures
+        if UMparam.MakePlotsOfPairs
+            DrawBlind = 0; %1 for blind drawing (for manual judging of pairs)
+            DrawPairsUnitMatch(UMparam.SaveDir,DrawBlind);
+        end
+
+        %% QM
+        try
+            QualityMetricsROCs(UMparam.SaveDir);
+        catch ME
+            disp(['Couldn''t do Quality metrics for ' MiceOpt{midx}])
+        end
+
     else
         UMparam = PrepareClusInfoparams;
         UMparam.SaveDir = fullfile(PrepareClusInfoparams.SaveDir,'UnitMatch');
     end
 
-    %% Evaluate (within unit ID cross-validation)
-    EvaluatingUnitMatch(UMparam.SaveDir);
 
-    %% Function analysis
-    ComputeFunctionalScores(UMparam.SaveDir)
-
-    %% Figures
-    if UMparam.MakePlotsOfPairs
-        DrawBlind = 0; %1 for blind drawing (for manual judging of pairs)
-        DrawPairsUnitMatch(UMparam.SaveDir,DrawBlind);
-    end
-
-    %% QM
-    try
-        QualityMetricsROCs(UMparam.SaveDir);
-    catch ME
-        disp(['Couldn''t do Quality metrics for ' MiceOpt{midx}])
-    end
-
-    %% 
+    %%
     disp(['Preprocessed data for ' MiceOpt{midx}])
-    
+
 
 end
 

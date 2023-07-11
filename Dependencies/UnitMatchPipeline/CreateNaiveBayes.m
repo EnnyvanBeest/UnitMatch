@@ -32,7 +32,7 @@ for scid=1:length(Scores2Include)
     end
 
     % Prepare plot
-    subplot(ceil(sqrt(length(Scores2Include))),round(sqrt(length(Scores2Include))),scid)
+    subplot(1,length(Scores2Include),scid)
     hold on
 
     % Scores irrespective of label:
