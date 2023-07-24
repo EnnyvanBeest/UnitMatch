@@ -33,6 +33,7 @@ if ~iscell(KiloSortPaths) %isstruct(KiloSortPaths) || isfield(KiloSortPaths(1),'
     error('This is not a cell... give correct input please')
 end
 
+
 try
     if nargin<2
         disp('No params given. Use default - although this is not advised...')
@@ -80,6 +81,7 @@ for subsesid=1:length(KiloSortPaths)
     %% initialize for new round
     Good_ID = [];
     Shank=[];
+    ProbeAll = [];
     recsesAll = [];
     channel = [];
     Label = [];
@@ -87,6 +89,12 @@ for subsesid=1:length(KiloSortPaths)
     AllUniqueTemplates = [];
     cluster_id = [];
     recses = [];
+    if any(strfind(KiloSortPaths{subsesid},'Probe'))
+        probeid = str2num(KiloSortPaths{subsesid}(strfind(KiloSortPaths{subsesid},'Probe')+5));
+    else
+        disp('Probe ID unknown')
+        probeid = 0;
+    end
 
     %% save data paths information
     if Params.RunPyKSChronicStitched %CALL THIS STITCHED --> Only works when using RunPyKS2_FromMatlab as well from this toolbox
@@ -183,8 +191,10 @@ for subsesid=1:length(KiloSortPaths)
     %% Load histology if available
     tmphisto = dir(fullfile(KiloSortPaths{subsesid},'HistoEphysAlignment.mat'));
     clear Depth2AreaPerUnit
-    histodat = load(fullfile(tmphisto.folder,tmphisto.name));
-    Depth2AreaPerUnit = histodat.Depth2AreaPerUnit;
+    if ~isempty(tmphisto)
+        histodat = load(fullfile(tmphisto.folder,tmphisto.name));
+        Depth2AreaPerUnit = histodat.Depth2AreaPerUnit;
+    end
 
     %% Load Spike Data
     sp = loadKSdir(fullfile(KiloSortPaths{subsesid}),Params); % Load Spikes with PCs
@@ -449,8 +459,10 @@ for subsesid=1:length(KiloSortPaths)
     if exist('theseuniqueTemplates','var') && iscell(theseuniqueTemplates)
         recsesAlltmp = arrayfun(@(X) repmat(addthis+X,1,length(theseuniqueTemplates{X})),[1:length(theseuniqueTemplates)],'UniformOutput',0);
         recsesAll =cat(1,recsesAll(:), cat(2,recsesAlltmp{:})');
+        ProbeAll = cat(1,ProbeAll(:),repmat(probeid,1,length(cat(2,recsesAlltmp{:})))');
     else
         recsesAll = cat(1,recsesAll(:),repmat(addthis+1,1,length(Good_IDtmp))');
+        ProbeAll = cat(1,ProbeAll(:),repmat(probeid,1,length(Good_IDtmp))');
     end
     sp.RecSes = sp.SessionID+countid-1; %Keep track of recording session, as cluster IDs are not unique across sessions
 
@@ -461,6 +473,7 @@ for subsesid=1:length(KiloSortPaths)
         ShankID(Shank==ShankOpt(shankid))=shankid;
     end
     clusinfo.Shank = Shank;
+    clusinfo.ProbeID = ProbeAll;
     clusinfo.ShankID = ShankID;
     clusinfo.RecSesID = recsesAll;
     clusinfo.ch = channel;

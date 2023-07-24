@@ -49,10 +49,8 @@ global stepsize
 % Usually this means there's no variance in the match distribution
 % (which in a way is great). Create some small variance
 flag = 0;
-npairs = 0;
 MinLoss=1;
 MaxPerf = [0 0];
-npairslatest = 0;
 runid = 0;
 % Priors = [0.5 0.5];
 priorMatch = 1-((nclus+nclus.*sqrt(ndays-1)*param.ExpectMatches)./nclus^2); %Punish multiple days (unlikely to find as many matches after a few days) %for naive bayes

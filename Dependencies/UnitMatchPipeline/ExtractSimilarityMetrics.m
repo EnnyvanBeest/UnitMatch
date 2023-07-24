@@ -77,7 +77,7 @@ timercounter = tic;
 % Spatial decay
 x1 = repmat(spatialdecay(:,1),[1 numel(spatialdecay(:,1))]);
 x2 = repmat(spatialdecay(:,2),[1 numel(spatialdecay(:,2))]);
-spatialdecaySim = abs(x1 - x2');
+spatialdecaySim = abs(x1 - x2')./nanmean(cat(3,x1,x2'),3);
 % Make (more) normal
 spatialdecaySim = sqrt(spatialdecaySim);
 spatialdecaySim = 1-((spatialdecaySim-nanmin(spatialdecaySim(:)))./(quantile(spatialdecaySim(:),0.99)-nanmin(spatialdecaySim(:))));
@@ -90,7 +90,10 @@ paramid = find(ismember(paramNames,'spatialdecaySim'));
 % spatial decay fit
 x1 = repmat(spatialdecayfit(:,1),[1 numel(spatialdecayfit(:,1))]);
 x2 = repmat(spatialdecayfit(:,2),[1 numel(spatialdecayfit(:,2))]);
-spatialdecayfitSim = abs(x1 - x2');
+spatialdecayfitSim = abs(x1 - x2')./nanmean(cat(3,x1,x2'),3);
+% Remove extreme outliers
+spatialdecayfitSim(spatialdecayfitSim<0) = quantile(spatialdecayfitSim(:),0.9999);
+spatialdecayfitSim((spatialdecayfitSim)>quantile(spatialdecayfitSim(:),0.9999)) = quantile(spatialdecayfitSim(:),0.9999);
 % Make (more) normal
 spatialdecayfitSim = sqrt(spatialdecayfitSim);
 spatialdecayfitSim = 1-((spatialdecayfitSim-nanmin(spatialdecayfitSim(:)))./(quantile(spatialdecayfitSim(:),0.99)-nanmin(spatialdecayfitSim(:))));
@@ -104,7 +107,10 @@ paramid = find(ismember(paramNames,'spatialdecayfitSim'));
 % Ampitude difference
 x1 = repmat(Amplitude(:,1),[1 numel(Amplitude(:,1))]);
 x2 = repmat(Amplitude(:,2),[1 numel(Amplitude(:,2))]);
-AmplitudeSim = abs(x1 - x2');
+AmplitudeSim = abs(x1 - x2')./nanmean(abs(cat(3,x1,x2')),3);
+% Remove extreme outliers
+% AmplitudeSim((AmplitudeSim)>quantile(AmplitudeSim(:),0.9999)) = quantile(AmplitudeSim(:),0.9999);
+
 % Make (more) normal
 AmplitudeSim = sqrt(AmplitudeSim);
 AmplitudeSim = 1-((AmplitudeSim-nanmin(AmplitudeSim(:)))./(quantile(AmplitudeSim(:),.99)-nanmin(AmplitudeSim(:))));
@@ -206,6 +212,9 @@ for uid = 1:nclus
     else
         channelpos = Allchannelpos{recsesGood(uid)};
     end
+    if isnan(MaxChannel(uid,1))
+        continue
+    end
     %Load channels
     ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChannel(uid,1),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius); %Averaging over 10 channels helps with drift
     Locs = channelpos(ChanIdx,:);
@@ -241,7 +250,7 @@ while flag<2
     zlabel('Depth (um)')
     xlabel('XPos (um)')
 
-    xlim([min(channelpos_AllCat(:,1))-50 max(channelpos_AllCat(:,1))+50])
+%     xlim([min(channelpos_AllCat(:,1))-50 max(channelpos_AllCat(:,1))+50])
     drawnow
     saveas(gcf,fullfile(SaveDir,'ProjectedLocation.fig'))
     saveas(gcf,fullfile(SaveDir,'ProjectedLocation.bmp'))
@@ -290,12 +299,13 @@ while flag<2
     ProjectedLocationPerTPRecentered = permute(permute(ProjectedLocationPerTPAllFlips,[1,2,4,3,5]) - ProjectedLocation,[1,2,4,3,5]);
     x1 = repmat(squeeze(ProjectedLocationPerTPRecentered(:,:,waveidx,1,:)),[1 1 1 1 nclus]);
     x2 = permute(repmat(squeeze(ProjectedLocationPerTPRecentered(:,:,waveidx,2,:)),[1 1 1 1 nclus]),[1 5 3 4 2]); %switch nclus around
-    EuclDist2 = squeeze(sqrt(nansum((x1-x2).^2,1))); % Euclidean distance
+    EuclDist2 = squeeze(vecnorm(x1-x2,2,1)); % Euclidean distance
     w = squeeze(isnan(abs(x1(1,:,:,:,:)-x2(1,:,:,:,:))));
     EuclDist2(w) = nan;
     % Average location
     CentroidDistRecentered = squeeze(nanmin(nanmean(EuclDist2,2),[],3));% minimum across flips
-    CentroidDistRecentered = 1-(CentroidDistRecentered-nanmin(CentroidDistRecentered(:)))./(nanmax(CentroidDistRecentered(:))-nanmin(CentroidDistRecentered(:)));
+    CentroidDistRecentered = 1-(CentroidDistRecentered-nanmin(CentroidDistRecentered(:)))./(quantile(CentroidDistRecentered(:),0.99)-nanmin(CentroidDistRecentered(:)));
+    CentroidDistRecentered(CentroidDistRecentered<0|isnan(CentroidDistRecentered))=0;
     scores = [CentroidDistRecentered(SameIdx(:))', CentroidDistRecentered(WithinIdx(:))'];
     paramid = find(ismember(paramNames,'CentroidDistRecentered'));
     [x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
@@ -312,15 +322,27 @@ while flag<2
     x1 = ProjectedLocationPerTPAllFlips(:,:,waveidx(2):waveidx(end),:,:);
     x2 = ProjectedLocationPerTPAllFlips(:,:,waveidx(1):waveidx(end-1),:,:);
     % The distance traveled (Eucledian)
-    TrajDist = sqrt(squeeze(nansum((x1-x2).^2,1)));
+    TrajDist = squeeze(vecnorm(x1-x2,2,1));
     % Difference in angle between two time points
-    LocAngle = squeeze(atan(abs(x1(1,:,:,:,:)-x2(1,:,:,:,:))./abs(x1(2,:,:,:,:)-x2(2,:,:,:,:))));
+    LocAngle = nan(size(TrajDist,1),size(TrajDist,2),size(TrajDist,3),size(TrajDist,4),0);
+    countid=1;
+    for dimid1=1:size(ProjectedLocationPerTPAllFlips,1)
+        for dimid2=2:size(ProjectedLocationPerTPAllFlips,1)
+            if dimid2<=dimid1
+                continue
+            end
+            LocAngle(:,:,:,:,countid) = squeeze(atan(abs(x1(dimid1,:,:,:,:)-x2(dimid1,:,:,:,:))./abs(x1(dimid2,:,:,:,:)-x2(dimid2,:,:,:,:))));
+            countid = countid + 1;
+        end
+    end
+    % Sum the angles across dimensions
+    LocAngle = nansum(LocAngle,5);
 
     % Actually just taking the weighted sum of angles is better
     x1 = repmat(squeeze(LocAngle(:,:,1,:)),[1 1 1 nclus]);
     x2 = permute(repmat(squeeze(LocAngle(:,:,2,1)),[1 1 1 nclus]),[4 2 3 1]); %switch nclus around
     AngleSubtraction = abs(x1-x2);
-    AngleSubtraction(isnan(abs(x1-x2))) = 0.5*pi; %punish points with nan
+    AngleSubtraction(isnan(abs(x1-x2))) = 2*pi; %punish points with nan
     TrajAngleSim = squeeze(nanmin(nansum(AngleSubtraction,2),[],3)); % sum of angles, minimum across flips
     TrajAngleSim = 1-((TrajAngleSim-nanmin(TrajAngleSim(:)))./(quantile(TrajAngleSim(:),0.99)-nanmin(TrajAngleSim(:))));
     TrajAngleSim(TrajAngleSim<0 | isnan(TrajAngleSim))=0;
@@ -336,10 +358,10 @@ while flag<2
     TrajDistSim = squeeze(nanmin(nansum(TrajDistCompared,2),[],3)); %and take minimum across flips
     TrajDistSim = sqrt(TrajDistSim); % Make more normal
     TrajDistSim = 1-((TrajDistSim-nanmin(TrajDistSim(:)))./(quantile(TrajDistSim(:),0.99)-nanmin(TrajDistSim(:))));
+    TrajDistSim(TrajDistSim<0 | isnan(TrajDistSim))=0;
     scores = [TrajDistSim(SameIdx(:))', TrajDistSim(WithinIdx(:))'];
     paramid = find(ismember(paramNames,'TrajDistSim'));
     [x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
-
 
 
     LocTrajectorySim = (TrajAngleSim+TrajDistSim)./2; % Trajectory Similarity is sum of distance + sum of angles

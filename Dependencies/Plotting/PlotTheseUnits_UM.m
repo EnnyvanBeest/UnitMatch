@@ -84,7 +84,7 @@ SessionSwitch = [cell2mat(SessionSwitch); nclus+1];
 
 ncellsperrecording = diff(SessionSwitch);
 
-Allchannelpos = param.channelpos;
+Allchannelpos = param.Coordinates;
 if ~iscell(Allchannelpos)
     Allchannelpos = {Allchannelpos};
 end
@@ -107,7 +107,7 @@ for uid = 1:nclus
         channelpos = Allchannelpos{recsesGood(uid)};
     end
     %Load channels
-    ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(WaveformInfo.MaxChannel(uid,1),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius); %Averaging over 10 channels helps with drift
+    ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(WaveformInfo.MaxChannel(uid,1),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<75); %Averaging over 10 channels helps with drift
     Locs = channelpos(ChanIdx,:);
     AllowFlipping(cell2mat(arrayfun(@(X) length(unique(Locs(:,X))),1:size(Locs,2),'Uni',0))<=2,:) = true;
 end
@@ -160,13 +160,13 @@ for pairid=1:length(Pairs)
         spikeMap = detrend(spikeMap,1); % Detrend (linearly) to be on the safe side. OVER TIME!
         spikeMap = permute(spikeMap,[2,1,3]);  % Put back in order
         %Load channels
-        ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(WaveformInfo.MaxChannel(uid,cv),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius); %Averaging over 10 channels helps with drift
+        ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(WaveformInfo.MaxChannel(uid,cv),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<75); %Averaging over 10 channels helps with drift
         Locs = channelpos(ChanIdx,:);
 
         subplot(3,6,[1,2,7,8])
         hold on
         scatter(Locs(:,1)*10,Locs(:,2)*20,20,[0.5 0.5 0.5],'filled') % Indicate sites
-        for id = 1:length(Locs)
+        for id = 1:size(Locs,1)
             plot(Locs(id,1)*10+[1:size(spikeMap,1)],Locs(id,2)*20+spikeMap(:,ChanIdx(id),cv),'-','color',cols(uidx,:),'LineWidth',1)
         end
         scatter(WaveformInfo.ProjectedLocation(1,uid,cv)*10,WaveformInfo.ProjectedLocation(2,uid,cv)*20,20,[0 0 0],'filled') %Indicate Centroid
@@ -333,10 +333,17 @@ for pairid=1:length(Pairs)
     if exist('CentroidVar')
         tmp2 = cell2mat(arrayfun(@(X) [num2str(round(CentroidVar(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
         tmp2(end)=[];
+    elseif exist('CentroidDistRecentered')
+        tmp2 = cell2mat(arrayfun(@(X) [num2str(round(CentroidDistRecentered(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp2(end)=[];
+    elseif exist('CentroidOverlord')
+        tmp2 = cell2mat(arrayfun(@(X) [num2str(round(CentroidOverlord(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp2(end)=[];
     else
         tmp2 = 'nan';
     end
-    title(['Centroid Distance: ' tmp ', CentroidVar: ' tmp2])
+
+    title(['Centroid Distance: ' tmp ', Centroid(va)r: ' tmp2])
 
     subplot(3,6,5)
     ylims = get(gca,'ylim');
@@ -367,8 +374,8 @@ for pairid=1:length(Pairs)
     else
         tmp3 = 'nan';
     end
-    if exist('spatialdecaySim')
-        tmp4 = cell2mat(arrayfun(@(X) [num2str(round(spatialdecaySim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
+    if exist('spatialdecayfitSim')
+        tmp4 = cell2mat(arrayfun(@(X) [num2str(round(spatialdecayfitSim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
         tmp4(end)=[];
     else
         tmp4 = 'nan';
@@ -416,10 +423,14 @@ for pairid=1:length(Pairs)
                 continue
             end
 
-            [r,c] = find(tmpfp == max([tmpfp(uidx,uidx2),tmpfp(uidx2,uidx)']),1,'first');
-
-            uid = Pairs{pairid}(r);
-            uid2 = Pairs{pairid}(c);
+            if all(isnan(tmpfp(uidx,uidx2))) % If no pairs were found across sessions
+                uid = Pairs{pairid}(1);
+                uid2 = Pairs{pairid}(2);
+            else
+                [r,c] = find(tmpfp == nanmax([tmpfp(uidx,uidx2),tmpfp(uidx2,uidx)']),1,'first');
+                uid = Pairs{pairid}(r);
+                uid2 = Pairs{pairid}(c);
+            end
             tmp = [tmp round(FingerprintR(uid,uid2)*10)/10];
             try
             SessionCorrelations = AllSessionCorrelations{ismember(DayOpt,recsesGood(uid)),ismember(DayOpt,recsesGood(uid2))};
@@ -465,13 +476,17 @@ for pairid=1:length(Pairs)
 
             tmp1 = FingerprintR(uid,Idx);
             tmp1(uid2)=nan;
+            if ~all(isnan(tmp1(:)))
 
-            histogram(tmp1,'EdgeColor','none','FaceColor',[0.5 0.5 0.5])
-            line([FingerprintR(uid,uid2) FingerprintR(uid,uid2)],get(gca,'ylim'),'color',nanmean(cols([uidx,uidx2],:),1))
+                histogram(tmp1,'EdgeColor','none','FaceColor',[0.5 0.5 0.5])
+                line([FingerprintR(uid,uid2) FingerprintR(uid,uid2)],get(gca,'ylim'),'color',nanmean(cols([uidx,uidx2],:),1))
+            end
         end
     end
     tmpR = cell2mat(arrayfun(@(X) [num2str(X) ','],tmpR,'Uni',0));
-    tmpR(end) = [];
+    if ~isempty(tmpR)
+        tmpR(end) = [];
+    end
 
     xlabel('Finger print r')
     title(['rank=' tmpR])

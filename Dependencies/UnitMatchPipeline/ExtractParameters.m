@@ -6,8 +6,9 @@ ProbeFun = @(p,x) p(1)*x(:,1)+p(2)+p(3)*x(:,2)+p(4);
 nclus = length(Path4UnitNPY);
 spikeWidth = param.spikeWidth;
 Allchannelpos = param.channelpos;
+RecSes = clusinfo.RecSesID;
+
 if isfield(clusinfo,'Coordinates') % Allow for real coordinates
-    RecSes = clusinfo.RecSesID;
     for recid = 1:max(RecSes)
         % Cluster
         Coordinates = clusinfo.Coordinates(RecSes == recid);
@@ -74,8 +75,14 @@ if isfield(clusinfo,'Coordinates') % Allow for real coordinates
     end
 
 else
-    % Add 3rd dimension of 0's
-    Allchannelpos = cellfun(@(X) cat(2,X,zeros(size(X,1),1)),Allchannelpos,'Uni',0);
+    % Add 3rd dimension of probe-ids
+    RecOpt = unique(RecSes);
+    for recid = 1:length(RecOpt)
+        probeid = unique(clusinfo.ProbeID(clusinfo.RecSesID==RecOpt(recid)));
+        if length(Allchannelpos) >= recid
+        Allchannelpos{recid} = cat(2,repmat(probeid,size(Allchannelpos{recid},1),1),Allchannelpos{recid});
+        end
+    end
 end
 param.Coordinates = Allchannelpos;
 
@@ -119,6 +126,12 @@ for uid = 1:nclus
     spikeMap = detrend(spikeMap,1); % Detrend (linearly) to be on the safe side. OVER TIME!
     spikeMap = permute(spikeMap,[2,1,3]);  % Put back in order
 
+    tmp1 = spikeMap(:,:,1);
+    tmp2 = spikeMap(:,:,2);
+    if all(isnan(tmp1(:))) || all(isnan(tmp2(:)))
+        continue
+    end
+
     try
         channelpos = Allchannelpos{recsesGood(uid)};
     catch ME
@@ -151,6 +164,9 @@ for uid = 1:nclus
         spdctmp(Distance2MaxChan==0) = [];
         Distance2MaxChan(Distance2MaxChan==0) = [];
 
+        if all(isnan(spdctmp(:)))
+            continue
+        end
         try
             p = lsqcurvefit(expFun,[max(spdctmp) 0.05],Distance2MaxChan',spdctmp,[],[],opts);
 
@@ -208,6 +224,7 @@ for uid = 1:nclus
         ProjectedWaveform(spikeWidth+lags(maxid):spikeWidth,uid,2) = nan;
         spikeMap(spikeWidth+lags(maxid):spikeWidth,:,2) = nan;
     end
+  
     for cv = 1:2
         ChanIdx = OriChanIdx;
         Locs = channelpos(ChanIdx,:);

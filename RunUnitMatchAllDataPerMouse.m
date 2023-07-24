@@ -2,14 +2,11 @@
 % Load all data
 % Find available datasets (always using dates as folders)
 clear DateOpt
-for idx = 1:length(DataDir)
-    DateOpt{idx} = cellfun(@(X) dir(fullfile(DataDir{idx},X,'*-*')),MiceOpt(DataDir2Use==idx),'UniformOutput',0);
-end
-DateOpt = cat(2,DateOpt{:});
+DateOpt = arrayfun(@(X) dir(fullfile(DataDir{DataDir2Use(X)},MiceOpt{X},'*-*')),1:length(MiceOpt),'UniformOutput',0);
 DateOpt = cellfun(@(X) X([X.isdir]),DateOpt,'UniformOutput',0);
 DateOpt = cellfun(@(X) {X.name},DateOpt,'UniformOutput',0);
 
-for midx = 1:length(MiceOpt)
+for midx = 25:length(MiceOpt)
     %% Loading data from kilosort/phy easily
     myKsDir = fullfile(KilosortDir,MiceOpt{midx});
     subksdirs = dir(fullfile(myKsDir,'**','Probe*')); %This changed because now I suddenly had 2 probes per recording
@@ -71,10 +68,15 @@ for midx = 1:length(MiceOpt)
         mkdir(fullfile(SaveDir,MiceOpt{midx}))
     end
     PrepareClusInfoparams.SaveDir = fullfile(SaveDir,MiceOpt{midx});
-
+   if isempty(subsesopt)
+       disp(['No data found for ' MiceOpt{midx}])
+        continue
+    end
     %% Prepare cluster information
     PrepareClusInfoparams = PrepareClusInfo(subsesoptAll,PrepareClusInfoparams);
     PrepareClusInfoparams.RecType = RecordingType{midx};%
+
+ 
 
     %% Run UnitMatch
     UnitMatchExist = dir(fullfile(PrepareClusInfoparams.SaveDir,'**','UnitMatch.mat'));

@@ -2,10 +2,7 @@
 % Load all data
 % Find available datasets (always using dates as folders)
 clear DateOpt
-for idx = 1:length(DataDir)
-    DateOpt{idx} = cellfun(@(X) dir(fullfile(DataDir{idx},X,'*-*')),MiceOpt(DataDir2Use==idx),'UniformOutput',0);
-end
-DateOpt = cat(2,DateOpt{:});
+DateOpt = arrayfun(@(X) dir(fullfile(DataDir{DataDir2Use(X)},MiceOpt{X},'*-*')),1:length(MiceOpt),'UniformOutput',0);
 DateOpt = cellfun(@(X) X([X.isdir]),DateOpt,'UniformOutput',0);
 DateOpt = cellfun(@(X) {X.name},DateOpt,'UniformOutput',0);
 RedoAfterClustering=1;

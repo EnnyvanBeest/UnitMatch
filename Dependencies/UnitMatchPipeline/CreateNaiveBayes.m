@@ -8,7 +8,7 @@ SmoothProbability = 10; % smoothing, since we need to make sure none of the scor
 SmoothSpatialFactor = 10; % Apply another smoothing factor for spatial decay and space
 global stepsize
 
-addone=0;%.0001; %Add probability to the distribution to not have a probability of 0 with small sample size(default 0)
+addone=1; %Add min probability to the distribution to not have a probability of 0 with small sample size(default 0)
 if nargin<3
     Prior = [0.5 0.5];
 end
@@ -45,7 +45,7 @@ for scid=1:length(Scores2Include)
         Parameterkernels(:,scid,Ck) = Parameterkernels(:,scid,Ck)/sum(Parameterkernels(:,scid,Ck)); % normalize to 1
      
         % Avoid having 0 probability
-        Parameterkernels(:,scid,Ck) = Parameterkernels(:,scid,Ck)+addone;
+        Parameterkernels(:,scid,Ck) = Parameterkernels(:,scid,Ck)+addone*min(Parameterkernels(Parameterkernels(:,scid,Ck)~=0,scid,Ck),[],1);
 %         % modify the distribution for not frequently observed values
 %         Parameterkernels(1:find(dlim-Edges<0,1,'first'),scid,Ck) = Parameterkernels(find(dlim-Edges<0,1,'first'),scid,Ck);
 %         Parameterkernels(find(ulim-Edges<0,1,'first'):end,scid,Ck) = Parameterkernels(find(ulim-Edges<0,1,'first'),scid,Ck);
@@ -94,7 +94,7 @@ for cv = 1:ncross
             ParameterkernelsCV(:,scid,Ck) = ParameterkernelsCV(:,scid,Ck)/sum(ParameterkernelsCV(:,scid,Ck)); % normalize to 1
 
             % Avoid having 0 probability
-            Parameterkernels(:,scid,Ck) = Parameterkernels(:,scid,Ck)+addone;
+            ParameterkernelsCV(:,scid,Ck) = ParameterkernelsCV(:,scid,Ck)+addone*min(ParameterkernelsCV(Parameterkernels(:,scid,Ck)~=0,scid,Ck),[],1);
             % modify the distribution for not frequently observed values
             %             ParameterkernelsCV(1:find(dlim-Edges<0,1,'first'),scid,Ck) = ParameterkernelsCV(find(dlim-Edges<0,1,'first'),scid,Ck);
             %             ParameterkernelsCV(find(ulim-Edges<0,1,'first'):end,scid,Ck) = ParameterkernelsCV(find(ulim-Edges<0,1,'first'),scid,Ck);
