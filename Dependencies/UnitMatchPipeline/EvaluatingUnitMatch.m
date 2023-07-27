@@ -211,7 +211,7 @@ else
 end
 
 %% AUC
-if exist(fullfile(Dir2Evaluate,'AUC.mat'))
+if exist(fullfile(DirToEvaluate,'AUC.mat'))
 load(fullfile(DirToEvaluate,'AUC.mat'));
 AUC = AUCStruct.AUC;
 ParamNames = AUCStruct.ParamNames(~isnan(AUC));

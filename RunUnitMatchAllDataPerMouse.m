@@ -6,7 +6,7 @@ DateOpt = arrayfun(@(X) dir(fullfile(DataDir{DataDir2Use(X)},MiceOpt{X},'*-*')),
 DateOpt = cellfun(@(X) X([X.isdir]),DateOpt,'UniformOutput',0);
 DateOpt = cellfun(@(X) {X.name},DateOpt,'UniformOutput',0);
 
-for midx = 25:length(MiceOpt)
+for midx = 28:length(MiceOpt)
     %% Loading data from kilosort/phy easily
     myKsDir = fullfile(KilosortDir,MiceOpt{midx});
     subksdirs = dir(fullfile(myKsDir,'**','Probe*')); %This changed because now I suddenly had 2 probes per recording
@@ -22,6 +22,10 @@ for midx = 25:length(MiceOpt)
     % Check for multiple subfolders?
     subsesopt = dir(fullfile(myKsDir,'**','channel_positions.npy'));
     subsesopt=arrayfun(@(X) subsesopt(X).folder,1:length(subsesopt),'Uni',0);
+    % Remove anything that contains the name 'noise'
+    subsesopt(cellfun(@(X) contains(X,'NOISE'),subsesopt)) = [];
+
+
     if strcmp(RecordingType{midx},'Chronic')
         if ~PrepareClusInfoparams.RunPyKSChronicStitched %MatchUnitsAcrossDays
             disp('Unit matching in Matlab')

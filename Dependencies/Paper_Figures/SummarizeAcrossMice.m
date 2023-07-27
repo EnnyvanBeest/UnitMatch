@@ -22,12 +22,14 @@ for midx = 1:length(MiceOpt)
     UMparam = tmpFile.UMparam; % Extract parameters
 
     % Load AUCS
+    if exist(fullfile(SaveDir,MiceOpt{midx},'UnitMatch','AUC.mat'))
     AUC = load(fullfile(SaveDir,MiceOpt{midx},'UnitMatch','AUC.mat'))';
     if midx == 1
     AUCParams = AUC.AUCStruct.ParamNames;
     AUCVals = nan(length(AUCParams),length(MiceOpt));
     end
     AUCVals(:,midx) = AUC.AUCStruct.AUC;
+    end
 
 
     % Extract groups
@@ -106,15 +108,22 @@ for midx = 1:length(MiceOpt)
 
     subplot(3,3,2)
     hold on
-    labels = [ones(1,numel(MatchIdx)), zeros(1,numel(NonMatchIdx))];
-    scores = [FingerprintCor(MatchIdx)', FingerprintCor(NonMatchIdx)'];
-    [X,Y,~,AUC1] = perfcurve(labels,scores,1);
-    h(1) = plot(X,Y,'color',[0.25 0.25 0]);
-    hold all
-    labels = [ones(1,numel(MatchIdx)), zeros(1,numel(WithinIdx))];
-    scores = [FingerprintCor(MatchIdx)', FingerprintCor(WithinIdx)'];
-    [X,Y,~,AUC2] = perfcurve(labels,scores,1);
-    h(2) = plot(X,Y,'color',[0 0.5 0.5]);
+    clear h
+    if length(MatchIdx)>10
+        labels = [ones(1,numel(MatchIdx)), zeros(1,numel(NonMatchIdx))];
+        scores = [FingerprintCor(MatchIdx)', FingerprintCor(NonMatchIdx)'];
+        [X,Y,~,AUC1] = perfcurve(labels,scores,1);
+        h(1) = plot(X,Y,'color',[0.25 0.25 0]);
+        hold all
+        labels = [ones(1,numel(MatchIdx)), zeros(1,numel(WithinIdx))];
+        scores = [FingerprintCor(MatchIdx)', FingerprintCor(WithinIdx)'];
+        [X,Y,~,AUC2] = perfcurve(labels,scores,1);
+        h(2) = plot(X,Y,'color',[0 0.5 0.5]);
+    else
+        AUC1 = nan;
+        AUC2 = nan;
+    end
+
     labels = [ones(1,numel(WithinIdx)), zeros(1,numel(NonMatchIdx))];
     scores = [FingerprintCor(WithinIdx)', FingerprintCor(NonMatchIdx)'];
     [X,Y,~,AUC3] = perfcurve(labels,scores,1);
@@ -125,55 +134,60 @@ for midx = 1:length(MiceOpt)
     plot([0 1],[0 1],'k--')
     xlabel('False positive rate')
     ylabel('True positive rate')
-    legend([h(:)],'Match vs No Match','Match vs Within','Within vs No Match','Location','best')
+    if length(MatchIdx)>10
+        legend([h(:)],'Match vs No Match','Match vs Within','Within vs No Match','Location','best')
+    else
+        legend([h(3)],'Within vs No Match','Location','best')
+    end
     title('Cross-Correlation Fingerprint')
     makepretty
     drawnow %Something to look at while ACG calculations are ongoing
 
 
     %% Autocorrelogram
-    ACGCor = reshape(MatchTable.ACGCorr,nclus,nclus);
+    if isfield(MatchTable,'ACGCor')
+        ACGCor = reshape(MatchTable.ACGCorr,nclus,nclus);
 
-    subplot(3,3,4)
-    hold on
-   
-    hw = histcounts(ACGCor(WithinIdx),bins)./length(WithinIdx);
-    hm = histcounts(ACGCor(MatchIdx),bins)./length(MatchIdx);
-    hn = histcounts(ACGCor(NonMatchIdx),bins)./length(NonMatchIdx);
-    ACGRAcrossMice(:,:,midx) = cat(1,hw,hm,hn)';
-    plot(Vector,hw,'color',[0 0 0.5])
-    plot(Vector,hm,'color',[0 0.5 0])
-    plot(Vector,hn,'color',[0.5 0 0])
-    xlabel('Autocorrelogram correlation')
-    ylabel('Proportion|Group')
-    axis square
-    makepretty
+        subplot(3,3,4)
+        hold on
 
-    subplot(3,3,5)
-    hold on
-    labels = [ones(1,numel(MatchIdx)), zeros(1,numel(NonMatchIdx))];
-    scores = [ACGCor(MatchIdx)', ACGCor(NonMatchIdx)'];
-    [X,Y,~,AUC1] = perfcurve(labels,scores,1);
-    h(1) = plot(X,Y,'color',[0.25 0.25 0]);
-    hold all
-    labels = [ones(1,numel(MatchIdx)), zeros(1,numel(WithinIdx))];
-    scores = [ACGCor(MatchIdx)', ACGCor(WithinIdx)'];
-    [X,Y,~,AUC2] = perfcurve(labels,scores,1);
-    h(2) = plot(X,Y,'color',[0 0.5 0.5]);
-    labels = [ones(1,numel(WithinIdx)), zeros(1,numel(NonMatchIdx))];
-    scores = [ACGCor(WithinIdx)', ACGCor(NonMatchIdx)'];
-    [X,Y,~,AUC3] = perfcurve(labels,scores,1);
-    h(3) = plot(X,Y,'color',[0.5 0 0.5]);
-    axis square
-    ACGAUC(:,midx) = [AUC1,AUC2,AUC3];
+        hw = histcounts(ACGCor(WithinIdx),bins)./length(WithinIdx);
+        hm = histcounts(ACGCor(MatchIdx),bins)./length(MatchIdx);
+        hn = histcounts(ACGCor(NonMatchIdx),bins)./length(NonMatchIdx);
+        ACGRAcrossMice(:,:,midx) = cat(1,hw,hm,hn)';
+        plot(Vector,hw,'color',[0 0 0.5])
+        plot(Vector,hm,'color',[0 0.5 0])
+        plot(Vector,hn,'color',[0.5 0 0])
+        xlabel('Autocorrelogram correlation')
+        ylabel('Proportion|Group')
+        axis square
+        makepretty
 
-    plot([0 1],[0 1],'k--')
-    xlabel('False positive rate')
-    ylabel('True positive rate')
-    title('Auto-correlogram correlations')
-    makepretty
-    drawnow %Something to look at while ACG calculations are ongoing
+        subplot(3,3,5)
+        hold on
+        labels = [ones(1,numel(MatchIdx)), zeros(1,numel(NonMatchIdx))];
+        scores = [ACGCor(MatchIdx)', ACGCor(NonMatchIdx)'];
+        [X,Y,~,AUC1] = perfcurve(labels,scores,1);
+        h(1) = plot(X,Y,'color',[0.25 0.25 0]);
+        hold all
+        labels = [ones(1,numel(MatchIdx)), zeros(1,numel(WithinIdx))];
+        scores = [ACGCor(MatchIdx)', ACGCor(WithinIdx)'];
+        [X,Y,~,AUC2] = perfcurve(labels,scores,1);
+        h(2) = plot(X,Y,'color',[0 0.5 0.5]);
+        labels = [ones(1,numel(WithinIdx)), zeros(1,numel(NonMatchIdx))];
+        scores = [ACGCor(WithinIdx)', ACGCor(NonMatchIdx)'];
+        [X,Y,~,AUC3] = perfcurve(labels,scores,1);
+        h(3) = plot(X,Y,'color',[0.5 0 0.5]);
+        axis square
+        ACGAUC(:,midx) = [AUC1,AUC2,AUC3];
 
+        plot([0 1],[0 1],'k--')
+        xlabel('False positive rate')
+        ylabel('True positive rate')
+        title('Auto-correlogram correlations')
+        makepretty
+        drawnow %Something to look at while ACG calculations are ongoing
+    end
     %% Receptive Field (?)
     if any(ismember(MatchTable.Properties.VariableNames,'RFDist'))
         RFDist = reshape(MatchTable.RFDist,nclus,nclus);
