@@ -47,6 +47,7 @@ PrepareClusInfoparams.GoodUnitsOnly = 1; % Include only good untis in the UnitMa
 %% Automatic from here
 PrepareClusInfoparams.SaveDir = SaveDir; % Save results here
 PrepareClusInfoparams.tmpdatafolder = tmpdatafolder; % use this as a local directory (should be large enough to handle all sessions you want to combine)
+
 %% All dependencies you want to add (you may need to download these, all available via github)
 addpath(genpath(cd))
 
