@@ -73,7 +73,6 @@ for id = 1:size(Pairs,1)
     if ~all(MatchTable.MatchProb(tblidx)>param.ProbabilityThreshold)
         continue
     end
-
     UniqueID(Pairs(id,2)) = UniqueID(Pairs(id,1)); %Survived, assign
 
 end

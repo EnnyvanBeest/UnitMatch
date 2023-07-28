@@ -7,6 +7,7 @@ end
 ExtractFields({AllWVBParameters})
 waveidx = param.waveidx;
 Allchannelpos = param.channelpos;
+AllchannelCoord = param.Coordinates;
 SaveDir = param.SaveDir;
 maxdist = param.maxdist;
 
@@ -27,53 +28,97 @@ if length(DepthOnProbe) == length(recsesAll)/2
     DepthOnProbe = [DepthOnProbe DepthOnProbe]; %Stitched
 end
 DepthOnProbe = DepthOnProbe(Good_Idx);
+
 [X,Y]=meshgrid(recsesAll(Good_Idx));
 nclus = length(Good_Idx);
 ndays = length(unique(GoodRecSesID));
 SessionSwitch = arrayfun(@(X) find(GoodRecSesID==X,1,'first'),unique(GoodRecSesID),'Uni',0);
 SessionSwitch(cellfun(@isempty,SessionSwitch))=[];
 SessionSwitch = [cell2mat(SessionSwitch); nclus+1];
+drift = nan;
 
+% Save AUCs to help find best parameters
+disp('Computing location distances between pairs of units...')
+LocDist = sqrt((ProjectedLocation(1,:,1)'-ProjectedLocation(1,:,2)).^2 + ...
+    (ProjectedLocation(2,:,1)'-ProjectedLocation(2,:,2)).^2);
+
+
+SameIdx = logical(eye(nclus));
+WithinIdx = false(nclus,nclus);
+for did = 1:ndays
+    WithinIdx(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1) = true;
+end
+WithinIdx(LocDist>param.NeighbourDist) = false;
+labels = [ones(1,sum(SameIdx(:))), zeros(1,sum(WithinIdx(:)))];
+paramNames = {'waveformTimePointSim','spatialdecaySim','spatialdecayfitSim','AmplitudeSim','WVCorr','WavformMSE','WavformSim','CentroidDist','CentroidVar','CentroidDistRecentered','CentroidOverlord','TrajAngleSim','TrajDistSim','LocTrajectorySim'};
+AUC = nan(1,length(paramNames));
 %% Compute Metrics
 disp('Computing Metric similarity between pairs of units...')
 timercounter = tic;
-x1 = repmat(PeakTime(:,1),[1 numel(PeakTime(:,1))]);
-x2 = repmat(PeakTime(:,2),[1 numel(PeakTime(:,2))]);
-PeakTimeSim = abs(x1 - x2');
-%Normalize between 0 and 1 (values that make sense after testing, without having outliers influence this)
-PeakTimeSim =1-PeakTimeSim./quantile(PeakTimeSim(:),0.99);
-PeakTimeSim(PeakTimeSim<0)=0;
+% x1 = repmat(PeakTime(:,1),[1 numel(PeakTime(:,1))]);
+% x2 = repmat(PeakTime(:,2),[1 numel(PeakTime(:,2))]);
+% PeakTimeSim = abs(x1 - x2');
+% %Normalize between 0 and 1 (values that make sense after testing, without having outliers influence this)
+% PeakTimeSim =1-PeakTimeSim./quantile(PeakTimeSim(:),0.99);
+% PeakTimeSim(PeakTimeSim<0)=0;
 
-if any(ismember(Scores2Include,'waveformTimePointSim'))
-    % can't find much better for this one
-    waveformTimePointSim = nan(nclus,nclus);
-    for uid = 1:nclus
-        for uid2 = 1:nclus
-            waveformTimePointSim(uid,uid2) = sum(ismember(find(WaveIdx(uid,:,1)),find(WaveIdx(uid2,:,2))))./sum((WaveIdx(uid,:,1)));
-        end
-    end
-end
+% % can't find much better for this one
+% waveformTimePointSim = nan(nclus,nclus);
+% for uid = 1:nclus
+%     for uid2 = 1:nclus
+%         waveformTimePointSim(uid,uid2) = sum(ismember(find(WaveIdx(uid,:,1)),find(WaveIdx(uid2,:,2))))./sum((WaveIdx(uid,:,1)));
+%     end
+% end
+% 
+% scores = [waveformTimePointSim(SameIdx(:))', waveformTimePointSim(WithinIdx(:))'];
+% paramid = find(ismember(paramNames,'waveformTimePointSim'));
+% [~,~,~,AUC(paramid)] = perfcurve(labels,scores,1);
 
-if any(ismember(Scores2Include,'spatialdecaySim'))
-    x1 = repmat(spatialdecay(:,1),[1 numel(spatialdecay(:,1))]);
-    x2 = repmat(spatialdecay(:,2),[1 numel(spatialdecay(:,2))]);
-    spatialdecaySim = abs(x1 - x2');
-    % Make (more) normal
-    spatialdecaySim = sqrt(spatialdecaySim);
-    spatialdecaySim = 1-((spatialdecaySim-nanmin(spatialdecaySim(:)))./(quantile(spatialdecaySim(:),0.99)-nanmin(spatialdecaySim(:))));
-    spatialdecaySim(spatialdecaySim<0)=0;
-end
+% Spatial decay
+x1 = repmat(spatialdecay(:,1),[1 numel(spatialdecay(:,1))]);
+x2 = repmat(spatialdecay(:,2),[1 numel(spatialdecay(:,2))]);
+spatialdecaySim = abs(x1 - x2')./nanmean(cat(3,x1,x2'),3);
+% Make (more) normal
+spatialdecaySim = sqrt(spatialdecaySim);
+spatialdecaySim = 1-((spatialdecaySim-nanmin(spatialdecaySim(:)))./(quantile(spatialdecaySim(:),0.99)-nanmin(spatialdecaySim(:))));
+spatialdecaySim(spatialdecaySim<0)=0;
 
-if any(ismember(Scores2Include,'AmplitudeSim'))
-    % Ampitude difference
-    x1 = repmat(Amplitude(:,1),[1 numel(Amplitude(:,1))]);
-    x2 = repmat(Amplitude(:,2),[1 numel(Amplitude(:,2))]);
-    AmplitudeSim = abs(x1 - x2');
-    % Make (more) normal
-    AmplitudeSim = sqrt(AmplitudeSim);
-    AmplitudeSim = 1-((AmplitudeSim-nanmin(AmplitudeSim(:)))./(quantile(AmplitudeSim(:),.99)-nanmin(AmplitudeSim(:))));
-    AmplitudeSim(AmplitudeSim<0)=0;
-end
+scores = [spatialdecaySim(SameIdx(:))', spatialdecaySim(WithinIdx(:))'];
+paramid = find(ismember(paramNames,'spatialdecaySim'));
+[~,~,~,AUC(paramid)] = perfcurve(labels,scores,1);
+
+% spatial decay fit
+x1 = repmat(spatialdecayfit(:,1),[1 numel(spatialdecayfit(:,1))]);
+x2 = repmat(spatialdecayfit(:,2),[1 numel(spatialdecayfit(:,2))]);
+spatialdecayfitSim = abs(x1 - x2')./nanmean(cat(3,x1,x2'),3);
+% Remove extreme outliers
+spatialdecayfitSim(spatialdecayfitSim<0) = quantile(spatialdecayfitSim(:),0.9999);
+spatialdecayfitSim((spatialdecayfitSim)>quantile(spatialdecayfitSim(:),0.9999)) = quantile(spatialdecayfitSim(:),0.9999);
+% Make (more) normal
+spatialdecayfitSim = sqrt(spatialdecayfitSim);
+spatialdecayfitSim = 1-((spatialdecayfitSim-nanmin(spatialdecayfitSim(:)))./(quantile(spatialdecayfitSim(:),0.99)-nanmin(spatialdecayfitSim(:))));
+spatialdecayfitSim(spatialdecayfitSim<0 | isnan(spatialdecayfitSim))=0;
+
+
+scores = [spatialdecayfitSim(SameIdx(:))', spatialdecayfitSim(WithinIdx(:))'];
+paramid = find(ismember(paramNames,'spatialdecayfitSim'));
+[~,~,~,AUC(paramid)] = perfcurve(labels,scores,1);
+
+% Ampitude difference
+x1 = repmat(Amplitude(:,1),[1 numel(Amplitude(:,1))]);
+x2 = repmat(Amplitude(:,2),[1 numel(Amplitude(:,2))]);
+AmplitudeSim = abs(x1 - x2')./nanmean(abs(cat(3,x1,x2')),3);
+% Remove extreme outliers
+% AmplitudeSim((AmplitudeSim)>quantile(AmplitudeSim(:),0.9999)) = quantile(AmplitudeSim(:),0.9999);
+
+% Make (more) normal
+AmplitudeSim = sqrt(AmplitudeSim);
+AmplitudeSim = 1-((AmplitudeSim-nanmin(AmplitudeSim(:)))./(quantile(AmplitudeSim(:),.99)-nanmin(AmplitudeSim(:))));
+AmplitudeSim(AmplitudeSim<0)=0;
+
+scores = [AmplitudeSim(SameIdx(:))', AmplitudeSim(WithinIdx(:))'];
+paramid = find(ismember(paramNames,'AmplitudeSim'));
+[~,~,~,AUC(paramid)] = perfcurve(labels,scores,1);
 
 %% Waveform similarity
 timercounter = tic;
@@ -92,6 +137,9 @@ WVCorr = atanh(WVCorr);
 WVCorr = (WVCorr-quantile(WVCorr(:),0.005))./(quantile(WVCorr(:),0.995)-quantile(WVCorr(:),0.005)); %Give WVCorr a better chance
 WVCorr(WVCorr<0)=0;
 WVCorr(WVCorr>1)=1;
+scores = [WVCorr(SameIdx(:))', WVCorr(WithinIdx(:))'];
+paramid = find(ismember(paramNames,'WVCorr'));
+[x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
 
 
 ProjectedWaveformNorm = cat(3,x1,x2);
@@ -105,6 +153,9 @@ RawWVMSENorm = sqrt(RawWVMSE);
 WavformMSE = (RawWVMSENorm-nanmin(RawWVMSENorm(:)))./(quantile(RawWVMSENorm(:),0.99)-nanmin(RawWVMSENorm(:)));
 WavformMSE = 1-WavformMSE;
 WavformMSE(WavformMSE<0) = 0;
+scores = [WavformMSE(SameIdx(:))', WavformMSE(WithinIdx(:))'];
+paramid = find(ismember(paramNames,'WavformMSE'));
+[x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
 
 disp(['Calculating waveform similarity took ' num2str(round(toc(timercounter))) ' seconds for ' num2str(nclus) ' units'])
 figure('name','Waveform similarity measures')
@@ -133,6 +184,10 @@ colorbar
 makepretty
 
 WavformSim = (WVCorr+WavformMSE)/2;
+scores = [WavformSim(SameIdx(:))', WavformSim(WithinIdx(:))'];
+paramid = find(ismember(paramNames,'WavformSim'));
+[x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
+
 subplot(1,3,3)
 imagesc(WavformSim,[0.5 0.9]);
 title('Average Waveform scores')
@@ -144,95 +199,177 @@ arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[
 colormap(flipud(gray))
 colorbar
 makepretty
+
 %% Location differences between pairs of units: - This is done twice to account for large drift between sessions
-channelpos_AllCat = unique(cat(1,Allchannelpos{:}),'rows');
+channelpos_AllCat = unique(cat(1,AllchannelCoord{:}),'rows');
+
+%% Flip trajectory if necessary?
+% for which dimensions do we allow flipping?
+AllowFlipping = false(size(channelpos_AllCat,2),nclus); % Dimension x channel
+for uid = 1:nclus
+    if param.RunPyKSChronicStitched
+        channelpos = Allchannelpos{1};
+    else
+        channelpos = Allchannelpos{recsesGood(uid)};
+    end
+    if isnan(MaxChannel(uid,1))
+        continue
+    end
+    %Load channels
+    ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChannel(uid,1),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius); %Averaging over 10 channels helps with drift
+    Locs = channelpos(ChanIdx,:);
+    AllowFlipping(cell2mat(arrayfun(@(X) length(unique(Locs(:,X))),1:size(Locs,2),'Uni',0))<=2,:) = true;
+end
+FlipDim = find(any(AllowFlipping,2));
+
+% Flip trajectory for flip dimensions
+ProjectedLocationPerTPAllFlips = nan(size(ProjectedLocationPerTP,1),size(ProjectedLocationPerTP,2),size(ProjectedLocationPerTP,3),size(ProjectedLocationPerTP,4),length(FlipDim));
+for flipid = 1:length(FlipDim)
+    tmpdat = squeeze(ProjectedLocationPerTP(FlipDim(flipid),:,:,:));
+    range = cat(2,nanmin(tmpdat,[],2), nanmax(tmpdat,[],2));
+
+    % change values
+    newvals = nanmin(tmpdat,[],2) + (nanmax(tmpdat,[],2) - tmpdat);
+    ProjectedLocationPerTPAllFlips(:,:,:,:,flipid) = ProjectedLocationPerTP;
+    ProjectedLocationPerTPAllFlips(FlipDim(flipid),:,:,:,flipid) = newvals;
+end
+
+ProjectedLocationPerTPAllFlips = cat(5,ProjectedLocationPerTP,ProjectedLocationPerTPAllFlips); % add them all together
 
 flag=0;
 while flag<2
     timercounter = tic;
     figure('name','Projection locations all units')
-    scatter(channelpos_AllCat(:,1),channelpos_AllCat(:,2),10,[0 0 0],'filled')
+    scatter3(channelpos_AllCat(:,3),channelpos_AllCat(:,1),channelpos_AllCat(:,2),10,[0 0 0],'filled')
     hold on
-    scatter(nanmean(ProjectedLocation(1,:,:),3),nanmean(ProjectedLocation(2,:,:),3),10,GoodRecSesID)
+    scatter3(nanmean(ProjectedLocation(3,:,:),3),nanmean(ProjectedLocation(1,:,:),3),nanmean(ProjectedLocation(2,:,:),3),10,GoodRecSesID)
     colormap jet
+%     set(gca,'CameraPosition',[-1.9009e+04 -3.7880e+04 1.0753e+04])
     makepretty
-    xlabel('XPos (um)')
     ylabel('YPos (um)')
-    xlim([min(channelpos_AllCat(:,1))-50 max(channelpos_AllCat(:,1))+50])
+    zlabel('Depth (um)')
+    xlabel('XPos (um)')
+
+%     xlim([min(channelpos_AllCat(:,1))-50 max(channelpos_AllCat(:,1))+50])
     drawnow
     saveas(gcf,fullfile(SaveDir,'ProjectedLocation.fig'))
     saveas(gcf,fullfile(SaveDir,'ProjectedLocation.bmp'))
 
-    disp('Computing location distances between pairs of units...')
-    LocDist = sqrt((ProjectedLocation(1,:,1)'-ProjectedLocation(1,:,2)).^2 + ...
-        (ProjectedLocation(2,:,1)'-ProjectedLocation(2,:,2)).^2);
-    LocDist = 1-((LocDist-nanmin(LocDist(:)))./(maxdist-nanmin(LocDist(:))));
-    LocDist(LocDist<0)=0;
-
     disp('Computing location distances between pairs of units, per individual time point of the waveform...')
     % Difference in distance between centroids of two halfs of the recording
-    x1 = repmat(squeeze(ProjectedLocationPerTP(:,:,waveidx,1)),[1 1 1 size(ProjectedLocationPerTP,2)]);
-    x2 = permute(repmat(squeeze(ProjectedLocationPerTP(:,:,waveidx,2)),[1 1 1 size(ProjectedLocationPerTP,2)]),[1 4 3 2]);
-    EuclDist = squeeze(sqrt(nansum((x1-x2).^2,1))); % Euclidean distance
-    w = squeeze(isnan(abs(x1(1,:,:,:)-x2(1,:,:,:))));
+
+    x1 = repmat(squeeze(ProjectedLocationPerTPAllFlips(:,:,waveidx,1,:)),[1 1 1 1 nclus]);
+    x2 = permute(repmat(squeeze(ProjectedLocationPerTPAllFlips(:,:,waveidx,2,:)),[1 1 1 1 nclus]),[1 5 3 4 2]); %Switch the two nclus around
+    EuclDist = squeeze(vecnorm(x1-x2,2,1)); % Euclidean distance
+    w = squeeze(isnan(abs(x1(1,:,:,:,:)-x2(1,:,:,:,:))));
     EuclDist(w) = nan;
     % Average location
-    CentroidDist = squeeze(nanmean(EuclDist,2));%
+    CentroidDist = squeeze(nanmin(squeeze(nanmean(EuclDist,2)),[],2));%
+
+
     % Normalize each of them from 0 to 1, 1 being the 'best'
     % If distance > maxdist micron it will never be the same unit:
     CentroidDist = 1-((CentroidDist-nanmin(CentroidDist(:)))./(maxdist-nanmin(CentroidDist(:)))); %Average difference
     CentroidDist(CentroidDist<0)=0;
     CentroidDist(isnan(CentroidDist))=0;
 
+    scores = [CentroidDist(SameIdx(:))', CentroidDist(WithinIdx(:))'];
+    paramid = find(ismember(paramNames,'CentroidDist'));
+    [x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
+
+
     % Variance in error, corrected by average error. This captures whether
     % the trajectory is consistenly separate
-    CentroidVar = squeeze(nanvar(EuclDist,[],2));%./nanmean(EuclDist,2)+nanmean(EuclDist,2));
+    CentroidVar = squeeze(min(squeeze(nanvar(EuclDist,[],2)),[],2));%./nanmean(EuclDist,2)+nanmean(EuclDist,2));
     CentroidVar = sqrt(CentroidVar);
     CentroidVar = 1-((CentroidVar-nanmin(CentroidVar(:)))./(quantile(CentroidVar(:),0.99)-nanmin(CentroidVar(:)))); %Average difference
     CentroidVar(CentroidVar<0) = 0;
     CentroidVar(isnan(CentroidVar)) = 0;
+    scores = [CentroidVar(SameIdx(:))', CentroidVar(WithinIdx(:))'];
+    paramid = find(ismember(paramNames,'CentroidVar'));
+    [x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
     % @Célian suggestion: recenter to 0 first, then calculate the
     % difference in distance (to account for uncorrected drift)
-    ProjectedLocationPerTPRecentered = permute(permute(ProjectedLocationPerTP,[1,2,4,3]) - ProjectedLocation,[1,2,4,3]);
-    x1 = repmat(squeeze(ProjectedLocationPerTPRecentered(:,:,waveidx,1)),[1 1 1 size(ProjectedLocationPerTPRecentered,2)]);
-    x2 = permute(repmat(squeeze(ProjectedLocationPerTPRecentered(:,:,waveidx,2)),[1 1 1 size(ProjectedLocationPerTPRecentered,2)]),[1 4 3 2]);
-    EuclDist2 = squeeze(sqrt(nansum((x1-x2).^2,1))); % Euclidean distance
-    w = squeeze(isnan(abs(x1(1,:,:,:)-x2(1,:,:,:))));
+    %     ProjectedLocationPerTPRecentered = permute(permute(ProjectedLocationPerTP,[1,2,4,3]) - ProjectedLocation,[1,2,4,3]);
+    %     x1 = repmat(squeeze(ProjectedLocationPerTPRecentered(:,:,waveidx,1)),[1 1 1 size(ProjectedLocationPerTPRecentered,2)]);
+    %     x2 = permute(repmat(squeeze(ProjectedLocationPerTPRecentered(:,:,waveidx,2)),[1 1 1 size(ProjectedLocationPerTPRecentered,2)]),[1 4 3 2]);
+    %     EuclDist2 = squeeze(sqrt(nansum((x1-x2).^2,1))); % Euclidean distance
+    %     w = squeeze(isnan(abs(x1(1,:,:,:)-x2(1,:,:,:))));
+    %     EuclDist2(w) = nan;
+    ProjectedLocationPerTPRecentered = permute(permute(ProjectedLocationPerTPAllFlips,[1,2,4,3,5]) - ProjectedLocation,[1,2,4,3,5]);
+    x1 = repmat(squeeze(ProjectedLocationPerTPRecentered(:,:,waveidx,1,:)),[1 1 1 1 nclus]);
+    x2 = permute(repmat(squeeze(ProjectedLocationPerTPRecentered(:,:,waveidx,2,:)),[1 1 1 1 nclus]),[1 5 3 4 2]); %switch nclus around
+    EuclDist2 = squeeze(vecnorm(x1-x2,2,1)); % Euclidean distance
+    w = squeeze(isnan(abs(x1(1,:,:,:,:)-x2(1,:,:,:,:))));
     EuclDist2(w) = nan;
     % Average location
-    CentroidDistRecentered = squeeze(nanmean(EuclDist2,2));%
-    CentroidDistRecentered = 1-(CentroidDistRecentered-nanmin(CentroidDistRecentered(:)))./(nanmax(CentroidDistRecentered(:))-nanmin(CentroidDistRecentered(:)));
-    
+    CentroidDistRecentered = squeeze(nanmin(nanmean(EuclDist2,2),[],3));% minimum across flips
+    CentroidDistRecentered = 1-(CentroidDistRecentered-nanmin(CentroidDistRecentered(:)))./(quantile(CentroidDistRecentered(:),0.99)-nanmin(CentroidDistRecentered(:)));
+    CentroidDistRecentered(CentroidDistRecentered<0|isnan(CentroidDistRecentered))=0;
+    scores = [CentroidDistRecentered(SameIdx(:))', CentroidDistRecentered(WithinIdx(:))'];
+    paramid = find(ismember(paramNames,'CentroidDistRecentered'));
+    [x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
+
+
+
     CentroidOverlord = (CentroidDistRecentered+CentroidVar)/2;
+    scores = [CentroidOverlord(SameIdx(:))', CentroidOverlord(WithinIdx(:))'];
+    paramid = find(ismember(paramNames,'CentroidOverlord'));
+    [x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
 
     disp('Computing location angle (direction) differences between pairs of units, per individual time point of the waveform...')
-    x1 = ProjectedLocationPerTP(:,:,waveidx(2):waveidx(end),:);
-    x2 = ProjectedLocationPerTP(:,:,waveidx(1):waveidx(end-1),:);
+
+    x1 = ProjectedLocationPerTPAllFlips(:,:,waveidx(2):waveidx(end),:,:);
+    x2 = ProjectedLocationPerTPAllFlips(:,:,waveidx(1):waveidx(end-1),:,:);
     % The distance traveled (Eucledian)
-    TrajDist = sqrt(squeeze(nansum((x1-x2).^2,1)));
+    TrajDist = squeeze(vecnorm(x1-x2,2,1));
     % Difference in angle between two time points
-    LocAngle = squeeze(atan(abs(x1(1,:,:,:)-x2(1,:,:,:))./abs(x1(2,:,:,:)-x2(2,:,:,:))));
+    LocAngle = nan(size(TrajDist,1),size(TrajDist,2),size(TrajDist,3),size(TrajDist,4),0);
+    countid=1;
+    for dimid1=1:size(ProjectedLocationPerTPAllFlips,1)
+        for dimid2=2:size(ProjectedLocationPerTPAllFlips,1)
+            if dimid2<=dimid1
+                continue
+            end
+            LocAngle(:,:,:,:,countid) = squeeze(atan(abs(x1(dimid1,:,:,:,:)-x2(dimid1,:,:,:,:))./abs(x1(dimid2,:,:,:,:)-x2(dimid2,:,:,:,:))));
+            countid = countid + 1;
+        end
+    end
+    % Sum the angles across dimensions
+    LocAngle = nansum(LocAngle,5);
+
     % Actually just taking the weighted sum of angles is better
-    x1 = repmat(LocAngle(:,:,1),[1 1 nclus]);
-    x2 = permute(repmat(LocAngle(:,:,2),[1 1 nclus]),[3 2 1]); %
+    x1 = repmat(squeeze(LocAngle(:,:,1,:)),[1 1 1 nclus]);
+    x2 = permute(repmat(squeeze(LocAngle(:,:,2,1)),[1 1 1 nclus]),[4 2 3 1]); %switch nclus around
     AngleSubtraction = abs(x1-x2);
-    AngleSubtraction(isnan(abs(x1-x2))) = 0.5*pi; %punish points with nan
-    TrajAngleSim = squeeze(nansum(AngleSubtraction,2)); % sum of angles
+    AngleSubtraction(isnan(abs(x1-x2))) = 2*pi; %punish points with nan
+    TrajAngleSim = squeeze(nanmin(nansum(AngleSubtraction,2),[],3)); % sum of angles, minimum across flips
     TrajAngleSim = 1-((TrajAngleSim-nanmin(TrajAngleSim(:)))./(quantile(TrajAngleSim(:),0.99)-nanmin(TrajAngleSim(:))));
     TrajAngleSim(TrajAngleSim<0 | isnan(TrajAngleSim))=0;
+    scores = [TrajAngleSim(SameIdx(:))', TrajAngleSim(WithinIdx(:))'];
+    paramid = find(ismember(paramNames,'TrajAngleSim'));
+    [x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
 
     % Continue distance traveled
-    x1 = repmat(TrajDist(:,:,1),[1 1 nclus]);
-    x2 = permute(repmat(TrajDist(:,:,2),[1 1 nclus]),[3 2 1]); %
+    x1 = repmat(squeeze(TrajDist(:,:,1,:)),[1 1 1 nclus]);
+    x2 = permute(repmat(squeeze(TrajDist(:,:,2,:)),[1 1 1 nclus]),[4 2 3 1]); % switch nclus around
     % Distance similarity (subtract for each pair of units)
     TrajDistCompared = abs(x1-x2);%
-    TrajDistSim = squeeze(nansum(TrajDistCompared,2));
+    TrajDistSim = squeeze(nanmin(nansum(TrajDistCompared,2),[],3)); %and take minimum across flips
     TrajDistSim = sqrt(TrajDistSim); % Make more normal
     TrajDistSim = 1-((TrajDistSim-nanmin(TrajDistSim(:)))./(quantile(TrajDistSim(:),0.99)-nanmin(TrajDistSim(:))));
+    TrajDistSim(TrajDistSim<0 | isnan(TrajDistSim))=0;
+    scores = [TrajDistSim(SameIdx(:))', TrajDistSim(WithinIdx(:))'];
+    paramid = find(ismember(paramNames,'TrajDistSim'));
+    [x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
 
 
     LocTrajectorySim = (TrajAngleSim+TrajDistSim)./2; % Trajectory Similarity is sum of distance + sum of angles
     LocTrajectorySim = (LocTrajectorySim-nanmin(LocTrajectorySim(:))./(quantile(LocTrajectorySim(:),0.99)-nanmin(LocTrajectorySim(:))));
+    scores = [LocTrajectorySim(SameIdx(:))', LocTrajectorySim(WithinIdx(:))'];
+    paramid = find(ismember(paramNames,'LocTrajectorySim'));
+    [x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
+
     %
     figure('name','Distance Measures')
     subplot(5,2,1)
@@ -312,7 +449,7 @@ while flag<2
     xlabel('Score')
     makepretty
 
-     subplot(5,2,9)
+    subplot(5,2,9)
     imagesc(CentroidDistRecentered);
     title('CentroidDistRecentered')
     xlabel('Unit_i')
@@ -334,7 +471,7 @@ while flag<2
     disp(['Extracting projected location took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])
 
     % Average EuclDist
-    EuclDist = squeeze(nanmean(EuclDist,2));
+    EuclDist = squeeze(nanmin(nanmean(EuclDist,2),[],3));
     % Plotting order (sort units based on distance)
     [~,SortingOrder] = arrayfun(@(X) sort(EuclDist(1,SessionSwitch(X):SessionSwitch(X+1)-1)),1:ndays,'Uni',0);
     SortingOrder = arrayfun(@(X) squeeze(SortingOrder{X}+SessionSwitch(X)-1),1:ndays,'Uni',0);
@@ -403,8 +540,8 @@ while flag<2
 
     disp('Computing total score...')
     timercounter = tic;
-%     priorMatch = 1-((nclus+nclus.*sqrt(ndays-1))./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days)
-    priorMatch = 1-((nclus+nclus.*sqrt(ndays-1))./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days)
+    %     priorMatch = 1-((nclus+nclus.*sqrt(ndays-1))./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days)
+    priorMatch = 1-((nclus+nclus.*sqrt(ndays-1)*param.ExpectMatches)./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days)
 
     leaveoutmatches = false(nclus,nclus,length(Scores2Include)); %Used later
     figure;
@@ -474,7 +611,7 @@ while flag<2
         set(ax(end,sid),'XTick',0.5,'XTickLabel',Scores2Include{sid},'XTickLabelRotation',45)
     end
     makepretty
-   
+
     figure('name','TotalScore')
     subplot(2,2,1)
     imagesc(TotalScore(SortingOrder,SortingOrder),[0 length(Scores2Include)]);
@@ -534,14 +671,14 @@ while flag<2
     % Take centroid dist > maxdist out
     tmp(EuclDist>param.NeighbourDist)=nan;
     % Take within session out
-    for did = 1:ndays       
+    for did = 1:ndays
         tmp(SessionSwitch(did):SessionSwitch(did+1),SessionSwitch(did):SessionSwitch(did+1))=nan;
     end
     hb = histcounts(tmp(~isnan(tmp(:))),0:0.1:length(Scores2Include))./sum(tmp(~isnan(tmp(:))));
     hd = histcounts(tmp(tmp(:)>ThrsOpt),0:0.1:length(Scores2Include))./sum(tmp(:)>ThrsOpt);
     hnd = histcounts(tmp(tmp(:)<=ThrsOpt),0:0.1:length(Scores2Include))./sum(tmp(:)<=ThrsOpt);
     hold on
-    plot(0.05:0.1:length(Scores2Include)-0.05,hd,'-','color',[0 0.5 0]); hold on; plot(0.05:0.1:length(Scores2Include)-0.05,hnd,'k-'); 
+    plot(0.05:0.1:length(Scores2Include)-0.05,hd,'-','color',[0 0.5 0]); hold on; plot(0.05:0.1:length(Scores2Include)-0.05,hnd,'k-');
     xlabel('TotalScore')
     ylabel('Proportion|Group')
     makepretty
@@ -551,7 +688,7 @@ while flag<2
     saveas(gcf,fullfile(SaveDir,'TotalScore.fig'))
     saveas(gcf,fullfile(SaveDir,'TotalScore.bmp'))
 
-  
+
     %% three ways to define candidate scores
     % Total score larger than threshold
     CandidatePairs = TotalScore>ThrsOpt;%
@@ -594,7 +731,9 @@ assignin('caller','ProjectedLocationPerTP',ProjectedLocationPerTP)
 assignin('caller','ProjectedLocation',ProjectedLocation)
 assignin('caller','EuclDist',EuclDist)
 assignin('caller','SortingOrder',SortingOrder)
-
+AUCStruct.AUC = AUC;
+AUCStruct.ParamNames = paramNames;
+save(fullfile(SaveDir,'AUC.mat'),'AUCStruct')
 return
 if 0 % THis can be used to look at some example projections
     % Find all pairs
@@ -607,17 +746,17 @@ if 0 % THis can be used to look at some example projections
     Pairs = unique(Pairs,'rows');
     Pairs(Pairs(:,1) == Pairs(:,2),:)=[];
     %% Plot
-    Pairs = [2,276,4] % Example
-    cols =  jet(length(Pairs));
+    Pairs = [10,450,11] % Example
+    cols =  [0 0 0; 0 0.7 0; 1 0 0];
 
     figure
-    subplot(5,1,1:3)
+    subplot(1,3,3)
     for uidx=1:length(Pairs)
         uid = Pairs(uidx);
         channelpos = Allchannelpos{recsesGood(uid)};
         % Load raw data
         try
-            spikeMap = readNPY(fullfile(param.KSDir{recsesGood(uid)},'RawWaveforms',['Unit' num2str(OriginalClusterIDs(uid)+1) '_RawSpikes.npy'])); %0-indexed to 1-indexed
+            spikeMap = readNPY(fullfile(param.KSDir{recsesGood(uid)},'RawWaveforms',['Unit' num2str(OriginalClusterIDs(Good_Idx(uid))) '_RawSpikes.npy'])); %0-indexed
         catch
             keyboard
         end
@@ -631,21 +770,24 @@ if 0 % THis can be used to look at some example projections
 
         scatter(Locs(:,1),Locs(:,2),20,[0.5 0.5 0.5],'filled')
         hold on
-        scatter(ProjectedLocation(1,uid,1),ProjectedLocation(2,uid,1),20,cols(uidx,:),'filled')
 
         takesamples = param.waveidx;
         takesamples = unique(takesamples(~isnan(takesamples)));
         h(1) = plot(squeeze(ProjectedLocationPerTP(1,uid,takesamples,1)),squeeze(ProjectedLocationPerTP(2,uid,takesamples,1)),'-','color',cols(uidx,:));
         scatter(squeeze(ProjectedLocationPerTP(1,uid,takesamples,1)),squeeze(ProjectedLocationPerTP(2,uid,takesamples,1)),30,takesamples,'filled')
-    end
-    colormap(hot)
+            plot(ProjectedLocation(1,uid,1),ProjectedLocation(2,uid,1),'*','MarkerSize',12,'color',cols(uidx,:))
 
-    xlabel('Xpos (um)')
-    ylabel('Ypos (um)')
-    xlims = [ProjectedLocation(1,uid,1)-30 ProjectedLocation(1,uid,1)+30];
-    ylims = [ProjectedLocation(2,uid,1)-30 ProjectedLocation(2,uid,1)+30];
+    end
+    colormap(flipud(hot))
+
+    xlabel('Xpos (\mum)')
+    ylabel('Ypos (\mum)')
+    xlims = [min(ProjectedLocation(1,Pairs,1))-30 max(ProjectedLocation(1,Pairs,1))+30];
+    ylims = [min(ProjectedLocation(2,Pairs,1))-15 max(ProjectedLocation(2,Pairs,1))+5];
+    ylabel('')
     set(gca,'xlim',xlims,'ylim',ylims)
     axis square
+    hpos = get(gca,'Position')
     %     legend([h(1),h(2)],{['Unit ' num2str(uid)],['Unit ' num2str(uid2)]})
     hc= colorbar;
     try
@@ -654,9 +796,93 @@ if 0 % THis can be used to look at some example projections
         disp(ME)
         keyboard
     end
+    title('Centroid trajectory')
+    set(gca,'Position',hpos);
     makepretty
 
-    subplot(5,1,4)
+
+
+    subplot(1,3,2)
+    for uidx=1:length(Pairs)
+        uid = Pairs(uidx);
+
+        hold on
+        plot(-(1/30)*(41-(1:size(ProjectedWaveform,1))),squeeze(ProjectedWaveform(:,uid,1)),'color',cols(uidx,:))
+    end
+    axis square
+    xlabel('Time (ms)')
+    ylabel('\muV')
+    makepretty
+    title('Average Waveforms')
+
+%     subplot(1,3,2)
+%     for uidx=1:length(Pairs)
+%         uid = Pairs(uidx);
+%         channelpos = Allchannelpos{recsesGood(uid)};
+%         % Load raw data
+%         try
+%             spikeMap = readNPY(fullfile(param.KSDir{recsesGood(uid)},'RawWaveforms',['Unit' num2str(OriginalClusterIDs(Good_Idx(uid))) '_RawSpikes.npy'])); %0-indexed
+%         catch
+%             keyboard
+%         end
+%         % Detrending
+%         spikeMap = permute(spikeMap,[2,1,3]); %detrend works over columns
+%         spikeMap = detrend(spikeMap,1); % Detrend (linearly) to be on the safe side. OVER TIME!
+%         spikeMap = permute(spikeMap,[2,1,3]);  % Put back in order
+%         %Load channels
+%         ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChannel(uid,1),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius); %Averaging over 10 channels helps with drift
+%         Locs = channelpos(ChanIdx,:);
+% 
+%         scatter(Locs(:,1),Locs(:,2),20,[0.5 0.5 0.5],'filled')
+%         hold on
+%         scatter(ProjectedLocation(1,uid,1),ProjectedLocation(2,uid,1),20,cols(uidx,:),'filled')
+%         plot(ProjectedLocation(1,uid,1)+0.1*[1:size(ProjectedWaveform,1)],ProjectedLocation(2,uid,1)+0.1*ProjectedWaveform(:,uid,1),'color',cols(uidx,:))
+%     end
+% 
+%     xlabel('Xpos (\mum)')
+%     ylabel('')
+%     set(gca,'xlim',xlims,'ylim',ylims,'YTickLabel',[])
+% 
+% 
+%     axis square
+%     title('Average waveforms')
+%     makepretty
+
+    subplot(1,3,1)
+    for uidx=1:length(Pairs)
+        uid = Pairs(uidx);
+        channelpos = Allchannelpos{recsesGood(uid)};
+        % Load raw data
+        try
+            spikeMap = readNPY(fullfile(param.KSDir{recsesGood(uid)},'RawWaveforms',['Unit' num2str(OriginalClusterIDs(Good_Idx(uid))) '_RawSpikes.npy'])); %0-indexed
+        catch
+            keyboard
+        end
+        % Detrending
+        spikeMap = permute(spikeMap,[2,1,3]); %detrend works over columns
+        spikeMap = detrend(spikeMap,1); % Detrend (linearly) to be on the safe side. OVER TIME!
+        spikeMap = permute(spikeMap,[2,1,3]);  % Put back in order
+        %Load channels
+        ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChannel(uid,1),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius); %Averaging over 10 channels helps with drift
+        Locs = channelpos(ChanIdx,:);
+
+        scatter(Locs(:,1),Locs(:,2),20,[0.5 0.5 0.5],'filled')
+        hold on
+        for chanid = 1:length(ChanIdx)
+            plot(Locs(chanid,1)+0.1*[1:size(ProjectedWaveform,1)],Locs(chanid,2)+0.1*spikeMap(:,ChanIdx(chanid),1),'color',cols(uidx,:))
+        end
+    end
+
+    xlabel('Xpos (\mum)')
+    ylabel('Ypos (\mum)')
+    set(gca,'xlim',xlims,'ylim',ylims)
+    axis square
+    title('all waveforms')
+    makepretty
+
+
+    figure
+    subplot(2,1,1)
     for uid = 2:length(Pairs)
         tmp = sqrt(nansum((squeeze([ProjectedLocationPerTP(1,Pairs(1),param.waveidx,1),ProjectedLocationPerTP(2,Pairs(1),param.waveidx,1)])-squeeze([ProjectedLocationPerTP(1,Pairs(uid),param.waveidx,1),ProjectedLocationPerTP(2,Pairs(uid),param.waveidx,1)])).^2,1));
         tmp(tmp==0)=nan; % =nan
@@ -667,23 +893,19 @@ if 0 % THis can be used to look at some example projections
     makepretty
 
 
-    subplot(5,1,5)
+    subplot(2,1,2)
     for uid = 2:length(Pairs)
-        plot(param.waveidx(2:end),squeeze(AngleSubtraction(Pairs(1),:,Pairs(uid))),'|','color',cols(uid,:)) 
+        plot(param.waveidx(2:end),squeeze(AngleSubtraction(Pairs(1),:,Pairs(uid))),'|','color',cols(uid,:))
         hold on
     end
     ylabel('\Deltad_i_j')
     makepretty
 
-    figure
-    for uidx=1:length(Pairs)
-        uid = Pairs(uidx);
-        
-        hold on
-        plot(squeeze(ProjectedWaveform(:,uid,1)),'color',cols(uidx,:))
-     end
 
-     %% 
-     
+    %% Draw at the different channels
+
+
+
+
 
 end

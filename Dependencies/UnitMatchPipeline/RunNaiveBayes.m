@@ -1,8 +1,6 @@
 function [MatchProbability,label,Tbl,BestMdl] = RunNaiveBayes(Predictors,TotalScore,Scores2Include,clusinfo,param,SortingOrder,EuclDist)
 
 %% Extract parameters
-FullSetParameters = {'AmplitudeSim','WVCorr','WavformMSE','TrajAngleSim','TrajDistSim','spatialdecaySim','CentroidDist','CentroidVar'};
-
 if param.GoodUnitsOnly
     Good_Idx = find(clusinfo.Good_ID); %Only care about good units at this point
 else
@@ -11,8 +9,6 @@ else
 
 end
 GoodRecSesID = clusinfo.RecSesID(Good_Idx);
-OriginalClusterIDs = clusinfo.cluster_id;
-
 recsesAll = clusinfo.RecSesID;
 recsesGood = recsesAll(Good_Idx);
 [X,Y]=meshgrid(recsesAll(Good_Idx));
@@ -26,7 +22,7 @@ SessionSwitch = [cell2mat(SessionSwitch); nclus+1];
 IncludeThesePairs = find(EuclDist<param.maxdist);
 % Prepare a set INCLUDING the cross-validated self-scores, otherwise the probability
 % distributions are just weird
-priorMatch = 1-((nclus+nclus.*sqrt(ndays-1))./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days)
+priorMatch = 1-((nclus+nclus.*sqrt(ndays-1)*param.ExpectMatches)./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days)
 % priorMatch = 1-(nclus*ndays)./(nclus*nclus); %Now use the actual expected prior for bayes'
 ThrsOpt = quantile(TotalScore(IncludeThesePairs),priorMatch);
 CandidatePairs = TotalScore>ThrsOpt;% 
@@ -53,13 +49,11 @@ global stepsize
 % Usually this means there's no variance in the match distribution
 % (which in a way is great). Create some small variance
 flag = 0;
-npairs = 0;
 MinLoss=1;
 MaxPerf = [0 0];
-npairslatest = 0;
 runid = 0;
 % Priors = [0.5 0.5];
-priorMatch = 1-((nclus+nclus.*sqrt(ndays-1))./nclus^2); %Punish multiple days (unlikely to find as many matches after a few days) %for naive bayes
+priorMatch = 1-((nclus+nclus.*sqrt(ndays-1)*param.ExpectMatches)./nclus^2); %Punish multiple days (unlikely to find as many matches after a few days) %for naive bayes
 Priors = [priorMatch 1-priorMatch];
 BestMdl = [];
 Tbl = array2table(reshape(Predictors,[],size(Predictors,3)),'VariableNames',Scores2Include); %All parameters

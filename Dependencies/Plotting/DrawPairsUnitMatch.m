@@ -2,11 +2,12 @@ function DrawPairsUnitMatch(SaveDir,DrawBlind)
 if nargin<2
     DrawBlind = 0;
 end
+Redo = 0;
 TmpFile = matfile(fullfile(SaveDir,'UnitMatch.mat')); % Access saved file
 UMparam = TmpFile.UMparam; % Extract parameters
 MatchTable = TmpFile.MatchTable; % Load Matchtable
 try
-AllSessionCorrelations = TmpFile.AllSessionCorrelations;
+    AllSessionCorrelations = TmpFile.AllSessionCorrelations;
 catch ME
     disp('Run ComputeFunctionalScores first')
     return
@@ -64,29 +65,51 @@ if UMparam.RunPyKSChronicStitched
     Pairs = cat(2,Pairs,arrayfun(@(X) PairsPKS(X,:),1:length(PairsPKS),'Uni',0));% Add these for plotting - inspection
 end
 
-if size(Pairs,2)>UMparam.drawmax
-    DrawPairs = randsample(1:size(Pairs,2),UMparam.drawmax,'false');
-else
-    DrawPairs = 1:size(Pairs,2);
-end
 if DrawBlind
     % Keep length 2 for each pair
-    Pairs = cellfun(@(X) X(1:2),Pairs,'Uni',0);
-    % Need to add some low probabilities, but around same location
-    EucledianDistance = reshape(MatchTable.EucledianDistance,nclus,nclus);
-    [r,c] = find(label==0 & PyKSLabel == 0 & EucledianDistance < UMparam.NeighbourDist);
-    LowProb = cat(2,r,c);
-    LowProb(r==c,:) = [];
-    LowProb = sort(LowProb,2,'ascend');
-    LowProb = unique(LowProb,'stable','rows');
-    % Match number of pairs for equal set
-    npairs = length(Pairs);
-    LowProb = LowProb(randsample(length(LowProb),npairs,0),:);
-    Pairs = cat(2,Pairs,arrayfun(@(X) LowProb(X,:),1:length(LowProb),'Uni',0));
-    % Randomly shuffle Pairs so we don't have matches grouped together
-    Pairs = Pairs(randsample(length(Pairs),length(Pairs),0));
+    tmptbl = dir(fullfile(UMparam.SaveDir,'BlindFigures','BlindTable.mat'));
+
+    if ~Redo &&  ~isempty(tmptbl)
+        tmptbl = load(fullfile(tmptbl(1).folder,tmptbl(1).name));
+        Pair1 = cell2mat(arrayfun(@(X) find(ismember(OriID,tmptbl.tbl.ClusID1(X)) & ismember(recses,tmptbl.tbl.RecID1(X))),1:height(tmptbl.tbl),'Uni',0));
+        Pair2 = cell2mat(arrayfun(@(X) find(ismember(OriID,tmptbl.tbl.ClusID2(X)) & ismember(recses,tmptbl.tbl.RecID2(X))),1:height(tmptbl.tbl),'Uni',0));
+        Pairs = arrayfun(@(X) [Pair1(X) Pair2(X)],1:length(Pair1),'Uni',0);
+    else
+        Pairs = cellfun(@(X) X(1:2),Pairs,'Uni',0);
+        % Need to add some low probabilities, but around same location
+        EucledianDistance = reshape(MatchTable.EucledianDistance,nclus,nclus);
+        [r,c] = find(label==0 & PyKSLabel == 0 & EucledianDistance < UMparam.NeighbourDist);
+        LowProb = cat(2,r,c);
+        LowProb(r==c,:) = [];
+        LowProb = sort(LowProb,2,'ascend');
+        LowProb = unique(LowProb,'stable','rows');
+        % Match number of pairs for equal set
+        npairs = length(Pairs);
+        LowProb = LowProb(randsample(length(LowProb),npairs,0),:);
+        Pairs = cat(2,Pairs,arrayfun(@(X) LowProb(X,:),1:length(LowProb),'Uni',0));
+
+        % add some diagonal (i=j within)
+        addIisJ = randsample(nclus,round(0.1*npairs),0);
+        addIisJ = repmat(addIisJ,1,2);
+        Pairs = cat(2,Pairs,arrayfun(@(X) addIisJ(X,:),1:length(addIisJ),'Uni',0));
+        % Randomly shuffle Pairs so we don't have matches grouped together and
+        % different order for different runs
+        Pairs = Pairs(randsample(length(Pairs),length(Pairs),0));
+
+    end
+
+    if size(Pairs,2)>UMparam.drawmax
+        DrawPairs = randsample(1:size(Pairs,2),UMparam.drawmax,'false');
+    else
+        DrawPairs = 1:size(Pairs,2);
+    end
     PlotTheseUnits_UM_Blind(Pairs(DrawPairs),MatchTable,UniqueIDConversion,WaveformInfo,AllSessionCorrelations,UMparam)
 else
+    if size(Pairs,2)>UMparam.drawmax
+        DrawPairs = randsample(1:size(Pairs,2),UMparam.drawmax,'false');
+    else
+        DrawPairs = 1:size(Pairs,2);
+    end
     PlotTheseUnits_UM(Pairs(DrawPairs),MatchTable,UniqueIDConversion,WaveformInfo,AllSessionCorrelations,UMparam)
 end
 

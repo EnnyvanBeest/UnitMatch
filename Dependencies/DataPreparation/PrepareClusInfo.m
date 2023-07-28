@@ -33,6 +33,7 @@ if ~iscell(KiloSortPaths) %isstruct(KiloSortPaths) || isfield(KiloSortPaths(1),'
     error('This is not a cell... give correct input please')
 end
 
+
 try
     if nargin<2
         disp('No params given. Use default - although this is not advised...')
@@ -80,6 +81,7 @@ for subsesid=1:length(KiloSortPaths)
     %% initialize for new round
     Good_ID = [];
     Shank=[];
+    ProbeAll = [];
     recsesAll = [];
     channel = [];
     Label = [];
@@ -87,6 +89,12 @@ for subsesid=1:length(KiloSortPaths)
     AllUniqueTemplates = [];
     cluster_id = [];
     recses = [];
+    if any(strfind(KiloSortPaths{subsesid},'Probe'))
+        probeid = str2num(KiloSortPaths{subsesid}(strfind(KiloSortPaths{subsesid},'Probe')+5));
+    else
+        disp('Probe ID unknown')
+        probeid = 0;
+    end
 
     %% save data paths information
     if Params.RunPyKSChronicStitched %CALL THIS STITCHED --> Only works when using RunPyKS2_FromMatlab as well from this toolbox
@@ -178,6 +186,14 @@ for subsesid=1:length(KiloSortPaths)
             countid=countid+1;
             continue
         end
+    end
+
+    %% Load histology if available
+    tmphisto = dir(fullfile(KiloSortPaths{subsesid},'HistoEphysAlignment.mat'));
+    clear Depth2AreaPerUnit
+    if ~isempty(tmphisto)
+        histodat = load(fullfile(tmphisto.folder,tmphisto.name));
+        Depth2AreaPerUnit = histodat.Depth2AreaPerUnit;
     end
 
     %% Load Spike Data
@@ -322,6 +338,24 @@ for subsesid=1:length(KiloSortPaths)
             qMetricsExist = ~isempty(dir(fullfile(savePath, '**', 'templates._bc_qMetrics.parquet'))); % ~isempty(dir(fullfile(savePath, 'qMetric*.mat'))) not used anymore?
             idx = sp.SessionID==id;
             InspectionFlag = 0;
+            if ~exist(fullfile(rawD(id).folder,strrep(rawD(id).name,'.cbin','_sync.dat')))
+                disp('Extracting sync file...')
+                % detect whether data is compressed, decompress locally if necessary
+                if ~exist(fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')))
+                    disp('This is compressed data and we do not want to use Python integration... uncompress temporarily')
+                    decompDataFile = bc_extractCbinData(fullfile(rawD(id).folder,rawD(id).name),...
+                        [], [], 0,  fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')));
+                    copyfile(strrep(fullfile(rawD(id).folder,rawD(id).name),'cbin','meta'),strrep(fullfile(Params.tmpdatafolder,rawD(id).name),'cbin','meta'))
+                end
+                DecompressionFlag = 1;
+                [Imecmeta] = ReadMeta2(fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','meta')),'ap');
+                nchan = strsplit(Imecmeta.acqApLfSy,',');
+                nChansInFile = str2num(nchan{1})+str2num(nchan{3});
+          
+                syncDatImec = extractSyncChannel(fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')), nChansInFile, nChansInFile); %Last channel is sync
+                copyfile(fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'.cbin','_sync.dat')),fullfile(rawD(id).folder,strrep(rawD(id).name,'.cbin','_sync.dat')))
+
+            end
             if ~qMetricsExist || Params.RedoQM
                 % First check if we want to use python for compressed data. If not, uncompress data first
                 if any(strfind(rawD(id).name,'cbin')) && Params.DecompressLocal
@@ -332,6 +366,7 @@ for subsesid=1:length(KiloSortPaths)
                             [], [], 0,  fullfile(Params.tmpdatafolder,strrep(rawD(id).name,'cbin','bin')));
                         copyfile(strrep(fullfile(rawD(id).folder,rawD(id).name),'cbin','meta'),strrep(fullfile(Params.tmpdatafolder,rawD(id).name),'cbin','meta'))
                     end
+                  
                     DecompressionFlag = 1;
                     if Params.InspectQualityMetrics
                         InspectionFlag=1;
@@ -424,8 +459,10 @@ for subsesid=1:length(KiloSortPaths)
     if exist('theseuniqueTemplates','var') && iscell(theseuniqueTemplates)
         recsesAlltmp = arrayfun(@(X) repmat(addthis+X,1,length(theseuniqueTemplates{X})),[1:length(theseuniqueTemplates)],'UniformOutput',0);
         recsesAll =cat(1,recsesAll(:), cat(2,recsesAlltmp{:})');
+        ProbeAll = cat(1,ProbeAll(:),repmat(probeid,1,length(cat(2,recsesAlltmp{:})))');
     else
         recsesAll = cat(1,recsesAll(:),repmat(addthis+1,1,length(Good_IDtmp))');
+        ProbeAll = cat(1,ProbeAll(:),repmat(probeid,1,length(Good_IDtmp))');
     end
     sp.RecSes = sp.SessionID+countid-1; %Keep track of recording session, as cluster IDs are not unique across sessions
 
@@ -436,6 +473,7 @@ for subsesid=1:length(KiloSortPaths)
         ShankID(Shank==ShankOpt(shankid))=shankid;
     end
     clusinfo.Shank = Shank;
+    clusinfo.ProbeID = ProbeAll;
     clusinfo.ShankID = ShankID;
     clusinfo.RecSesID = recsesAll;
     clusinfo.ch = channel;
@@ -443,6 +481,15 @@ for subsesid=1:length(KiloSortPaths)
     clusinfo.cluster_id = AllUniqueTemplates;
     clusinfo.group = Label;
     clusinfo.Good_ID = Good_ID;
+    if exist('Depth2AreaPerUnit','var') % Add area information
+        Idx = cell2mat(arrayfun(@(X) find(Depth2AreaPerUnit.Cluster_ID-1 == X),clusinfo.cluster_id,'Uni',0));
+        clusinfo.Area = Depth2AreaPerUnit.Area(Idx);
+        clusinfo.Coordinates = Depth2AreaPerUnit.Coordinates(Idx);
+        if length(clusinfo.Coordinates) ~= length(clusinfo.cluster_id)
+            clusinfo.Coordinates = []; % Doesn't work out
+            clusinfo.Area = [];
+        end
+    end
     % clusinfo.Noise_ID = NoiseUnit;
 
     sp.sample_rate = sp.sample_rate(1);
@@ -459,7 +506,11 @@ for subsesid=1:length(KiloSortPaths)
     sp = rmfield(sp,'waveforms');
     save(fullfile(KiloSortPaths{subsesid},'PreparedData.mat'),'clusinfo','Params','-v7.3')
     if Params.saveSp
+        try
         save(fullfile(KiloSortPaths{subsesid},'PreparedData.mat'),'sp','-append')
+        catch ME
+            disp(ME)
+        end
     end
 
     countid=countid+1;

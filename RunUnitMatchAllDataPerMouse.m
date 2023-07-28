@@ -2,15 +2,10 @@
 % Load all data
 % Find available datasets (always using dates as folders)
 clear DateOpt
-for idx = 1:length(DataDir)
-    DateOpt{idx} = cellfun(@(X) dir(fullfile(DataDir{idx},X,'*-*')),MiceOpt(DataDir2Use==idx),'UniformOutput',0);
-end
-DateOpt = cat(2,DateOpt{:});
+DateOpt = arrayfun(@(X) dir(fullfile(DataDir{DataDir2Use(X)},MiceOpt{X},'*-*')),1:length(MiceOpt),'UniformOutput',0);
 DateOpt = cellfun(@(X) X([X.isdir]),DateOpt,'UniformOutput',0);
 DateOpt = cellfun(@(X) {X.name},DateOpt,'UniformOutput',0);
-PlotLFP = 0;
-plotUnitActivity = 0;
-GoodUnits = cell(1,length(MiceOpt));
+
 for midx = 1:length(MiceOpt)
     %% Loading data from kilosort/phy easily
     myKsDir = fullfile(KilosortDir,MiceOpt{midx});
@@ -27,6 +22,10 @@ for midx = 1:length(MiceOpt)
     % Check for multiple subfolders?
     subsesopt = dir(fullfile(myKsDir,'**','channel_positions.npy'));
     subsesopt=arrayfun(@(X) subsesopt(X).folder,1:length(subsesopt),'Uni',0);
+    % Remove anything that contains the name 'noise'
+    subsesopt(cellfun(@(X) contains(X,'NOISE'),subsesopt)) = [];
+
+
     if strcmp(RecordingType{midx},'Chronic')
         if ~PrepareClusInfoparams.RunPyKSChronicStitched %MatchUnitsAcrossDays
             disp('Unit matching in Matlab')
@@ -73,33 +72,47 @@ for midx = 1:length(MiceOpt)
         mkdir(fullfile(SaveDir,MiceOpt{midx}))
     end
     PrepareClusInfoparams.SaveDir = fullfile(SaveDir,MiceOpt{midx});
-
+   if isempty(subsesopt)
+       disp(['No data found for ' MiceOpt{midx}])
+        continue
+    end
     %% Prepare cluster information
     PrepareClusInfoparams = PrepareClusInfo(subsesoptAll,PrepareClusInfoparams);
+    PrepareClusInfoparams.RecType = RecordingType{midx};%
 
     %% Run UnitMatch
-    UMparam = RunUnitMatch(subsesoptAll,PrepareClusInfoparams);
+    UnitMatchExist = dir(fullfile(PrepareClusInfoparams.SaveDir,'**','UnitMatch.mat'));
+    if isempty(UnitMatchExist) || PrepareClusInfoparams.RedoUnitMatch
+        UMparam = RunUnitMatch(subsesoptAll,PrepareClusInfoparams);
+        
+        %% Evaluate (within unit ID cross-validation)
+        EvaluatingUnitMatch(UMparam.SaveDir);
 
-      %% Function analysis
-    ComputeFunctionalScores(UMparam.SaveDir)
-    %% Figures
-    if UMparam.MakePlotsOfPairs
-        DrawBlind = 1; %Default 0. 1 for blind drawing (for manual judging of pairs)
-        DrawPairsUnitMatch(UMparam.SaveDir,DrawBlind);
+        %% Function analysis
+        ComputeFunctionalScores(UMparam.SaveDir)
+
+        %% Figures
+        if UMparam.MakePlotsOfPairs
+            DrawBlind = 0; %1 for blind drawing (for manual judging of pairs)
+            DrawPairsUnitMatch(UMparam.SaveDir,DrawBlind);
+        end
+
+        %% QM
+        try
+            QualityMetricsROCs(UMparam.SaveDir);
+        catch ME
+            disp(['Couldn''t do Quality metrics for ' MiceOpt{midx}])
+        end
+
+    else
+        UMparam = PrepareClusInfoparams;
+        UMparam.SaveDir = fullfile(PrepareClusInfoparams.SaveDir,'UnitMatch');
     end
-    
-    %% Evaluate (within unit ID cross-validation)
-    EvaluatingUnitMatch(UMparam.SaveDir);
-
-  
-
-    %% QM
-    QualityMetricsROCs(UMparam.SaveDir);
 
 
-    %% 
+    %%
     disp(['Preprocessed data for ' MiceOpt{midx}])
-    
+
 
 end
 
