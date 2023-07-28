@@ -163,26 +163,31 @@ for pairid=1:length(Pairs)
         ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(WaveformInfo.MaxChannel(uid,cv),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<75); %Averaging over 10 channels helps with drift
         Locs = channelpos(ChanIdx,:);
 
+        % Sort dimensions for plotting
+        [~,sortdims] = sort(nanvar(Locs,[],1),'descend');
+        sortdims = [sortdims(2) sortdims(1) sortdims(3)];
+        Locs = Locs(:,sortdims);
+
         subplot(3,6,[1,2,7,8])
         hold on
         scatter(Locs(:,1)*10,Locs(:,2)*20,20,[0.5 0.5 0.5],'filled') % Indicate sites
         for id = 1:size(Locs,1)
             plot(Locs(id,1)*10+[1:size(spikeMap,1)],Locs(id,2)*20+spikeMap(:,ChanIdx(id),cv),'-','color',cols(uidx,:),'LineWidth',1)
         end
-        scatter(WaveformInfo.ProjectedLocation(1,uid,cv)*10,WaveformInfo.ProjectedLocation(2,uid,cv)*20,20,[0 0 0],'filled') %Indicate Centroid
-        hleg(uidx) = plot(WaveformInfo.ProjectedLocation(1,uid,cv)*10+[1:size(spikeMap,1)],WaveformInfo.ProjectedLocation(2,uid,cv)*20+WaveformInfo.ProjectedWaveform(:,uid,cv),'-','color',cols(uidx,:),'LineWidth',2);
+        scatter(WaveformInfo.ProjectedLocation(sortdims(1),uid,cv)*10,WaveformInfo.ProjectedLocation(sortdims(2),uid,cv)*20,20,[0 0 0],'filled') %Indicate Centroid
+        hleg(uidx) = plot(WaveformInfo.ProjectedLocation(sortdims(1),uid,cv)*10+[1:size(spikeMap,1)],WaveformInfo.ProjectedLocation(sortdims(2),uid,cv)*20+WaveformInfo.ProjectedWaveform(:,uid,cv),'-','color',cols(uidx,:),'LineWidth',2);
 
         subplot(3,6,3)
         if uidx==1
-            plot(channelpos(:,1),channelpos(:,2),'k.')
+            plot(channelpos(:,sortdims(1)),channelpos(:,sortdims(2)),'k.')
             hold on
         end
-        h(1)=plot(channelpos(WaveformInfo.MaxChannel(uid,cv),1),channelpos(WaveformInfo.MaxChannel(uid,cv),2),'.','color',cols(uidx,:),'MarkerSize',15);
+        h(1)=plot(channelpos(WaveformInfo.MaxChannel(uid,cv),sortdims(1)),channelpos(WaveformInfo.MaxChannel(uid,cv),sortdims(2)),'.','color',cols(uidx,:),'MarkerSize',15);
 
         subplot(3,6,4)
         hold on
         scatter(Locs(:,1),Locs(:,2),20,[0.5 0.5 0.5],'filled')
-        scatter(WaveformInfo.ProjectedLocation(1,uid,cv),WaveformInfo.ProjectedLocation(2,uid,cv),20,[0 0 0],'filled')
+        scatter(WaveformInfo.ProjectedLocation(sortdims(1),uid,cv),WaveformInfo.ProjectedLocation(sortdims(2),uid,cv),20,[0 0 0],'filled')
 
         takesamples = param.waveidx;
         takesamples = unique(takesamples(~isnan(takesamples)));
@@ -195,15 +200,15 @@ for pairid=1:length(Pairs)
             flipidx = 1;
         end
 
-        h(1) = plot(squeeze(ProjectedLocationPerTPAllFlips(1,uid,takesamples,cv,flipidx)),squeeze(ProjectedLocationPerTPAllFlips(2,uid,takesamples,cv,flipidx)),'-','color',cols(uidx,:));
-        scatter(squeeze(ProjectedLocationPerTPAllFlips(1,uid,takesamples,cv,flipidx)),squeeze(ProjectedLocationPerTPAllFlips(2,uid,takesamples,cv,flipidx)),30,takesamples,'filled')
+        h(1) = plot(squeeze(ProjectedLocationPerTPAllFlips(sortdims(1),uid,takesamples,cv,flipidx)),squeeze(ProjectedLocationPerTPAllFlips(sortdims(2),uid,takesamples,cv,flipidx)),'-','color',cols(uidx,:));
+        scatter(squeeze(ProjectedLocationPerTPAllFlips(sortdims(1),uid,takesamples,cv,flipidx)),squeeze(ProjectedLocationPerTPAllFlips(sortdims(2),uid,takesamples,cv,flipidx)),30,takesamples,'filled')
         colormap(hot)
 
 
         subplot(3,6,[9,10])
         hold on
         scatter(Locs(:,1)+addforspace,Locs(:,2),20,[0.5 0.5 0.5],'filled')
-        scatter(WaveformInfo.ProjectedLocation(1,uid,cv)+addforspace,WaveformInfo.ProjectedLocation(2,uid,cv),20,[0 0 0],'filled')
+        scatter(WaveformInfo.ProjectedLocation(sortdims(1),uid,cv)+addforspace,WaveformInfo.ProjectedLocation(sortdims(2),uid,cv),20,[0 0 0],'filled')
 
         takesamples = param.waveidx;
         takesamples = unique(takesamples(~isnan(takesamples)));
@@ -216,8 +221,8 @@ for pairid=1:length(Pairs)
             flipidx = 1;
         end
 
-        h(1) = plot(squeeze(ProjectedLocationPerTPAllFlips(1,uid,takesamples,cv,flipidx))+addforspace,squeeze(ProjectedLocationPerTPAllFlips(2,uid,takesamples,cv,flipidx)),'-','color',cols(uidx,:));
-        scatter(squeeze(ProjectedLocationPerTPAllFlips(1,uid,takesamples,cv,flipidx))+addforspace,squeeze(ProjectedLocationPerTPAllFlips(2,uid,takesamples,cv,flipidx)),30,takesamples,'filled')
+        h(1) = plot(squeeze(ProjectedLocationPerTPAllFlips(sortdims(1),uid,takesamples,cv,flipidx))+addforspace,squeeze(ProjectedLocationPerTPAllFlips(sortdims(2),uid,takesamples,cv,flipidx)),'-','color',cols(uidx,:));
+        scatter(squeeze(ProjectedLocationPerTPAllFlips(sortdims(1),uid,takesamples,cv,flipidx))+addforspace,squeeze(ProjectedLocationPerTPAllFlips(sortdims(2),uid,takesamples,cv,flipidx)),30,takesamples,'filled')
         colormap(hot)
         addforspace = addforspace+2*max(diff(Locs(:,1)));
 
@@ -292,8 +297,8 @@ for pairid=1:length(Pairs)
     subplot(3,6,4)
     xlabel('Xpos (um)')
     ylabel('Ypos (um)')
-    xlims = [min(WaveformInfo.ProjectedLocation(1,Pairs{pairid},cv))-25 max(WaveformInfo.ProjectedLocation(1,Pairs{pairid},cv))+25];
-    ylims = [min(WaveformInfo.ProjectedLocation(2,Pairs{pairid},cv))-25 max(WaveformInfo.ProjectedLocation(2,Pairs{pairid},cv))+25];
+    xlims = [min(WaveformInfo.ProjectedLocation(sortdims(1),Pairs{pairid},cv))-25 max(WaveformInfo.ProjectedLocation(sortdims(1),Pairs{pairid},cv))+25];
+    ylims = [min(WaveformInfo.ProjectedLocation(sortdims(2),Pairs{pairid},cv))-25 max(WaveformInfo.ProjectedLocation(sortdims(2),Pairs{pairid},cv))+25];
     set(gca,'xlim',xlims,'ylim',ylims)
     axis square
     %     legend([h(1),h(2)],{['Unit ' num2str(uid)],['Unit ' num2str(uid2)]})
@@ -318,6 +323,12 @@ for pairid=1:length(Pairs)
         tmp2 = 'nan';
     end
     title(['Trajectory length: ' tmp ', angle: ' tmp2])
+
+    subplot(3,6,[9,10])
+    xlabel('Xpos (um)')
+    ylabel('Ypos (um)')
+    set(gca,'XTickLabel',[],'YTickLabel',[])
+
 
     subplot(3,6,3)
     xlabel('X position')

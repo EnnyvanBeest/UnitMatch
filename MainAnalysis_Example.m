@@ -35,7 +35,7 @@ PrepareClusInfoparams.saveSp = 1; % Save SP struct for easy loading of preproces
 % %Full set. WavformSim is average of WVCorr and WavformMSE
 PrepareClusInfoparams.Scores2Include = {'CentroidDist','WavformSim','CentroidOverlord','spatialdecaySim','AmplitudeSim','TrajAngleSim'}; %{'AmplitudeSim','spatialdecayfitSim','WavformSim','CentroidDist','CentroidVar','TrajAngleSim'}; % 
 PrepareClusInfoparams.ApplyExistingBayesModel = 0; %If 1, use probability distributions made available by us
-PrepareClusInfoparams.MakePlotsOfPairs = 0; % Plots pairs for inspection (UnitMatch)
+PrepareClusInfoparams.MakePlotsOfPairs = 1; % Plots pairs for inspection (UnitMatch)
 PrepareClusInfoparams.AssignUniqueID = 1; % Assign UniqueID 
 PrepareClusInfoparams.GoodUnitsOnly = 1; % Include only good untis in the UnitMatch analysis
 %% All dependencies you want to add (you may need to download these, all available via github)

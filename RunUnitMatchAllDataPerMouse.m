@@ -80,8 +80,6 @@ for midx = 1:length(MiceOpt)
     PrepareClusInfoparams = PrepareClusInfo(subsesoptAll,PrepareClusInfoparams);
     PrepareClusInfoparams.RecType = RecordingType{midx};%
 
- 
-
     %% Run UnitMatch
     UnitMatchExist = dir(fullfile(PrepareClusInfoparams.SaveDir,'**','UnitMatch.mat'));
     if isempty(UnitMatchExist) || PrepareClusInfoparams.RedoUnitMatch

@@ -170,7 +170,7 @@ for midx = 1:length(MiceOpt)
     AvgMan = nanmean(Manual(~ismember(ScorerNames,'In2Science'),:),1);
     AvgMan = AvgMan(idx);
     Manual = Manual(:,idx);
-    RankThreshold = RankThreshold(:,idx);
+    RankThreshold = RankThreshold(idx);
     disp('Compared to Stitched Kilosort:')
     disp(['In2Science students found ' num2str(round(sum(In2Science(PyKS==1)>0)./sum(PyKS==1)*1000)/10) '% of PyKS Matches to be a match'])
     disp(['In2Science students found ' num2str(round(sum(In2Science(PyKS==1)<0)./sum(PyKS==1)*1000)/10) '% of PyKS Matches to be a non-match'])
