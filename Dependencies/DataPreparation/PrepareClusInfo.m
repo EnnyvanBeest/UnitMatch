@@ -482,9 +482,13 @@ for subsesid=1:length(KiloSortPaths)
     clusinfo.group = Label;
     clusinfo.Good_ID = Good_ID;
     if exist('Depth2AreaPerUnit','var') % Add area information
-        Idx = cell2mat(arrayfun(@(X) find(Depth2AreaPerUnit.Cluster_ID == X),clusinfo.cluster_id,'Uni',0));
+        Idx = cell2mat(arrayfun(@(X) find(Depth2AreaPerUnit.Cluster_ID-1 == X),clusinfo.cluster_id,'Uni',0));
         clusinfo.Area = Depth2AreaPerUnit.Area(Idx);
         clusinfo.Coordinates = Depth2AreaPerUnit.Coordinates(Idx);
+        if length(clusinfo.Coordinates) ~= length(clusinfo.cluster_id)
+            clusinfo.Coordinates = []; % Doesn't work out
+            clusinfo.Area = [];
+        end
     end
     % clusinfo.Noise_ID = NoiseUnit;
 

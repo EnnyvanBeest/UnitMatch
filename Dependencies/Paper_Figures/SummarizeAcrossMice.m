@@ -10,7 +10,7 @@ ACGRAcrossMice = nan(length(Vector),3,length(MiceOpt)); % Vector / within,Match,
 ACGAUC = nan(3,length(MiceOpt));
 RFDistAcrossMice = nan(length(Vector),3,length(MiceOpt)); % Vector / within,Match,Non-match / mice
 RFAUC = nan(3,length(MiceOpt));
-UseKSLabels = 0;
+UseKSLabels = PrepareClusInfoparams.RunPyKSChronicStitched;
 
 for midx = 1:length(MiceOpt)
     tmpfile = dir(fullfile(SaveDir,MiceOpt{midx},'UnitMatch','UnitMatch.mat'));
@@ -145,7 +145,7 @@ for midx = 1:length(MiceOpt)
 
 
     %% Autocorrelogram
-    if isfield(MatchTable,'ACGCor')
+    if any(ismember(MatchTable.Properties.VariableNames,'ACGCorr'))
         ACGCor = reshape(MatchTable.ACGCorr,nclus,nclus);
 
         subplot(3,3,4)
@@ -246,8 +246,12 @@ figure; h=barwitherr(nanstd(AUCVals(sortidx,:),[],2),nanmean(AUCVals(sortidx,:),
 set(gca,'XTick',1:size(AUCVals,1),'XTickLabel',AUCParams(sortidx))
 ylabel('AUC')
 makepretty
+saveas(gcf,fullfile(SaveDir,'AUCParameters.fig'))
+saveas(gcf,fullfile(SaveDir,'AUCParameters.bmp'))
+
 
 %% Now we make histograms for the Area Under the Curve scores
+figure(FSCoreFig)
 edges = [0:0.1:1];
 subplot(3,3,3)
 hold on
@@ -326,26 +330,32 @@ line([nanmedian(RFAUC(3,:)) nanmedian(RFAUC(3,:))],get(gca,'ylim'),'Color',[0.5 
 xlabel('AUC RF distance')
 ylabel('Nr sessions')
 makepretty
+saveas(FSCoreFig,fullfile(SaveDir,'FunctionScoreFigAcrossMice.fig'))
+saveas(FSCoreFig,fullfile(SaveDir,'FunctionScoreFigAcrossMice.bmp'))
 
 %% Tracking performance
 % UMTrackingPerformancePerMouse{midx} = TrackingPerformance;
 %     KSTrackingPerformancePerMouse{midx} = TrackingPerformanceKS;
 tmpUM = cat(2,UMTrackingPerformancePerMouse{:});
 if UseKSLabels
-tmpKS =  cat(2,KSTrackingPerformancePerMouse{:});
+    tmpKS =  cat(2,KSTrackingPerformancePerMouse{:});
 end
 figure('name','Tracking Performance')
-scatter(1:length(MiceOpt),tmpUM(3,:),20,[0 0 0],'filled')
+scatter(1:length(MiceOpt),tmpUM(3,:)./tmpUM(3,:),20,[0 0 0],'filled')
 hold on
 if UseKSLabels
-scatter(1:length(MiceOpt),tmpKS(2,:),20,[1 0 0],'filled')
+scatter(1:length(MiceOpt),tmpKS(2,:)./tmpKS(3,:),20,[1 0 0],'filled')
 end
-scatter(1:length(MiceOpt),tmpUM(2,:),20,[0 0 1],'filled')
+scatter(1:length(MiceOpt),tmpUM(2,:)./tmpUM(3,:),20,[0 0 1],'filled')
 
 set(gca,'XTick',1:length(MiceOpt),'XTickLabel',MiceOpt,'XTickLabelRotation',90)
 if UseKSLabels
     legend('maximum possible','Kilosort tracked','UnitMatch tracked (concatenated)')
+else
+    legend('maximum possible','UnitMatch tracked (not concatenated)')
 end
 xlim([0.5 length(MiceOpt)+0.5])
 ylabel('nUnits')
 makepretty
+saveas(gcf,fullfile(SaveDir,'TrackingPerformance.fig'))
+saveas(gcf,fullfile(SaveDir,'TrackingPerformance.bmp'))

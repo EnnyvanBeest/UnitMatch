@@ -6,7 +6,7 @@ DateOpt = arrayfun(@(X) dir(fullfile(DataDir{DataDir2Use(X)},MiceOpt{X},'*-*')),
 DateOpt = cellfun(@(X) X([X.isdir]),DateOpt,'UniformOutput',0);
 DateOpt = cellfun(@(X) {X.name},DateOpt,'UniformOutput',0);
 
-for midx = 28:length(MiceOpt)
+for midx = 1:length(MiceOpt)
     %% Loading data from kilosort/phy easily
     myKsDir = fullfile(KilosortDir,MiceOpt{midx});
     subksdirs = dir(fullfile(myKsDir,'**','Probe*')); %This changed because now I suddenly had 2 probes per recording
