@@ -31,4 +31,4 @@ It is advised to initially follow MainAnalysis_Example.m to understand how UnitM
 
 Two recording sessions of same IMRO table. In the first recording this unit was oversplit, and UnitMatch will Merge it. Additonally it found it's match in the second recording.
 
-![image](https://github.com/EnnyvanBeest/UnitMatch/blob/main/LogoAndExamples/Example1.png)
+![image](https://github.com/EnnyvanBeest/UnitMatch/blob/main/LogoAndExamples/Example1.bmp)
