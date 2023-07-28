@@ -26,8 +26,8 @@ PrepareClusInfoparams.binsz = 0.01; %Bin size for PSTHs in seconds
 % Quality Metrics
 PrepareClusInfoparams.RunQualityMetrics = 1; % If 1, Run the quality metrics (Bombcell @JulieFabre)
 PrepareClusInfoparams.RedoQM = 0; %if 1, redo quality metrics if it already exists
-PrepareClusInfoparams.InspectQualityMetrics=0; % If 1, Inspect the quality matrix/data set using the GUI (manual inspection)
-PrepareClusInfoparams.loadPCs=1; % Do we need the PCs for data analysis (YES IF QM)? If not you save a lot of time keeping this at 0
+PrepareClusInfoparams.InspectQualityMetrics = 0; % If 1, Inspect the quality matrix/data set using the GUI (manual inspection)
+PrepareClusInfoparams.loadPCs = 0; % Only necessary when computiong isoluation metrics/drift in QM. You save a lot of time keeping this at 0
 
 % UnitMatch
 PrepareClusInfoparams.UnitMatch = 1; % If 1, find identical units across sessions or oversplits in a fast and flexible way
@@ -35,9 +35,9 @@ PrepareClusInfoparams.RedoUnitMatch = 1; % if 1, Redo unitmatch
 PrepareClusInfoparams.separateIMRO = 0; % Run for every IMRO separately (for memory reasons or when having multiple probes this might be a good idea)
 
 % UnitMatch Parameters:
-% PrepareClusInfoparams.Scores2Include =
-% {'AmplitudeSim','spatialdecaySim','WavformMSE','WVCorr','CentroidDist','CentroidVar','CentroidDistRecentered','TrajAngleSim','TrajDistSim'};
-% %Full set. WavformSim is average of WVCorr and WavformMSE
+% All parameters to choose from: {'AmplitudeSim','spatialdecaySim','WavformMSE','WVCorr','CentroidDist','CentroidVar','CentroidDistRecentered','TrajAngleSim','TrajDistSim'};
+% WavformSim is average of WVCorr and WavformMSE
+% CentroidOverlord is average of CentroidDistRecentered and CentroidVar
 PrepareClusInfoparams.Scores2Include = {'CentroidDist','WavformSim','CentroidOverlord','spatialdecaySim','AmplitudeSim','TrajAngleSim'}; %{'AmplitudeSim','spatialdecayfitSim','WavformSim','CentroidDist','CentroidVar','TrajAngleSim'}; % 
 PrepareClusInfoparams.ApplyExistingBayesModel = 0; %If 1, use probability distributions made available by us - 
 PrepareClusInfoparams.MakePlotsOfPairs = 0; % Plots pairs for inspection (UnitMatch)
@@ -47,6 +47,7 @@ PrepareClusInfoparams.GoodUnitsOnly = 1; % Include only good untis in the UnitMa
 %% Automatic from here
 PrepareClusInfoparams.SaveDir = SaveDir; % Save results here
 PrepareClusInfoparams.tmpdatafolder = tmpdatafolder; % use this as a local directory (should be large enough to handle all sessions you want to combine)
+
 %% All dependencies you want to add (you may need to download these, all available via github)
 addpath(genpath(cd))
 
