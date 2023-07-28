@@ -25,7 +25,7 @@ PrepareClusInfoparams.UnitMatch = 1; % If 1, find identical units across session
 PrepareClusInfoparams.RedoUnitMatch = 1; % if 1, Redo unitmatch
 PrepareClusInfoparams.SaveDir = SaveDir; % Save results here
 PrepareClusInfoparams.tmpdatafolder = tmpdatafolder; % use this as a local directory (should be large enough to handle all sessions you want to combine)
-PrepareClusInfoparams.separateIMRO = 0; % Run for every IMRO separately (for memory reasons this might be a good idea)
+PrepareClusInfoparams.separateIMRO = 0; % Run for every IMRO separately (for memory reasons or when having multiple probes this might be a good idea)
 PrepareClusInfoparams.ReLoadAlways = 1; % If 1, SP & Clusinfo are always loaded from KS output
 PrepareClusInfoparams.binsz = 0.01; %Binsz for unitmatch PSTHs
 PrepareClusInfoparams.saveSp = 1; % Save SP struct for easy loading of preprocessed data
@@ -35,7 +35,7 @@ PrepareClusInfoparams.saveSp = 1; % Save SP struct for easy loading of preproces
 % %Full set. WavformSim is average of WVCorr and WavformMSE
 PrepareClusInfoparams.Scores2Include = {'CentroidDist','WavformSim','CentroidOverlord','spatialdecaySim','AmplitudeSim','TrajAngleSim'}; %{'AmplitudeSim','spatialdecayfitSim','WavformSim','CentroidDist','CentroidVar','TrajAngleSim'}; % 
 PrepareClusInfoparams.ApplyExistingBayesModel = 0; %If 1, use probability distributions made available by us
-PrepareClusInfoparams.MakePlotsOfPairs = 1; % Plots pairs for inspection (UnitMatch)
+PrepareClusInfoparams.MakePlotsOfPairs = 0; % Plots pairs for inspection (UnitMatch)
 PrepareClusInfoparams.AssignUniqueID = 1; % Assign UniqueID 
 PrepareClusInfoparams.GoodUnitsOnly = 1; % Include only good untis in the UnitMatch analysis
 %% All dependencies you want to add (you may need to download these, all available via github)
