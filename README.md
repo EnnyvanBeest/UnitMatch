@@ -1,7 +1,7 @@
 # UnitMatch
 Ephys toolbox to match single units (electrophysiology) either within the same recording (oversplits) or across recordings
 
-![image](https://github.com/EnnyvanBeest/UnitMatch/blob/main/LogoAndExamples/Logo.png)
+![image](https://github.com/EnnyvanBeest/UnitMatch/blob/main/LogoAndExamples/Logo.svg)
 
 This toolbox was created in November 2022-January 2023 by Enny H. van Beest as a tool to match units across multiple recording(day)s, and/or merge oversplit units within the same day. It uses spatial position and waveform-based parameters - both standard and unstandard metrics to the field - to find possible matches. The toolbox was further optimized between February-May 2023 in collaboration with Célian Bimbard.
 
