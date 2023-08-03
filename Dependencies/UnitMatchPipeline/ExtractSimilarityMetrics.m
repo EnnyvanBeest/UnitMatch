@@ -240,9 +240,9 @@ flag=0;
 while flag<2
     timercounter = tic;
     figure('name','Projection locations all units')
-    scatter3(channelpos_AllCat(:,3),channelpos_AllCat(:,1),channelpos_AllCat(:,2),10,[0 0 0],'filled')
+    scatter3(channelpos_AllCat(:,1),channelpos_AllCat(:,2),channelpos_AllCat(:,3),10,[0 0 0],'filled')
     hold on
-    scatter3(nanmean(ProjectedLocation(3,:,:),3),nanmean(ProjectedLocation(1,:,:),3),nanmean(ProjectedLocation(2,:,:),3),10,GoodRecSesID)
+    scatter3(nanmean(ProjectedLocation(1,:,:),3),nanmean(ProjectedLocation(2,:,:),3),nanmean(ProjectedLocation(3,:,:),3),10,GoodRecSesID)
     colormap jet
 %     set(gca,'CameraPosition',[-1.9009e+04 -3.7880e+04 1.0753e+04])
     makepretty

@@ -170,7 +170,7 @@ for midx = 1:length(MiceOpt)
     end
     hold on
     clear h
-    cols = lines(size(Manual,1));
+    cols = distinguishable_colors(size(Manual,1));
     for id = 1:size(Manual,1)
         h(id) = scatter(midx+0.05*id,sum(Manual(id,PyKS==1)==1)./sum(PyKS==1),30,cols(id,:),'filled');
     end
@@ -187,7 +187,6 @@ for midx = 1:length(MiceOpt)
     end
     hold on
     clear h
-    cols = lines(size(Manual,1));
     for id = 1:size(Manual,1)
         h(id) = scatter(midx+0.05*id,sum(Manual(id,PyKS==0)==-1)./sum(PyKS==0),30,cols(id,:),'filled');
     end
@@ -207,7 +206,6 @@ for midx = 1:length(MiceOpt)
     end
     hold on
     clear h
-    cols = lines(size(Manual,1));
     for id = 1:size(Manual,1)
         h(id) = scatter(midx+0.05*id,sum(Manual(id,MatchProb>0.5)==1)./sum(MatchProb>0.5),30,cols(id,:),'filled');
     end
@@ -224,7 +222,6 @@ for midx = 1:length(MiceOpt)
     end
     hold on
     clear h
-    cols = lines(size(Manual,1));
     for id = 1:size(Manual,1)
         h(id) = scatter(midx+0.05*id,sum(Manual(id,MatchProb<0.5)==-1)./sum(MatchProb<0.5),30,cols(id,:),'filled');
     end
@@ -250,7 +247,6 @@ for midx = 1:length(MiceOpt)
     end
     hold on
     clear h
-    cols = lines(size(Manual,1));
     for id = 1:size(Manual,1)
         h(id) = scatter(midx+0.05*id,sum(Manual(id,AvgMan>0.5)==1)./sum(AvgMan>0.5),30,cols(id,:),'filled');
     end
@@ -272,7 +268,6 @@ for midx = 1:length(MiceOpt)
     end
     hold on
     clear h
-    cols = lines(size(Manual,1));
     for id = 1:size(Manual,1)
         h(id) = scatter(midx+0.05*id,sum(Manual(id,AvgMan<-0.5)==1)./sum(AvgMan<-0.5),30,cols(id,:),'filled');
     end
@@ -295,7 +290,6 @@ for midx = 1:length(MiceOpt)
     end
     hold on
     clear h
-    cols = lines(size(Manual,1));
     for id = 1:size(Manual,1)
         h(id) = scatter(midx+0.05*id,sum(Manual(id,abs(AvgMan)<=0.5)==1)./sum(abs(AvgMan)<=0.5),30,cols(id,:),'filled');
     end
@@ -430,7 +424,38 @@ for midx = 1:length(MiceOpt)
      ReOrderedTbl.BlindID(idx) 
      Check{4,midx} =  ReOrderedTbl.BlindID(idx)
 
+     %% Tracking performance?
+     %      Maximum possible
+     tmpscores = AllScoringMethods(~WithinSameSession,:);
+
+     if midx == 1
+         TrackPerf = nan(length(AllScorerNames),length(MiceOpt));
+     end
+     TrackPerf(:,midx) = sum(tmpscores>0.5,1)./sum(tmpscores(:,ismember(AllScorerNames,'AvgScorer'))>0.5,1);
+
+
 end
+  
+figure('name','Tracking Performance')
+cols = cat(1,[0 0 0],[0 0 1],[1 0 0],[0 0.75 0]);
+TakeIdx = find(ismember(AllScorerNames,{'AvgScorer','UM','KS','RankTr'}));
+clear h
+for idx = 1:length(TakeIdx)
+    hold on
+    h(idx) = scatter(1:length(MiceOpt),TrackPerf(TakeIdx(idx),:).*100,40,cols(idx,:),'filled')
+end
+
+set(gca,'XTick',1:length(MiceOpt),'XTickLabel',MiceOpt,'XTickLabelRotation',90)
+legend([h(:)],{'AvgScorer','UM','KS','RankTr'},'Location','best')
+  
+xlim([0.5 length(MiceOpt)+0.5])
+ylim([0 250])
+ylabel('Tracked Units (%)')
+makepretty
+saveas(gcf,fullfile(SaveDir,'TrackingPerformance_Curated.fig'))
+saveas(gcf,fullfile(SaveDir,'TrackingPerformance_Curated.bmp'))
+
+
 midx = 5
 Check{1,midx}(ismember(Check{1,midx},Check{3,midx}))
 Check{2,midx}(ismember(Check{2,midx},Check{4,midx}))
