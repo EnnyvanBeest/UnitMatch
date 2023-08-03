@@ -47,7 +47,7 @@ for midx = 1:length(MiceOpt)
     end
     subsesopt(cellfun(@isempty,channelposition))=[];
     channelposition(cellfun(@isempty,channelposition))=[];
-    subsesoptAll = subsesopt;
+    AllKiloSortPaths = subsesopt;
     ImroCount = 1;
     IMROTableOpt = {};
     ChannelPosOpt = {};
@@ -77,13 +77,13 @@ for midx = 1:length(MiceOpt)
         continue
     end
     %% Prepare cluster information
-    PrepareClusInfoparams = PrepareClusInfo(subsesoptAll,PrepareClusInfoparams);
+    PrepareClusInfoparams = PrepareClusInfo(AllKiloSortPaths,PrepareClusInfoparams);
     PrepareClusInfoparams.RecType = RecordingType{midx};%
 
     %% Run UnitMatch
     UnitMatchExist = dir(fullfile(PrepareClusInfoparams.SaveDir,'**','UnitMatch.mat'));
     if isempty(UnitMatchExist) || PrepareClusInfoparams.RedoUnitMatch
-        UMparam = RunUnitMatch(subsesoptAll,PrepareClusInfoparams);
+        UMparam = RunUnitMatch(AllKiloSortPaths,PrepareClusInfoparams);
         
         %% Evaluate (within unit ID cross-validation)
         EvaluatingUnitMatch(UMparam.SaveDir);
