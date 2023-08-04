@@ -215,8 +215,8 @@ for subsesid=1:length(KiloSortPaths)
         myClusFile = dir(fullfile(KiloSortPaths{subsesid},'cluster_group.tsv'));
         clusinfo = tdfread(fullfile(myClusFile(1).folder,myClusFile(1).name));
         % Convert sp data to correct cluster according to phy (clu and
-        % template are not necessarily the same after phy)
-        [clusinfo,sp] = ConvertTemplatesAfterPhy(clusinfo,sp);
+        % template are not necessarily the same after splitting/merging)
+        [clusinfo,sp] = RemovingEmptyClusters(clusinfo,sp);
 
         clusidtmp = clusinfo.cluster_id;
         cluster_id = cat(1,cluster_id,clusinfo.cluster_id);
@@ -257,8 +257,8 @@ for subsesid=1:length(KiloSortPaths)
         save(fullfile(KiloSortPaths{subsesid},'CuratedResults.mat'),'CurationDone')
         clusinfo = tdfread(fullfile(myClusFile(1).folder,myClusFile(1).name));
         % Convert sp data to correct cluster according to phy (clu and
-        % template are not necessarily the same after phy)
-        [clusinfo,sp] = ConvertTemplatesAfterPhy(clusinfo,sp);
+        % template are not necessarily the same after  splitting/merging)
+        [clusinfo,sp] = RemovingEmptyClusters(clusinfo,sp);
 
         curratedflag=1;
         if isfield(clusinfo,'id')
