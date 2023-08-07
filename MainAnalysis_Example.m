@@ -5,13 +5,13 @@ SaveDir = 'H:\MatchingUnits\Output\NotConcatenated' % Folder where to store the 
 tmpdatafolder = 'H:\MatchingUnits\Tmp'; % temporary folder for temporary decompression of data 
 KilosortDir = 'H:\MatchingUnits\KilosortOutput'; % Kilosort output folder
 GithubDir = 'C:\Users\EnnyB\Documents\GitHub'; % Github directory
-PythonEXE = 'C:\Users\EnnyB\anaconda3\envs\pyks2\pythonw.exe' % Python version to run python code in:
+%PythonEXE = 'C:\Users\EnnyB\anaconda3\envs\pyks2\pythonw.exe' % Python version to run python code in:
 
 %% Information on experiments
-MiceOpt = {'AL032','AV008','CB016','EB019','JF067'}; % Add all mice you want to analyze
+MiceOpt = {'JF067'}; % Add all mice you want to analyze
 DataDir2Use = repmat(1,[1,length(MiceOpt)]); % In case you have multiple DataDir, index which directory is used for each mouse
 RecordingType = repmat({'Acute'},1,length(MiceOpt)); % And whether recordings were acute (default)
-RecordingType(ismember(MiceOpt,{'AL032','EB019','CB016','AV008','JF067'}))={'Chronic'}; %EB014', % Or maybe Chronic?
+RecordingType(ismember(MiceOpt,{'JF067'}))={'Chronic'}; %EB014', % Or maybe Chronic?
 
 %% Parameters on how to prepare units/data for analysis
 PrepareClusInfoparams.RunPyKSChronicStitched = 0; % Default 0. if 1, run PyKS chronic recordings stitched when same IMRO table was used
@@ -19,7 +19,7 @@ PrepareClusInfoparams.CopyToTmpFirst = 1; % If 1, copy data to local first, don'
 PrepareClusInfoparams.DecompressLocal = 1; % If 1, uncompress data first if it's currently compressed (= necessary for unitmatch and faster for QualityMetrics)
 
 % Storing preprocessed data?
-PrepareClusInfoparams.ReLoadAlways = 0; % If 1, SP & Clusinfo are always loaded from KS output
+PrepareClusInfoparams.ReLoadAlways = 1; % If 1, SP & Clusinfo are always loaded from KS output
 PrepareClusInfoparams.saveSp = 1; % Save SP struct for easy loading of preprocessed data
 PrepareClusInfoparams.binsz = 0.01; %Bin size for PSTHs in seconds
 
@@ -82,4 +82,4 @@ RunPyKS2_FromMatlab
 RunUnitMatchAllDataPerMouse
 
 %% Across Mice Graphs
-SummarizeAcrossMice
+%SummarizeAcrossMice

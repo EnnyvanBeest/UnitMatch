@@ -1,4 +1,4 @@
-function   [clusinfo, sp] = RemovingEmptyClusters(clusinfo,sp)
+function   [clusinfo, sp, emptyclus] = RemovingEmptyClusters(clusinfo,sp)
 
 %% Due to merging/ splitting etc. there are empty clusters. Remove these
 % Convert sp data accordingly
@@ -49,7 +49,8 @@ sp.tempsUnW = tempsUnW(takeclus,:,:);
 sp.templateDuration = templateDuration(takeclus);
 sp.waveforms = waveforms(takeclus,:);
 if any(emptyclus)
-disp(['Found ' num2str(length(emptyclus)) ' empty clusters found. Removing from clusinfo'])
+
+disp(['Found ' num2str(length(emptyclus)) ' empty clusters. Removing from clusinfo'])
 end
 
 %% Remove the empty clusters
