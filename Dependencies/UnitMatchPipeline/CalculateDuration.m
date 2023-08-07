@@ -1,13 +1,22 @@
-function DataSizeParam = CalculateDuration(Dir2Use)
+function DataSizeParam = CalculateDuration(Dir2Use, metaLocation)
 % Dir2Use = 'H:\Ongoing\EB019\'
 tmp = dir(fullfile(Dir2Use,'UnitMatch','UnitMatch.mat'));
 
 tmp = load(fullfile(tmp.folder,tmp.name));
 TotalDur = 0;
 TotalBytes = 0;
-for id = 1:length(tmp.UMparam.AllRawPaths)
-
-    meta = ReadMeta2(tmp.UMparam.AllRawPaths(id).folder);
+if exist("metaLocation")
+    meta_path = metaLocation;
+else
+    meta_path = tmp.UMparam.AllRawPaths;
+end
+for id = 1:length(meta_path)
+    if isstruct(meta_path(id))
+        meta = ReadMeta2(meta_path(id).folder);
+    else
+        meta_folder = dir(meta_path{id});
+        meta = ReadMeta2(meta_folder.folder);
+    end
     TotalDur = TotalDur+str2num(meta.fileTimeSecs);
     TotalBytes = TotalBytes + str2num(meta.fileSizeBytes);
 end
