@@ -1,6 +1,6 @@
 function DataSizeParam = CalculateDuration(Dir2Use, metaLocation)
 % Dir2Use = 'H:\Ongoing\EB019\'
-tmp = dir(fullfile(Dir2Use,'UnitMatch','UnitMatch.mat'));
+tmp = dir(fullfile(Dir2Use,'UnitMatch.mat'));
 
 tmp = load(fullfile(tmp.folder,tmp.name));
 TotalDur = 0;
