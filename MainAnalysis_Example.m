@@ -5,13 +5,13 @@ SaveDir = 'H:\MatchingUnits\Output\NotConcatenated' % Folder where to store the 
 tmpdatafolder = 'H:\MatchingUnits\Tmp'; % temporary folder for temporary decompression of data 
 KilosortDir = 'H:\MatchingUnits\KilosortOutput'; % Kilosort output folder
 GithubDir = 'C:\Users\EnnyB\Documents\GitHub'; % Github directory
-%PythonEXE = 'C:\Users\EnnyB\anaconda3\envs\pyks2\pythonw.exe' % Python version to run python code in:
+PythonEXE = 'C:\Users\EnnyB\anaconda3\envs\pyks2\pythonw.exe' % Python version to run python code in:
 
 %% Information on experiments
-MiceOpt = {'JF067'}; % Add all mice you want to analyze
+MiceOpt = {'AL032','AV008','CB016','EB019','JF067'}; % Add all mice you want to analyze
 DataDir2Use = repmat(1,[1,length(MiceOpt)]); % In case you have multiple DataDir, index which directory is used for each mouse
-RecordingType = repmat({'Acute'},1,length(MiceOpt)); % And whether recordings were acute (default)
-RecordingType(ismember(MiceOpt,{'JF067'}))={'Chronic'}; %EB014', % Or maybe Chronic?
+RecordingType = repmat({'Chronic'},1,length(MiceOpt)); % And whether recordings were Chronic (default)
+RecordingType(ismember(MiceOpt,{''}))={'Acute'}; %EB014', % Or maybe acute?
 
 %% Parameters on how to prepare units/data for analysis
 PrepareClusInfoparams.RunPyKSChronicStitched = 0; % Default 0. if 1, run PyKS chronic recordings stitched when same IMRO table was used

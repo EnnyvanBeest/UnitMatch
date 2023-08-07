@@ -171,16 +171,7 @@ for subsesid = 1:length(KiloSortPaths)
     if length(channelmaptmp) < length(channelpostmp)
         channelmaptmp(end+1:length(channelpostmp)) = length(channelmaptmp):length(channelpostmp) - 1;
     end
-    Params.nSavedChans = 385; % QQ: Load from meta 
-    Params.nSyncChans = 1;
-    if length(channelmaptmp) < (Params.nSavedChans - Params.nSyncChans) %for Kilosort2, "dead" sites are removed. Add them back here 
-        channelmaptmp_full = [0:(Params.nSavedChans - Params.nSyncChans)]';
-        missing_sites = ismember(channelmaptmp_full, channelmaptmp);
-        depth_step = median(diff(channelpostmp(:,2)));
-        x_arrangement = unique(channelpostmp(:,1));
-        channel_map_full  = nan(size(channelmaptmp_full,1),2);
-        channel_map_full(missing_sites,:) = channelpostmp ;
-    end
+   
 
     %% Is it correct channelpos though...? Check using raw data
     channelpostmpconv = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done
