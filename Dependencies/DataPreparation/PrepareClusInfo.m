@@ -40,6 +40,7 @@ try
         Params.loadPCs = 1;
         Params.RunPyKSChronicStitched = 1;
         Params.DecompressLocal = 1; %if 1, uncompress data first if it's currently compressed
+        Params.CleanUpTemporary = 1; % Clean up temporary data
         Params.RedoQM = 0; %if 1, redo quality metrics if it already exists
         Params.RunQualityMetrics = 1; % If 1, Run the quality metrics
         Params.InspectQualityMetrics = 0; % Inspect the quality metrics/data set using the GUI
@@ -67,6 +68,9 @@ try
 catch ME
     disp(ME)
     UseParamsKS = 1;
+end
+if ~isfield(Params,'CleanUpTemporary')
+    Params.CleanUpTemporary = 1; % Clean up temporary folder
 end
 
 %% Initialize everything
@@ -170,8 +174,7 @@ for subsesid = 1:length(KiloSortPaths)
     channelpostmp = readNPY(fullfile(myClusFile(1).folder, myClusFile(1).name));
     if length(channelmaptmp) < length(channelpostmp)
         channelmaptmp(end+1:length(channelpostmp)) = length(channelmaptmp):length(channelpostmp) - 1;
-    end
-   
+    end   
 
     %% Is it correct channelpos though...? Check using raw data
     channelpostmpconv = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done
@@ -557,16 +560,31 @@ Params.RawDataPaths = RawDataPaths;
 Params.DecompressionFlag = DecompressionFlag;
 
 %% Remove temporary files
-if 0 %Params.DecompressLocal && DecompressionFlag
-    clear memMapData
-    clear ap_data
-    try
-        for id = 1:length(RawDataPaths)
-            delete(fullfile(Params.tmpdatafolder, strrep(RawDataPaths(id).name, 'cbin', 'bin')))
-            delete(fullfile(Params.tmpdatafolder, strrep(RawDataPaths(id).name, 'cbin', 'meta')))
+if any(ismember({RawDataPaths(:).folder},Params.tmpdatafolder))
+     Params.CleanUpTemporary = 1;
+end
+
+CleanUpCheckFlag = 0; % Put to 1 is own responsibility! Make sure not to delete stuff from the server directly!
+if Params.DecompressLocal && Params.CleanUpTemporary 
+    if ~CleanUpCheckFlag
+        answer = questdlg(['Automatically remove data from ' Params.tmpdatafolder '?'], ...
+	'REMOVING -- CHECK!!!', ...
+	'YES','NO','YES');
+        if strcmpi(answer,'YES')
+            CleanUpCheckFlag = 1;
         end
-    catch ME
-        keyboard
+    end
+    if CleanUpCheckFlag
+        clear memMapData
+        clear ap_data
+        try
+            for id = 1:length(RawDataPaths)
+                delete(fullfile(Params.tmpdatafolder, strrep(RawDataPaths(id).name, 'cbin', 'bin')))
+                delete(fullfile(Params.tmpdatafolder, strrep(RawDataPaths(id).name, 'cbin', 'meta')))
+            end
+        catch ME
+            keyboard
+        end
     end
 end
 

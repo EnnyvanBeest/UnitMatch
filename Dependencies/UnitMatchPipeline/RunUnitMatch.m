@@ -119,7 +119,7 @@ if Params.UnitMatch
         [UniqueIDConversion, MatchTable, WaveformInfo, UMparam] = UnitMatch(clusinfo, UMparam);
         UMrunTime = toc(GlobalUnitMatchClock);
         save(fullfile(UMparam.SaveDir, 'UnitMatch.mat'), 'UniqueIDConversion', 'MatchTable', 'WaveformInfo', 'UMparam', 'UMrunTime')
-        DataSizeParam = CalculateDuration(Params.SaveDir, ephys_dirs);
+        DataSizeParam = CalculateDuration(UMparam.SaveDir, ephys_dirs);
         disp(['UnitMatch took ', num2str(round(UMrunTime/60*10)/10), ' minute(s) to run'])
 
     end
