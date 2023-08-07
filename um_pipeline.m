@@ -41,5 +41,23 @@ for iMouse = 1:size(MiceOpt,2)
     %% run unit match
     [PrepareClusInfoparams, UMparam, UniqueIDConversion, MatchTable, WaveformInfo]  = um_runUnitMatch(kilosort_dirs, ephys_dirs, SaveDir, tmpdatafolder, thisRecordingType, mouseName);  
 
+    %% Evaluate UnitMatch's output
+    EvaluatingUnitMatch(SaveDir);
+    ComputeFunctionalScores(SaveDir)
+    
     %% GUI: look at matches 
+    DrawBlind = 0; %1 for blind drawing (for manual judging of pairs)
+    DrawPairsUnitMatch(SaveDir, DrawBlind);
+    
+    % Key presses:
+    %   Right arrow: next pair
+    %   Left arrow: previous pair
+    %   Up arrow: label as match
+    %   Down arrow: label as non-match
+    %   o: label as I don't know (=uncurated)
+    %   m: go to first uncurated pair
+    %   p: select pair number
+    %   s: SAVE
+    recompute = 1;
+    FigureFlick(SaveDir,'julie',recompute)
 end
