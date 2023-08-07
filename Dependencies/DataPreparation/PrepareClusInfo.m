@@ -509,8 +509,8 @@ for subsesid = 1:length(KiloSortPaths)
     clusinfo.depth = depth;
     clusinfo.cluster_id = AllUniqueTemplates;
     clusinfo.group = Label;
-    if length(Good_ID)>length(recsesAll)
-        NonEmptyIdx = true(1,length(recsesAll));
+    if length(Good_ID) > length(recsesAll)
+        NonEmptyIdx = true(1,length(Good_ID));
         NonEmptyIdx(emptyclus) = false;
         clusinfo.Good_ID = Good_ID(NonEmptyIdx);
     else

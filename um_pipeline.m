@@ -60,6 +60,7 @@ for iMouse = 1:size(MiceOpt,2)
     %   p: go to pair number
     %   s: SAVE
     recompute = 1;
+
     FigureFlick(SaveDir,user,recompute)
     % your labels are saved in MatchTable.<user>
 end
