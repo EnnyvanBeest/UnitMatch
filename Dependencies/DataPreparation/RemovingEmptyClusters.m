@@ -1,6 +1,6 @@
-function   [clusinfo, sp] = ConvertTemplatesAfterPhy(clusinfo,sp)
+function   [clusinfo, sp, emptyclus] = RemovingEmptyClusters(clusinfo,sp)
 
-%% After phy clu and template are not identical (due to merging/ splitting etc.
+%% Due to merging/ splitting etc. there are empty clusters. Remove these
 % Convert sp data accordingly
 
 % Initialize new vectors
@@ -49,6 +49,7 @@ sp.tempsUnW = tempsUnW(takeclus,:,:);
 sp.templateDuration = templateDuration(takeclus);
 sp.waveforms = waveforms(takeclus,:);
 if any(emptyclus)
+
 disp(['Found ' num2str(length(emptyclus)) ' empty clusters. Removing from clusinfo'])
 end
 

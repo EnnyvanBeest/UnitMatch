@@ -48,22 +48,8 @@ for midx = 1:length(MiceOpt)
     end
     subsesopt(cellfun(@isempty,channelposition))=[];
     channelposition(cellfun(@isempty,channelposition))=[];
-    subsesoptAll = subsesopt;
-    ImroCount = 1;
-    IMROTableOpt = {};
-    ChannelPosOpt = {};
-    subsesoptGroups = {};
-    for id = 1:length(channelposition)
-        id1 = find(cell2mat(cellfun(@(X) all(channelposition{id}(:)==X(:)),ChannelPosOpt,'Uni',0)));
-        if ~isempty(id1)
-            subsesoptGroups{id1} = [subsesoptGroups{id1} id];
-        else
-            IMROTableOpt = {IMROTableOpt{:} ['IMRO' num2str(ImroCount)]};
-            subsesoptGroups{ImroCount} = id;
-            ChannelPosOpt{ImroCount} = channelposition{id};
-            ImroCount = ImroCount+1;
-        end
-    end
+    AllKiloSortPaths = subsesopt;
+  
 
     %% Create saving directoryed
     clear params
@@ -73,18 +59,19 @@ for midx = 1:length(MiceOpt)
         mkdir(fullfile(SaveDir,MiceOpt{midx}))
     end
     PrepareClusInfoparams.SaveDir = fullfile(SaveDir,MiceOpt{midx});
-   if isempty(subsesopt)
-       disp(['No data found for ' MiceOpt{midx}])
+    if isempty(subsesopt)
+        disp(['No data found for ' MiceOpt{midx}])
         continue
     end
     %% Prepare cluster information
-    PrepareClusInfoparams = PrepareClusInfo(subsesoptAll,PrepareClusInfoparams);
+    PrepareClusInfoparams = PrepareClusInfo(AllKiloSortPaths,PrepareClusInfoparams);
     PrepareClusInfoparams.RecType = RecordingType{midx};%
 
     %% Run UnitMatch
     UnitMatchExist = dir(fullfile(PrepareClusInfoparams.SaveDir,'**','UnitMatch.mat'));
     if isempty(UnitMatchExist) || PrepareClusInfoparams.RedoUnitMatch
-        UMparam = RunUnitMatch(subsesoptAll,PrepareClusInfoparams);
+     %% Evaluate (within unit ID cross-v alidation)
+        UMparam = RunUnitMatch(AllKiloSortPaths,PrepareClusInfoparams);
         
         %% Evaluate (within unit ID cross-validation)
         EvaluatingUnitMatch(UMparam.SaveDir);
@@ -96,6 +83,10 @@ for midx = 1:length(MiceOpt)
         if UMparam.MakePlotsOfPairs
             DrawBlind = 0; %1 for blind drawing (for manual judging of pairs)
             DrawPairsUnitMatch(UMparam.SaveDir,DrawBlind);
+
+            if UMparam.GUI
+                FigureFlick(UMparam.SaveDir)
+            end
         end
 
         %% QM

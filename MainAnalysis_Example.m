@@ -1,17 +1,17 @@
 %% User Input
 %% Path information
-DataDir = {'/home/netshare/zinu/'}; % Raw data folders, typically servers were e.g. *.cbin files are stored
-SaveDir = '/home/netshare/zinu/JF067/unitMatch' % Folder where to store the results
-tmpdatafolder = '/media/julie/ExtraHD/data_temp'; % temporary folder for temporary decompression of data 
-KilosortDir = '/home/netshare/zinu/'; % Kilosort output folder
+DataDir = {'H:\MatchingUnits\RawData'}; % Raw data folders, typically servers were e.g. *.cbin files are stored
+SaveDir = 'H:\MatchingUnits\Output\NotConcatenated' % Folder where to store the results
+tmpdatafolder = 'H:\MatchingUnits\Tmp'; % temporary folder for temporary decompression of data 
+KilosortDir = 'H:\MatchingUnits\KilosortOutput'; % Kilosort output folder
 GithubDir = 'C:\Users\EnnyB\Documents\GitHub'; % Github directory
-%PythonEXE = 'C:\Users\EnnyB\anaconda3\envs\pyks2\pythonw.exe' % Python version to run python code in:
+PythonEXE = 'C:\Users\EnnyB\anaconda3\envs\pyks2\pythonw.exe' % Python version to run python code in:
 
 %% Information on experiments
-MiceOpt = {'JF067'}; % Add all mice you want to analyze
+MiceOpt = {'AL032','AV008','CB016','EB019','JF067'}; % Add all mice you want to analyze
 DataDir2Use = repmat(1,[1,length(MiceOpt)]); % In case you have multiple DataDir, index which directory is used for each mouse
-RecordingType = repmat({'Acute'},1,length(MiceOpt)); % And whether recordings were acute (default)
-RecordingType(ismember(MiceOpt,{'JF067'}))={'Chronic'}; %EB014', % Or maybe Chronic?
+RecordingType = repmat({'Chronic'},1,length(MiceOpt)); % And whether recordings were Chronic (default)
+RecordingType(ismember(MiceOpt,{''}))={'Acute'}; %EB014', % Or maybe acute?
 
 %% Parameters on how to prepare units/data for analysis
 PrepareClusInfoparams.RunPyKSChronicStitched = 0; % Default 0. if 1, run PyKS chronic recordings stitched when same IMRO table was used
@@ -43,39 +43,40 @@ PrepareClusInfoparams.ApplyExistingBayesModel = 0; %If 1, use probability distri
 PrepareClusInfoparams.MakePlotsOfPairs = 0; % Plots pairs for inspection (UnitMatch)
 PrepareClusInfoparams.AssignUniqueID = 1; % Assign UniqueID 
 PrepareClusInfoparams.GoodUnitsOnly = 1; % Include only good untis in the UnitMatch analysis - faster and more sensical
+PrepareClusInfoparams.GUI = 1; % Flick through and do manual curation of matching
 
 %% Automatic from here
 PrepareClusInfoparams.SaveDir = SaveDir; % Save results here
 PrepareClusInfoparams.tmpdatafolder = tmpdatafolder; % use this as a local directory (should be large enough to handle all sessions you want to combine)
 
 %% All dependencies you want to add (you may need to download these, all available via github)
-% addpath(genpath(cd))
-% 
-% % Required (for using UnitMatch):
-% addpath(genpath(fullfile(GithubDir,'spikes')))% Should work with normal spikes toolbox, but I use the forked version in https://github.com/EnnyvanBeest/spikes
-% addpath(genpath(fullfile(GithubDir,'npy-matlab'))) % https://github.com/kwikteam/npy-matlab
-% addpath(genpath(fullfile(GithubDir,'mtscomp'))) % https://github.com/int-brain-lab/mtscomp
-% 
-% % Advised (quality metrics for unit selection):
-% addpath(genpath(fullfile(GithubDir,'bombcell'))) % DOI: 10.5281/zenodo.8172822, https://github.com/Julie-Fabre/bombcell 
-% 
-% % Optional for histology:
-% addpath(genpath(fullfile(GithubDir,'AP_histology'))) % https://github.com/petersaj/AP_histology
-% addpath(genpath(fullfile(GithubDir,'allenCCF'))) % https://github.com/cortex-lab/allenCCF
-% 
-% % UNITMATCH - Move to top of paths 
-% addpath(genpath(fullfile(GithubDir,'UnitMatch'))) % Make sure to have this one fresh in the path (so run this last)
-% 
-% try
-%     % Python version to run python code in:
-%     pyversion(PythonEXE) %Explanation on how to do this is provided in the README
-% catch ME
-%     disp(ME)
-% end
+addpath(genpath(cd))
+
+% Required (for using UnitMatch):
+addpath(genpath(fullfile(GithubDir,'spikes')))% Should work with normal spikes toolbox, but I use the forked version in https://github.com/EnnyvanBeest/spikes
+addpath(genpath(fullfile(GithubDir,'npy-matlab'))) % https://github.com/kwikteam/npy-matlab
+addpath(genpath(fullfile(GithubDir,'mtscomp'))) % https://github.com/int-brain-lab/mtscomp
+
+% Advised (quality metrics for unit selection):
+addpath(genpath(fullfile(GithubDir,'bombcell'))) % DOI: 10.5281/zenodo.8172822, https://github.com/Julie-Fabre/bombcell 
+
+% Optional for histology:
+addpath(genpath(fullfile(GithubDir,'AP_histology'))) % https://github.com/petersaj/AP_histology
+addpath(genpath(fullfile(GithubDir,'allenCCF'))) % https://github.com/cortex-lab/allenCCF
+
+% UNITMATCH - Move to top of paths 
+addpath(genpath(fullfile(GithubDir,'UnitMatch'))) % Make sure to have this one fresh in the path (so run this last)
+
+try
+    % Python version to run python code in:
+    pyversion(PythonEXE) %Explanation on how to do this is provided in the README
+catch ME
+    disp(ME)
+end
 
 %% Actual pipeline
 %% PyKS - run pykilosort from Matlab/Python integration
-%RunPyKS2_FromMatlab
+RunPyKS2_FromMatlab
 
 %% Runs unitmatch across all data from a mouse to generate a table
 RunUnitMatchAllDataPerMouse

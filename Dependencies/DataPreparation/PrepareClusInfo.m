@@ -171,14 +171,7 @@ for subsesid = 1:length(KiloSortPaths)
     if length(channelmaptmp) < length(channelpostmp)
         channelmaptmp(end+1:length(channelpostmp)) = length(channelmaptmp):length(channelpostmp) - 1;
     end
-    if length(channelmaptmp) < (Params.nSavedChans - Params.nSyncChans) %for Kilosort2, "dead" sites are removed. Add them back here 
-        channelmaptmp_full = [0:(Params.nSavedChans - Params.nSyncChans)]';
-        missing_sites = ismember(channelmaptmp_full, channelmaptmp);
-        depth_step = median(diff(channelpostmp(:,2)));
-        x_arrangement = unique(channelpostmp(:,1));
-        channel_map_full  = nan(size(channelmaptmp_full,1),2);
-        channel_map_full(missing_sites,:) = channelpostmp ;
-    end
+   
 
     %% Is it correct channelpos though...? Check using raw data
     channelpostmpconv = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done
@@ -221,6 +214,9 @@ for subsesid = 1:length(KiloSortPaths)
         templatePositionsAmplitudes(sp.temps, sp.winv, sp.ycoords, sp.xcoords, sp.spikeTemplates, sp.tempScalingAmps); %from the spikes toolbox
     templateWaveforms = sp.temps;
     %% Remove noise; spikes across all channels'
+    if ~isfield(Params,'deNoise')
+        Params.deNoise = 1;
+    end
     if Params.deNoise == 1
         sp = RemoveNoiseAmplitudeBased(sp);
     end
@@ -242,8 +238,8 @@ for subsesid = 1:length(KiloSortPaths)
         end
         
         % Convert sp data to correct cluster according to phy (clu and
-        % template are not necessarily the same after phy)
-        [clusinfo,sp] = ConvertTemplatesAfterPhy(clusinfo,sp);
+        % template are not necessarily the same after splitting/merging)
+        [clusinfo,sp,emptyclus] = RemovingEmptyClusters(clusinfo,sp);
 
         %clusidtmp = clusinfo.cluster_id;
         clusinfo.cluster_id = unique(sp.spikeTemplates);
@@ -285,9 +281,9 @@ for subsesid = 1:length(KiloSortPaths)
         save(fullfile(KiloSortPaths{subsesid}, 'CuratedResults.mat'), 'CurationDone')
         clusinfo = tdfread(fullfile(myClusFile(1).folder, myClusFile(1).name));
         % Convert sp data to correct cluster according to phy (clu and
-        % template are not necessarily the same after phy)
-        [clusinfo, sp] = ConvertTemplatesAfterPhy(clusinfo, sp);
-
+        % template are not necessarily the same after  splitting/merging)
+        [clusinfo, sp, emptyclus] = RemovingEmptyClusters(clusinfo,sp);
+       
         curratedflag = 1;
         if isfield(clusinfo, 'id')
             clusidtmp = clusinfo.id;
@@ -513,7 +509,14 @@ for subsesid = 1:length(KiloSortPaths)
     clusinfo.depth = depth;
     clusinfo.cluster_id = AllUniqueTemplates;
     clusinfo.group = Label;
-    clusinfo.Good_ID = Good_ID;
+    if length(Good_ID)>length(recsesAll)
+        NonEmptyIdx = true(1,length(recsesAll));
+        NonEmptyIdx(emptyclus) = false;
+        clusinfo.Good_ID = Good_ID(NonEmptyIdx);
+    else
+        clusinfo.Good_ID = Good_ID;
+    end
+
     if exist('Depth2AreaPerUnit', 'var') % Add area information
         Idx = cell2mat(arrayfun(@(X) find(Depth2AreaPerUnit.Cluster_ID-1 == X), clusinfo.cluster_id, 'Uni', 0));
         clusinfo.Area = Depth2AreaPerUnit.Area(Idx);
