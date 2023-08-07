@@ -23,7 +23,7 @@
 %         - the prior used in the model (e.g. 'Acute' vs 'Chronic') 
 
 %% Where to save data - CHANGE THESE PATHS
-SaveDir = '/home/netshare/zinu/JF067/unitMatch'; % Folder where to store the results
+SaveDir = '/home/netshare/zinu/JF067/'; % Folder where to store the results
 tmpdatafolder = '/media/julie/ExtraHD/data_temp'; % temporary folder for temporary decompression of data 
 
 %% Information on mice and recording types - CHANGE THESE MOUSE NAMES AND RECORDING TYPES
