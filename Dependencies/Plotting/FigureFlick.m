@@ -40,7 +40,8 @@ function FigureFlick(UMDir,user,recompute)
     d = dir(fullfile(UMDir,'MatchFigures','*.fig'));
     %     d(cellfun(@(X) datetime(X)<datetime(UMFile.date),{d.date})) = []; % Remove figures that were made prior to this matchtable
     if isempty(d)
-        disp(['No figures were created after date of matchtable output: ' UMFile.date])
+        disp(['No figures were created after date of matchtable output: ' UMFile.date newline ...
+            'Run th function DrawPairsUnitMatch to create them'])
         return
     end
     UIDs = cell2mat(cellfun(@(y) str2num(y{2}(1:strfind(y{2},'_')-1)), cellfun(@(x) strsplit(x,'UID'), {d.name}, 'uni',0),'uni',0));
