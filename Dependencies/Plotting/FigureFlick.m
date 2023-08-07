@@ -19,8 +19,8 @@ function FigureFlick(UMDir,user,recompute)
 
     if ~exist('user','var')
         warning('No user specified. Will use default computername.')
-        [ret,name] = system('hostname');%'default';
-        name = (name(1:end-1));
+        [ret,user] = system('hostname');%'default';
+        user = (user(1:end-1));
     end
 
     if ~exist('recompute','var')
@@ -30,8 +30,8 @@ function FigureFlick(UMDir,user,recompute)
     % Load matchtable
     UMFile = dir(fullfile(UMDir,'UnitMatch.mat'));
     load(fullfile(UMFile.folder,UMFile.name))
-    if ~any(ismember(MatchTable.Properties.VariableNames,name))
-        eval(['MatchTable.' name ' = zeros(height(MatchTable),1);'])
+    if ~any(ismember(MatchTable.Properties.VariableNames,user))
+        eval(['MatchTable.' user ' = zeros(height(MatchTable),1);'])
     end
 
 
@@ -40,7 +40,8 @@ function FigureFlick(UMDir,user,recompute)
     d = dir(fullfile(UMDir,'MatchFigures','*.fig'));
     %     d(cellfun(@(X) datetime(X)<datetime(UMFile.date),{d.date})) = []; % Remove figures that were made prior to this matchtable
     if isempty(d)
-        disp(['No figures were created after date of matchtable output: ' UMFile.date])
+        disp(['No figures were created after date of matchtable output: ' UMFile.date newline ...
+            'Run the function DrawPairsUnitMatch to create them'])
         return
     end
     UIDs = cell2mat(cellfun(@(y) str2num(y{2}(1:strfind(y{2},'_')-1)), cellfun(@(x) strsplit(x,'UID'), {d.name}, 'uni',0),'uni',0));
@@ -51,8 +52,8 @@ function FigureFlick(UMDir,user,recompute)
     % Fill in GUI data
     guiData = struct;
     guiData.d = d;
-    guiData.name = name;
-    eval(['tmpMatch = MatchTable.' name ';']);
+    guiData.name = user;
+    eval(['tmpMatch = MatchTable.' user ';']);
     try
     tmpMatchIdx = arrayfun(@(X)find(MatchTable.UID1 == X & MatchTable.UID2 == X,1,'first'),UIDs);
     catch ME
@@ -67,7 +68,7 @@ function FigureFlick(UMDir,user,recompute)
     guiData.showFinishBox = 1;
 
     % Create figure
-    blindFlickGUI = figure('color','w','name',name);
+    blindFlickGUI = figure('color','w','name',user);
 
     guidata(blindFlickGUI, guiData);
     updatePlot(blindFlickGUI);
