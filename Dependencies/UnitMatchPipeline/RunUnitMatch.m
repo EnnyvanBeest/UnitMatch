@@ -69,7 +69,7 @@ UMparam.binsize = Params.binsz;
 UMparam.Scores2Include = Params.Scores2Include; %
 UMparam.ApplyExistingBayesModel = Params.ApplyExistingBayesModel; %If 1, use probability distributions made available by us
 UMparam.MakePlotsOfPairs = Params.MakePlotsOfPairs; % Plot all pairs
-UMparam.GUI = Params.GUI; % Open GUI for manual curation of pairs
+%UMparam.GUI = Params.GUI; % Open GUI for manual curation of pairs
 
 UMparam.AssignUniqueID = Params.AssignUniqueID; %Assign Unique ID
 UMparam.GoodUnitsOnly = Params.GoodUnitsOnly;

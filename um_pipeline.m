@@ -25,6 +25,7 @@
 %% Where to save data - CHANGE THESE PATHS
 SaveDir = '/home/netshare/zinu/JF067/'; % Folder where to store the results
 tmpdatafolder = '/media/julie/ExtraHD/data_temp'; % temporary folder for temporary decompression of data 
+user = 'julie';
 
 %% Information on mice and recording types - CHANGE THESE MOUSE NAMES AND RECORDING TYPES
 MiceOpt = {'JF067'}; % Add all mice you want to analyze
@@ -32,32 +33,34 @@ RecordingType(ismember(MiceOpt,{'JF067'}))={'Chronic'}; % 'Acute' or 'Chronic'
 
 for iMouse = 1:size(MiceOpt,2)
 
-    %% get all raw ephys and kilosort directories - CHANGE THESE PATHS
+    %% Get all raw ephys and kilosort directories - CHANGE THESE PATHS
     ephys_dirs = {path_to_all_ephys_dirs}; % this should be a cell array, with each cell containing the path to your raw .bin, .cbin or .dat data. 
     kilosort_dirs = {path_to_all_kilosort_dirs}; % this should be a cell array, with each cell containing the path to your kilosort output files 
     thisRecordingType = RecordingType{iMouse};
     mouseName = MiceOpt{iMouse};
 
-    %% run unit match
+    %% Run UnitMatch
     [PrepareClusInfoparams, UMparam, UniqueIDConversion, MatchTable, WaveformInfo]  = um_runUnitMatch(kilosort_dirs, ephys_dirs, SaveDir, tmpdatafolder, thisRecordingType, mouseName);  
 
     %% Evaluate UnitMatch's output
     EvaluatingUnitMatch(SaveDir);
     ComputeFunctionalScores(SaveDir)
-    
-    %% GUI: look at matches 
+
+    %% GUI: look at matches and evaluate them
     DrawBlind = 0; %1 for blind drawing (for manual judging of pairs)
     DrawPairsUnitMatch(SaveDir, DrawBlind);
     
-    % Key presses:
+    % GUI guide:
     %   Right arrow: next pair
     %   Left arrow: previous pair
     %   Up arrow: label as match
     %   Down arrow: label as non-match
     %   o: label as I don't know (=uncurated)
     %   m: go to first uncurated pair
-    %   p: select pair number
+    %   p: go to pair number
     %   s: SAVE
     recompute = 1;
-    FigureFlick(SaveDir,'julie',recompute)
+
+    FigureFlick(SaveDir,user,recompute)
+    % your labels are saved in MatchTable.<user>
 end

@@ -361,17 +361,17 @@ for subsesid = 1:length(KiloSortPaths)
             qMetricsExist = ~isempty(dir(fullfile(savePath, '**', 'templates._bc_qMetrics.parquet'))); % ~isempty(dir(fullfile(savePath, 'qMetric*.mat'))) not used anymore?
             idx = sp.SessionID == 1;
             InspectionFlag = 0;
-            if ~exist(fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'bin'))) %&& Params.extractSync
+            if isempty(dir(fullfile(savePath, '**', 'RawWaveforms'))) % if raw waveforms have not been extract, decompress data for extraction
                 disp('Extracting sync file...')
                 % detect whether data is compressed, decompress locally if necessary
                 if ~exist(fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'bin')))
                     disp('This is compressed data and we do not want to use Python integration... uncompress temporarily')
                     decompDataFile = bc_extractCbinData(fullfile(rawD(id).folder, rawD(id).name), ...
                         [], [], 0, fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'bin')));
-                    status = copyfile(strrep(fullfile(rawD(id).folder, rawD(id).name), 'cbin', 'meta'), strrep(fullfile(Params.tmpdatafolder, rawD(id).name), 'cbin', 'meta')); %QQ doesn't work on linux
+                    statusCopy = copyfile(strrep(fullfile(rawD(id).folder, rawD(id).name), 'cbin', 'meta'), strrep(fullfile(Params.tmpdatafolder, rawD(id).name), 'cbin', 'meta')); %QQ doesn't work on linux
                 end
                 DecompressionFlag = 1;
-                 if status == 0 %could not copy meta file - use original meta file 
+                 if statusCopy == 0 %could not copy meta file - use original meta file 
                      [Imecmeta] = ReadMeta2(fullfile(rawD(id).folder, strrep(rawD(id).name, 'cbin', 'meta')), 'ap');
                  else
                     [Imecmeta] = ReadMeta2(fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'meta')), 'ap');
@@ -380,7 +380,7 @@ for subsesid = 1:length(KiloSortPaths)
                 nChansInFile = str2num(nchan{1}) + str2num(nchan{3});
 
                 syncDatImec = extractSyncChannel(fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'bin')), nChansInFile, nChansInFile); %Last channel is sync
-                status = copyfile(fullfile(Params.tmpdatafolder, strrep(rawD(id).name, '.cbin', '_sync.dat')), fullfile(rawD(id).folder, strrep(rawD(id).name, '.cbin', '_sync.dat'))); %QQ doesn't work on linux
+                statusCopy = copyfile(fullfile(Params.tmpdatafolder, strrep(rawD(id).name, '.cbin', '_sync.dat')), fullfile(rawD(id).folder, strrep(rawD(id).name, '.cbin', '_sync.dat'))); %QQ doesn't work on linux
 
             end
             if ~qMetricsExist || Params.RedoQM
@@ -391,7 +391,7 @@ for subsesid = 1:length(KiloSortPaths)
                         disp('This is compressed data and we do not want to use Python integration... uncompress temporarily')
                         decompDataFile = bc_extractCbinData(fullfile(rawD(id).folder, rawD(id).name), ...
                             [], [], 0, fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'bin')));
-                        status = copyfile(strrep(fullfile(rawD(id).folder, rawD(id).name), 'cbin', 'meta'), strrep(fullfile(Params.tmpdatafolder, rawD(id).name), 'cbin', 'meta')); %QQ doesn't work on linux
+                        statusCopy = copyfile(strrep(fullfile(rawD(id).folder, rawD(id).name), 'cbin', 'meta'), strrep(fullfile(Params.tmpdatafolder, rawD(id).name), 'cbin', 'meta')); %QQ doesn't work on linux
                     end
 
                     DecompressionFlag = 1;
@@ -509,8 +509,8 @@ for subsesid = 1:length(KiloSortPaths)
     clusinfo.depth = depth;
     clusinfo.cluster_id = AllUniqueTemplates;
     clusinfo.group = Label;
-    if length(Good_ID)>length(recsesAll)
-        NonEmptyIdx = true(1,length(recsesAll));
+    if length(Good_ID) > length(recsesAll)
+        NonEmptyIdx = true(1,length(Good_ID));
         NonEmptyIdx(emptyclus) = false;
         clusinfo.Good_ID = Good_ID(NonEmptyIdx);
     else
