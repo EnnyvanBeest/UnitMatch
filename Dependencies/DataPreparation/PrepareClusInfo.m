@@ -566,15 +566,17 @@ if any(ismember({RawDataPaths(:).folder},Params.tmpdatafolder))
      Params.CleanUpTemporary = 1;
 end
 
-CleanUpCheckFlag = 0; % Put to 1 is own responsibility! Make sure not to delete stuff from the server directly!
-if Params.DecompressLocal && Params.CleanUpTemporary 
+CleanUpCheckFlag = nan; % Put to 1 is own responsibility! Make sure not to delete stuff from the server directly!
+if 0%Params.DecompressLocal && Params.CleanUpTemporary 
     
-    if ~CleanUpCheckFlag && exist(fullfile(Params.tmpdatafolder, strrep(RawDataPaths(1).name, 'cbin', 'bin')))
+    if isnan(CleanUpCheckFlag) && exist(fullfile(Params.tmpdatafolder, strrep(RawDataPaths(1).name, 'cbin', 'bin')))
         answer = questdlg(['Automatically remove data from ' Params.tmpdatafolder '?'], ...
 	'REMOVING -- CHECK!!!', ...
 	'YES','NO','YES');
         if strcmpi(answer,'YES')
             CleanUpCheckFlag = 1;
+        else
+            CleanUpCheckFlag = 0;
         end
     end
     if CleanUpCheckFlag

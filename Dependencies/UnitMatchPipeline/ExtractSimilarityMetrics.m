@@ -688,6 +688,15 @@ while flag<2
     saveas(gcf,fullfile(SaveDir,'TotalScore.fig'))
     saveas(gcf,fullfile(SaveDir,'TotalScore.bmp'))
 
+    figure('name','Cumulative')
+    [h,stats] = cdfplot(TotalScore(:));
+%     plot(h.XData,h.YData,'k-')
+    hold on
+    line([ThrsOpt,ThrsOpt],[0 1],'color',[1 0 0])
+    xlabel('TotalScore')
+    ylabel('Cumulative density')
+    makepretty
+
 
     %% three ways to define candidate scores
     % Total score larger than threshold

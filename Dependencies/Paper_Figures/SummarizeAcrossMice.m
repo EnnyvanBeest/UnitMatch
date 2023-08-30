@@ -10,6 +10,7 @@ ACGRAcrossMice = nan(length(Vector),3,length(MiceOpt)); % Vector / within,Match,
 ACGAUC = nan(3,length(MiceOpt));
 RFDistAcrossMice = nan(length(Vector),3,length(MiceOpt)); % Vector / within,Match,Non-match / mice
 RFAUC = nan(3,length(MiceOpt));
+EPosAndNeg = nan(3,length(MiceOpt));
 UseKSLabels = PrepareClusInfoparams.RunPyKSChronicStitched;
 
 for midx = 1:length(MiceOpt)
@@ -23,12 +24,12 @@ for midx = 1:length(MiceOpt)
 
     % Load AUCS
     if exist(fullfile(SaveDir,MiceOpt{midx},'UnitMatch','AUC.mat'))
-    AUC = load(fullfile(SaveDir,MiceOpt{midx},'UnitMatch','AUC.mat'))';
-    if midx == 1
-    AUCParams = AUC.AUCStruct.ParamNames;
-    AUCVals = nan(length(AUCParams),length(MiceOpt));
-    end
-    AUCVals(:,midx) = AUC.AUCStruct.AUC;
+        AUC = load(fullfile(SaveDir,MiceOpt{midx},'UnitMatch','AUC.mat'))';
+        if midx == 1
+            AUCParams = AUC.AUCStruct.ParamNames;
+            AUCVals = nan(length(AUCParams),length(MiceOpt));
+        end
+        AUCVals(:,midx) = AUC.AUCStruct.AUC;
     end
 
 
@@ -75,7 +76,7 @@ for midx = 1:length(MiceOpt)
             TrackingPerformance = cat(2,TrackingPerformance,[did2-did1,nMatches,nMax]');
             nMatches = length((thesedaysidx)) - length(unique(OriID(thesedaysidx)));
             if UseKSLabels
-            TrackingPerformanceKS = cat(2,TrackingPerformanceKS,[did2-did1,nMatches,nMax]');
+                TrackingPerformanceKS = cat(2,TrackingPerformanceKS,[did2-did1,nMatches,nMax]');
             end
         end
     end
@@ -85,7 +86,16 @@ for midx = 1:length(MiceOpt)
         KSTrackingPerformancePerMouse{midx} = TrackingPerformanceKS;
     end
 
+    %% Extra Positives/negatives
+    %Extra Positive
+    EPosAndNeg(1,midx) = sum(MatchProb(NonMatchIdx)>UMparam.ProbabilityThreshold)./length(NonMatchIdx);
 
+    %Extra Negative
+    EPosAndNeg(2,midx) = sum(MatchProb(WithinIdx)<UMparam.ProbabilityThreshold)./length(WithinIdx);
+
+    if UseKSLabels
+        EPosAndNeg(3,midx) = sum(MatchProb(MatchIdx)<UMparam.ProbabilityThreshold)./length(MatchIdx);
+    end
     %% Fingerprint correlation
     FingerprintCor = reshape(MatchTable.FingerprintCor,nclus,nclus);
 
@@ -333,6 +343,18 @@ makepretty
 saveas(FSCoreFig,fullfile(SaveDir,'FunctionScoreFigAcrossMice.fig'))
 saveas(FSCoreFig,fullfile(SaveDir,'FunctionScoreFigAcrossMice.bmp'))
 
+%% Extra Positive/negative
+EPosAndNeg(:,sum(isnan(EPosAndNeg),1)==3) = [];
+EPosAndNeg(sum(isnan(EPosAndNeg),2)==size(EPosAndNeg,2),:) = [];
+figure('name','ExtraPositiveAndNegative');
+bar(EPosAndNeg'.*100,'EdgeColor','none','BarWidth',1)
+set(gca,'XTick',1:length(MiceOpt),'XTickLabel',MiceOpt,'YAxisLocation','right','XTickLabelRotation',90)
+ylabel('% (relative to spike sorting)')
+legend('Extra Positives','Extra Negatives Within','Extra Negatives Across')
+makepretty
+
+nanmean(EPosAndNeg,2)
+nanstd(EPosAndNeg,[],2)
 %% Tracking performance
 % UMTrackingPerformancePerMouse{midx} = TrackingPerformance;
 %     KSTrackingPerformancePerMouse{midx} = TrackingPerformanceKS;
@@ -359,3 +381,5 @@ ylabel('nUnits')
 makepretty
 saveas(gcf,fullfile(SaveDir,'TrackingPerformance.fig'))
 saveas(gcf,fullfile(SaveDir,'TrackingPerformance.bmp'))
+
+
