@@ -354,12 +354,18 @@ for subsesid = 1:length(KiloSortPaths)
         for id = 1:length(rawD)
             ephysap_tmp = [];
 
-            ephysap_path = fullfile(rawD(id).folder, rawD(id).name);
+            %ephysap_path = fullfile(rawD(id).folder, rawD(id).name);
 
+            if length(rawD) > 1 % DO NOT DELETE!
+                savePath = fullfile(myClusFile(1).folder,num2str(id));
+                idx = sp.SessionID == id;
+            else
                 savePath = fullfile(KiloSortPaths{subsesid});
+                idx = sp.SessionID == 1;
+            end
 
             qMetricsExist = ~isempty(dir(fullfile(savePath, '**', 'templates._bc_qMetrics.parquet'))); % ~isempty(dir(fullfile(savePath, 'qMetric*.mat'))) not used anymore?
-            idx = sp.SessionID == 1;
+            
             InspectionFlag = 0;
             if isempty(dir(fullfile(savePath, '**', 'RawWaveforms'))) % if raw waveforms have not been extract, decompress data for extraction
                 disp('Extracting sync file...')
@@ -430,10 +436,11 @@ for subsesid = 1:length(KiloSortPaths)
 
                 %                 load(fullfile(savePath, 'qMetric.mat'))
             end
+            theseuniqueTemplates{id} = unique(sp.spikeTemplates);
             qMetricclusterID = qMetric.clusterID;
 
             unitTypeAcrossRec{id} = unitType;
-            theseuniqueTemplates{id} = unique(sp.spikeTemplates);
+            
 
             if InspectionFlag % Doesn't currently work: Julie will update bombcell
                 bc_loadMetricsForGUI
