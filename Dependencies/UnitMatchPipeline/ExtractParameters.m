@@ -315,28 +315,30 @@ if 0
 
     % Extract channel positions that are relevant and extract mean location
     [~,MaxChanneltmp] = nanmax(nanmax(abs(nanmean(spikeMap(35:70,:,:),3)),[],1));
-    ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChanneltmp,:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius*3); %Averaging over 10 channels helps with drift
-    Locs = channelpos(ChanIdx,:);
+    ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChanneltmp,:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius.*0.8); %Averaging over 10 channels helps with drift
+    Locs = channelpos(ChanIdx,:,:);
 
     % Plot
-    tmp = nanmean(spikeMap(:,ChanIdx(channelpos(ChanIdx,1)==0),:),3);
+    tmp = nanmean(spikeMap(:,ChanIdx(channelpos(ChanIdx,2)==0),:),3);
     timevec = [-(param.NewPeakLoc-(1:size(spikeMap,1)))].*(1/30000)*1000; % In MS
     lims = [-150 150];
     figure;
     subplot(2,3,1)
-    imagesc(timevec,channelpos(ChanIdx(channelpos(ChanIdx,1)==0),2),tmp',lims)
+    imagesc(timevec,channelpos(ChanIdx(channelpos(ChanIdx,2)==0),3),tmp',lims)
     colormap redblue
     makepretty
     xlabel('Time (ms)')
     ylabel('depth (\mum)')
     title('sites at 0um')
     set(gca,'ydir','normal')
+    ylims = get(gca,'ylim');
 
     subplot(2,3,2) % Peak profile
-    tmp = nanmean(spikeMap(param.NewPeakLoc,ChanIdx(channelpos(ChanIdx,1)==0),:),3);
-    plot(tmp,channelpos(ChanIdx(channelpos(ChanIdx,1)==0),2),'k-')
+    tmp = nanmean(spikeMap(param.NewPeakLoc,ChanIdx(channelpos(ChanIdx,2)==0),:),3);
+    plot(tmp,channelpos(ChanIdx(channelpos(ChanIdx,2)==0),3),'k-')
     xlabel('\muV at peak')
     ylabel('depth (\mum)')
+    ylim(ylims)
     makepretty
 
     subplot(2,3,3) % average waveform
@@ -347,22 +349,26 @@ if 0
     makepretty
 
 
-    tmp = nanmean(spikeMap(:,ChanIdx(channelpos(ChanIdx,1)==32),:),3);
+    tmp = nanmean(spikeMap(:,ChanIdx(channelpos(ChanIdx,2)==32),:),3);
 
     subplot(2,3,4)
-    imagesc(timevec,channelpos(ChanIdx(channelpos(ChanIdx,1)==32),2),tmp',lims)
+    imagesc(timevec,channelpos(ChanIdx(channelpos(ChanIdx,2)==32),3),tmp',lims)
     xlabel('Time (ms)')
     ylabel('Depth (\mum)')
     title('Sites at 32um')
     set(gca,'ydir','normal')
+    ylim(ylims)
+
     colormap redblue
 
     makepretty
     subplot(2,3,5) % Peak profile
-    tmp = nanmean(spikeMap(param.NewPeakLoc,ChanIdx(channelpos(ChanIdx,1)==32),:),3);
-    plot(tmp,channelpos(ChanIdx(channelpos(ChanIdx,1)==0),2),'k-')
+    tmp = nanmean(spikeMap(param.NewPeakLoc,ChanIdx(channelpos(ChanIdx,2)==32),:),3);
+    plot(tmp,channelpos(ChanIdx(channelpos(ChanIdx,2)==0),3),'k-')
     xlabel('\muV at peak')
     ylabel('Depth (\mum)')
+        ylim(ylims)
+
     makepretty
 
     subplot(2,3,6) % average waveform

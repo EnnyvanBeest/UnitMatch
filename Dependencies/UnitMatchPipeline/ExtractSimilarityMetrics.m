@@ -688,6 +688,15 @@ while flag<2
     saveas(gcf,fullfile(SaveDir,'TotalScore.fig'))
     saveas(gcf,fullfile(SaveDir,'TotalScore.bmp'))
 
+    figure('name','Cumulative')
+    [h,stats] = cdfplot(TotalScore(:));
+%     plot(h.XData,h.YData,'k-')
+    hold on
+    line([ThrsOpt,ThrsOpt],[0 1],'color',[1 0 0])
+    xlabel('TotalScore')
+    ylabel('Cumulative density')
+    makepretty
+
 
     %% three ways to define candidate scores
     % Total score larger than threshold
@@ -711,8 +720,12 @@ while flag<2
             end
             ProjectedLocation(1,GoodRecSesID==did+1,:)=ProjectedLocation(1,GoodRecSesID==did+1,:)+drift(1);
             ProjectedLocation(2,GoodRecSesID==did+1,:)=ProjectedLocation(2,GoodRecSesID==did+1,:)+drift(2);
+            ProjectedLocation(3,GoodRecSesID==did+1,:)=ProjectedLocation(3,GoodRecSesID==did+1,:)+drift(3);
+
             ProjectedLocationPerTP(1,GoodRecSesID==did+1,:,:) = ProjectedLocationPerTP(1,GoodRecSesID==did+1,:,:) + drift(1);
             ProjectedLocationPerTP(2,GoodRecSesID==did+1,:,:) = ProjectedLocationPerTP(2,GoodRecSesID==did+1,:,:) + drift(2);
+            ProjectedLocationPerTP(3,GoodRecSesID==did+1,:,:) = ProjectedLocationPerTP(3,GoodRecSesID==did+1,:,:) + drift(3);
+
             close all
 
         end
@@ -765,39 +778,40 @@ if 0 % THis can be used to look at some example projections
         spikeMap = detrend(spikeMap,1); % Detrend (linearly) to be on the safe side. OVER TIME!
         spikeMap = permute(spikeMap,[2,1,3]);  % Put back in order
         %Load channels
-        ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChannel(uid,1),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius); %Averaging over 10 channels helps with drift
+        ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChannel(uid,1),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius.*0.8); %Averaging over 10 channels helps with drift
         Locs = channelpos(ChanIdx,:);
 
         scatter(Locs(:,1),Locs(:,2),20,[0.5 0.5 0.5],'filled')
         hold on
 
         takesamples = param.waveidx;
-        takesamples = unique(takesamples(~isnan(takesamples)));
-        h(1) = plot(squeeze(ProjectedLocationPerTP(1,uid,takesamples,1)),squeeze(ProjectedLocationPerTP(2,uid,takesamples,1)),'-','color',cols(uidx,:));
-        scatter(squeeze(ProjectedLocationPerTP(1,uid,takesamples,1)),squeeze(ProjectedLocationPerTP(2,uid,takesamples,1)),30,takesamples,'filled')
-            plot(ProjectedLocation(1,uid,1),ProjectedLocation(2,uid,1),'*','MarkerSize',12,'color',cols(uidx,:))
+        takesamples = unique(takesamples(~isnan(squeeze(ProjectedLocationPerTP(2,uid,takesamples,1)))));
+        h(1) = plot(squeeze(ProjectedLocationPerTP(2,uid,takesamples,1)),squeeze(ProjectedLocationPerTP(3,uid,takesamples,1)),'-','color',cols(uidx,:));
+        scatter(squeeze(ProjectedLocationPerTP(2,uid,takesamples(1),1)),squeeze(ProjectedLocationPerTP(3,uid,takesamples(1),1)),30,cols(uidx,:),'filled')
+        plot(ProjectedLocation(2,uid,1),ProjectedLocation(3,uid,1),'*','MarkerSize',12,'color',cols(uidx,:))
 
     end
-    colormap(flipud(hot))
+%     MyColMap = hsv(length(takesamples)*2);
+%     colormap(MyColMap(length(takesamples)+1:end,:))
 
     xlabel('Xpos (\mum)')
     ylabel('Ypos (\mum)')
-    xlims = [min(ProjectedLocation(1,Pairs,1))-30 max(ProjectedLocation(1,Pairs,1))+30];
-    ylims = [min(ProjectedLocation(2,Pairs,1))-15 max(ProjectedLocation(2,Pairs,1))+5];
+    ylims = [min(Locs(:,2))-15 max(Locs(:,2))+15];
+   
+    xlims = [min(ProjectedLocation(2,Pairs,1))-diff(ylims)/2 min(ProjectedLocation(2,Pairs,1))+diff(ylims)/2];
     ylabel('')
     set(gca,'xlim',xlims,'ylim',ylims)
     axis square
-    hpos = get(gca,'Position')
-    %     legend([h(1),h(2)],{['Unit ' num2str(uid)],['Unit ' num2str(uid2)]})
-    hc= colorbar;
-    try
-        hc.Label.String = 'timesample';
-    catch ME
-        disp(ME)
-        keyboard
-    end
+%     hpos = get(gca,'Position')
+%         legend([h(1),h(2)],{['Unit ' num2str(uid)],['Unit ' num2str(uid2)]})
+%     hc= colorbar;
+%     try
+%         hc.Label.String = 'timesample';
+%     catch ME
+%         disp(ME)
+%         keyboard
+%     end
     title('Centroid trajectory')
-    set(gca,'Position',hpos);
     makepretty
 
 
@@ -863,7 +877,7 @@ if 0 % THis can be used to look at some example projections
         spikeMap = detrend(spikeMap,1); % Detrend (linearly) to be on the safe side. OVER TIME!
         spikeMap = permute(spikeMap,[2,1,3]);  % Put back in order
         %Load channels
-        ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChannel(uid,1),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius); %Averaging over 10 channels helps with drift
+        ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChannel(uid,1),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius.*0.8); %Averaging over 10 channels helps with drift
         Locs = channelpos(ChanIdx,:);
 
         scatter(Locs(:,1),Locs(:,2),20,[0.5 0.5 0.5],'filled')
@@ -902,7 +916,21 @@ if 0 % THis can be used to look at some example projections
     makepretty
 
 
-    %% Draw at the different channels
+    %% Similarity scores for the two pairs
+         Pairs = [10,450,11] % Example
+        cols =  [0 0 0; 0 0.7 0; 1 0 0];
+    figure('name','Similarity scores')
+    subplot(1,2,1)
+    bar(cat(1,squeeze(Predictors(Pairs(1),Pairs(3),:)),squeeze(TotalScore(Pairs(1),Pairs(3))./6)),'FaceColor',cols(3,:),'EdgeColor','none')
+    set(gca,'XTick',1:size(Predictors,3)+1,'XTickLabel',{'C','W','V','D','A',char(920),'T'},'YAxisLocation','right','YTickLabelRotation',90,'XTickLabelRotation',90)
+    ylabel('Normalized Score')
+    makepretty
+
+  subplot(1,2,2)
+    bar(cat(1,squeeze(Predictors(Pairs(1),Pairs(2),:)),squeeze(TotalScore(Pairs(1),Pairs(2))./6)),'FaceColor',cols(2,:),'EdgeColor','none')
+    set(gca,'XTick',1:size(Predictors,3)+1,'XTickLabel',{'C','W','V','D','A',char(920),'T'},'YAxisLocation','right','YTickLabelRotation',90,'XTickLabelRotation',90)
+    ylabel('Normalized Score')
+    makepretty
 
 
 

@@ -101,7 +101,6 @@ for midx = 1:length(MiceOpt)
         UMparam.SaveDir = fullfile(PrepareClusInfoparams.SaveDir,'UnitMatch');
     end
 
-
     %%
     disp(['Preprocessed data for ' MiceOpt{midx}])
 
