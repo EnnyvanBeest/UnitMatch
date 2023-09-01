@@ -25,7 +25,7 @@ IncludeThesePairs = find(EuclDist<param.maxdist);
 priorMatch = 1-((nclus+nclus.*sqrt(ndays-1)*param.ExpectMatches)./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days)
 % priorMatch = 1-(nclus*ndays)./(nclus*nclus); %Now use the actual expected prior for bayes'
 ThrsOpt = quantile(TotalScore(IncludeThesePairs),priorMatch);
-CandidatePairs = TotalScore>ThrsOpt;% 
+CandidatePairs = TotalScore>ThrsOpt;%
 
 figure('name','Potential Matches')
 imagesc(CandidatePairs(SortingOrder,SortingOrder))
@@ -182,7 +182,7 @@ while flag<2 && runid<param.maxrun
         [PairScore,sortid] = sort(cell2mat(arrayfun(@(X) MatchProbability(Pairs(X,1),Pairs(X,2)),1:size(Pairs,1),'Uni',0)),'descend');
         Pairs = Pairs(sortid,:);
         [FingerprintR,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCorrelationFingerPrint(sessionCorrelationsAll,Pairs,Unit2Take,recsesGood);
-%         CrossCorrelationFingerPrint_BU
+        %         CrossCorrelationFingerPrint_BU
 
         tmpf = triu(FingerprintR,1);
         tmpm = triu(MatchProbability,1);
@@ -213,7 +213,7 @@ end
 %% Extract final pairs:
 disp('Extracting final pairs of units...')
 timercounter = tic;
-   
+
 if isfield(BestMdl,'Parameterkernels')
     BestMdl.VariableNames = Scores2Include;
     BestMdl.Parameterkernels = BestMdl.Parameterkernels(:,ismember(BestMdl.VariableNames,Scores2Include),:);
@@ -233,7 +233,9 @@ Pairs = sortrows(Pairs);
 Pairs = unique(Pairs,'rows');
 
 
-figure; imagesc(MatchProbability(SortingOrder,SortingOrder),[0.5 1])
+figure;
+subplot(2,2,1)
+imagesc(MatchProbability(SortingOrder,SortingOrder),[0 1])
 colormap(flipud(gray))
 xlabel('Unit_i')
 ylabel('Unit_j')
@@ -242,52 +244,99 @@ arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[
 arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
 title('match probability')
 makepretty
+
+subplot(2,2,2)
+imagesc(MatchProbability(SortingOrder,SortingOrder)>0.5)
+colormap(flipud(gray))
+xlabel('Unit_i')
+ylabel('Unit_j')
+hold on
+arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+title('thresholded')
+makepretty
+
+
+subplot(2,2,3)
+tmp = MatchProbability;
+% Take centroid dist > maxdist out
+tmp(EuclDist>param.NeighbourDist)=nan;
+% Take between session out
+for did = 1:ndays
+    for did2 = 1:ndays
+        if did==did2
+            continue
+        end
+        tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1)=nan;
+    end
+end
+hd = histcounts(diag(tmp),0:0.1:1);%./nclus + 0.0001;
+hnd = histcounts(tmp(~eye(size(tmp))),0:0.1:1);%./sum(~isnan(tmp(~eye(size(tmp))))) +0.0001;
+plot(0.05:0.1:1-0.05,hd,'-','color',[0 0.7 0]); hold on; plot(0.05:0.1:1-0.05,hnd,'b-')
+tmp = MatchProbability;
+% Take centroid dist > maxdist out
+tmp(EuclDist>param.NeighbourDist)=nan;
+% Take within session out
+for did = 1:ndays
+    tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1)=nan;
+end
+ha = histcounts(tmp(:),0:0.1:1);%./sum(~isnan(tmp(:))) + 0.0001;
+plot(0.05:0.1:1-0.05,ha,'-','color',[1 0 0]);
+set(gca,'yscale','linear')
+line([param.ProbabilityThreshold param.ProbabilityThreshold ],get(gca,'ylim'),'LineStyle','--','color',[0 0 0])
+xlabel('MatchProbability')
+ylabel('number of pairs')
+makepretty
+title('P(match) distributions')
+legend('Same Unit','Neighbors','Across','Threshold','Location', 'best')
+
+%Cumulative density
+subplot(2,2,4)
+hold on
+tmp = MatchProbability;
+% Take centroid dist > maxdist out
+tmp(EuclDist>param.NeighbourDist)=nan;
+% Take between session out
+for did = 1:ndays
+    for did2 = 1:ndays
+        if did==did2
+            continue
+        end
+        tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1)=nan;
+    end
+end
+[h,stats] = cdfplot(diag(tmp)); %same
+h.Color = [0 0.5 0];
+
+tmp(logical(eye(size(tmp)))) = nan;
+
+[h,stats] = cdfplot(tmp(~eye(size(tmp)))); %Neighbours
+h.Color = [0 0 0.5];
+
+tmp = MatchProbability;
+% Take centroid dist > maxdist out
+tmp(EuclDist>param.NeighbourDist)=nan;
+% Take within session out
+for did = 1:ndays
+    tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1)=nan;
+end
+[h,stats] = cdfplot(tmp(:)); %Across days
+h.Color = [1 0 0];
+
+
+xlabel('MatchProbability')
+ylabel('Cumulative density')
+line([param.ProbabilityThreshold,param.ProbabilityThreshold],[0 1],'color',[1 0 0],'LineStyle','--')
+makepretty
+
+legend('Same unit','Neighbors','Across','threshold')
+
+
+
+
 saveas(gcf,fullfile(param.SaveDir,'MatchProbability.fig'))
 saveas(gcf,fullfile(param.SaveDir,'MatchProbability.bmp'))
 
-   %% Cumulative density function
-    figure('name','Cumulative')
-%     [h,stats] = cdfplot(MatchProbability(:));
-%     h.Color = [0 0 0];
-    hold on
-      tmp = MatchProbability;
-    % Take centroid dist > maxdist out
-    tmp(EuclDist>param.NeighbourDist)=nan;
-    % Take between session out
-    for did = 1:ndays
-        for did2 = 1:ndays
-            if did==did2
-                continue
-            end
-            tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1)=nan;
-        end
-    end
-    [h,stats] = cdfplot(diag(tmp)); %same
-    h.Color = [0 0.5 0];
-
-    tmp(logical(eye(size(tmp)))) = nan;
-
-    [h,stats] = cdfplot(tmp(~eye(size(tmp)))); %Neighbours
-    h.Color = [0 0 0.5];
-
-    tmp = MatchProbability;
-    % Take centroid dist > maxdist out
-    tmp(EuclDist>param.NeighbourDist)=nan;
-    % Take within session out
-    for did = 1:ndays
-        tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1)=nan;
-    end
-   [h,stats] = cdfplot(tmp(:)); %Across days
-    h.Color = [1 0 0];
-
-
-    xlabel('MatchProbability')
-    ylabel('Cumulative density')
-    line([param.ProbabilityThreshold,param.ProbabilityThreshold],[0 1],'color',[1 0 0],'LineStyle','--')
-    makepretty
-
-    legend('Same unit','Neighbors','Across','threshold')
-
-
+%%
 BestMdl.Priors = Priors;
 disp(['Extracting final pair of units took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])

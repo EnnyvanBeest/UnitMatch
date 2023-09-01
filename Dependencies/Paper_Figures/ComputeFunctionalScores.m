@@ -164,7 +164,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) % If it
     %TmpFile.AllSessionCorrelations = AllSessionCorrelations;
     %TmpFile.Properties.Writable = false;
     movefile(fullfile(SaveDir, 'UnitMatch.mat'), fullfile(SaveDir, 'UnitMatch_prev.mat'))
-    save(fullfile(SaveDir, 'UnitMatch.mat'), 'TmpFile');
+    save(fullfile(SaveDir, 'UnitMatch.mat'),'-struct', 'TmpFile');
     delete(fullfile(SaveDir, 'UnitMatch_prev.mat'))
 
     %% Compare to functional scores
@@ -341,7 +341,7 @@ for id = 1:ntimes
 
         % Write to table
         movefile(fullfile(SaveDir, 'UnitMatch.mat'), fullfile(SaveDir, 'UnitMatch_prev.mat'))
-        save(fullfile(SaveDir, 'UnitMatch.mat'), 'TmpFile');
+        save(fullfile(SaveDir, 'UnitMatch.mat'),'-struct', 'TmpFile');
         delete(fullfile(SaveDir, 'UnitMatch_prev.mat'))
 
     end

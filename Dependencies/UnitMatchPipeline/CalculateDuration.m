@@ -5,7 +5,7 @@ tmp = dir(fullfile(Dir2Use,'UnitMatch.mat'));
 tmp = load(fullfile(tmp.folder,tmp.name));
 TotalDur = 0;
 TotalBytes = 0;
-if exist("metaLocation")
+if nargin>1 && ~isempty(metaLocation)
     meta_path = metaLocation;
 else
     meta_path = tmp.UMparam.AllRawPaths;
