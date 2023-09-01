@@ -1,6 +1,8 @@
 function ComputeFunctionalScores(SaveDir)
 
-TmpFile = matfile(fullfile(SaveDir, 'UnitMatch.mat')); % Access saved file
+%TmpFile = matfile(fullfile(SaveDir, 'UnitMatch.mat')); % Access saved file
+
+TmpFile = load(fullfile(SaveDir, 'UnitMatch.mat'));
 UMparam = TmpFile.UMparam; % Extract parameters
 UMparam.binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
 
@@ -156,11 +158,14 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) % If it
     MatchTable.RankScore = RankScoreAll(:);
     MatchTable.SigFingerprintR = SigMask(:);
 
-    TmpFile.Properties.Writable = true;
-    TmpFile.MatchTable = MatchTable; % Overwrite
+    %TmpFile.Properties.Writable = true;
+    %TmpFile.MatchTable = MatchTable; % Overwrite
     % add AllSessionCorrelations
-    TmpFile.AllSessionCorrelations = AllSessionCorrelations;
-    TmpFile.Properties.Writable = false;
+    %TmpFile.AllSessionCorrelations = AllSessionCorrelations;
+    %TmpFile.Properties.Writable = false;
+    movefile(fullfile(SaveDir, 'UnitMatch.mat'), fullfile(SaveDir, 'UnitMatch_prev.mat'))
+    save(fullfile(SaveDir, 'UnitMatch.mat'), 'TmpFile');
+    delete(fullfile(SaveDir, 'UnitMatch_prev.mat'))
 
     %% Compare to functional scores
 
@@ -303,7 +308,7 @@ for id = 1:ntimes
         tvec = -UMparam.ACGduration / 2:UMparam.ACGbinSize:UMparam.ACGduration / 2;
         ACGMat = nan(length(tvec), 2, nclus);
         FR = nan(2, nclus);
-        parfor clusid = 1:nclus
+        for clusid = 1:nclus %parfot QQ
             for cv = 1:2
                 idx1 = find(sp.spikeTemplates == OriID(clusid) & sp.RecSes == recses(clusid));
                 if ~isempty(idx1) && length(idx1) > UMparam.sampleamount
@@ -335,9 +340,9 @@ for id = 1:ntimes
         MatchTable.FRDiff = FRDiff(:);
 
         % Write to table
-        TmpFile.Properties.Writable = true;
-        TmpFile.MatchTable = MatchTable; % Overwrite
-        TmpFile.Properties.Writable = false;
+        movefile(fullfile(SaveDir, 'UnitMatch.mat'), fullfile(SaveDir, 'UnitMatch_prev.mat'))
+        save(fullfile(SaveDir, 'UnitMatch.mat'), 'TmpFile');
+        delete(fullfile(SaveDir, 'UnitMatch_prev.mat'))
 
     end
 

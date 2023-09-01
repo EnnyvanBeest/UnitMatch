@@ -69,7 +69,7 @@ catch ME
     disp(ME)
     UseParamsKS = 1;
 end
-if ~isfield(Params,'CleanUpTemporary')
+if ~isfield(Params, 'CleanUpTemporary')
     Params.CleanUpTemporary = 1; % Clean up temporary folder
 end
 
@@ -174,7 +174,7 @@ for subsesid = 1:length(KiloSortPaths)
     channelpostmp = readNPY(fullfile(myClusFile(1).folder, myClusFile(1).name));
     if length(channelmaptmp) < length(channelpostmp)
         channelmaptmp(end+1:length(channelpostmp)) = length(channelmaptmp):length(channelpostmp) - 1;
-    end   
+    end
 
     %% Is it correct channelpos though...? Check using raw data
     channelpostmpconv = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done
@@ -216,8 +216,9 @@ for subsesid = 1:length(KiloSortPaths)
     [sp.spikeAmps, sp.spikeDepths, sp.templateDepths, sp.templateXpos, sp.tempAmps, sp.tempsUnW, sp.templateDuration, sp.waveforms] = ...
         templatePositionsAmplitudes(sp.temps, sp.winv, sp.ycoords, sp.xcoords, sp.spikeTemplates, sp.tempScalingAmps); %from the spikes toolbox
     templateWaveforms = sp.temps;
+
     %% Remove noise; spikes across all channels'
-    if ~isfield(Params,'deNoise')
+    if ~isfield(Params, 'deNoise')
         Params.deNoise = 1;
     end
     if Params.deNoise == 1
@@ -233,16 +234,16 @@ for subsesid = 1:length(KiloSortPaths)
     if isempty(myClusFile)
         disp('This data is not curated with phy! Hopefully you''re using automated quality metrics to find good units!')
         curratedflag = 0;
-        myClusFile = dir(fullfile(KiloSortPaths{subsesid},'cluster_group.tsv'));
+        myClusFile = dir(fullfile(KiloSortPaths{subsesid}, 'cluster_group.tsv'));
         if isempty(myClusFile)
             clusinfo = tdfread(fullfile(KiloSortPaths{subsesid}, 'cluster_KSLabel.tsv'));
         else
             clusinfo = tdfread(fullfile(myClusFile(1).folder, myClusFile(1).name));
         end
-        
+
         % Convert sp data to correct cluster according to phy (clu and
         % template are not necessarily the same after splitting/merging)
-        [clusinfo,sp,emptyclus] = RemovingEmptyClusters(clusinfo,sp);
+        [clusinfo, sp, emptyclus] = RemovingEmptyClusters(clusinfo, sp);
 
         %clusidtmp = clusinfo.cluster_id;
         clusinfo.cluster_id = unique(sp.spikeTemplates);
@@ -285,8 +286,8 @@ for subsesid = 1:length(KiloSortPaths)
         clusinfo = tdfread(fullfile(myClusFile(1).folder, myClusFile(1).name));
         % Convert sp data to correct cluster according to phy (clu and
         % template are not necessarily the same after  splitting/merging)
-        [clusinfo, sp, emptyclus] = RemovingEmptyClusters(clusinfo,sp);
-       
+        [clusinfo, sp, emptyclus] = RemovingEmptyClusters(clusinfo, sp);
+
         curratedflag = 1;
         if isfield(clusinfo, 'id')
             clusidtmp = clusinfo.id;
@@ -357,14 +358,19 @@ for subsesid = 1:length(KiloSortPaths)
         for id = 1:length(rawD)
             ephysap_tmp = [];
 
-            if length(rawD)>1 % DO NOT DELETE!
-                savePath = fullfile(myClusFile(1).folder,num2str(id));
+            %ephysap_path = fullfile(rawD(id).folder, rawD(id).name);
+
+            if length(rawD) > 1 % DO NOT DELETE!
+                savePath = fullfile(myClusFile(1).folder, num2str(id));
+                idx = sp.SessionID == id;
             else
                 savePath = fullfile(KiloSortPaths{subsesid});
+                idx = sp.SessionID == 1;
             end
 
             qMetricsExist = ~isempty(dir(fullfile(savePath, '**', 'templates._bc_qMetrics.parquet'))); % ~isempty(dir(fullfile(savePath, 'qMetric*.mat'))) not used anymore?
-            idx = sp.SessionID == id;
+
+
             InspectionFlag = 0;
             if isempty(dir(fullfile(savePath, '**', 'RawWaveforms'))) % if raw waveforms have not been extract, decompress data for extraction
                 disp('Extracting sync file...')
@@ -376,9 +382,9 @@ for subsesid = 1:length(KiloSortPaths)
                     statusCopy = copyfile(strrep(fullfile(rawD(id).folder, rawD(id).name), 'cbin', 'meta'), strrep(fullfile(Params.tmpdatafolder, rawD(id).name), 'cbin', 'meta')); %QQ doesn't work on linux
                 end
                 DecompressionFlag = 1;
-                 if statusCopy == 0 %could not copy meta file - use original meta file 
-                     [Imecmeta] = ReadMeta2(fullfile(rawD(id).folder, strrep(rawD(id).name, 'cbin', 'meta')), 'ap');
-                 else
+                if statusCopy == 0 %could not copy meta file - use original meta file
+                    [Imecmeta] = ReadMeta2(fullfile(rawD(id).folder, strrep(rawD(id).name, 'cbin', 'meta')), 'ap');
+                else
                     [Imecmeta] = ReadMeta2(fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'meta')), 'ap');
                 end
                 nchan = strsplit(Imecmeta.acqApLfSy, ',');
@@ -515,7 +521,7 @@ for subsesid = 1:length(KiloSortPaths)
     clusinfo.cluster_id = AllUniqueTemplates;
     clusinfo.group = Label;
     if length(Good_ID) > length(recsesAll)
-        NonEmptyIdx = true(1,length(Good_ID));
+        NonEmptyIdx = true(1, length(Good_ID));
         NonEmptyIdx(emptyclus) = false;
         clusinfo.Good_ID = Good_ID(NonEmptyIdx);
     else
@@ -562,18 +568,20 @@ Params.RawDataPaths = RawDataPaths;
 Params.DecompressionFlag = DecompressionFlag;
 
 %% Remove temporary files
-if any(ismember({RawDataPaths(:).folder},Params.tmpdatafolder))
-     Params.CleanUpTemporary = 1;
+if isstruct(RawDataPaths)
+    if any(ismember({RawDataPaths(:).folder}, Params.tmpdatafolder))
+        Params.CleanUpTemporary = 1;
+    end
 end
 
 CleanUpCheckFlag = nan; % Put to 1 is own responsibility! Make sure not to delete stuff from the server directly!
-if 0%Params.DecompressLocal && Params.CleanUpTemporary 
-    
+if 0 %Params.DecompressLocal && Params.CleanUpTemporary
+
     if isnan(CleanUpCheckFlag) && exist(fullfile(Params.tmpdatafolder, strrep(RawDataPaths(1).name, 'cbin', 'bin')))
-        answer = questdlg(['Automatically remove data from ' Params.tmpdatafolder '?'], ...
-	'REMOVING -- CHECK!!!', ...
-	'YES','NO','YES');
-        if strcmpi(answer,'YES')
+        answer = questdlg(['Automatically remove data from ', Params.tmpdatafolder, '?'], ...
+            'REMOVING -- CHECK!!!', ...
+            'YES', 'NO', 'YES');
+        if strcmpi(answer, 'YES')
             CleanUpCheckFlag = 1;
         else
             CleanUpCheckFlag = 0;

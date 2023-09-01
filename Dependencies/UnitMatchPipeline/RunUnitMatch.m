@@ -1,4 +1,4 @@
-function [UMparam, UniqueIDConversion, MatchTable, WaveformInfo] = RunUnitMatch(AllKiloSortPaths, Params)
+function [UMparam, UniqueIDConversion, MatchTable, WaveformInfo] = RunUnitMatch(AllKiloSortPaths, Params, ephys_dirs)
 
 %% Here we're going to actually load in all the sessions requested - only clusinfo to save memory for unitmatch
 clusinfo = cell(1, length(AllKiloSortPaths));
@@ -119,7 +119,7 @@ if Params.UnitMatch
         [UniqueIDConversion, MatchTable, WaveformInfo, UMparam] = UnitMatch(clusinfo, UMparam);
         UMrunTime = toc(GlobalUnitMatchClock);
         save(fullfile(UMparam.SaveDir, 'UnitMatch.mat'), 'UniqueIDConversion', 'MatchTable', 'WaveformInfo', 'UMparam', 'UMrunTime')
-        DataSizeParam = CalculateDuration(UMparam.SaveDir);
+        DataSizeParam = CalculateDuration(UMparam.SaveDir, ephys_dirs);
         disp(['UnitMatch took ', num2str(round(UMrunTime/60*10)/10), ' minute(s) to run'])
 
     end
