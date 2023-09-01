@@ -1,5 +1,3 @@
-
-
 function [PrepareClusInfoparams, UMparam, UniqueIDConversion, MatchTable, WaveformInfo] = um_runUnitMatch(kilosort_dirs, ephys_dirs, SaveDir, tmpdatafolder, thisRecordingType, mouseName)
 % Run unit match
 % ------
@@ -14,20 +12,21 @@ function [PrepareClusInfoparams, UMparam, UniqueIDConversion, MatchTable, Wavefo
 % ------
 % Outputs
 % ------
-% PrepareClusInfoparams: strcuture containing the paramaters used 
-% UMparam: strcuture containing the paramaters used 
+% PrepareClusInfoparams: strcuture containing the paramaters used
+% UMparam: strcuture containing the paramaters used
 % UniqueIDConversion: structure containing a summary unit match's results:
 %    - UniqueIDConversion.UniqueID returns, for each unit, the ID assigned
 %    to them. Any duplicate values indicates units that were matched
 %    - UniqueIDConversion.OriginalClusID is a 1 x number_of_units unit32 vector, gives each unit's original label
 %    - UniqueIDConversion.recsesAll is a 1 x number_of_units double vector, returns from which recording (1:number_of_recordings)
-%    each unit comes from 
+%    each unit comes from
 %    - UniqueIDConversion.GoodID is a 1 x number_of_units binary double
 %    vector, returns for each unit whether it was classified as good or
 %    not.
 % MatchTable: structure detailing unit match's results, with scores for
-% each metric used: 
+% each metric used:
 % ------
+
 %% Parameters and settings
 PrepareClusInfoparams.RunPyKSChronicStitched = 0; % Default 0. if 1, run PyKS chronic recordings stitched when same IMRO table was used
 PrepareClusInfoparams.CopyToTmpFirst = 1; % If 1, copy data to local first, don't run from server (= advised!)

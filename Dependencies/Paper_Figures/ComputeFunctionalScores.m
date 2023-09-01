@@ -166,6 +166,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) % If it
     movefile(fullfile(SaveDir, 'UnitMatch.mat'), fullfile(SaveDir, 'UnitMatch_prev.mat'))
     save(fullfile(SaveDir, 'UnitMatch.mat'), 'TmpFile');
     delete(fullfile(SaveDir, 'UnitMatch_prev.mat'))
+
     %% Compare to functional scores
 
     figure;
