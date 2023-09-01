@@ -624,6 +624,10 @@ while flag<2
     colormap(flipud(gray))
     colorbar
     makepretty
+%         hold on
+%         scatter(find(SortingOrder==Pairs(1)),find(SortingOrder==Pairs(3)),5,cols(3,:),'filled')
+%         scatter(find(SortingOrder==Pairs(1)),find(SortingOrder==Pairs(2)),5,cols(2,:),'filled')
+
 
     % Make initial threshold --> to be optimized
     ThrsOpt = quantile(TotalScore(IncludeThesePairs),priorMatch); %Select best ones only later
@@ -640,6 +644,9 @@ while flag<2
     colorbar
     % axis square
     makepretty
+    %     hold on
+    %     scatter(find(SortingOrder==Pairs(1)),find(SortingOrder==Pairs(3)),5,cols(3,:),'filled')
+    %     scatter(find(SortingOrder==Pairs(1)),find(SortingOrder==Pairs(2)),5,cols(2,:),'filled')
 
 
     subplot(2,2,3)
@@ -652,51 +659,76 @@ while flag<2
             if did==did2
                 continue
             end
-            tmp(SessionSwitch(did):SessionSwitch(did+1),SessionSwitch(did2):SessionSwitch(did2+1))=nan;
+            tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1)=nan;
         end
     end
-    hd = histcounts(diag(tmp),0:0.1:length(Scores2Include))./nclus;
-    hnd = histcounts(tmp(~eye(size(tmp))),0:0.1:length(Scores2Include))./sum(~isnan(tmp(~eye(size(tmp)))));
-    plot(0.05:0.1:length(Scores2Include)-0.05,hd,'-','color',[0.5 0.5 0.5]); hold on; plot(0.05:0.1:length(Scores2Include)-0.05,hnd,'k-')
-    line([ThrsOpt ThrsOpt],get(gca,'ylim'),'LineStyle','--','color',[1 0 0])
-    xlabel('TotalScore')
-    ylabel('Proportion|Group')
-    makepretty
-    title('Within session cross-validation')
-    legend('Within session diagonal',['Within session off-diagonal (<' num2str(param.NeighbourDist) ')'],'Threshold','Location', 'best')
-
-
-    subplot(2,2,4)
+    hd = histcounts(diag(tmp),0:0.1:length(Scores2Include));%./nclus + 0.0001;
+    hnd = histcounts(tmp(~eye(size(tmp))),0:0.1:length(Scores2Include));%./sum(~isnan(tmp(~eye(size(tmp))))) +0.0001;
+    plot(0.05:0.1:length(Scores2Include)-0.05,hd,'-','color',[0 0.7 0]); hold on; plot(0.05:0.1:length(Scores2Include)-0.05,hnd,'b-')
     tmp = TotalScore;
     % Take centroid dist > maxdist out
     tmp(EuclDist>param.NeighbourDist)=nan;
     % Take within session out
     for did = 1:ndays
-        tmp(SessionSwitch(did):SessionSwitch(did+1),SessionSwitch(did):SessionSwitch(did+1))=nan;
+        tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1)=nan;
     end
-    hb = histcounts(tmp(~isnan(tmp(:))),0:0.1:length(Scores2Include))./sum(tmp(~isnan(tmp(:))));
-    hd = histcounts(tmp(tmp(:)>ThrsOpt),0:0.1:length(Scores2Include))./sum(tmp(:)>ThrsOpt);
-    hnd = histcounts(tmp(tmp(:)<=ThrsOpt),0:0.1:length(Scores2Include))./sum(tmp(:)<=ThrsOpt);
-    hold on
-    plot(0.05:0.1:length(Scores2Include)-0.05,hd,'-','color',[0 0.5 0]); hold on; plot(0.05:0.1:length(Scores2Include)-0.05,hnd,'k-');
+    ha = histcounts(tmp(:),0:0.1:length(Scores2Include));%./sum(~isnan(tmp(:))) + 0.0001;
+    plot(0.05:0.1:length(Scores2Include)-0.05,ha,'-','color',[1 0 0]);
+    set(gca,'yscale','linear')
+    line([ThrsOpt ThrsOpt],get(gca,'ylim'),'LineStyle','--','color',[0 0 0])
     xlabel('TotalScore')
-    ylabel('Proportion|Group')
+    ylabel('number of pairs')
     makepretty
-    title(['Across sessions, EuclDist< ' num2str(param.NeighbourDist) 'um'])
-    legend('T>threshold','T<threshold','Location', 'best')
+    title('Total score distributions')
+    legend('Same Unit','Neighbors','Across','Threshold','Location', 'best')
+
+
+    %% CUmulative density function
+    subplot(2,2,4)
+    [h,stats] = cdfplot(TotalScore(IncludeThesePairs));
+    h.Color = [0 0 0];
+    hold on
+    tmp = TotalScore;
+    % Take centroid dist > maxdist out
+    tmp(EuclDist>param.NeighbourDist)=nan;
+    % Take between session out
+    for did = 1:ndays
+        for did2 = 1:ndays
+            if did==did2
+                continue
+            end
+            tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1)=nan;
+        end
+    end
+    [h,stats] = cdfplot(diag(tmp)); %same
+    h.Color = [0 0.5 0];
+
+    tmp(logical(eye(size(tmp)))) = nan;
+    [h,stats] = cdfplot(tmp(~isnan(tmp))); %Neighbours
+    h.Color = [0 0 0.5];
+
+    tmp = TotalScore;
+    % Take centroid dist > maxdist out
+    tmp(EuclDist>param.NeighbourDist)=nan;
+    % Take within session out
+    for did = 1:ndays
+        tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1)=nan;
+    end
+   [h,stats] = cdfplot(tmp(:)); %pAcross sessions
+    h.Color = [1 0 0];
+
+%     [h,stats] = cdfplot(tmp(tmp(:)<ThrsOpt)); %putative matches
+%     h.Color = [0.5 0.2 0];
+
+    xlabel('TotalScore')
+    ylabel('Cumulative density')
+    line([ThrsOpt,ThrsOpt],[0 1],'color',[1 0 0],'LineStyle','--')
+    makepretty
+
+    legend('All pairs','Same unit','Neighbors','Across','threshold')
 
     saveas(gcf,fullfile(SaveDir,'TotalScore.fig'))
     saveas(gcf,fullfile(SaveDir,'TotalScore.bmp'))
-
-    figure('name','Cumulative')
-    [h,stats] = cdfplot(TotalScore(:));
-%     plot(h.XData,h.YData,'k-')
-    hold on
-    line([ThrsOpt,ThrsOpt],[0 1],'color',[1 0 0])
-    xlabel('TotalScore')
-    ylabel('Cumulative density')
-    makepretty
-
 
     %% three ways to define candidate scores
     % Total score larger than threshold
@@ -759,8 +791,10 @@ if 0 % THis can be used to look at some example projections
     Pairs = unique(Pairs,'rows');
     Pairs(Pairs(:,1) == Pairs(:,2),:)=[];
     %% Plot
-    Pairs = [10,450,11] % Example
-    cols =  [0 0 0; 0 0.7 0; 1 0 0];
+        Pairs = [198, 469, 47] % Example (AL032, take 10)
+
+%     Pairs = [10,450,11] % Example
+    cols =  [0 0 0; 1 0 0; 0 0 0.7];
 
     figure
     subplot(1,3,3)
@@ -778,19 +812,20 @@ if 0 % THis can be used to look at some example projections
         spikeMap = detrend(spikeMap,1); % Detrend (linearly) to be on the safe side. OVER TIME!
         spikeMap = permute(spikeMap,[2,1,3]);  % Put back in order
         %Load channels
-        ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChannel(uid,1),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius.*0.8); %Averaging over 10 channels helps with drift
+        ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChannel(uid,1),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius.*0.4); %Averaging over 10 channels helps with drift
         Locs = channelpos(ChanIdx,:);
 
-        scatter(Locs(:,1),Locs(:,2),20,[0.5 0.5 0.5],'filled')
+        scatter(Locs(:,1),Locs(:,2),20,[0.5 0.5 0.5],'filled','marker','s')
         hold on
 
         takesamples = param.waveidx;
         takesamples = unique(takesamples(~isnan(squeeze(ProjectedLocationPerTP(2,uid,takesamples,1)))));
         h(1) = plot(squeeze(ProjectedLocationPerTP(2,uid,takesamples,1)),squeeze(ProjectedLocationPerTP(3,uid,takesamples,1)),'-','color',cols(uidx,:));
         scatter(squeeze(ProjectedLocationPerTP(2,uid,takesamples(1),1)),squeeze(ProjectedLocationPerTP(3,uid,takesamples(1),1)),30,cols(uidx,:),'filled')
-        plot(ProjectedLocation(2,uid,1),ProjectedLocation(3,uid,1),'*','MarkerSize',12,'color',cols(uidx,:))
+        plot(ProjectedLocation(2,uid,1),ProjectedLocation(3,uid,1),'.','MarkerSize',25,'color',cols(uidx,:))
 
     end
+    
 %     MyColMap = hsv(length(takesamples)*2);
 %     colormap(MyColMap(length(takesamples)+1:end,:))
 
@@ -817,15 +852,19 @@ if 0 % THis can be used to look at some example projections
 
 
     subplot(1,3,2)
+    patch([-(1/30)*(41-34),-(1/30)*(41-34),-(1/30)*(41-56),-(1/30)*(41-56)],[-150 50 50 -150],[0.5 0.5 0.5],'edgecolor','none','FaceAlpha',0.4)
+
     for uidx=1:length(Pairs)
         uid = Pairs(uidx);
 
         hold on
         plot(-(1/30)*(41-(1:size(ProjectedWaveform,1))),squeeze(ProjectedWaveform(:,uid,1)),'color',cols(uidx,:))
     end
+    hold on
     axis square
     xlabel('Time (ms)')
     ylabel('\muV')
+%     ylim([])
     makepretty
     title('Average Waveforms')
 
@@ -877,10 +916,10 @@ if 0 % THis can be used to look at some example projections
         spikeMap = detrend(spikeMap,1); % Detrend (linearly) to be on the safe side. OVER TIME!
         spikeMap = permute(spikeMap,[2,1,3]);  % Put back in order
         %Load channels
-        ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChannel(uid,1),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius.*0.8); %Averaging over 10 channels helps with drift
+        ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChannel(uid,1),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius.*2.5); %Averaging over 10 channels helps with drift
         Locs = channelpos(ChanIdx,:);
 
-        scatter(Locs(:,1),Locs(:,2),20,[0.5 0.5 0.5],'filled')
+        scatter(Locs(:,1),Locs(:,2),20,[0.5 0.5 0.5],'filled','marker','s')
         hold on
         for chanid = 1:length(ChanIdx)
             plot(Locs(chanid,1)+0.1*[1:size(ProjectedWaveform,1)],Locs(chanid,2)+0.1*spikeMap(:,ChanIdx(chanid),1),'color',cols(uidx,:))
@@ -889,36 +928,47 @@ if 0 % THis can be used to look at some example projections
 
     xlabel('Xpos (\mum)')
     ylabel('Ypos (\mum)')
-    set(gca,'xlim',xlims,'ylim',ylims)
+    ylims = [min(Locs(:,2))-15 max(Locs(:,2))+15];
+
+    xlims = [min(ProjectedLocation(2,Pairs,1))-diff(ylims)/2 min(ProjectedLocation(2,Pairs,1))+diff(ylims)/2];
+        set(gca,'xlim',xlims,'ylim',ylims)
     axis square
     title('all waveforms')
     makepretty
 
+    figure('name','Probeview')
+    scatter(Allchannelpos{1}(:,1),Allchannelpos{1}(:,2),20,[0.5 0.5 0.5],'filled','marker','s')
 
-    figure
-    subplot(2,1,1)
-    for uid = 2:length(Pairs)
-        tmp = sqrt(nansum((squeeze([ProjectedLocationPerTP(1,Pairs(1),param.waveidx,1),ProjectedLocationPerTP(2,Pairs(1),param.waveidx,1)])-squeeze([ProjectedLocationPerTP(1,Pairs(uid),param.waveidx,1),ProjectedLocationPerTP(2,Pairs(uid),param.waveidx,1)])).^2,1));
-        tmp(tmp==0)=nan; % =nan
-        plot(param.waveidx,tmp,'|','color',cols(uid,:))
-        hold on
-    end
-    ylabel('\Deltad_i_j')
-    makepretty
+    ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChannel(Pairs(1),1),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius); %Averaging over 10 channels helps with drift
+    Locs = channelpos(ChanIdx,:);
+    hold on
+    scatter(Locs(:,1),Locs(:,2),20,[1 0 0],'filled','marker','s')
+ 
 
-
-    subplot(2,1,2)
-    for uid = 2:length(Pairs)
-        plot(param.waveidx(2:end),squeeze(AngleSubtraction(Pairs(1),:,Pairs(uid))),'|','color',cols(uid,:))
-        hold on
-    end
-    ylabel('\Deltad_i_j')
-    makepretty
+% 
+%     figure
+%     subplot(2,1,1)
+%     for uid = 2:length(Pairs)
+%         tmp = sqrt(nansum((squeeze([ProjectedLocationPerTP(1,Pairs(1),param.waveidx,1),ProjectedLocationPerTP(2,Pairs(1),param.waveidx,1)])-squeeze([ProjectedLocationPerTP(1,Pairs(uid),param.waveidx,1),ProjectedLocationPerTP(2,Pairs(uid),param.waveidx,1)])).^2,1));
+%         tmp(tmp==0)=nan; % =nan
+%         plot(param.waveidx,tmp,'|','color',cols(uid,:))
+%         hold on
+%     end
+%     ylabel('\Deltad_i_j')
+%     makepretty
+% 
+% 
+%     subplot(2,1,2)
+%     for uid = 2:length(Pairs)
+%         plot(param.waveidx(2:end),squeeze(AngleSubtraction(Pairs(1),:,Pairs(uid))),'|','color',cols(uid,:))
+%         hold on
+%     end
+%     ylabel('\Deltad_i_j')
+%     makepretty
 
 
     %% Similarity scores for the two pairs
-         Pairs = [10,450,11] % Example
-        cols =  [0 0 0; 0 0.7 0; 1 0 0];
+
     figure('name','Similarity scores')
     subplot(1,2,1)
     bar(cat(1,squeeze(Predictors(Pairs(1),Pairs(3),:)),squeeze(TotalScore(Pairs(1),Pairs(3))./6)),'FaceColor',cols(3,:),'EdgeColor','none')

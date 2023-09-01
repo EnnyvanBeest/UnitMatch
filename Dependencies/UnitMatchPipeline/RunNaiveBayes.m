@@ -244,5 +244,50 @@ title('match probability')
 makepretty
 saveas(gcf,fullfile(param.SaveDir,'MatchProbability.fig'))
 saveas(gcf,fullfile(param.SaveDir,'MatchProbability.bmp'))
+
+   %% Cumulative density function
+    figure('name','Cumulative')
+%     [h,stats] = cdfplot(MatchProbability(:));
+%     h.Color = [0 0 0];
+    hold on
+      tmp = MatchProbability;
+    % Take centroid dist > maxdist out
+    tmp(EuclDist>param.NeighbourDist)=nan;
+    % Take between session out
+    for did = 1:ndays
+        for did2 = 1:ndays
+            if did==did2
+                continue
+            end
+            tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1)=nan;
+        end
+    end
+    [h,stats] = cdfplot(diag(tmp)); %same
+    h.Color = [0 0.5 0];
+
+    tmp(logical(eye(size(tmp)))) = nan;
+
+    [h,stats] = cdfplot(tmp(~eye(size(tmp)))); %Neighbours
+    h.Color = [0 0 0.5];
+
+    tmp = MatchProbability;
+    % Take centroid dist > maxdist out
+    tmp(EuclDist>param.NeighbourDist)=nan;
+    % Take within session out
+    for did = 1:ndays
+        tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1)=nan;
+    end
+   [h,stats] = cdfplot(tmp(:)); %Across days
+    h.Color = [1 0 0];
+
+
+    xlabel('MatchProbability')
+    ylabel('Cumulative density')
+    line([param.ProbabilityThreshold,param.ProbabilityThreshold],[0 1],'color',[1 0 0],'LineStyle','--')
+    makepretty
+
+    legend('Same unit','Neighbors','Across','threshold')
+
+
 BestMdl.Priors = Priors;
 disp(['Extracting final pair of units took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])
