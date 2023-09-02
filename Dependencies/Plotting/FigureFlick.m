@@ -1,4 +1,4 @@
-function FigureFlick(UMDir,user,recompute)
+function FigureFlick(UMDir,user,recompute, loadMATsToSave)
     %%% Go through pairs to manually curate matches. Will save a .mat file
     %%% with the label of the pairs (0: uncurated, 1: match, -1: non-match)
     %
@@ -30,6 +30,9 @@ function FigureFlick(UMDir,user,recompute)
     % Load matchtable
     UMFile = dir(fullfile(UMDir,'UnitMatch.mat'));
     load(fullfile(UMFile.folder,UMFile.name))
+    if nargin == 3 || ~isempty(loadMATsToSave)
+        MatchTable = TmpFile.MatchTable;
+    end
     if ~any(ismember(MatchTable.Properties.VariableNames,user))
         eval(['MatchTable.' user ' = zeros(height(MatchTable),1);'])
     end
