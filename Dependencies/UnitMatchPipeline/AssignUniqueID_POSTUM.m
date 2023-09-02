@@ -1,24 +1,32 @@
-function [UniqueID, MatchTable] = AssignUniqueID(MatchTable,clusinfo,Path4UnitNPY,param)
-AllClusterIDs = clusinfo.cluster_id;
+function [UniqueID, MatchTable] = AssignUniqueID_Serial(SaveDir)
+
+load(SaveDir)
+AllClusterIDs = UniqueIDConversion.OriginalClusID;
 % nses = length(AllDecompPaths);
 % OriginalClusID = AllClusterIDs; % Original cluster ID assigned by KS
 UniqueID = 1:length(AllClusterIDs); % Initial assumption: All clusters are unique
 OriUniqueID = UniqueID;
-if param.GoodUnitsOnly
-    Good_Idx = find(clusinfo.Good_ID); %Only care about good units at this point
+if UMparam.GoodUnitsOnly
+    Good_Idx = find(UniqueIDConversion.GoodID); %Only care about good units at this point
 else
-    Good_Idx = 1:length(clusinfo.Good_ID);
+    Good_Idx = 1:length(UniqueIDConversion.GoodID);
     disp('Use all units including MUA and noise')
 end
-GoodRecSesID = clusinfo.RecSesID;
+GoodRecSesID = UniqueIDConversion.recsesAll;
+% Re-initialize UID
+[PairID3,PairID4]=meshgrid(OriUniqueID(Good_Idx));
+MatchTable.UID1 = PairID3(:);
+MatchTable.UID2 = PairID4(:);
+RecOpt = unique(GoodRecSesID);
 
 %% Initial pairing based on matchscore
-Pairs = [MatchTable.UID1(MatchTable.MatchProb>param.ProbabilityThreshold) MatchTable.UID2(MatchTable.MatchProb>param.ProbabilityThreshold)]; %
+Pairs = [MatchTable.UID1(MatchTable.MatchProb>UMparam.ProbabilityThreshold) MatchTable.UID2(MatchTable.MatchProb>UMparam.ProbabilityThreshold)]; %
 Pairs(diff(Pairs,[],2)==0,:)=[]; %Remove own matches
 Pairs = sort(Pairs,2,'ascend'); % Only use each unique pair once
 Pairs = unique(Pairs,'stable','rows');
+
 %% ISI violations (for over splits matching)
-if param.removeoversplits
+if UMparam.removeoversplits
     CurrentSPPath = [];
     ISIViolationsScore = nan(1,size(Pairs,1));
     fprintf(1,'Computing functional properties for determining ISI. Progress: %3d%%',0)
@@ -27,10 +35,10 @@ if param.removeoversplits
             tmppath = strsplit(Path4UnitNPY{find(Good_Idx==Pairs(pairid,1))},'RawWaveforms');
             % Load sp for correct day
             if isempty(CurrentSPPath) || ~strcmp(CurrentSPPath{1},tmppath{1})
-                if length(param.KSDir)>1
-                    tmp = matfile(fullfile(param.KSDir{GoodRecSesID(Pairs(pairid,1))},'PreparedData.mat'));
+                if length(UMparam.KSDir)>1
+                    tmp = matfile(fullfile(UMparam.KSDir{GoodRecSesID(Pairs(pairid,1))},'PreparedData.mat'));
                 else %Stitched
-                    tmp = matfile(fullfile(param.KSDir{1},'PreparedData.mat'));
+                    tmp = matfile(fullfile(UMparam.KSDir{1},'PreparedData.mat'));
                 end
                 sp = tmp.sp;
                 CurrentSPPath = tmppath;
@@ -85,6 +93,7 @@ end
 MatchTable.UID1 = PairID3(:);
 MatchTable.UID2 = PairID4(:);
 
-
+% Overwrite
+save(SaveDir,'MatchTable','-append')
 
 return

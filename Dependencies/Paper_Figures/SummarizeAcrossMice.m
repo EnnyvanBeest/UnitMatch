@@ -249,6 +249,7 @@ for midx = 1:length(MiceOpt)
     
 end
 %% AUC
+if exist('AUCVals')
 meanAUC = nanmean(AUCVals,2);
 [~,sortidx] = sort(meanAUC,'descend');
 figure; h=barwitherr(nanstd(AUCVals(sortidx,:),[],2),nanmean(AUCVals(sortidx,:),2));
@@ -258,7 +259,7 @@ ylabel('AUC')
 makepretty
 saveas(gcf,fullfile(SaveDir,'AUCParameters.fig'))
 saveas(gcf,fullfile(SaveDir,'AUCParameters.bmp'))
-
+end
 
 %% Now we make histograms for the Area Under the Curve scores
 figure(FSCoreFig)
@@ -355,7 +356,10 @@ makepretty
 
 nanmean(EPosAndNeg,2)
 nanstd(EPosAndNeg,[],2)
+
 %% Tracking performance
+%             TrackingPerformance = cat(2,TrackingPerformance,[did2-did1,nMatches,nMax]');
+
 % UMTrackingPerformancePerMouse{midx} = TrackingPerformance;
 %     KSTrackingPerformancePerMouse{midx} = TrackingPerformanceKS;
 tmpUM = cat(2,UMTrackingPerformancePerMouse{:});
@@ -381,5 +385,20 @@ ylabel('nUnits')
 makepretty
 saveas(gcf,fullfile(SaveDir,'TrackingPerformance.fig'))
 saveas(gcf,fullfile(SaveDir,'TrackingPerformance.bmp'))
+
+%% Across days
+figure('name','Tracking across days')
+hold on
+cols = lines(length(UMTrackingPerformancePerMouse));
+for mid = 1:length(UMTrackingPerformancePerMouse)
+
+    scatter(UMTrackingPerformancePerMouse{midx}(1,:),UMTrackingPerformancePerMouse{midx}(2,:)./UMTrackingPerformancePerMouse{midx}(3,:),20,cols(mid,:),'filled')
+    
+end
+
+ylabel('Tracked units (%)')
+xlabel('\Delta Days')
+
+makepretty
 
 
