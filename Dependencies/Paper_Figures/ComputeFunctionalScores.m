@@ -159,9 +159,9 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) % If it
     MatchTable.SigFingerprintR = SigMask(:);
 
     %TmpFile.Properties.Writable = true;
-    %TmpFile.MatchTable = MatchTable; % Overwrite
+    TmpFile.MatchTable = MatchTable; % Overwrite
     % add AllSessionCorrelations
-    %TmpFile.AllSessionCorrelations = AllSessionCorrelations;
+    TmpFile.AllSessionCorrelations = AllSessionCorrelations;
     %TmpFile.Properties.Writable = false;
     movefile(fullfile(SaveDir, 'UnitMatch.mat'), fullfile(SaveDir, 'UnitMatch_prev.mat'))
     save(fullfile(SaveDir, 'UnitMatch.mat'),'-struct', 'TmpFile');
