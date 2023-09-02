@@ -340,6 +340,7 @@ for id = 1:ntimes
         MatchTable.FRDiff = FRDiff(:);
 
         % Write to table
+        TmpFile.MatchTable = MatchTable;
         movefile(fullfile(SaveDir, 'UnitMatch.mat'), fullfile(SaveDir, 'UnitMatch_prev.mat'))
         save(fullfile(SaveDir, 'UnitMatch.mat'),'-struct', 'TmpFile');
         delete(fullfile(SaveDir, 'UnitMatch_prev.mat'))

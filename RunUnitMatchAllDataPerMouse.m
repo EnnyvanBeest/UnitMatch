@@ -3,7 +3,7 @@
 % Find available datasets (always using dates as folders)
 clear DateOpt
 %dd = arrayfun(@(X) fullfile(DataDir{DataDir2Use(X)},MiceOpt{X},'*-*'),1:length(MiceOpt),'UniformOutput',0);
-DateOpt = arrayfun(@(X) dir(fullfile(DataDir{DataDir2Use(X)},MiceOpt{X},'*-*')),1:length(MiceOpt),'UniformOutput',0); % DataDir2Use = server 
+DateOpt = arrayfun(@(X) dir(fullfile(DataDir{DataDir2Use(X)},MiceOpt{X},'*-*')),1:length(MiceOpt),'UniformOutput',0); % DataDir2Use = server
 DateOpt = cellfun(@(X) X([X.isdir]),DateOpt,'UniformOutput',0);
 DateOpt = cellfun(@(X) {X.name},DateOpt,'UniformOutput',0);
 
@@ -49,7 +49,7 @@ for midx = 1:length(MiceOpt)
     subsesopt(cellfun(@isempty,channelposition))=[];
     channelposition(cellfun(@isempty,channelposition))=[];
     AllKiloSortPaths = subsesopt;
-  
+
 
     %% Create saving directoryed
     clear params
@@ -70,11 +70,11 @@ for midx = 1:length(MiceOpt)
     %% Run UnitMatch
     UnitMatchExist = dir(fullfile(PrepareClusInfoparams.SaveDir,'**','UnitMatch.mat'));
     if isempty(UnitMatchExist) || PrepareClusInfoparams.RedoUnitMatch
-     %% Evaluate (within unit ID cross-v alidation)
-%         UMparam = RunUnitMatch(AllKiloSortPaths,PrepareClusInfoparams);
+        %% Evaluate (within unit ID cross-v alidation)
+        UMparam = RunUnitMatch(AllKiloSortPaths,PrepareClusInfoparams);
 
         %% Evaluate (within unit ID cross-validation)
-%         EvaluatingUnitMatch(UMparam.SaveDir);
+        EvaluatingUnitMatch(UMparam.SaveDir);
 
         %% Function analysis
         UMparam.SaveDir = fullfile(SaveDir,MiceOpt{midx},'UnitMatch')

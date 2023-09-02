@@ -11,7 +11,7 @@ else
     disp('Use all units including MUA and noise')
 end
 GoodRecSesID = clusinfo.RecSesID;
-
+RecOpt = unique(GoodRecSesID);
 %% Initial pairing based on matchscore
 Pairs = [MatchTable.UID1(MatchTable.MatchProb>param.ProbabilityThreshold) MatchTable.UID2(MatchTable.MatchProb>param.ProbabilityThreshold)]; %
 Pairs(diff(Pairs,[],2)==0,:)=[]; %Remove own matches
