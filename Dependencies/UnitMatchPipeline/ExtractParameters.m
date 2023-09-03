@@ -8,7 +8,7 @@ spikeWidth = param.spikeWidth;
 Allchannelpos = param.channelpos;
 RecSes = clusinfo.RecSesID;
 
-if isfield(clusinfo,'Coordinates') % Allow for real coordinates
+if isfield(clusinfo,'Coordinates') && param.UseHistology% Allow for real coordinates
     for recid = 1:max(RecSes)
         % Cluster
         Coordinates = clusinfo.Coordinates(RecSes == recid);

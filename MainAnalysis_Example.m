@@ -33,6 +33,7 @@ PrepareClusInfoparams.loadPCs = 0; % Only necessary when computiong isoluation m
 PrepareClusInfoparams.UnitMatch = 1; % If 1, find identical units across sessions or oversplits in a fast and flexible way
 PrepareClusInfoparams.RedoUnitMatch = 1; % if 1, Redo unitmatch
 PrepareClusInfoparams.separateIMRO = 0; % Run for every IMRO separately (for memory reasons or when having multiple probes this might be a good idea)
+PrepareClusInfoparams.UseHistology = 0; % Use real coordinates (3D space of tracked probes if available)
 
 % UnitMatch Parameters:
 % All parameters to choose from: {'AmplitudeSim','spatialdecaySim','WavformMSE','WVCorr','CentroidDist','CentroidVar','CentroidDistRecentered','TrajAngleSim','TrajDistSim'};

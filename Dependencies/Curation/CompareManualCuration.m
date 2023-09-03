@@ -92,6 +92,8 @@ for midx = 1:length(MiceOpt)
     end
     ScorerNames = ScorerNames(~cellfun(@isempty,ScorerNames));
 
+    % WithIdx
+%     WithIdx = cellfun(@isempty,strfind(ScorerNames,'With'));
     %% How well do the different scoring methods correlate?
     AvgMan = nanmean(Manual,1);
 
@@ -434,6 +436,11 @@ for midx = 1:length(MiceOpt)
      TrackPerf(:,midx) = sum(tmpscores>0.5,1)./sum(tmpscores(:,ismember(AllScorerNames,'AvgScorer'))>0.5,1);
 
 
+     % Tracking numbers?
+     if midx == 1
+         nTracked = nan(size(tmpscores,2),length(MiceOpt));
+     end
+     nTracked(:,midx) = sum(tmpscores>0.5,1);
 end
   
 figure('name','Tracking Performance')
@@ -449,13 +456,26 @@ set(gca,'XTick',1:length(MiceOpt),'XTickLabel',MiceOpt,'XTickLabelRotation',90)
 legend([h(:)],{'AvgScorer','UM','KS','RankTr'},'Location','best')
   
 xlim([0.5 length(MiceOpt)+0.5])
-ylim([0 250])
+ylim([0 300])
 ylabel('Tracked Units (%)')
 makepretty
 saveas(gcf,fullfile(SaveDir,'TrackingPerformance_Curated.fig'))
 saveas(gcf,fullfile(SaveDir,'TrackingPerformance_Curated.bmp'))
 
-
+figure('name','TrackingScatter')
+clear h
+h(1) = scatter(nTracked(ismember(AllScorerNames,'AvgScorer'),:),nTracked(ismember(AllScorerNames,'KS'),:),40,[1 0 0],'filled');
+hold on
+h(2) = scatter(nTracked(ismember(AllScorerNames,'AvgScorer'),:),nTracked(ismember(AllScorerNames,'UM'),:),40,[0 0 1],'filled');
+for midx = 1:length(MiceOpt)
+h(2+midx) = line([nTracked(ismember(AllScorerNames,'AvgScorer'),midx),nTracked(ismember(AllScorerNames,'AvgScorer'),midx)],[nTracked(ismember(AllScorerNames,'KS'),midx),nTracked(ismember(AllScorerNames,'UM'),midx)],'color',[0 0 0]);
+end
+line([0 max(nTracked(:))],[0 max(nTracked(:))],'color',[0 0 0])
+xlabel('Average Scorer')
+ylabel('Algorithms')
+legend('KS','UnitMatch')
+makepretty
+if 0
 midx = 5
 Check{1,midx}(ismember(Check{1,midx},Check{3,midx}))
 Check{2,midx}(ismember(Check{2,midx},Check{4,midx}))
@@ -473,3 +493,4 @@ RankThr = cell2mat(cellfun(@(X) RankThreshold(X(1),X(2)),Pairs,'Uni',0))'
 WithinSameSession = cell2mat(cellfun(@(X) recses(X(1)) == recses(X(2)),Pairs,'Uni',0))
 
 PyKS = cell2mat(cellfun(@(X) OriID(X(1)) == OriID(X(2)),Pairs,'Uni',0))
+end

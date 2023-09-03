@@ -60,6 +60,7 @@ UMparam.UseBombCelRawWav = Params.RunQualityMetrics; % 1 by default
 UMparam.KSDir = AllKiloSortPaths;
 UMparam.channelpos = Params.AllChannelPos;
 UMparam.AllRawPaths = Params.RawDataPaths;
+UMparam.UseHistology = Params.UseHistology;
 if isstruct(Params.RawDataPaths)
     UMparam.AllDecompPaths = arrayfun(@(X) fullfile(Params.tmpdatafolder, strrep(Params.RawDataPaths(X).name, 'cbin', 'bin')), 1:length(Params.RawDataPaths), 'Uni', 0);
 else
@@ -72,7 +73,11 @@ UMparam.binsize = Params.binsz;
 UMparam.Scores2Include = Params.Scores2Include; %
 UMparam.ApplyExistingBayesModel = Params.ApplyExistingBayesModel; %If 1, use probability distributions made available by us
 UMparam.MakePlotsOfPairs = Params.MakePlotsOfPairs; % Plot all pairs
-%UMparam.GUI = Params.GUI; % Open GUI for manual curation of pairs
+if isfield(Params,'GUI')
+    UMparam.GUI = Params.GUI; % Open GUI for manual curation of pairs
+else
+    UMparam.GUI = 0;
+end
 
 UMparam.AssignUniqueID = Params.AssignUniqueID; %Assign Unique ID
 UMparam.GoodUnitsOnly = Params.GoodUnitsOnly;
