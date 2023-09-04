@@ -1,7 +1,7 @@
 %% User Input
 %% Path information
 DataDir = {'H:\MatchingUnits\RawData'}; % Raw data folders, typically servers were e.g. *.cbin files are stored
-SaveDir = 'H:\MatchingUnits\Output\NotConcatenated' % Folder where to store the results
+SaveDir = 'H:\MatchingUnits\Output\ManyRecordings'%'H:\MatchingUnits\Output\Concatenated1Day' % Folder where to store the results
 tmpdatafolder = 'H:\MatchingUnits\Tmp'; % temporary folder for temporary decompression of data 
 KilosortDir = 'H:\MatchingUnits\KilosortOutput'; % Kilosort output folder
 GithubDir = 'C:\Users\EnnyB\Documents\GitHub'; % Github directory
@@ -31,8 +31,9 @@ PrepareClusInfoparams.loadPCs = 0; % Only necessary when computiong isoluation m
 
 % UnitMatch
 PrepareClusInfoparams.UnitMatch = 1; % If 1, find identical units across sessions or oversplits in a fast and flexible way
-PrepareClusInfoparams.RedoUnitMatch = 1; % if 1, Redo unitmatch
+PrepareClusInfoparams.RedoUnitMatch = 0; % if 1, Redo unitmatch
 PrepareClusInfoparams.separateIMRO = 0; % Run for every IMRO separately (for memory reasons or when having multiple probes this might be a good idea)
+PrepareClusInfoparams.UseHistology = 0; % Use real coordinates (3D space of tracked probes if available)
 
 % UnitMatch Parameters:
 % All parameters to choose from: {'AmplitudeSim','spatialdecaySim','WavformMSE','WVCorr','CentroidDist','CentroidVar','CentroidDistRecentered','TrajAngleSim','TrajDistSim'};
@@ -43,7 +44,7 @@ PrepareClusInfoparams.ApplyExistingBayesModel = 0; %If 1, use probability distri
 PrepareClusInfoparams.AssignUniqueID = 1; % Assign UniqueID 
 PrepareClusInfoparams.GoodUnitsOnly = 1; % Include only good untis in the UnitMatch analysis - faster and more sensical
 PrepareClusInfoparams.MakePlotsOfPairs = 0; % Plots pairs for inspection (UnitMatch)
-PrepareClusInfoparams.GUI = 1; % Flick through and do manual curation of matching - only works if MakePlotsofPairs = 1
+PrepareClusInfoparams.GUI = 0; % Flick through and do manual curation of matching - only works if MakePlotsofPairs = 1
 
 %% Automatic from here
 PrepareClusInfoparams.SaveDir = SaveDir; % Save results here

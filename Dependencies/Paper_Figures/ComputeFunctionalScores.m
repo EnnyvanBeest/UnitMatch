@@ -7,7 +7,6 @@ else
 end
 UMparam = TmpFile.UMparam; % Extract parameters
 UMparam.binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
-
 MatchTable = TmpFile.MatchTable; % Load Matchtable
 
 
@@ -160,20 +159,23 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) % If it
     MatchTable.RankScore = RankScoreAll(:);
     MatchTable.SigFingerprintR = SigMask(:);
 
+   
     if nargin < 2 || isempty(loadMATsToSave)
         TmpFile.Properties.Writable = true;
-        TmpFile.MatchTable = MatchTable; % Overwrite
-        % add AllSessionCorrelations
-        TmpFile.AllSessionCorrelations = AllSessionCorrelations;
+        end
+         TmpFile.MatchTable = MatchTable; % Overwrite
+    TmpFile.AllSessionCorrelations = AllSessionCorrelations;
+
+           if nargin < 2 || isempty(loadMATsToSave)
+
         TmpFile.Properties.Writable = false;
-    else
-        TmpFile.MatchTable = MatchTable; % Overwrite
-        % add AllSessionCorrelations
-        TmpFile.AllSessionCorrelations = AllSessionCorrelations;
+        else
+  
         movefile(fullfile(SaveDir, 'UnitMatch.mat'), fullfile(SaveDir, 'UnitMatch_prev.mat'))
-        save(fullfile(SaveDir, 'UnitMatch.mat'), 'TmpFile');
+        save(fullfile(SaveDir, 'UnitMatch.mat'),'-struct','TmpFile');
         delete(fullfile(SaveDir, 'UnitMatch_prev.mat'))
     end
+  
 
     %% Compare to functional scores
 
@@ -242,6 +244,7 @@ for id = 1:ntimes
         NonMatchIdx = find((MatchTable.ID1 ~= MatchTable.ID2)); % Not the same unit
         addname = 'KSlabels';
     end
+    MatchIdx(isnan(MatchTable.FingerprintCor(MatchIdx))) = [];
     if isempty(MatchIdx)
         disp('No Matches found... return')
         return
@@ -285,15 +288,18 @@ for id = 1:ntimes
     makepretty
 
     subplot(3, 3, 3)
-    labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
-    scores = [FingerprintCor(MatchIdx)', FingerprintCor(NonMatchIdx)'];
-    [X, Y, ~, AUC1] = perfcurve(labels, scores, 1);
-    h(1) = plot(X, Y, 'color', [0, 0.25, 0]);
-    hold all
-    labels = [ones(1, numel(MatchIdx)), zeros(1, numel(WithinIdx))];
-    scores = [FingerprintCor(MatchIdx)', FingerprintCor(WithinIdx)'];
-    [X, Y, ~, AUC2] = perfcurve(labels, scores, 1);
-    h(2) = plot(X, Y, 'color', [0, 0.5, 0]);
+    if any(MatchIdx)
+        labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
+        scores = [FingerprintCor(MatchIdx)', FingerprintCor(NonMatchIdx)'];
+        [X, Y, ~, AUC1] = perfcurve(labels, scores, 1);
+        h(1) = plot(X, Y, 'color', [0, 0.25, 0]);
+        hold all
+        labels = [ones(1, numel(MatchIdx)), zeros(1, numel(WithinIdx))];
+        scores = [FingerprintCor(MatchIdx)', FingerprintCor(WithinIdx)'];
+        [X, Y, ~, AUC2] = perfcurve(labels, scores, 1);
+        h(2) = plot(X, Y, 'color', [0, 0.5, 0]);
+    end
+
     labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
     scores = [FingerprintCor(WithinIdx)', FingerprintCor(NonMatchIdx)'];
     [X, Y, ~, AUC3] = perfcurve(labels, scores, 1);
@@ -348,8 +354,9 @@ for id = 1:ntimes
         MatchTable.FRDiff = FRDiff(:);
 
         % Write to table
+        TmpFile.MatchTable = MatchTable;
         movefile(fullfile(SaveDir, 'UnitMatch.mat'), fullfile(SaveDir, 'UnitMatch_prev.mat'))
-        save(fullfile(SaveDir, 'UnitMatch.mat'), 'TmpFile');
+        save(fullfile(SaveDir, 'UnitMatch.mat'),'-struct', 'TmpFile');
         delete(fullfile(SaveDir, 'UnitMatch_prev.mat'))
 
     end
@@ -391,15 +398,17 @@ for id = 1:ntimes
     makepretty
 
     subplot(3, 3, 6)
-    labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
-    scores = [ACGCor(MatchIdx)', ACGCor(NonMatchIdx)'];
-    [X, Y, ~, AUC1] = perfcurve(labels, scores, 1);
-    h(1) = plot(X, Y, 'color', [0, 0.25, 0]);
-    hold all
-    labels = [ones(1, numel(MatchIdx)), zeros(1, numel(WithinIdx))];
-    scores = [ACGCor(MatchIdx)', ACGCor(WithinIdx)'];
-    [X, Y, ~, AUC2] = perfcurve(labels, scores, 1);
-    h(2) = plot(X, Y, 'color', [0, 0.5, 0]);
+    if any(MatchIdx)
+        labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
+        scores = [ACGCor(MatchIdx)', ACGCor(NonMatchIdx)'];
+        [X, Y, ~, AUC1] = perfcurve(labels, scores, 1);
+        h(1) = plot(X, Y, 'color', [0, 0.25, 0]);
+        hold all
+        labels = [ones(1, numel(MatchIdx)), zeros(1, numel(WithinIdx))];
+        scores = [ACGCor(MatchIdx)', ACGCor(WithinIdx)'];
+        [X, Y, ~, AUC2] = perfcurve(labels, scores, 1);
+        h(2) = plot(X, Y, 'color', [0, 0.5, 0]);
+    end
     labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
     scores = [ACGCor(WithinIdx)', ACGCor(NonMatchIdx)'];
     [X, Y, ~, AUC3] = perfcurve(labels, scores, 1);
@@ -450,10 +459,12 @@ for id = 1:ntimes
     axis square
 
     subplot(3, 3, 9)
-    labels = [zeros(1, numel(MatchIdx)), ones(1, numel(NonMatchIdx))];
-    scores = [FRDiff(MatchIdx)', FRDiff(NonMatchIdx)'];
-    [X, Y, ~, AUC1] = perfcurve(labels, scores, 1);
-    h(1) = plot(X, Y, 'color', [0, 0.25, 0]);
+    if any(MatchIdx(:))
+        labels = [zeros(1, numel(MatchIdx)), ones(1, numel(NonMatchIdx))];
+        scores = [FRDiff(MatchIdx)', FRDiff(NonMatchIdx)'];
+        [X, Y, ~, AUC1] = perfcurve(labels, scores, 1);
+        h(1) = plot(X, Y, 'color', [0, 0.25, 0]);
+    end
     hold all
     labels = [zeros(1, numel(MatchIdx)), ones(1, numel(WithinIdx))];
     scores = [FRDiff(MatchIdx)', FRDiff(WithinIdx)'];

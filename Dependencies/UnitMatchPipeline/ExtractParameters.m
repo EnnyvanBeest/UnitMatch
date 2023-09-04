@@ -8,7 +8,7 @@ spikeWidth = param.spikeWidth;
 Allchannelpos = param.channelpos;
 RecSes = clusinfo.RecSesID;
 
-if isfield(clusinfo,'Coordinates') % Allow for real coordinates
+if isfield(clusinfo,'Coordinates') && param.UseHistology% Allow for real coordinates
     for recid = 1:max(RecSes)
         % Cluster
         Coordinates = clusinfo.Coordinates(RecSes == recid);
@@ -286,6 +286,8 @@ AllWVBParameters.WaveIdx = WaveIdx;
 return
 % Images for example neuron
 if 0
+
+
     figure; histogram(A0Distance(:),'FaceColor',[0 0 0],'EdgeColor',[0 0 0])
     hold on;
     line([nanmedian(A0Distance(:)) nanmedian(A0Distance(:))],get(gca,'ylim'),'color',[1 0 0])
@@ -296,7 +298,7 @@ if 0
     makepretty
 
 
-    uid = [10] % Example (AL032, take 10)
+    uid = [198] % Example (AL032, take 10)
     fprintf(1,'\b\b\b\b%3.0f%%',uid/nclus*100)
     % load data
     spikeMap = readNPY(Path4UnitNPY{uid});

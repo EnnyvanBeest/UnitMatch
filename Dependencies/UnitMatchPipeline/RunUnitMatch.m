@@ -1,5 +1,8 @@
 function [UMparam, UniqueIDConversion, MatchTable, WaveformInfo] = RunUnitMatch(AllKiloSortPaths, Params, ephys_dirs)
 
+if nargin<3
+    ephys_dirs = [];
+end
 %% Here we're going to actually load in all the sessions requested - only clusinfo to save memory for unitmatch
 clusinfo = cell(1, length(AllKiloSortPaths));
 addthis = 0;
@@ -57,6 +60,7 @@ UMparam.UseBombCelRawWav = Params.RunQualityMetrics; % 1 by default
 UMparam.KSDir = AllKiloSortPaths;
 UMparam.channelpos = Params.AllChannelPos;
 UMparam.AllRawPaths = Params.RawDataPaths;
+UMparam.UseHistology = Params.UseHistology;
 if isstruct(Params.RawDataPaths)
     UMparam.AllDecompPaths = arrayfun(@(X) fullfile(Params.tmpdatafolder, strrep(Params.RawDataPaths(X).name, 'cbin', 'bin')), 1:length(Params.RawDataPaths), 'Uni', 0);
 else
@@ -69,7 +73,11 @@ UMparam.binsize = Params.binsz;
 UMparam.Scores2Include = Params.Scores2Include; %
 UMparam.ApplyExistingBayesModel = Params.ApplyExistingBayesModel; %If 1, use probability distributions made available by us
 UMparam.MakePlotsOfPairs = Params.MakePlotsOfPairs; % Plot all pairs
-%UMparam.GUI = Params.GUI; % Open GUI for manual curation of pairs
+if isfield(Params,'GUI')
+    UMparam.GUI = Params.GUI; % Open GUI for manual curation of pairs
+else
+    UMparam.GUI = 0;
+end
 
 UMparam.AssignUniqueID = Params.AssignUniqueID; %Assign Unique ID
 UMparam.GoodUnitsOnly = Params.GoodUnitsOnly;
@@ -119,7 +127,7 @@ if Params.UnitMatch
         [UniqueIDConversion, MatchTable, WaveformInfo, UMparam] = UnitMatch(clusinfo, UMparam);
         UMrunTime = toc(GlobalUnitMatchClock);
         save(fullfile(UMparam.SaveDir, 'UnitMatch.mat'), 'UniqueIDConversion', 'MatchTable', 'WaveformInfo', 'UMparam', 'UMrunTime')
-        DataSizeParam = CalculateDuration(UMparam.SaveDir, ephys_dirs);
+        DataSizeParam = CalculateDuration(UMparam.SaveDir,ephys_dirs);
         disp(['UnitMatch took ', num2str(round(UMrunTime/60*10)/10), ' minute(s) to run'])
 
     end

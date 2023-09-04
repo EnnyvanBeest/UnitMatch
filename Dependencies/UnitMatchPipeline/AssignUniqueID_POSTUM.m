@@ -1,24 +1,32 @@
-function [UniqueID, MatchTable] = AssignUniqueID(MatchTable,clusinfo,Path4UnitNPY,param)
-AllClusterIDs = clusinfo.cluster_id;
+function [UniqueID, MatchTable] = AssignUniqueID_POSTUM(SaveDir)
+
+load(SaveDir)
+AllClusterIDs = UniqueIDConversion.OriginalClusID;
 % nses = length(AllDecompPaths);
 % OriginalClusID = AllClusterIDs; % Original cluster ID assigned by KS
 UniqueID = 1:length(AllClusterIDs); % Initial assumption: All clusters are unique
 OriUniqueID = UniqueID;
-if param.GoodUnitsOnly
-    Good_Idx = find(clusinfo.Good_ID); %Only care about good units at this point
+if UMparam.GoodUnitsOnly
+    Good_Idx = find(UniqueIDConversion.GoodID); %Only care about good units at this point
 else
-    Good_Idx = 1:length(clusinfo.Good_ID);
+    Good_Idx = 1:length(UniqueIDConversion.GoodID);
     disp('Use all units including MUA and noise')
 end
-GoodRecSesID = clusinfo.RecSesID;
+GoodRecSesID = UniqueIDConversion.recsesAll;
+% Re-initialize UID
+[PairID3,PairID4]=meshgrid(OriUniqueID(Good_Idx));
+MatchTable.UID1 = PairID3(:);
+MatchTable.UID2 = PairID4(:);
 RecOpt = unique(GoodRecSesID);
+
 %% Initial pairing based on matchscore
-Pairs = [MatchTable.UID1(MatchTable.MatchProb>param.ProbabilityThreshold) MatchTable.UID2(MatchTable.MatchProb>param.ProbabilityThreshold)]; %
+Pairs = [MatchTable.UID1(MatchTable.MatchProb>UMparam.ProbabilityThreshold) MatchTable.UID2(MatchTable.MatchProb>UMparam.ProbabilityThreshold)]; %
 Pairs(diff(Pairs,[],2)==0,:)=[]; %Remove own matches
 Pairs = sort(Pairs,2,'ascend'); % Only use each unique pair once
 Pairs = unique(Pairs,'stable','rows');
+
 %% ISI violations (for over splits matching)
-if param.removeoversplits
+if UMparam.removeoversplits
     CurrentSPPath = [];
     ISIViolationsScore = nan(1,size(Pairs,1));
     fprintf(1,'Computing functional properties for determining ISI. Progress: %3d%%',0)
@@ -27,10 +35,10 @@ if param.removeoversplits
             tmppath = strsplit(Path4UnitNPY{find(Good_Idx==Pairs(pairid,1))},'RawWaveforms');
             % Load sp for correct day
             if isempty(CurrentSPPath) || ~strcmp(CurrentSPPath{1},tmppath{1})
-                if length(param.KSDir)>1
-                    tmp = matfile(fullfile(param.KSDir{GoodRecSesID(Pairs(pairid,1))},'PreparedData.mat'));
+                if length(UMparam.KSDir)>1
+                    tmp = matfile(fullfile(UMparam.KSDir{GoodRecSesID(Pairs(pairid,1))},'PreparedData.mat'));
                 else %Stitched
-                    tmp = matfile(fullfile(param.KSDir{1},'PreparedData.mat'));
+                    tmp = matfile(fullfile(UMparam.KSDir{1},'PreparedData.mat'));
                 end
                 sp = tmp.sp;
                 CurrentSPPath = tmppath;
@@ -58,13 +66,13 @@ for recid = 1:length(RecOpt)-1
     for id = 1:size(SubPairs,1)
         % Matchprobability should be high enough
         tblidx1 = find(ismember(MatchTable.UID1,SubPairs(id,1))&ismember(MatchTable.UID2,SubPairs(id,2)));
-        if ~(MatchTable.MatchProb(tblidx1) > param.ProbabilityThreshold) %Requirement 1, match probability should be high enough
+        if ~(MatchTable.MatchProb(tblidx1) > UMparam.ProbabilityThreshold) %Requirement 1, match probability should be high enough
             continue
         end
         % Find the cross-validated version of this pair, this should also have
         % high enough probability
         tblidx2 = find(ismember(MatchTable.UID1,SubPairs(id,2))&ismember(MatchTable.UID2,SubPairs(id,1)));
-        if ~(MatchTable.MatchProb(tblidx2) > param.ProbabilityThreshold) %Requirement 1, match probability should be high enough
+        if ~(MatchTable.MatchProb(tblidx2) > UMparam.ProbabilityThreshold) %Requirement 1, match probability should be high enough
             continue
         end
         % Extra check: It should also match with all the other pairs that were
@@ -74,7 +82,7 @@ for recid = 1:length(RecOpt)-1
         TheseOriUids(GoodRecSesID(TheseOriUids)<recid | GoodRecSesID(TheseOriUids)>recid+1) = [];
         % All of these need to match with the new one, if added
         tblidx = find(((ismember(MatchTable.UID1,TheseOriUids)&ismember(MatchTable.UID2,SubPairs(id,2))) | (ismember(MatchTable.UID2,TheseOriUids)&ismember(MatchTable.UID1,SubPairs(id,2)))) & ~(MatchTable.UID1==MatchTable.UID2)); % !
-        if ~all(MatchTable.MatchProb(tblidx)>param.ProbabilityThreshold)
+        if ~all(MatchTable.MatchProb(tblidx)>UMparam.ProbabilityThreshold)
             continue
         end
         UniqueID(SubPairs(id,2)) = UniqueID(SubPairs(id,1)); %Survived, assign
@@ -85,6 +93,10 @@ end
 MatchTable.UID1 = PairID3(:);
 MatchTable.UID2 = PairID4(:);
 
+%% Replace in UniqueIDConversion
+UniqueIDConversion.UniqueID = UniqueID;
 
+% Overwrite
+save(SaveDir,'MatchTable','UniqueIDConversion','-append')
 
 return
