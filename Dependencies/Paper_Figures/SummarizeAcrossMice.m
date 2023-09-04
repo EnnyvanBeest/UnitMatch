@@ -12,7 +12,7 @@ RFDistAcrossMice = nan(length(Vector),3,length(MiceOpt)); % Vector / within,Matc
 RFAUC = nan(3,length(MiceOpt));
 EPosAndNeg = nan(3,length(MiceOpt));
 UseKSLabels = PrepareClusInfoparams.RunPyKSChronicStitched;
-
+RecSesPerUIDAllMice = cell(1,length(MiceOpt));
 for midx = 1:length(MiceOpt)
     tmpfile = dir(fullfile(SaveDir,MiceOpt{midx},'UnitMatch','UnitMatch.mat'));
     if isempty(tmpfile)
@@ -86,6 +86,26 @@ for midx = 1:length(MiceOpt)
         KSTrackingPerformancePerMouse{midx} = TrackingPerformanceKS;
     end
 
+    %% UniqueID X FinterprintCor
+    [UniqueIDOpt,idx1,idx2] = unique(UniqueID); %UID options
+    RecSesOpt = unique(recses); %Recording sessions options
+    RecSesPerUID = arrayfun(@(X) ismember(RecSesOpt,recses(idx2==X)),1:numel(UniqueIDOpt),'Uni',0); % Extract which recording sessions a unite appears in
+    RecSesPerUID = cat(2,RecSesPerUID{:});
+    if midx == 1
+        MatrixFig = figure('name','TrackingAcrossDaysMatrix');
+    else
+        figure(MatrixFig)
+    end
+    subplot(ceil(sqrt(length(MiceOpt))),round(sqrt(length(MiceOpt))),midx)
+    h = imagesc(RecSesPerUID(:,sum(RecSesPerUID,1)>1)');
+    colormap(flipud(gray))
+    title(MiceOpt{midx})
+    xlabel('RecordingSession')
+    ylabel('Tracked Units')
+    makepretty
+
+    RecSesPerUIDAllMice{midx} = RecSesPerUID; % Save for later use
+    
     %% Extra Positives/negatives
     %Extra Positive
     EPosAndNeg(1,midx) = sum(MatchProb(NonMatchIdx)>UMparam.ProbabilityThreshold)./length(NonMatchIdx);
@@ -97,6 +117,7 @@ for midx = 1:length(MiceOpt)
         EPosAndNeg(3,midx) = sum(MatchProb(MatchIdx)<UMparam.ProbabilityThreshold)./length(MatchIdx);
     end
     %% Fingerprint correlation
+    figure(FSCoreFig)
     FingerprintCor = reshape(MatchTable.FingerprintCor,nclus,nclus);
 
 
@@ -401,4 +422,8 @@ xlabel('\Delta Days')
 
 makepretty
 
+%% save figure
+figure(MatrixFig)
+saveas(gcf,fullfile(SaveDir,'TrackingPerformanceMatrix.fig'))
+saveas(gcf,fullfile(SaveDir,'TrackingPerformanceMatrix.bmp'))
 
