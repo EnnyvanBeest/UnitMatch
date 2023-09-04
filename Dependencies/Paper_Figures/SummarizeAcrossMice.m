@@ -18,10 +18,9 @@ for midx = 1:length(MiceOpt)
     if isempty(tmpfile)
         continue
     end
-    load(fullfile(tmpfile.folder, tmpfile.name));
-    MatchTable = TmpFile.MatchTable; %Extract matchtable
-    UMparam = TmpFile.UMparam; % Extract parameters
-
+    tmpFile = matfile(fullfile(tmpfile.folder, tmpfile.name));
+    MatchTable = tmpFile.MatchTable; %Extract matchtable
+    UMparam = tmpFile.UMparam; % Extract parameters
     % Load AUCS
     if exist(fullfile(SaveDir, MiceOpt{midx}, 'UnitMatch', 'AUC.mat'))
         AUC = load(fullfile(SaveDir, MiceOpt{midx}, 'UnitMatch', 'AUC.mat'))';
@@ -44,7 +43,7 @@ for midx = 1:length(MiceOpt)
         NonMatchIdx = find((MatchTable.ID1 ~= MatchTable.ID2)); % Not the same unit
     end
     % Extract cluster information
-    UniqueIDConversion = TmpFile.UniqueIDConversion;
+    UniqueIDConversion = tmpFile.UniqueIDConversion;
     if UMparam.GoodUnitsOnly
         GoodId = logical(UniqueIDConversion.GoodID);
     else
