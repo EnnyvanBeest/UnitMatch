@@ -63,6 +63,7 @@ PrepareClusInfoparams.AssignUniqueID = 1; % Assign UniqueID
 PrepareClusInfoparams.GoodUnitsOnly = 1; % Include only good untis in the UnitMatch analysis - faster and more sensical
 PrepareClusInfoparams.extractSync = 0;
 PrepareClusInfoparams.plot = 0;
+PrepareClusInfoparams.UseHistology =0;
 
 PrepareClusInfoparams.SaveDir = SaveDir; % Save results here
 PrepareClusInfoparams.tmpdatafolder = tmpdatafolder; % use this as a local directory (should be large enough to handle all sessions you want to combine)
