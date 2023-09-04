@@ -1,4 +1,4 @@
-function [UniqueID, MatchTable] = AssignUniqueID_Serial(SaveDir)
+function [UniqueID, MatchTable] = AssignUniqueID_POSTUM(SaveDir)
 
 load(SaveDir)
 AllClusterIDs = UniqueIDConversion.OriginalClusID;
@@ -93,7 +93,10 @@ end
 MatchTable.UID1 = PairID3(:);
 MatchTable.UID2 = PairID4(:);
 
+%% Replace in UniqueIDConversion
+UniqueIDConversion.UniqueID = UniqueID;
+
 % Overwrite
-save(SaveDir,'MatchTable','-append')
+save(SaveDir,'MatchTable','UniqueIDConversion','-append')
 
 return

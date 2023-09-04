@@ -84,7 +84,6 @@ for midx = 1:length(MiceOpt)
         if UMparam.MakePlotsOfPairs
             DrawBlind = 0; %1 for blind drawing (for manual judging of pairs)
             DrawPairsUnitMatch(UMparam.SaveDir,DrawBlind);
-
             if UMparam.GUI
                 FigureFlick(UMparam.SaveDir)
             end

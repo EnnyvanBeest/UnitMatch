@@ -714,9 +714,10 @@ while flag<2
     for did = 1:ndays
         tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1)=nan;
     end
+    if any(~isnan(tmp(:)))
    [h,stats] = cdfplot(tmp(:)); %pAcross sessions
     h.Color = [1 0 0];
-
+    end
 %     [h,stats] = cdfplot(tmp(tmp(:)<ThrsOpt)); %putative matches
 %     h.Color = [0.5 0.2 0];
 

@@ -320,8 +320,10 @@ tmp(EuclDist>param.NeighbourDist)=nan;
 for did = 1:ndays
     tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1)=nan;
 end
+if any(~isnan(tmp(:)))
 [h,stats] = cdfplot(tmp(:)); %Across days
 h.Color = [1 0 0];
+end
 
 
 xlabel('MatchProbability')
