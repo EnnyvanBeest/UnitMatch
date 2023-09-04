@@ -62,7 +62,7 @@ for uid = 1:nclus
                 ap_data = memmapfile(AllDecompPaths{GoodRecSesID(uid)}, 'Format', {'int16', [param.nChannels, n_samples], 'data'});
             catch
                 nChannels = param.nChannels - 1;
-                n_samples = spikeFile.bytes / (nChannels * dataTypeNBytes);
+                n_samples = spikeFile.bytes / (param.nChannels * dataTypeNBytes);
                 ap_data = memmapfile(AllDecompPaths{GoodRecSesID(uid)}, 'Format', {'int16', [nChannels, n_samples], 'data'});
             end
             memMapData = ap_data.Data.data;
