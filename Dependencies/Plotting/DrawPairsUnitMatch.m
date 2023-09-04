@@ -1,9 +1,14 @@
-function DrawPairsUnitMatch(SaveDir, DrawBlind)
+function DrawPairsUnitMatch(SaveDir, DrawBlind, loadMATsToSave)
 if nargin < 2
     DrawBlind = 0;
 end
 Redo = 0;
-TmpFile = matfile(fullfile(SaveDir, 'UnitMatch.mat')); % Access saved file
+if nargin < 3 || isempty(loadMATsToSave)
+    TmpFile = matfile(fullfile(SaveDir, 'UnitMatch.mat')); % Access saved file
+else
+    load(fullfile(SaveDir, 'UnitMatch.mat'));
+end
+
 UMparam = TmpFile.UMparam; % Extract parameters
 MatchTable = TmpFile.MatchTable; % Load Matchtable
 try

@@ -1,8 +1,10 @@
-function ComputeFunctionalScores(SaveDir)
+function ComputeFunctionalScores(SaveDir, loadMATsToSave)
 
-%TmpFile = matfile(fullfile(SaveDir, 'UnitMatch.mat')); % Access saved file
-
-TmpFile = load(fullfile(SaveDir, 'UnitMatch.mat'));
+if nargin < 2 || isempty(loadMATsToSave)
+    TmpFile = matfile(fullfile(SaveDir, 'UnitMatch.mat')); % Access saved file
+else
+    TmpFile = load(fullfile(SaveDir, 'UnitMatch.mat'));
+end
 UMparam = TmpFile.UMparam; % Extract parameters
 UMparam.binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
 MatchTable = TmpFile.MatchTable; % Load Matchtable
@@ -157,14 +159,23 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) % If it
     MatchTable.RankScore = RankScoreAll(:);
     MatchTable.SigFingerprintR = SigMask(:);
 
-    %TmpFile.Properties.Writable = true;
-    TmpFile.MatchTable = MatchTable; % Overwrite
-    % add AllSessionCorrelations
+   
+    if nargin < 2 || isempty(loadMATsToSave)
+        TmpFile.Properties.Writable = true;
+        end
+         TmpFile.MatchTable = MatchTable; % Overwrite
     TmpFile.AllSessionCorrelations = AllSessionCorrelations;
-    %TmpFile.Properties.Writable = false;
-    movefile(fullfile(SaveDir, 'UnitMatch.mat'), fullfile(SaveDir, 'UnitMatch_prev.mat'))
-    save(fullfile(SaveDir, 'UnitMatch.mat'),'-struct', 'TmpFile');
-    delete(fullfile(SaveDir, 'UnitMatch_prev.mat'))
+
+           if nargin < 2 || isempty(loadMATsToSave)
+
+        TmpFile.Properties.Writable = false;
+        else
+  
+        movefile(fullfile(SaveDir, 'UnitMatch.mat'), fullfile(SaveDir, 'UnitMatch_prev.mat'))
+        save(fullfile(SaveDir, 'UnitMatch.mat'),'-struct','TmpFile');
+        delete(fullfile(SaveDir, 'UnitMatch_prev.mat'))
+    end
+  
 
     %% Compare to functional scores
 

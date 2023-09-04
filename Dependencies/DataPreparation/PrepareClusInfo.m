@@ -252,7 +252,7 @@ for subsesid = 1:length(KiloSortPaths)
         KSLabelfile = tdfread(fullfile(KiloSortPaths{subsesid}, 'cluster_KSLabel.tsv'));
         tmpLabel(ismember(clusinfo.cluster_id, KSLabelfile.cluster_id)) = KSLabelfile.KSLabel(ismember(KSLabelfile.cluster_id, clusinfo.cluster_id));
         Label = [Label, tmpLabel];
-        totSpkNum = histc(sp.clu, sp.cids);
+        totSpkNum = histc(sp.spikeTemplates, clusinfo.cluster_id);
         Good_IDtmp = ismember(tmpLabel, 'g') & totSpkNum' > paramBC.minNumSpikes; %Identify good clusters
 
         % Find depth and channel
@@ -372,7 +372,8 @@ for subsesid = 1:length(KiloSortPaths)
 
 
             InspectionFlag = 0;
-            if isempty(dir(fullfile(savePath, '**', 'RawWaveforms'))) % if raw waveforms have not been extract, decompress data for extraction
+            rerunEx = false;
+            if isempty(dir(fullfile(savePath, '**', 'RawWaveforms'))) || rerunEx  % if raw waveforms have not been extract, decompress data for extraction
                 disp('Extracting sync file...')
                 % detect whether data is compressed, decompress locally if necessary
                 if ~exist(fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'bin')))
