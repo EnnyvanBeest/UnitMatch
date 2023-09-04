@@ -34,6 +34,7 @@ PrepareClusInfoparams.DecompressLocal = 1; % If 1, uncompress data first if it's
 PrepareClusInfoparams.deNoise = 0;
 PrepareClusInfoparams.nSavedChans = 385;
 PrepareClusInfoparams.nSyncChans = 1;
+
 % Storing preprocessed data?
 PrepareClusInfoparams.ReLoadAlways = 1; % If 1, SP & Clusinfo are always loaded from KS output
 PrepareClusInfoparams.saveSp = 1; % Save SP struct for easy loading of preprocessed data
@@ -66,6 +67,7 @@ PrepareClusInfoparams.plot = 0;
 PrepareClusInfoparams.SaveDir = SaveDir; % Save results here
 PrepareClusInfoparams.tmpdatafolder = tmpdatafolder; % use this as a local directory (should be large enough to handle all sessions you want to combine)
 
+PrepareClusInfoparams.loadMATsToSave = 1;
 %% Loading data from kilosort/phy
 subsesopt = kilosort_dirs;
 
@@ -92,6 +94,7 @@ if isempty(subsesopt)
     disp(['No data found for ', mouseName])
 
 end
+saveJF = 1;
 
 %% Pre-process: quality metrics
 PrepareClusInfoparams = PrepareClusInfo(subsesopt, PrepareClusInfoparams, ephys_dirs);
@@ -105,12 +108,12 @@ if PrepareClusInfoparams.plot
     EvaluatingUnitMatch(UMparam.SaveDir);
 
     % Function analysis
-    ComputeFunctionalScores(UMparam.SaveDir)
+    ComputeFunctionalScores(UMparam.SaveDir, saveJF)
 end
 % Figures
 if UMparam.MakePlotsOfPairs
     DrawBlind = 0; %1 for blind drawing (for manual judging of pairs)
-    DrawPairsUnitMatch(UMparam.SaveDir, DrawBlind);
+    DrawPairsUnitMatch(UMparam.SaveDir, DrawBlind, saveJF);
 end
 
 % Quality metrics

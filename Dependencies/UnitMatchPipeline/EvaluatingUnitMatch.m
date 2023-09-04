@@ -193,7 +193,7 @@ end
 disp(['False negative rate: ', num2str(round(FN(1, 1)*1000)/10), '%'])
 disp(['False positive rate: ', num2str(round(FP(1, 1)*1000)/10), '%'])
 
-%% Some Advise:
+%% Some Advice:
 if FalseNegativeChanges(2, 1) < FalseNegativeChanges(1, 1) & FalsePositiveChanges(2, 1) < FalsePositiveChanges(1, 1)
     disp('We advise to use the standard model on this data:')
     disp('PrepareClusInfoparams.ApplyExistingBayesModel = 1');

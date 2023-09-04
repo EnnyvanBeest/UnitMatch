@@ -1,4 +1,4 @@
-function FigureFlick(UMDir,user,recompute)
+function FigureFlick(UMDir,user,recompute, loadMATsToSave)
     %%% Go through pairs to manually curate matches. Will save a .mat file
     %%% with the label of the pairs (0: uncurated, 1: match, -1: non-match)
     %
@@ -30,6 +30,11 @@ function FigureFlick(UMDir,user,recompute)
     % Load matchtable
     UMFile = dir(fullfile(UMDir,'UnitMatch.mat'));
     load(fullfile(UMFile.folder,UMFile.name))
+    if nargin == 3 || ~isempty(loadMATsToSave)
+        MatchTable = TmpFile.MatchTable;
+    else
+        loadMATsToSave = '';
+    end
     if ~any(ismember(MatchTable.Properties.VariableNames,user))
         eval(['MatchTable.' user ' = zeros(height(MatchTable),1);'])
     end
@@ -66,6 +71,7 @@ function FigureFlick(UMDir,user,recompute)
     guiData.curr.updateFig = 1;
     guiData.curr.match = guiData.match(guiData.pairIDs == guiData.curr.pair);
     guiData.showFinishBox = 1;
+    guiData.loadMATsToSave = loadMATsToSave;
 
     % Create figure
     blindFlickGUI = figure('color','w','name',user);
@@ -175,7 +181,11 @@ function savedata(guiData)
 SaveDir = strsplit(guiData.d(1).folder,'MatchFigures');
 SaveDir = SaveDir{1};
 % Load MatchTable
-load(fullfile(SaveDir,'UnitMatch.mat'))
+    load(fullfile(SaveDir,'UnitMatch.mat'))
+if ~isempty(guiData.loadMATsToSave)
+    MatchTable = TmpFile.MatchTable;
+end
+
 if ~any(ismember(MatchTable.Properties.VariableNames,guiData.name))
     eval(['MatchTable.' guiData.name  ' = zeros(height(MatchTable),1);'])
 end
