@@ -21,6 +21,8 @@ for midx = 1:length(MiceOpt)
     tmpFile = matfile(fullfile(tmpfile.folder, tmpfile.name));
     MatchTable = tmpFile.MatchTable; %Extract matchtable
     UMparam = tmpFile.UMparam; % Extract parameters
+    UniqueIDConversion = tmpFile.UniqueIDConversion; % Extract UniqueID Conversion
+
     % Load AUCS
     if exist(fullfile(SaveDir, MiceOpt{midx}, 'UnitMatch', 'AUC.mat'))
         AUC = load(fullfile(SaveDir, MiceOpt{midx}, 'UnitMatch', 'AUC.mat'))';
@@ -43,7 +45,6 @@ for midx = 1:length(MiceOpt)
         NonMatchIdx = find((MatchTable.ID1 ~= MatchTable.ID2)); % Not the same unit
     end
     % Extract cluster information
-    UniqueIDConversion = tmpFile.UniqueIDConversion;
     if UMparam.GoodUnitsOnly
         GoodId = logical(UniqueIDConversion.GoodID);
     else
@@ -62,7 +63,6 @@ for midx = 1:length(MiceOpt)
     TrackingPerformance = nan(3, 0); % Difference between recording number, % Tracked units %maximum possibility
     TrackingPerformanceKS = nan(3, 0); % Difference between recording number, % Tracked units %maximum possibility
 
-    MatchProb = reshape(MatchTable.MatchProb, nclus, nclus);
     for did1 = 1:ndays
         for did2 = 1:ndays
             if did2 <= did1
@@ -86,6 +86,7 @@ for midx = 1:length(MiceOpt)
     end
 
     %% UniqueID X FinterprintCor
+
     [UniqueIDOpt,idx1,idx2] = unique(UniqueID); %UID options
     RecSesOpt = unique(recses); %Recording sessions options
     RecSesPerUID = arrayfun(@(X) ismember(RecSesOpt,recses(idx2==X)),1:numel(UniqueIDOpt),'Uni',0); % Extract which recording sessions a unite appears in
@@ -106,6 +107,7 @@ for midx = 1:length(MiceOpt)
     RecSesPerUIDAllMice{midx} = RecSesPerUID; % Save for later use
 
     %% Extra Positives/negatives
+    MatchProb = reshape(MatchTable.MatchProb, nclus, nclus);
     %Extra Positive
     EPosAndNeg(1, midx) = sum(MatchProb(NonMatchIdx) > UMparam.ProbabilityThreshold) ./ length(NonMatchIdx);
 
@@ -420,9 +422,7 @@ figure('name','Tracking across days')
 hold on
 cols = lines(length(UMTrackingPerformancePerMouse));
 for midx = 1:length(UMTrackingPerformancePerMouse)
-
     scatter(UMTrackingPerformancePerMouse{midx}(1,:)+0.2*midx,UMTrackingPerformancePerMouse{midx}(2,:)./UMTrackingPerformancePerMouse{midx}(3,:),20,cols(midx,:),'filled')
-
 end
 
 ylabel('Tracked units (%)')
