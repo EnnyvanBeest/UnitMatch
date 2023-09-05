@@ -426,6 +426,19 @@ for midx = 1:length(MiceOpt)
      ReOrderedTbl.BlindID(idx) 
      Check{4,midx} =  ReOrderedTbl.BlindID(idx)
 
+     %% VENN DIAGRAM
+     if midx == 1
+         VENNFig = figure('name','VENN');
+     else
+         figure(VENNFig)
+     end
+     subplot(ceil(sqrt(length(MiceOpt))),round(sqrt(length(MiceOpt))),midx)
+     Idx = (AvgMan'>0.5 | PyKS'==1 | MatchProb>0.5);
+     h= vennX([sum(PyKS(Idx)'==1 & MatchProb(Idx)<=0.5 & AvgMan(Idx)'<=0.5) sum(PyKS(Idx)'==1 & MatchProb(Idx)>0.5 & AvgMan(Idx)'<=0.5) sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'<=0.5) sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'>0.5) ...
+        sum(PyKS(Idx)'==0 & MatchProb(Idx)<=0.5 & AvgMan(Idx)'>0.5) sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'>0.5) sum(PyKS(Idx)'==1 & AvgMan(Idx)'>0.5&MatchProb(Idx)>0.5)],0.1);
+     title(MiceOpt{midx})
+
+
      %% Tracking performance?
      %      Maximum possible
      tmpscores = AllScoringMethods(~WithinSameSession,:);
@@ -463,18 +476,23 @@ saveas(gcf,fullfile(SaveDir,'TrackingPerformance_Curated.fig'))
 saveas(gcf,fullfile(SaveDir,'TrackingPerformance_Curated.bmp'))
 
 figure('name','TrackingScatter')
+cols = lines(length(MiceOpt));
 clear h
-h(1) = scatter(nTracked(ismember(AllScorerNames,'AvgScorer'),:),nTracked(ismember(AllScorerNames,'KS'),:),40,[1 0 0],'filled');
+h(1) = scatter(nTracked(ismember(AllScorerNames,'AvgScorer'),:),nTracked(ismember(AllScorerNames,'KS'),:),40,cols);
 hold on
-h(2) = scatter(nTracked(ismember(AllScorerNames,'AvgScorer'),:),nTracked(ismember(AllScorerNames,'UM'),:),40,[0 0 1],'filled');
+h(2) = scatter(nTracked(ismember(AllScorerNames,'AvgScorer'),:),nTracked(ismember(AllScorerNames,'UM'),:),40,cols,'filled');
 for midx = 1:length(MiceOpt)
-h(2+midx) = line([nTracked(ismember(AllScorerNames,'AvgScorer'),midx),nTracked(ismember(AllScorerNames,'AvgScorer'),midx)],[nTracked(ismember(AllScorerNames,'KS'),midx),nTracked(ismember(AllScorerNames,'UM'),midx)],'color',[0 0 0]);
+    h(2+midx) = line([nTracked(ismember(AllScorerNames,'AvgScorer'),midx),nTracked(ismember(AllScorerNames,'AvgScorer'),midx)],[nTracked(ismember(AllScorerNames,'KS'),midx),nTracked(ismember(AllScorerNames,'UM'),midx)],'color',[0 0 0]);
 end
 line([0 max(nTracked(:))],[0 max(nTracked(:))],'color',[0 0 0])
 xlabel('Average Scorer')
 ylabel('Algorithms')
 legend('KS','UnitMatch')
 makepretty
+
+figure(VENNFig)
+subplot(3,2,6)
+vennX([10 10 10 10 10 10 10],0.1)
 if 0
 midx = 5
 Check{1,midx}(ismember(Check{1,midx},Check{3,midx}))

@@ -1,0 +1,11 @@
+#------------------ common OS config files
+.DS_Store
+.Spotlight-V100
+Thumbs.db
+desktop.ini
+#------------------ directories to ignore
+temp/
+private/
+unpublished/
+#------------------ MATLAB autosave backup
+.asv
