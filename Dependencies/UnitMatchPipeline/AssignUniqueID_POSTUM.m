@@ -1,6 +1,11 @@
 function [UniqueID, MatchTable] = AssignUniqueID_POSTUM(SaveDir)
 
 load(SaveDir)
+if exist('TmpFile', 'var')
+    UniqueIDConversion = TmpFile.UniqueIDConversion;
+    MatchTable = TmpFile.MatchTable;
+    UMparam = TmpFile.UMparam;
+end
 AllClusterIDs = UniqueIDConversion.OriginalClusID;
 % nses = length(AllDecompPaths);
 % OriginalClusID = AllClusterIDs; % Original cluster ID assigned by KS
