@@ -26,13 +26,12 @@ for midx = 1:length(MiceOpt)
     % Load AUCS
     if exist(fullfile(SaveDir, MiceOpt{midx}, 'UnitMatch', 'AUC.mat'))
         AUC = load(fullfile(SaveDir, MiceOpt{midx}, 'UnitMatch', 'AUC.mat'))';
-        if midx == 1
+        if midx == 1 || ~exist('AUCParams','var')
             AUCParams = AUC.AUCStruct.ParamNames;
             AUCVals = nan(length(AUCParams), length(MiceOpt));
         end
         AUCVals(:, midx) = AUC.AUCStruct.AUC;
     end
-
 
     % Extract groups
     if ~UseKSLabels
@@ -57,29 +56,97 @@ for midx = 1:length(MiceOpt)
     recsesall = UniqueIDConversion.recsesAll;
     nRecs = length(unique(recsesall));
     AllKSDir = UMparam.KSDir; %original KS Dir
+    AllRawDir = UMparam.AllRawPaths; %
+    if isstruct(AllRawDir)
+        AllRawDir = arrayfun(@(X) fullfile(X.folder,X.name),AllRawDir,'Uni',0);
+    end
     nclus = length(UniqueID);
+    ChannelPos = UMparam.channelpos;
 
     %% How many units vs number of units were tracked?
-    TrackingPerformance = nan(3, 0); % Difference between recording number, % Tracked units %maximum possibility
-    TrackingPerformanceKS = nan(3, 0); % Difference between recording number, % Tracked units %maximum possibility
-
+    TrackingPerformance = nan(4, 0); % MatchesExpected, Difference between recording day, % Tracked units %maximum possibility
+    TrackingPerformanceKS = nan(4, 0); % MatchesExpected, Difference between recording day, % Tracked units %maximum possibility
+    AllDeltaDays = nan(1,nRecs);
+    ProbeSN = cell(1,nRecs); % To make sure the same probe was used, read the Serial number from the params file an store.
     for did1 = 1:nRecs
+
+        % Read ProbeID
+        if isempty(ProbeSN{did1})
+            if any(strfind(AllRawDir{did1},'zinu'))
+                 AllRawDir{did1} = strrep(AllRawDir{did1},AllRawDir{did1}(1:strfind(AllRawDir{did1},'zinu')+3),'\\zinu.cortexlab.net\subjects');
+            end
+            rawdir = dir(fullfile(AllRawDir{did1}));
+            meta = ReadMeta2(fullfile(rawdir.folder,'*.ap.meta'));
+            try
+                ProbeSN{did1} = meta.imDatPrb_sn;
+            catch ME
+                disp(ME)
+                keyboard
+            end
+        end
+
+       
         % For difference in days
-        tmpday1 = strsplit(AllKSDir{did1},'\');% relies on yyyy-mm-dd format
+        tmpday1 = strsplit(fullfile(AllRawDir{did1}),'\');% relies on yyyy-mm-dd format
         tmpday1 = tmpday1(cellfun(@(X) any(strfind(X,'-')),tmpday1));
+        try
         tmpday1 = datetime(tmpday1{1},'InputFormat','yyyy-MM-dd');
+        catch
+            tmpday1 = datetime(tmpday1{1},'InputFormat','dd-MM-yyyy');
+        end
+
+        if did1==1
+            firstday = tmpday1;
+        end
+        AllDeltaDays(did1) = double(days(duration(tmpday1-firstday)));
+
+        if length(ChannelPos)>1
+            ChansD1 = ChannelPos{did1};
+        else
+            ChansD1 = ChannelPos{1};
+        end
 
         for did2 = 1:nRecs
             if did2 <= did1
                 continue
             end
-            tmpday2 = strsplit(AllKSDir{did2},'\');% relies on yyyy-mm-dd format
+
+            % Read ProbeID
+            if isempty(ProbeSN{did2})
+                if any(strfind(AllRawDir{did2},'zinu'))
+                    AllRawDir{did2} = strrep(AllRawDir{did2},AllRawDir{did2}(1:strfind(AllRawDir{did2},'zinu')+3),'\\zinu.cortexlab.net\subjects');
+                end
+                rawdir = dir(fullfile(AllRawDir{did2}));
+                meta = ReadMeta2(fullfile(rawdir.folder,'*.ap.meta'));
+                try
+                    ProbeSN{did2} = meta.imDatPrb_sn;
+                catch ME
+                    disp(ME)
+                    keyboard
+                end
+            end
+            tmpday2 = strsplit(fullfile(AllRawDir{did2}),'\');% relies on yyyy-mm-dd format
             tmpday2 = tmpday2(cellfun(@(X) any(strfind(X,'-')),tmpday2));
-            tmpday2 = datetime(tmpday2{1},'InputFormat','yyyy-MM-dd');
+            try
+                tmpday2 = datetime(tmpday2{1},'InputFormat','yyyy-MM-dd');
+            catch
+                tmpday2 = datetime(tmpday2{1},'InputFormat','dd-MM-yyyy');
+            end
 
             % Delta Days
             DDay = days(duration(tmpday2-tmpday1));
 
+            if length(ChannelPos)>1
+                ChansD2 = ChannelPos{did2};
+            else
+                ChansD2 = ChannelPos{1};
+            end
+
+            if strcmp(RecordingType{midx},'Chronic') & ProbeSN{did1} == ProbeSN{did2}% How much did the IMRO overlay??
+                MatchesExpected = sum(ChansD1(:) == ChansD2(:))./numel(ChansD1);
+            else
+                MatchesExpected = 0;
+            end
 
             thesedaysidx = find(ismember(recses, [did1, did2]));
             % can possibly only track these many units:
@@ -95,7 +162,10 @@ for midx = 1:length(MiceOpt)
             if nMatches>nMax
                 keyboard
             end
-            TrackingPerformance = cat(2, TrackingPerformance, [double(DDay), nMatches, nMax]');
+            TrackingPerformance = cat(2, TrackingPerformance, [MatchesExpected, double(DDay), nMatches, nMax]');
+            if MatchesExpected == 1 && (nMatches/nMax)==0
+                keyboard
+            end
 
             if sum(recses(thesedaysidx) == did1)>sum(recses(thesedaysidx) == did2)
                 nMatches = sum(ismember(OriID(recses==did2),OriID(recses==did1)));
@@ -103,7 +173,7 @@ for midx = 1:length(MiceOpt)
                 nMatches = sum(ismember(OriID(recses==did1),OriID(recses==did2)));
             end
             if UseKSLabels
-                TrackingPerformanceKS = cat(2, TrackingPerformanceKS, [did2 - did1, nMatches, nMax]');
+                TrackingPerformanceKS = cat(2, TrackingPerformanceKS, [MatchesExpected, double(DDay), nMatches, nMax]');
             end
         end
     end
@@ -115,25 +185,25 @@ for midx = 1:length(MiceOpt)
 
 
 
-    %% UniqueID X FinterprintCor
-
+    %% UniqueID X tracking
     [UniqueIDOpt,idx1,idx2] = unique(UniqueID); %UID options
-    RecSesOpt = unique(recses); %Recording sessions options
-    RecSesPerUID = arrayfun(@(X) ismember(RecSesOpt,recses(idx2==X)),1:numel(UniqueIDOpt),'Uni',0); % Extract which recording sessions a unite appears in
-    RecSesPerUID = cat(2,RecSesPerUID{:});
+    DayOpt = unique(AllDeltaDays);
+    dayses = AllDeltaDays(recses); % Get in days after first recording
+    RecSesPerUID = arrayfun(@(X) ismember(DayOpt,dayses(idx2==X)),1:numel(UniqueIDOpt),'Uni',0); % Extract which recording sessions a unite appears in
+    RecSesPerUID = cat(1,RecSesPerUID{:});
+
     if midx == 1
         MatrixFig = figure('name','TrackingAcrossDaysMatrix');
     else
         figure(MatrixFig)
     end
     subplot(ceil(sqrt(length(MiceOpt))),round(sqrt(length(MiceOpt))),midx)
-    h = imagesc(RecSesPerUID(:,sum(RecSesPerUID,1)>1)');
+    h = imagesc(RecSesPerUID(sum(RecSesPerUID,2)>1,:));
     colormap(flipud(gray))
     title(MiceOpt{midx})
-    xlabel('RecordingSession')
+    xlabel('\Deltadays')
     ylabel('Tracked Units')
     makepretty
-
     RecSesPerUIDAllMice{midx} = RecSesPerUID; % Save for later use
 
     %% Extra Positives/negatives
@@ -149,6 +219,7 @@ for midx = 1:length(MiceOpt)
     end
 
     %% Fingerprint correlation
+    if any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor'))
     figure(FSCoreFig)
     FingerprintCor = reshape(MatchTable.FingerprintCor, nclus, nclus);
 
@@ -205,7 +276,7 @@ for midx = 1:length(MiceOpt)
     title('Cross-Correlation Fingerprint')
     makepretty
     drawnow %Something to look at while ACG calculations are ongoing
-
+    end
     %% Autocorrelogram
     if any(ismember(MatchTable.Properties.VariableNames, 'ACGCorr'))
         ACGCor = reshape(MatchTable.ACGCorr, nclus, nclus);
@@ -402,6 +473,7 @@ saveas(FSCoreFig, fullfile(SaveDir, 'FunctionScoreFigAcrossMice.bmp'))
 %% Extra Positive/negative
 EPosAndNeg(:, sum(isnan(EPosAndNeg), 1) == 3) = [];
 EPosAndNeg(sum(isnan(EPosAndNeg), 2) == size(EPosAndNeg, 2), :) = [];
+
 figure('name', 'ExtraPositiveAndNegative');
 subplot(1,3,1)
 bar(EPosAndNeg'.*100, 'EdgeColor', 'none', 'BarWidth', 1)
@@ -411,13 +483,13 @@ legend('Extra Positives', 'Extra Negatives Within', 'Extra Negatives Across')
 makepretty
 
 subplot(1,3,2)
-cols = jet(size(EPosAndNeg,2));
+cols = lines(size(EPosAndNeg,2));
 hold on
 scatter(EPosAndNeg(1,:).*100,EPosAndNeg(2,:).*100,40,cols,'filled')
 
 % xlims = get(gca,'xlim');
 % ylims = get(gca,'ylim');
-line([0 25],[0 25],'color',[0 0 0],'LineStyle','-')
+line([0 8],[0 8],'color',[0 0 0],'LineStyle','-')
 
 title('Within')
 xlabel('Units to be merged (%)')
@@ -425,21 +497,21 @@ ylabel('Units to be split (%)')
 makepretty
 
 if size(EPosAndNeg,1)>2
-subplot(1,3,3)
-scatter(EPosAndNeg(1,:).*100,EPosAndNeg(3,:).*100,40,cols,'filled')
+    subplot(1,3,3)
+    scatter(EPosAndNeg(1,:).*100,EPosAndNeg(3,:).*100,40,cols,'filled')
 
-xlims = get(gca,'xlim');
-ylims = get(gca,'ylim');
-line([0 max([xlims ylims])],[0 max([xlims ylims])],'color',[0 0 0],'LineStyle','-')
-title('Across')
-xlabel('Units to be merged (%)')
-ylabel('Units to be split (%)')
-makepretty
+    xlims = get(gca,'xlim');
+    ylims = get(gca,'ylim');
+    line([0 max([xlims ylims])],[0 max([xlims ylims])],'color',[0 0 0],'LineStyle','-')
+    title('Across')
+    xlabel('Units to be merged (%)')
+    ylabel('Units to be split (%)')
+    makepretty
 end
 
 
-nanmean(EPosAndNeg,2)
-nanstd(EPosAndNeg,[],2)
+nanmean(EPosAndNeg.*100,2)
+nanstd(EPosAndNeg.*100,[],2)
 
 %% Tracking performance
 %             TrackingPerformance = cat(2,TrackingPerformance,[did2-did1,nMatches,nMax]');
@@ -447,25 +519,25 @@ nanstd(EPosAndNeg,[],2)
 % UMTrackingPerformancePerMouse{midx} = TrackingPerformance;
 %     KSTrackingPerformancePerMouse{midx} = TrackingPerformanceKS;
 tmpUM = cat(2, UMTrackingPerformancePerMouse{:});
-tmpUM(:,tmpUM(3,:)<15) = [];
+tmpUM(:,tmpUM(4,:)<15) = [];
 if UseKSLabels
     tmpKS = cat(2, KSTrackingPerformancePerMouse{:});
 end
-figure('name', 'Tracking Performance')
+figure('name', 'Tracking Performance when tracking is expected')
 % scatter(1:size(tmpUM,2), tmpUM(3, :)./tmpUM(3, :), 20, [0, 0, 0], 'filled')
 hold on
 if UseKSLabels
-    scatter(1:size(tmpUM,2), tmpKS(2, :)./tmpKS(3, :).*100, 20, tmpUM(1,:), 'filled')
+    scatter(1:sum(tmpUM(1,:)==1), tmpKS(3, tmpUM(1,:)==1)./tmpKS(4, tmpUM(1,:)==1).*100, 20, tmpUM(2,tmpUM(1,:)==1))
 end
-scatter(1:size(tmpUM,2), tmpUM(2, :)./tmpUM(3, :).*100, 20, tmpUM(1,:), 'filled')
-line([0.5 size(tmpUM,2)+1],[100 100],'color',[0 0 0],'LineStyle','-')
+scatter(1:sum(tmpUM(1,:)==1), tmpUM(3, tmpUM(1,:)==1)./tmpUM(4,  tmpUM(1,:)==1).*100, 20, tmpUM(2, tmpUM(1,:)==1), 'filled')
+line([0.5 sum(tmpUM(1,:)==1)+0.5],[100 100],'color',[0 0 0],'LineStyle','-')
 % set(gca, 'XTick', 1:length(tmpUM), 'XTickLabel', 1:size(tmpUM,2), 'XTickLabelRotation', 90)
 if UseKSLabels
     legend('Kilosort tracked', 'UnitMatch tracked (concatenated)','maximum possible')
 else
     legend('UnitMatch tracked (not concatenated)','maximum possible')
 end
-xlim([0.5,size(tmpUM,2) + 0.5])
+xlim([0.5,sum(tmpUM(1,:)==1) + 0.5])
 xlabel('SessionID')
 ylabel('Units Traced (%)')
 hc = colorbar;
@@ -478,24 +550,31 @@ saveas(gcf,fullfile(SaveDir,'TrackingPerformance.bmp'))
 
 %% Split per type of recordings
 NonEmptyIdx = ~cellfun(@isempty,UMTrackingPerformancePerMouse);
-if exist('RecordingType','var')
-    RecTypesHere = RecordingType(NonEmptyIdx);
-else
-    RecTypesHere = repmat({'Chronic'},1,sum(NonEmptyIdx))
-end
-RecTypeOpt = unique(RecTypesHere);
+RecTypeOpt = {'Acute','Some IMRO differences','Chronic - same IMRO'}
 UMTrackingPerformancePerMouse = UMTrackingPerformancePerMouse(NonEmptyIdx);
 tmpmice = MiceOpt(NonEmptyIdx);
+rectypeid = nan(1,size(tmpUM,2));
+rectypeid(find(tmpUM(1,:) == 0)) = 1; % Acute
+rectypeid(find(tmpUM(1,:) > 0 & tmpUM(1,:) <1 )) = 2; % Some IMRO differences
+rectypeid(find(tmpUM(1,:) == 1)) = 3; %Chronic, same IMRO
+OneDayDiffIdx = tmpUM(2,:)==1;
+
+AllDat = tmpUM(3,OneDayDiffIdx)./tmpUM(4,OneDayDiffIdx).*100;
+Edges = floor(min(AllDat))-5:5:ceil(max(AllDat))+5;
+
+cols = [0 0 1; 0 1 0; 1 0 0];
 figure('name','TrackedUnits (%)')
-AllDat = cell2mat(cellfun(@(X) nansum(X(2,X(1,:)==1))./nansum(X(3,X(1,:)==1)),UMTrackingPerformancePerMouse,'Uni',0)).*100;
-Edges = min(AllDat):2:round(max(AllDat));
 clear h
 hold on
 for tid = 1:length(RecTypeOpt)
-    h(tid) = histogram(AllDat(ismember(RecTypesHere,RecTypeOpt{tid})),Edges);
+    h(tid) = histogram(AllDat(rectypeid(OneDayDiffIdx)==tid),Edges);
+    h(tid).FaceColor = cols(tid,:);
+    h(tid).EdgeColor = cols(tid,:);
+    h(tid).FaceAlpha = 0.5;
 end
 xlabel('Tracked units (%) across two days')
-ylabel('nr Datasets')
+ylabel('frequency')
+legend(RecTypeOpt)
 makepretty
 
 
@@ -506,8 +585,15 @@ for tid = 1:length(RecTypeOpt)
     subplot(1,length(RecTypeOpt),tid)
     hold on
     for midx = 1:length(UMTrackingPerformancePerMouse)
-        if ~isempty(UMTrackingPerformancePerMouse{midx}) && strcmp(RecTypesHere{midx},RecTypeOpt{tid})
-            scatter(UMTrackingPerformancePerMouse{midx}(1,:),UMTrackingPerformancePerMouse{midx}(2,:)./UMTrackingPerformancePerMouse{midx}(3,:).*100,20,cols(midx,:),'filled')
+        if ~isempty(UMTrackingPerformancePerMouse{midx})
+            if tid == 1
+                Idx = UMTrackingPerformancePerMouse{midx}(1,:) == 0;
+            elseif tid == 2
+                Idx = UMTrackingPerformancePerMouse{midx}(1,:)~=0 & UMTrackingPerformancePerMouse{midx}(1,:)~=1;
+            elseif tid == 3
+                Idx = UMTrackingPerformancePerMouse{midx}(1,:) == 1;
+            end
+            scatter(UMTrackingPerformancePerMouse{midx}(2,Idx),UMTrackingPerformancePerMouse{midx}(3,Idx)./UMTrackingPerformancePerMouse{midx}(4,Idx).*100,20,cols(midx,:),'filled')
         end
     end
     ylabel('Tracked units (%)')
@@ -515,9 +601,52 @@ for tid = 1:length(RecTypeOpt)
     ylim([0 100])
     title(RecTypeOpt{tid})
     
-    legend(tmpmice(ismember(RecTypesHere,RecTypeOpt{tid})))
     makepretty
 end
+legend(tmpmice)
+
+%% Tracking For chronic only
+expFun = @(p,d) p(1)*exp(-p(2)*d);%+p(3); % For nneurons decay
+opts = optimset('Display','off');
+
+figure('name','ChronicTrackingAcrossDays')
+cols = distinguishable_colors(length(UMTrackingPerformancePerMouse));
+miceincluded = true(1,length(UMTrackingPerformancePerMouse));
+for midx = 1:length(UMTrackingPerformancePerMouse)
+    subplot(ceil(sqrt(length(UMTrackingPerformancePerMouse)+1)),round(sqrt(length(UMTrackingPerformancePerMouse)+1)),midx)
+    Idx = UMTrackingPerformancePerMouse{midx}(1,:) == 1;
+    if ~any(Idx)
+        miceincluded(midx)=0;
+        continue
+    end
+    hold on
+    scatter(UMTrackingPerformancePerMouse{midx}(2,Idx),UMTrackingPerformancePerMouse{midx}(3,Idx)./UMTrackingPerformancePerMouse{midx}(4,Idx).*100,20,cols(midx,:),'filled')
+    p = lsqcurvefit(expFun,[max(UMTrackingPerformancePerMouse{midx}(3,Idx)./UMTrackingPerformancePerMouse{midx}(4,Idx).*100) 0.05],UMTrackingPerformancePerMouse{midx}(2,Idx),UMTrackingPerformancePerMouse{midx}(3,Idx)./UMTrackingPerformancePerMouse{midx}(4,Idx).*100,[],[],opts);
+    plot(unique(UMTrackingPerformancePerMouse{midx}(2,Idx)),expFun(p,unique(UMTrackingPerformancePerMouse{midx}(2,Idx))),'color',cols(midx,:))
+    title(tmpmice{midx})
+    xlabel('\Deltadays')
+    ylabel('Tracked (%)')
+    makepretty
+end
+subplot(ceil(sqrt(length(UMTrackingPerformancePerMouse)+1)),round(sqrt(length(UMTrackingPerformancePerMouse)+1)),length(UMTrackingPerformancePerMouse)+1)
+
+for midx = 1:length(UMTrackingPerformancePerMouse)
+    Idx = UMTrackingPerformancePerMouse{midx}(1,:) == 1;
+    if ~any(Idx)
+        miceincluded(midx)=0;
+        continue
+    end
+    hold on
+    p = lsqcurvefit(expFun,[max(UMTrackingPerformancePerMouse{midx}(3,Idx)./UMTrackingPerformancePerMouse{midx}(4,Idx).*100) 0.05],UMTrackingPerformancePerMouse{midx}(2,Idx),UMTrackingPerformancePerMouse{midx}(3,Idx)./UMTrackingPerformancePerMouse{midx}(4,Idx).*100,[],[],opts);
+    plot(unique(UMTrackingPerformancePerMouse{midx}(2,Idx)),expFun(p,unique(UMTrackingPerformancePerMouse{midx}(2,Idx))),'color',cols(midx,:))
+
+end
+title('All chronic mice')
+xlabel('\Deltadays')
+ylabel('Tracked (%)')
+makepretty
+legend(tmpmice(miceincluded))
+
 
 
 %% save figure

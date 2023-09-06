@@ -1,7 +1,6 @@
 function [AllWVBParameters,param] = ExtractParameters(Path4UnitNPY,clusinfo,param)
 % Prepare fitting
 opts = optimset('Display','off');
-ProbeFun = @(p,x) p(1)*x(:,1)+p(2)+p(3)*x(:,2)+p(4);
 %% Extract relevant information
 nclus = length(Path4UnitNPY);
 spikeWidth = param.spikeWidth;

@@ -453,7 +453,7 @@ for midx = 1:length(MiceOpt)
      if midx == 1
          nTracked = nan(size(tmpscores,2),length(MiceOpt));
      end
-     nTracked(:,midx) = sum(tmpscores>0.5,1);
+     nTracked(:,midx) = sum(tmpscores>0.5,1)./length(tmpscores);
 end
   
 figure('name','Tracking Performance')
