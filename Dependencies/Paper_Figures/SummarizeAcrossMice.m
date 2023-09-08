@@ -113,7 +113,8 @@ for midx = 1:length(MiceOpt)
 
             % Read ProbeID
             if isempty(ProbeSN{did2})
-                if any(strfind(AllRawDir{did2},'zinu'))
+                if any(strfind(AllRawDir{did2},'zinu')) && ~any(strfind(AllRawDir{did2},'\\zinu.cortexlab.net\'))
+              
                     AllRawDir{did2} = strrep(AllRawDir{did2},AllRawDir{did2}(1:strfind(AllRawDir{did2},'zinu')+3),'\\zinu.cortexlab.net\subjects');
                 end
                 rawdir = dir(fullfile(AllRawDir{did2}));
