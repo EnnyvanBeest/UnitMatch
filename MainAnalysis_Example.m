@@ -8,7 +8,7 @@ GithubDir = 'C:\Users\EnnyB\Documents\GitHub'; % Github directory
 PythonEXE = 'C:\Users\EnnyB\anaconda3\envs\pyks2\pythonw.exe' % Python version to run python code in:
 
 %% Information on experiments
-MiceOpt = {'AL032','AV008','CB016','EB019','JF067'}; % Add all mice you want to analyze
+MiceOpt = {'AL032'};%{'AL032','AV008','CB016','EB019','JF067'}; % Add all mice you want to analyze
 DataDir2Use = repmat(1,[1,length(MiceOpt)]); % In case you have multiple DataDir, index which directory is used for each mouse
 RecordingType = repmat({'Chronic'},1,length(MiceOpt)); % And whether recordings were Chronic (default)
 RecordingType(ismember(MiceOpt,{''}))={'Acute'}; %EB014', % Or maybe acute?
@@ -31,7 +31,7 @@ PrepareClusInfoparams.loadPCs = 0; % Only necessary when computiong isoluation m
 
 % UnitMatch
 PrepareClusInfoparams.UnitMatch = 1; % If 1, find identical units across sessions or oversplits in a fast and flexible way
-PrepareClusInfoparams.RedoUnitMatch = 0; % if 1, Redo unitmatch
+PrepareClusInfoparams.RedoUnitMatch = 1; % if 1, Redo unitmatch
 PrepareClusInfoparams.separateIMRO = 0; % Run for every IMRO separately (for memory reasons or when having multiple probes this might be a good idea)
 PrepareClusInfoparams.UseHistology = 0; % Use real coordinates (3D space of tracked probes if available)
 

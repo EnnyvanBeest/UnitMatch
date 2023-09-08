@@ -87,6 +87,11 @@ else
 end
 if ~any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) % If it already exists in table, skip this entire thing
 
+
+    % paper:
+%     pairid = [247 448]; % this is a known pair of units
+%     figure;
+%     hold on
     %% Compute cross-correlation matrices for individual recordings
     disp('Computing cross-correlation fingerprint')
     SessionCorrelations = cell(1, nRec);
@@ -100,6 +105,18 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) % If it
         for uid = 1:numel(Good_Idx)
             sr(uid, :) = histcounts(sp.st(sp.spikeTemplates == OriIDAll(Good_Idx(uid)) & sp.RecSes == recsesall(Good_Idx(uid))), edges);
         end
+% 
+%         subplot(2,nRec,rid)
+%         plot(sr(pairid(rid)-SessionSwitch(rid)+1,1:10000)>0,'k');
+%         makepretty
+%         ylabel('Spike')
+%         subplot(2,nRec,2+rid)
+%         imagesc(sr(:,1:10000)); hold on
+%         colormap(flipud(gray))
+%         plot(AllSessionCorrelations{1,2}(pairid(2),:));
+%         xlabel('time')
+%         ylabel('Other units')
+%         makepretty
 
         % Define folds (two halves)
         idx_fold1 = 1:floor(size(sr, 2)./2);
@@ -154,23 +171,25 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) % If it
     Pairs = unique(Pairs, 'rows');
     [FingerprintR, RankScoreAll, SigMask, AllSessionCorrelations] = CrossCorrelationFingerPrint(sessionCorrelationsAll, Pairs, OriID, recses, drawdrosscorr);
 
+
+
     % Save in table
     MatchTable.FingerprintCor = FingerprintR(:);
     MatchTable.RankScore = RankScoreAll(:);
     MatchTable.SigFingerprintR = SigMask(:);
 
-   
+
     if nargin < 2 || isempty(loadMATsToSave)
         TmpFile.Properties.Writable = true;
-        end
-         TmpFile.MatchTable = MatchTable; % Overwrite
+    end
+    TmpFile.MatchTable = MatchTable; % Overwrite
     TmpFile.AllSessionCorrelations = AllSessionCorrelations;
 
-           if nargin < 2 || isempty(loadMATsToSave)
+    if nargin < 2 || isempty(loadMATsToSave)
 
         TmpFile.Properties.Writable = false;
-        else
-  
+    else
+
         movefile(fullfile(SaveDir, 'UnitMatch.mat'), fullfile(SaveDir, 'UnitMatch_prev.mat'))
         save(fullfile(SaveDir, 'UnitMatch.mat'),'-struct','TmpFile');
         delete(fullfile(SaveDir, 'UnitMatch_prev.mat'))
@@ -353,11 +372,21 @@ for id = 1:ntimes
         FRDiff = abs(squeeze(FR(:, 2, :)-permute(FR(:, 1, :), [3, 2, 1])));
         MatchTable.FRDiff = FRDiff(:);
 
-        % Write to table
-        TmpFile.MatchTable = MatchTable;
-        movefile(fullfile(SaveDir, 'UnitMatch.mat'), fullfile(SaveDir, 'UnitMatch_prev.mat'))
-        save(fullfile(SaveDir, 'UnitMatch.mat'),'-struct', 'TmpFile');
-        delete(fullfile(SaveDir, 'UnitMatch_prev.mat'))
+        if nargin < 2 || isempty(loadMATsToSave)
+            TmpFile.Properties.Writable = true;
+        end
+        TmpFile.MatchTable = MatchTable; % Overwrite
+        TmpFile.AllSessionCorrelations = AllSessionCorrelations;
+
+        if nargin < 2 || isempty(loadMATsToSave)
+
+            TmpFile.Properties.Writable = false;
+        else
+
+            movefile(fullfile(SaveDir, 'UnitMatch.mat'), fullfile(SaveDir, 'UnitMatch_prev.mat'))
+            save(fullfile(SaveDir, 'UnitMatch.mat'),'-struct','TmpFile');
+            delete(fullfile(SaveDir, 'UnitMatch_prev.mat'))
+        end
 
     end
 
