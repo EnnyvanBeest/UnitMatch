@@ -434,8 +434,9 @@ for midx = 1:length(MiceOpt)
      end
      subplot(ceil(sqrt(length(MiceOpt))),round(sqrt(length(MiceOpt))),midx)
      Idx = (AvgMan'>0.5 | PyKS'==1 | MatchProb>0.5);
-     h= vennX([sum(PyKS(Idx)'==1 & MatchProb(Idx)<=0.5 & AvgMan(Idx)'<=0.5) sum(PyKS(Idx)'==1 & MatchProb(Idx)>0.5 & AvgMan(Idx)'<=0.5) sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'<=0.5) sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'>0.5) ...
-        sum(PyKS(Idx)'==0 & MatchProb(Idx)<=0.5 & AvgMan(Idx)'>0.5) sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'>0.5) sum(PyKS(Idx)'==1 & AvgMan(Idx)'>0.5&MatchProb(Idx)>0.5)],0.1);
+     ManThrs = sum(MatchProb>0.5);
+     h= vennRGB([sum(PyKS(Idx)'==1 & MatchProb(Idx)<=0.5 & AvgMan(Idx)'<=0.5)./ManThrs sum(PyKS(Idx)'==1 & MatchProb(Idx)>0.5 & AvgMan(Idx)'<=0.5)./ManThrs sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'<=0.5)./ManThrs sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'>0.5)./ManThrs ...
+        sum(PyKS(Idx)'==0 & MatchProb(Idx)<=0.5 & AvgMan(Idx)'>0.5)./ManThrs sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'>0.5)./ManThrs sum(PyKS(Idx)'==1 & AvgMan(Idx)'>0.5&MatchProb(Idx)>0.5)./ManThrs],0.01);
      title(MiceOpt{midx})
 
 
@@ -492,7 +493,7 @@ makepretty
 
 figure(VENNFig)
 subplot(3,2,6)
-vennX([10 10 10 10 10 10 10],0.1)
+vennRGB([10 10 10 10 10 10 10],0.1)
 if 0
 midx = 5
 Check{1,midx}(ismember(Check{1,midx},Check{3,midx}))

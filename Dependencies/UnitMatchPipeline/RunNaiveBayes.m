@@ -270,9 +270,11 @@ for did = 1:ndays
         tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1)=nan;
     end
 end
-hd = histcounts(diag(tmp),0:0.1:1);%./nclus + 0.0001;
-hnd = histcounts(tmp(~eye(size(tmp))),0:0.1:1);%./sum(~isnan(tmp(~eye(size(tmp))))) +0.0001;
-plot(0.05:0.1:1-0.05,hd,'-','color',[0 0.7 0]); hold on; plot(0.05:0.1:1-0.05,hnd,'b-')
+stepsz = 0.01;
+
+hd = histcounts(diag(tmp),0:stepsz:1);%./nclus + 0.0001;
+hnd = histcounts(tmp(~eye(size(tmp))),0:stepsz:1);%./sum(~isnan(tmp(~eye(size(tmp))))) +0.0001;
+plot(stepsz./2:stepsz:1-stepsz./2,hd,'-','color',[0 0.7 0]); hold on; plot(stepsz./2:stepsz:1-stepsz./2,hnd,'b-')
 tmp = MatchProbability;
 % Take centroid dist > maxdist out
 tmp(EuclDist>param.NeighbourDist)=nan;
@@ -280,8 +282,8 @@ tmp(EuclDist>param.NeighbourDist)=nan;
 for did = 1:ndays
     tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1)=nan;
 end
-ha = histcounts(tmp(:),0:0.1:1);%./sum(~isnan(tmp(:))) + 0.0001;
-plot(0.05:0.1:1-0.05,ha,'-','color',[1 0 0]);
+ha = histcounts(tmp(:),0:stepsz:1);%./sum(~isnan(tmp(:))) + 0.0001;
+plot(stepsz./2:stepsz:1-stepsz./2,ha,'-','color',[1 0 0]);
 set(gca,'yscale','linear')
 line([param.ProbabilityThreshold param.ProbabilityThreshold ],get(gca,'ylim'),'LineStyle','--','color',[0 0 0])
 xlabel('MatchProbability')

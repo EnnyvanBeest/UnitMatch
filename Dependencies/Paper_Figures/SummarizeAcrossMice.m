@@ -72,7 +72,7 @@ for midx = 1:length(MiceOpt)
 
         % Read ProbeID
         if isempty(ProbeSN{did1})
-            if any(strfind(AllRawDir{did1},'zinu'))
+            if any(strfind(AllRawDir{did1},'zinu')) && ~any(strfind(AllRawDir{did1},'\\zinu.cortexlab.net\'))
                  AllRawDir{did1} = strrep(AllRawDir{did1},AllRawDir{did1}(1:strfind(AllRawDir{did1},'zinu')+3),'\\zinu.cortexlab.net\subjects');
             end
             rawdir = dir(fullfile(AllRawDir{did1}));
@@ -164,7 +164,7 @@ for midx = 1:length(MiceOpt)
             end
             TrackingPerformance = cat(2, TrackingPerformance, [MatchesExpected, double(DDay), nMatches, nMax]');
             if MatchesExpected == 1 && (nMatches/nMax)==0
-                keyboard
+                warning(['No matches unexpectedly for ' MiceOpt{midx}])
             end
 
             if sum(recses(thesedaysidx) == did1)>sum(recses(thesedaysidx) == did2)
@@ -560,20 +560,23 @@ rectypeid(find(tmpUM(1,:) == 1)) = 3; %Chronic, same IMRO
 OneDayDiffIdx = tmpUM(2,:)==1;
 
 AllDat = tmpUM(3,OneDayDiffIdx)./tmpUM(4,OneDayDiffIdx).*100;
-Edges = floor(min(AllDat))-5:5:ceil(max(AllDat))+5;
+stepsz = 10;
+Edges = floor(min(AllDat)):stepsz:round(max(AllDat)+stepsz);
+histvec = floor(min(AllDat))+stepsz/2:stepsz:round(max(AllDat)+stepsz)-stepsz/2;
 
 cols = [0 0 1; 0 1 0; 1 0 0];
 figure('name','TrackedUnits (%)')
 clear h
 hold on
 for tid = 1:length(RecTypeOpt)
-    h(tid) = histogram(AllDat(rectypeid(OneDayDiffIdx)==tid),Edges);
-    h(tid).FaceColor = cols(tid,:);
-    h(tid).EdgeColor = cols(tid,:);
-    h(tid).FaceAlpha = 0.5;
+    hc = histcounts(AllDat(rectypeid(OneDayDiffIdx)==tid),Edges)./sum(rectypeid(OneDayDiffIdx)==tid);
+    h(tid) = plot(histvec,hc.*100,'color',cols(tid,:));
+%     h(tid).FaceColor = cols(tid,:);
+%     h(tid).EdgeColor = cols(tid,:);
+%     h(tid).FaceAlpha = 0.5;
 end
-xlabel('Tracked units (%) across two days')
-ylabel('frequency')
+xlabel('Tracked units (%)')
+ylabel('Pairs of days (%)')
 legend(RecTypeOpt)
 makepretty
 
