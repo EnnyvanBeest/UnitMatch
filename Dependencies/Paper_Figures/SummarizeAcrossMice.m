@@ -10,9 +10,26 @@ ACGRAcrossMice = nan(length(Vector), 3, length(MiceOpt)); % Vector / within,Matc
 ACGAUC = nan(3, length(MiceOpt));
 RFDistAcrossMice = nan(length(Vector), 3, length(MiceOpt)); % Vector / within,Match,Non-match / mice
 RFAUC = nan(3, length(MiceOpt));
+NatImgAcrossMice = nan(length(Vector), 3, length(MiceOpt)); % Vector / within,Match,Non-match / mice
+NatImgAUC = nan(3, length(MiceOpt));
+
 EPosAndNeg = nan(3, length(MiceOpt));
 UseKSLabels = PrepareClusInfoparams.RunPyKSChronicStitched;
 RecSesPerUIDAllMice = cell(1,length(MiceOpt));
+
+% Prepare these
+AllFPCor = [];
+AllCGCor = [];
+AllRFCor = [];
+AllNMCor = [];
+
+AUCFPCurves = [];
+AUCACGCurves = [];
+AUCNImCurves = [];
+AUCRFCurves = [];
+
+AUCCols = [0 0.7 0; 1 0 0; 0 0 0.7] %WIthin %Match %non-match
+aucprecision = [0:0.05:1];
 for midx = 1:length(MiceOpt)
     tmpfile = dir(fullfile(SaveDir, MiceOpt{midx}, 'UnitMatch', 'UnitMatch.mat'));
     if isempty(tmpfile)
@@ -73,7 +90,7 @@ for midx = 1:length(MiceOpt)
         % Read ProbeID
         if isempty(ProbeSN{did1})
             if any(strfind(AllRawDir{did1},'zinu')) && ~any(strfind(AllRawDir{did1},'\\zinu.cortexlab.net\'))
-                 AllRawDir{did1} = strrep(AllRawDir{did1},AllRawDir{did1}(1:strfind(AllRawDir{did1},'zinu')+3),'\\zinu.cortexlab.net\subjects');
+                AllRawDir{did1} = strrep(AllRawDir{did1},AllRawDir{did1}(1:strfind(AllRawDir{did1},'zinu')+3),'\\zinu.cortexlab.net\subjects');
             end
             rawdir = dir(fullfile(AllRawDir{did1}));
             meta = ReadMeta2(fullfile(rawdir.folder,'*.ap.meta'));
@@ -85,12 +102,12 @@ for midx = 1:length(MiceOpt)
             end
         end
 
-       
+
         % For difference in days
         tmpday1 = strsplit(fullfile(AllRawDir{did1}),'\');% relies on yyyy-mm-dd format
         tmpday1 = tmpday1(cellfun(@(X) any(strfind(X,'-')),tmpday1));
         try
-        tmpday1 = datetime(tmpday1{1},'InputFormat','yyyy-MM-dd');
+            tmpday1 = datetime(tmpday1{1},'InputFormat','yyyy-MM-dd');
         catch
             tmpday1 = datetime(tmpday1{1},'InputFormat','dd-MM-yyyy');
         end
@@ -114,7 +131,7 @@ for midx = 1:length(MiceOpt)
             % Read ProbeID
             if isempty(ProbeSN{did2})
                 if any(strfind(AllRawDir{did2},'zinu')) && ~any(strfind(AllRawDir{did2},'\\zinu.cortexlab.net\'))
-              
+
                     AllRawDir{did2} = strrep(AllRawDir{did2},AllRawDir{did2}(1:strfind(AllRawDir{did2},'zinu')+3),'\\zinu.cortexlab.net\subjects');
                 end
                 rawdir = dir(fullfile(AllRawDir{did2}));
@@ -151,7 +168,7 @@ for midx = 1:length(MiceOpt)
 
             thesedaysidx = find(ismember(recses, [did1, did2]));
             % can possibly only track these many units:
-            nMax = min([sum(recses(thesedaysidx) == did1), sum(recses(thesedaysidx) == did2)]); 
+            nMax = min([sum(recses(thesedaysidx) == did1), sum(recses(thesedaysidx) == did2)]);
             if nMax < 25
                 continue
             end
@@ -220,98 +237,125 @@ for midx = 1:length(MiceOpt)
     end
 
     %% Fingerprint correlation
-    if any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor'))
-    figure(FSCoreFig)
-    FingerprintCor = reshape(MatchTable.FingerprintCor, nclus, nclus);
+    if any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) && MatchesExpected == 1
+        figure(FSCoreFig)
+        FingerprintCor = reshape(MatchTable.FingerprintCor, nclus, nclus);
 
 
-    subplot(3, 3, 1)
-    hold on
+        subplot(4, 3, 1)
+        hold on
 
-    hw = histcounts(FingerprintCor(WithinIdx), bins) ./ length(WithinIdx);
-    hm = histcounts(FingerprintCor(MatchIdx), bins) ./ length(MatchIdx);
-    hn = histcounts(FingerprintCor(NonMatchIdx), bins) ./ length(NonMatchIdx);
-    FingerPrintRAcrossMice(:, :, midx) = cat(1, hw, hm, hn)';
-    plot(Vector, hw, 'color', [0, 0, 0.5])
-    plot(Vector, hm, 'color', [0, 0.5, 0])
-    plot(Vector, hn, 'color', [0.5, 0, 0])
-    xlabel('Cross-correlation Fingerprint')
-    ylabel('Proportion|Group')
-    legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
-    axis square
-    makepretty
+        hw = histcounts(FingerprintCor(WithinIdx), bins) ./ length(WithinIdx);
+        hm = histcounts(FingerprintCor(MatchIdx), bins) ./ length(MatchIdx);
+        hn = histcounts(FingerprintCor(NonMatchIdx), bins) ./ length(NonMatchIdx);
+        FingerPrintRAcrossMice(:, :, midx) = cat(1, hw, hm, hn)';
+        plot(Vector, hw, 'color', AUCCols(1,:))
+        plot(Vector, hm, 'color', AUCCols(2,:))
+        plot(Vector, hn, 'color', AUCCols(3,:))
+        xlabel('Cross-correlation Fingerprint')
+        ylabel('Proportion|Group')
+        %     legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
+        axis square
+        makepretty
 
-    subplot(3, 3, 2)
-    hold on
-    clear h
-    if length(MatchIdx) > 10
-        labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
-        scores = [FingerprintCor(MatchIdx)', FingerprintCor(NonMatchIdx)'];
-        [X, Y, ~, AUC1] = perfcurve(labels, scores, 1);
-        h(1) = plot(X, Y, 'color', [0.25, 0.25, 0]);
-        hold all
-        labels = [ones(1, numel(MatchIdx)), zeros(1, numel(WithinIdx))];
-        scores = [FingerprintCor(MatchIdx)', FingerprintCor(WithinIdx)'];
-        [X, Y, ~, AUC2] = perfcurve(labels, scores, 1);
-        h(2) = plot(X, Y, 'color', [0, 0.5, 0.5]);
-    else
-        AUC1 = nan;
-        AUC2 = nan;
-    end
+        AllFPCor = cat(3,AllFPCor,[hw;hm;hn]);
+        subplot(4, 3, 2)
+        hold on
+        clear h
+        if length(MatchIdx) > 10
+            labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
+            scores = [FingerprintCor(MatchIdx)', FingerprintCor(NonMatchIdx)'];
+            [X, Y, ~, AUC1] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+            h(1) = plot(X, Y, 'color', nanmean(AUCCols([2,3],:),1));
+            % find closest precision value for every X
+            [~,idx1] = min(abs(aucprecision-X),[],1);
+            Y1 = Y(idx1);
+            hold all
+            labels = [zeros(1, numel(MatchIdx)), ones(1, numel(WithinIdx))];
+            scores = [FingerprintCor(MatchIdx)', FingerprintCor(WithinIdx)'];
+            [X, Y, ~, AUC2] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+            h(2) = plot(X, Y, 'color',nanmean(AUCCols([1,2],:),1));
+            % find closest precision value for every X
+            [~,idx1] = min(abs(aucprecision-X),[],1);
+            Y2 = Y(idx1);
+        else
+            AUC1 = nan;
+            AUC2 = nan;
+        end
+        labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
+        scores = [FingerprintCor(WithinIdx)', FingerprintCor(NonMatchIdx)'];
+        [X, Y, ~, AUC3] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+        h(3) = plot(X, Y, 'color', nanmean(AUCCols([1,3],:),1));
+        % find closest precision value for every X
+        [~,idx1] = min(abs(aucprecision-X),[],1);
+        Y3 = Y(idx1);
+        axis square
+        FingerprintAUC(:, midx) = [AUC1, AUC2, AUC3];
+        AUCFPCurves = cat(3,AUCFPCurves,[Y1,Y2,Y3]);
 
-    labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
-    scores = [FingerprintCor(WithinIdx)', FingerprintCor(NonMatchIdx)'];
-    [X, Y, ~, AUC3] = perfcurve(labels, scores, 1);
-    h(3) = plot(X, Y, 'color', [0.5, 0, 0.5]);
-    axis square
-    FingerprintAUC(:, midx) = [AUC1, AUC2, AUC3];
 
-    plot([0, 1], [0, 1], 'k--')
-    xlabel('False positive rate')
-    ylabel('True positive rate')
-    if length(MatchIdx) > 10
-        legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
-    else
-        legend([h(3)], 'Within vs No Match', 'Location', 'best')
-    end
-    title('Cross-Correlation Fingerprint')
-    makepretty
-    drawnow %Something to look at while ACG calculations are ongoing
+        plot([0, 1], [0, 1], 'k--')
+        xlabel('False positive rate')
+        ylabel('True positive rate')
+
+
+
+
+        %     if length(MatchIdx) > 10
+        %         legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
+        %     else
+        %         legend([h(3)], 'Within vs No Match', 'Location', 'best')
+        %     end
+        title('Cross-Correlation Fingerprint')
+        makepretty
+        drawnow %Something to look at while ACG calculations are ongoing
     end
     %% Autocorrelogram
-    if any(ismember(MatchTable.Properties.VariableNames, 'ACGCorr'))
+    if any(ismember(MatchTable.Properties.VariableNames, 'ACGCorr')) && MatchesExpected == 1
         ACGCor = reshape(MatchTable.ACGCorr, nclus, nclus);
 
-        subplot(3, 3, 4)
+        subplot(4, 3, 4)
         hold on
 
         hw = histcounts(ACGCor(WithinIdx), bins) ./ length(WithinIdx);
         hm = histcounts(ACGCor(MatchIdx), bins) ./ length(MatchIdx);
         hn = histcounts(ACGCor(NonMatchIdx), bins) ./ length(NonMatchIdx);
         ACGRAcrossMice(:, :, midx) = cat(1, hw, hm, hn)';
-        plot(Vector, hw, 'color', [0, 0, 0.5])
-        plot(Vector, hm, 'color', [0, 0.5, 0])
-        plot(Vector, hn, 'color', [0.5, 0, 0])
+        plot(Vector, hw, 'color', AUCCols(1,:))
+        plot(Vector, hm, 'color', AUCCols(2,:))
+        plot(Vector, hn, 'color', AUCCols(3,:))
         xlabel('Autocorrelogram correlation')
         ylabel('Proportion|Group')
         axis square
         makepretty
 
-        subplot(3, 3, 5)
+        AllCGCor = cat(3,AllCGCor,[hw;hm;hn]);
+
+
+        subplot(4, 3, 5)
         hold on
         labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
         scores = [ACGCor(MatchIdx)', ACGCor(NonMatchIdx)'];
-        [X, Y, ~, AUC1] = perfcurve(labels, scores, 1);
-        h(1) = plot(X, Y, 'color', [0.25, 0.25, 0]);
+        [X, Y, ~, AUC1] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+        h(1) = plot(X, Y, 'color', nanmean(AUCCols([2,3],:),1));
+        % find closest precision value for every X
+        [~,idx1] = min(abs(aucprecision-X),[],1);
+        Y1 = Y(idx1);
         hold all
-        labels = [ones(1, numel(MatchIdx)), zeros(1, numel(WithinIdx))];
+        labels = [zeros(1, numel(MatchIdx)), ones(1, numel(WithinIdx))];
         scores = [ACGCor(MatchIdx)', ACGCor(WithinIdx)'];
-        [X, Y, ~, AUC2] = perfcurve(labels, scores, 1);
-        h(2) = plot(X, Y, 'color', [0, 0.5, 0.5]);
+        [X, Y, ~, AUC2] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+        h(2) = plot(X, Y, 'color', nanmean(AUCCols([1,2],:),1));
+        % find closest precision value for every X
+        [~,idx1] = min(abs(aucprecision-X),[],1);
+        Y2 = Y(idx1);
         labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
         scores = [ACGCor(WithinIdx)', ACGCor(NonMatchIdx)'];
-        [X, Y, ~, AUC3] = perfcurve(labels, scores, 1);
-        h(3) = plot(X, Y, 'color', [0.5, 0, 0.5]);
+        [X, Y, ~, AUC3] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+        h(3) = plot(X, Y, 'color', nanmean(AUCCols([1,3],:),1));
+        % find closest precision value for every X
+        [~,idx1] = min(abs(aucprecision-X),[],1);
+        Y3 = Y(idx1);
         axis square
         ACGAUC(:, midx) = [AUC1, AUC2, AUC3];
 
@@ -321,12 +365,89 @@ for midx = 1:length(MiceOpt)
         title('Auto-correlogram correlations')
         makepretty
         drawnow %Something to look at while ACG calculations are ongoing
-    end
 
+        AUCACGCurves = cat(3,AUCACGCurves,[Y1,Y2,Y3]);
+
+
+    end
+    %% Natural Images correlation
+    if any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) && MatchesExpected == 1
+        figure(FSCoreFig)
+        FingerprintCor = reshape(MatchTable.NatImCorr, nclus, nclus);
+
+
+        subplot(4, 3, 7)
+        hold on
+
+        hw = histcounts(NatImCorr(WithinIdx), bins) ./ length(WithinIdx);
+        hm = histcounts(NatImCorr(MatchIdx), bins) ./ length(MatchIdx);
+        hn = histcounts(NatImCorr(NonMatchIdx), bins) ./ length(NonMatchIdx);
+        NatImgAcrossMice(:, :, midx) = cat(1, hw, hm, hn)';
+        plot(Vector, hw, 'color', AUCCols(1,:))
+        plot(Vector, hm, 'color', AUCCols(2,:))
+        plot(Vector, hn, 'color', AUCCols(3,:))
+        xlabel('Natural Images Fingerprint')
+        ylabel('Proportion|Group')
+        %     legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
+        axis square
+        makepretty
+
+        AllNMCor = cat(3,AllNMCor,[hw;hm;hn]);
+
+        subplot(4, 3, 8)
+        hold on
+        clear h
+        if length(MatchIdx) > 10
+            labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
+            scores = [NatImCorr(MatchIdx)', FingerprintCor(NonMatchIdx)'];
+            [X, Y, ~, AUC1] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+            h(1) = plot(X, Y, 'color', nanmean(AUCCols([2,3],:),1));
+            % find closest precision value for every X
+            [~,idx1] = min(abs(aucprecision-X),[],1);
+            Y1 = Y(idx1);
+            hold all
+            labels = [zeros(1, numel(MatchIdx)), ones(1, numel(WithinIdx))];
+            scores = [NatImCorr(MatchIdx)', FingerprintCor(WithinIdx)'];
+            [X, Y, ~, AUC2] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+            h(2) = plot(X, Y, 'color',nanmean(AUCCols([1,2],:),1));
+            % find closest precision value for every X
+            [~,idx1] = min(abs(aucprecision-X),[],1);
+            Y2 = Y(idx1);
+        else
+            AUC1 = nan;
+            AUC2 = nan;
+        end
+
+        labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
+        scores = [NatImCorr(WithinIdx)', FingerprintCor(NonMatchIdx)'];
+        [X, Y, ~, AUC3] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+        h(3) = plot(X, Y, 'color', nanmean(AUCCols([1,3],:),1));
+        % find closest precision value for every X
+        [~,idx1] = min(abs(aucprecision-X),[],1);
+        Y3 = Y(idx1);
+        axis square
+
+        NatImgAUC(:, midx) = [AUC1, AUC2, AUC3];
+
+        plot([0, 1], [0, 1], 'k--')
+        xlabel('False positive rate')
+        ylabel('True positive rate')
+        %     if length(MatchIdx) > 10
+        %         legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
+        %     else
+        %         legend([h(3)], 'Within vs No Match', 'Location', 'best')
+        %     end
+        title('Natural Images Fingerprint')
+        makepretty
+        drawnow %Something to look at while ACG calculations are ongoing
+
+        AUCNImCurves = cat(3,AUCNImCurves,[Y1,Y2,Y3]);
+
+    end
     %% Receptive Field (?)
-    if any(ismember(MatchTable.Properties.VariableNames, 'RFDist'))
+    if any(ismember(MatchTable.Properties.VariableNames, 'RFDist')) && MatchesExpected == 1
         RFDist = reshape(MatchTable.RFDist, nclus, nclus);
-        subplot(3, 3, 7)
+        subplot(4, 3, 10)
         hold on
 
         bins = linspace(0, 50, length(Vector)+1);
@@ -335,29 +456,40 @@ for midx = 1:length(MiceOpt)
         hm = histcounts(RFDist(MatchIdx), bins) ./ length(MatchIdx);
         hn = histcounts(RFDist(NonMatchIdx), bins) ./ length(NonMatchIdx);
         RFDistAcrossMice(:, :, midx) = cat(1, hw, hm, hn)';
-        plot(bins(1)+stepsz/2:stepsz:bins(end)-stepsz/2, hw, 'color', [0, 0, 0.5])
-        plot(bins(1)+stepsz/2:stepsz:bins(end)-stepsz/2, hm, 'color', [0, 0.5, 0])
-        plot(bins(1)+stepsz/2:stepsz:bins(end)-stepsz/2, hn, 'color', [0.5, 0, 0])
+        plot(bins(1)+stepsz/2:stepsz:bins(end)-stepsz/2, hw, 'color', AUCCols(1,:))
+        plot(bins(1)+stepsz/2:stepsz:bins(end)-stepsz/2, hm, 'color', AUCCols(2,:))
+        plot(bins(1)+stepsz/2:stepsz:bins(end)-stepsz/2, hn, 'color', AUCCols(3,:))
         xlabel('Receptive Field Distance')
         ylabel('Proportion|Group')
         axis square
         makepretty
+        AllRFCor = cat(3,AllRFCor,[hw;hm;hn]);
 
-        subplot(3, 3, 8)
+
+        subplot(4, 3, 11)
         hold on
         labels = [zeros(1, numel(MatchIdx)), ones(1, numel(NonMatchIdx))];
         scores = [RFDist(MatchIdx)', RFDist(NonMatchIdx)'];
-        [X, Y, ~, AUC1] = perfcurve(labels, scores, 1);
-        h(1) = plot(X, Y, 'color', [0.25, 0.25, 0]);
+        [X, Y, ~, AUC1] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+        h(1) = plot(X, Y, 'color', nanmean(AUCCols([2,3],:),1));
+        % find closest precision value for every X
+        [~,idx1] = min(abs(aucprecision-X),[],1);
+        Y1 = Y(idx1);
         hold all
-        labels = [ones(1, numel(MatchIdx)), zeros(1, numel(WithinIdx))];
+        labels = [zeros(1, numel(MatchIdx)), ones(1, numel(WithinIdx))];
         scores = [RFDist(MatchIdx)', RFDist(WithinIdx)'];
-        [X, Y, ~, AUC2] = perfcurve(labels, scores, 1);
-        h(2) = plot(X, Y, 'color', [0, 0.5, 0.5]);
+        [X, Y, ~, AUC2] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+        h(2) = plot(X, Y, 'color', nanmean(AUCCols([1,2],:),1));
+        % find closest precision value for every X
+        [~,idx1] = min(abs(aucprecision-X),[],1);
+        Y2 = Y(idx1);
         labels = [zeros(1, numel(WithinIdx)), ones(1, numel(NonMatchIdx))];
         scores = [RFDist(WithinIdx)', RFDist(NonMatchIdx)'];
-        [X, Y, ~, AUC3] = perfcurve(labels, scores, 1);
-        h(3) = plot(X, Y, 'color', [0.5, 0, 0.5]);
+        [X, Y, ~, AUC3] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+        h(3) = plot(X, Y, 'color', nanmean(AUCCols([1,3],:),1));
+        % find closest precision value for every X
+        [~,idx1] = min(abs(aucprecision-X),[],1);
+        Y3 = Y(idx1);
         axis square
         RFAUC(:, midx) = [AUC1, AUC2, AUC3];
 
@@ -368,6 +500,7 @@ for midx = 1:length(MiceOpt)
         makepretty
         drawnow %Something to look at while ACG calculations are ongoing
 
+        AUCRFCurves = cat(3,AUCRFCurves,[Y1,Y2,Y3]);
 
     end
 
@@ -375,7 +508,6 @@ for midx = 1:length(MiceOpt)
 end
 
 %% AUC
-
 if exist('AUCVals')
     meanAUC = nanmean(AUCVals,2);
     [~,sortidx] = sort(meanAUC,'descend');
@@ -388,88 +520,7 @@ if exist('AUCVals')
     saveas(gcf,fullfile(SaveDir,'AUCParameters.fig'))
     saveas(gcf,fullfile(SaveDir,'AUCParameters.bmp'))
 end
-%% Now we make histograms for the Area Under the Curve scores
-figure(FSCoreFig)
-edges = [0:0.1:1];
-subplot(3, 3, 3)
-hold on
-h1 = histogram(FingerprintAUC(1, :), edges);
-h1.FaceColor = [0.25, 0.25, 0];
-% h1.FaceAlpha = 0.5;
-h1.EdgeColor = [0.25, 0.25, 0];
 
-h2 = histogram(FingerprintAUC(2, :), edges);
-h2.FaceColor = [0, 0.5, 0.5];
-% h2.FaceAlpha = 0.5;
-h2.EdgeColor = [0, 0.5, 0.5];
-
-
-h3 = histogram(FingerprintAUC(3, :), edges);
-h3.FaceColor = [0.5, 0, 0.5];
-% h2.FaceAlpha = 0.5;
-h3.EdgeColor = [0.5, 0, 0.5];
-
-line([nanmedian(FingerprintAUC(1, :)), nanmedian(FingerprintAUC(1, :))], get(gca, 'ylim'), 'Color', [0.25, 0.25, 0])
-line([nanmedian(FingerprintAUC(2, :)), nanmedian(FingerprintAUC(2, :))], get(gca, 'ylim'), 'Color', [0, 0.5, 0.5])
-line([nanmedian(FingerprintAUC(3, :)), nanmedian(FingerprintAUC(3, :))], get(gca, 'ylim'), 'Color', [0.5, 0, 0.5])
-
-xlabel('AUC cross-correlation')
-ylabel('Nr sessions')
-makepretty
-
-%%
-subplot(3, 3, 6)
-hold on
-h1 = histogram(ACGAUC(1, :), edges);
-h1.FaceColor = [0.25, 0.25, 0];
-% h1.FaceAlpha = 0.5;
-h1.EdgeColor = [0.25, 0.25, 0];
-
-h2 = histogram(ACGAUC(2, :), edges);
-h2.FaceColor = [0, 0.5, 0.5];
-% h2.FaceAlpha = 0.5;
-h2.EdgeColor = [0, 0.5, 0.5];
-
-h3 = histogram(ACGAUC(3, :), edges);
-h3.FaceColor = [0.5, 0, 0.5];
-% h2.FaceAlpha = 0.5;
-h3.EdgeColor = [0.5, 0, 0.5];
-
-line([nanmedian(ACGAUC(1, :)), nanmedian(ACGAUC(1, :))], get(gca, 'ylim'), 'Color', [0.25, 0.25, 0])
-line([nanmedian(ACGAUC(2, :)), nanmedian(ACGAUC(2, :))], get(gca, 'ylim'), 'Color', [0, 0.5, 0.5])
-line([nanmedian(ACGAUC(3, :)), nanmedian(ACGAUC(3, :))], get(gca, 'ylim'), 'Color', [0.5, 0, 0.5])
-
-xlabel('AUC ACG correlation')
-ylabel('Nr sessions')
-makepretty
-
-%%
-subplot(3, 3, 9)
-hold on
-h1 = histogram(RFAUC(1, :), edges);
-h1.FaceColor = [0.25, 0.25, 0];
-% h1.FaceAlpha = 0.5;
-h1.EdgeColor = [0.25, 0.25, 0];
-
-
-h2 = histogram(RFAUC(2, :), edges);
-h2.FaceColor = [0, 0.5, 0.5];
-% h2.FaceAlpha = 0.5;
-h2.EdgeColor = [0, 0.5, 0.5];
-
-h3 = histogram(RFAUC(3, :), edges);
-h3.FaceColor = [0.5, 0, 0.5];
-% h2.FaceAlpha = 0.5;
-h3.EdgeColor = [0.5, 0, 0.5];
-line([nanmedian(RFAUC(1, :)), nanmedian(RFAUC(1, :))], get(gca, 'ylim'), 'Color', [0.25, 0.25, 0])
-line([nanmedian(RFAUC(2, :)), nanmedian(RFAUC(2, :))], get(gca, 'ylim'), 'Color', [0, 0.5, 0.5])
-line([nanmedian(RFAUC(3, :)), nanmedian(RFAUC(3, :))], get(gca, 'ylim'), 'Color', [0.5, 0, 0.5])
-
-xlabel('AUC RF distance')
-ylabel('Nr sessions')
-makepretty
-saveas(FSCoreFig, fullfile(SaveDir, 'FunctionScoreFigAcrossMice.fig'))
-saveas(FSCoreFig, fullfile(SaveDir, 'FunctionScoreFigAcrossMice.bmp'))
 
 %% Extra Positive/negative
 EPosAndNeg(:, sum(isnan(EPosAndNeg), 1) == 3) = [];
@@ -572,9 +623,9 @@ hold on
 for tid = 1:length(RecTypeOpt)
     hc = histcounts(AllDat(rectypeid(OneDayDiffIdx)==tid),Edges)./sum(rectypeid(OneDayDiffIdx)==tid);
     h(tid) = plot(histvec,hc.*100,'color',cols(tid,:));
-%     h(tid).FaceColor = cols(tid,:);
-%     h(tid).EdgeColor = cols(tid,:);
-%     h(tid).FaceAlpha = 0.5;
+    %     h(tid).FaceColor = cols(tid,:);
+    %     h(tid).EdgeColor = cols(tid,:);
+    %     h(tid).FaceAlpha = 0.5;
 end
 xlabel('Tracked units (%)')
 ylabel('Pairs of days (%)')
@@ -604,7 +655,7 @@ for tid = 1:length(RecTypeOpt)
     xlabel('\Delta Days')
     ylim([0 100])
     title(RecTypeOpt{tid})
-    
+
     makepretty
 end
 legend(tmpmice)
@@ -634,6 +685,7 @@ for midx = 1:length(UMTrackingPerformancePerMouse)
 end
 subplot(ceil(sqrt(length(UMTrackingPerformancePerMouse)+1)),round(sqrt(length(UMTrackingPerformancePerMouse)+1)),length(UMTrackingPerformancePerMouse)+1)
 
+figure('name','All Mice Tracking peformance')
 for midx = 1:length(UMTrackingPerformancePerMouse)
     Idx = UMTrackingPerformancePerMouse{midx}(1,:) == 1;
     if ~any(Idx)
@@ -658,3 +710,299 @@ figure(MatrixFig)
 saveas(gcf,fullfile(SaveDir,'TrackingPerformanceMatrix.fig'))
 saveas(gcf,fullfile(SaveDir,'TrackingPerformanceMatrix.bmp'))
 
+%% Average figure
+figure('name','FunctionalScoresAverages')
+subplot(4,3,1)
+clear h
+hold on
+for hid = 1:3
+    h(hid) = shadedErrorBar(Vector, squeeze(nanmean(AllFPCor(hid,:,:),3)),squeeze(nanstd(AllFPCor(hid,:,:),[],3))./sqrt(size(AllFPCor,3)-1));
+    h(hid).mainLine.Color = AUCCols(hid,:);
+    h(hid).patch.FaceColor = AUCCols(hid,:);
+    h(hid).edge(1).Color = AUCCols(hid,:);
+    h(hid).edge(2).Color = AUCCols(hid,:);
+end
+xlabel('Cross-correlation Fingerprint')
+ylabel('Proportion|Group')
+legend([h(:).mainLine], 'Same unit within', 'Matches', 'Neighbors', 'Location', 'best')
+
+makepretty
+
+subplot(4,3,4)
+clear h
+hold on
+for hid = 1:3
+    h(hid) = shadedErrorBar(Vector, squeeze(nanmean(AllCGCor(hid,:,:),3)),squeeze(nanstd(AllCGCor(hid,:,:),[],3))./sqrt(size(AllCGCor,3)-1));
+    h(hid).mainLine.Color = AUCCols(hid,:);
+    h(hid).patch.FaceColor = AUCCols(hid,:);
+    h(hid).edge(1).Color = AUCCols(hid,:);
+    h(hid).edge(2).Color = AUCCols(hid,:);
+end
+xlabel('ACG Correlation')
+ylabel('Proportion|Group')
+makepretty
+
+if any(~isnan(NatImgAUC(:)))
+    subplot(4,3,7)
+    clear h
+    hold on
+    for hid = 1:3
+        h(hid) = shadedErrorBar(Vector, squeeze(nanmean(NatImgAUC(hid,:,:),3)),squeeze(nanstd(NatImgAUC(hid,:,:),[],3))./sqrt(size(NatImgAUC,3)-1));
+        h(hid).mainLine.Color = AUCCols(hid,:);
+        h(hid).patch.FaceColor = AUCCols(hid,:);
+        h(hid).edge(1).Color = AUCCols(hid,:);
+        h(hid).edge(2).Color = AUCCols(hid,:);
+    end
+    xlabel('Natural Images Fingerprint')
+    ylabel('Proportion|Group')
+    makepretty
+end
+
+% AllRFCor
+if any(~isnan(AllRFCor(:)))
+    subplot(4,3,10)
+    clear h
+    hold on
+    for hid = 1:3
+        h(hid) = shadedErrorBar(Vector, squeeze(nanmean(AllRFCor(hid,:,:),3)),squeeze(nanstd(AllRFCor(hid,:,:),[],3))./sqrt(size(AllRFCor,3)-1));
+        h(hid).mainLine.Color = AUCCols(hid,:);
+        h(hid).patch.FaceColor = AUCCols(hid,:);
+        h(hid).edge(1).Color = AUCCols(hid,:);
+        h(hid).edge(2).Color = AUCCols(hid,:);
+    end
+    xlabel('RF Distance')
+    ylabel('Proportion|Group')
+    makepretty
+end
+
+%% AUC curves
+% AUCFPCurves = [];
+% AUCACGCurves = [];
+% AUCNImCurves = [];
+% AUCRFCurves = [];
+% % aucprecision = [0:0.01:1];
+AUCmixedCols = cat(1,nanmean(AUCCols([2,3],:),1),nanmean(AUCCols([2,1],:),1), nanmean(AUCCols([1,3],:),1));
+
+subplot(4,3,2)
+clear h
+hold on
+for hid = 1:3
+    h(hid) = shadedErrorBar(aucprecision, squeeze(nanmean(AUCFPCurves(:,hid,:),3)),squeeze(nanstd(AUCFPCurves(:,hid,:),[],3))./sqrt(size(AUCFPCurves,3)-1));
+    h(hid).mainLine.Color = AUCmixedCols(hid,:);
+    h(hid).patch.FaceColor = AUCmixedCols(hid,:);
+    h(hid).edge(1).Color = AUCmixedCols(hid,:);
+    h(hid).edge(2).Color = AUCmixedCols(hid,:);
+end
+plot([0, 1], [0, 1], 'k--')
+
+xlabel('False positives')
+ylabel('True positives')
+makepretty
+legend([h(:).mainLine], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
+
+
+subplot(4,3,5)
+clear h
+hold on
+for hid = 1:3
+    h(hid) = shadedErrorBar(aucprecision, squeeze(nanmean(AUCACGCurves(:,hid,:),3)),squeeze(nanstd(AUCACGCurves(:,hid,:),[],3))./sqrt(size(AUCACGCurves,3)-1));
+    h(hid).mainLine.Color = AUCmixedCols(hid,:);
+    h(hid).patch.FaceColor = AUCmixedCols(hid,:);
+    h(hid).edge(1).Color = AUCmixedCols(hid,:);
+    h(hid).edge(2).Color = AUCmixedCols(hid,:);
+end
+plot([0, 1], [0, 1], 'k--')
+
+xlabel('False positives')
+ylabel('True positives')
+makepretty
+
+if any(~isnan(NatImgAUC(:)))
+
+    subplot(4,3,8)
+    clear h
+    hold on
+    for hid = 1:3
+        h(hid) = shadedErrorBar(aucprecision, squeeze(nanmean(AUCNImCurves(:,hid,:),3)),squeeze(nanstd(AUCNImCurves(:,hid,:),[],3))./sqrt(size(AUCNImCurves,3)-1));
+        h(hid).mainLine.Color = AUCmixedCols(hid,:);
+        h(hid).patch.FaceColor = AUCmixedCols(hid,:);
+        h(hid).edge(1).Color = AUCmixedCols(hid,:);
+        h(hid).edge(2).Color = AUCmixedCols(hid,:);
+    end
+    plot([0, 1], [0, 1], 'k--')
+
+    xlabel('False positives')
+    ylabel('True positives')
+    makepretty
+end
+% AllRFCor
+if any(~isnan(AllRFCor(:)))
+    subplot(4,3,11)
+    clear h
+    hold on
+    for hid = 1:3
+        h(hid) = shadedErrorBar(aucprecision, squeeze(nanmean(AUCRFCurves(:,hid,:),3)),squeeze(nanstd(AUCRFCurves(:,hid,:),[],3))./sqrt(size(AUCRFCurves,3)-1));
+        h(hid).mainLine.Color = AUCmixedCols(hid,:);
+        h(hid).patch.FaceColor = AUCmixedCols(hid,:);
+        h(hid).edge(1).Color = AUCmixedCols(hid,:);
+        h(hid).edge(2).Color = AUCmixedCols(hid,:);
+    end
+    plot([0, 1], [0, 1], 'k--')
+
+    xlabel('False positives')
+    ylabel('True positives')
+    makepretty
+end
+%% Now we make histograms for the Area Under the Curve scores
+Incl1 = find(~cellfun(@isempty,UMTrackingPerformancePerMouse));
+ChronicMice = find(cellfun(@(X) nanmean(X(1,:)),UMTrackingPerformancePerMouse(Incl1))>0);
+ChronicMice = Incl1(ChronicMice);
+pAUC = nan(4,3);
+
+edges = [0:0.1:1];
+subplot(4, 3, 3)
+hold on
+h1 = histogram(FingerprintAUC(1, ChronicMice), edges);
+h1.FaceColor = nanmean(AUCCols([2,3],:),1);
+% h1.FaceAlpha = 0.5;
+h1.EdgeColor = nanmean(AUCCols([2,3],:),1);
+
+h2 = histogram(FingerprintAUC(2, ChronicMice), edges);
+h2.FaceColor = nanmean(AUCCols([1,2],:),1);
+% h2.FaceAlpha = 0.5;
+h2.EdgeColor = nanmean(AUCCols([1,2],:),1);
+
+
+h3 = histogram(FingerprintAUC(3, ChronicMice), edges);
+h3.FaceColor = nanmean(AUCCols([1,3],:),1);
+% h2.FaceAlpha = 0.5;
+h3.EdgeColor = nanmean(AUCCols([1,3],:),1);
+
+line([nanmedian(FingerprintAUC(1, ChronicMice)), nanmedian(FingerprintAUC(1, ChronicMice))], get(gca, 'ylim'), 'Color', nanmean(AUCCols([2,3],:),1))
+line([nanmedian(FingerprintAUC(2, ChronicMice)), nanmedian(FingerprintAUC(2, ChronicMice))], get(gca, 'ylim'), 'Color', nanmean(AUCCols([1,2],:),1))
+line([nanmedian(FingerprintAUC(3, ChronicMice)), nanmedian(FingerprintAUC(3, ChronicMice))], get(gca, 'ylim'), 'Color', nanmean(AUCCols([1,3],:),1))
+
+xlabel('AUC cross-correlation')
+ylabel('Nr sessions')
+makepretty
+
+% Statistics
+[~,pAUC(1,1)] = ttest(FingerprintAUC(1, ChronicMice),FingerprintAUC(2, ChronicMice));
+[~,pAUC(1,2)] = ttest(FingerprintAUC(1, ChronicMice),FingerprintAUC(3, ChronicMice));
+[~,pAUC(1,3)] = ttest(FingerprintAUC(2, ChronicMice),FingerprintAUC(3, ChronicMice));
+
+disp(['Fingerprint correlation - Match/Non-match vs Within/Match: p=' num2str(round(pAUC(1,1).*3*100)./100)])
+disp(['Fingerprint correlation - Match/Non-match vs Within/Non-match: p=' num2str(round(pAUC(1,2).*3*100)./100)])
+disp(['Fingerprint correlation - Within/Match vs Within/Non-match: p=' num2str(round(pAUC(1,3).*3*100)./100)])
+
+%%
+subplot(4, 3, 6)
+hold on
+h1 = histogram(ACGAUC(1, :), edges);
+h1.FaceColor = nanmean(AUCCols([2,3],:),1);
+% h1.FaceAlpha = 0.5;
+h1.EdgeColor = nanmean(AUCCols([2,3],:),1);
+
+h2 = histogram(ACGAUC(2, :), edges);
+h2.FaceColor = nanmean(AUCCols([1,2],:),1);
+% h2.FaceAlpha = 0.5;
+h2.EdgeColor = nanmean(AUCCols([1,2],:),1);
+
+h3 = histogram(ACGAUC(3, :), edges);
+h3.FaceColor = nanmean(AUCCols([1,3],:),1);
+% h2.FaceAlpha = 0.5;
+h3.EdgeColor = nanmean(AUCCols([1,3],:),1);
+
+line([nanmedian(ACGAUC(1, :)), nanmedian(ACGAUC(1, :))], get(gca, 'ylim'), 'Color', nanmean(AUCCols([2,3],:),1))
+line([nanmedian(ACGAUC(2, :)), nanmedian(ACGAUC(2, :))], get(gca, 'ylim'), 'Color', nanmean(AUCCols([2,1],:),1))
+line([nanmedian(ACGAUC(3, :)), nanmedian(ACGAUC(3, :))], get(gca, 'ylim'), 'Color', nanmean(AUCCols([1,3],:),1))
+
+xlabel('AUC ACG correlation')
+ylabel('Nr sessions')
+makepretty
+
+% Statistics
+[~,pAUC(2,1)] = ttest(ACGAUC(1, ChronicMice),ACGAUC(2, ChronicMice));
+[~,pAUC(2,2)] = ttest(ACGAUC(1, ChronicMice),ACGAUC(3, ChronicMice));
+[~,pAUC(2,3)] = ttest(ACGAUC(2, ChronicMice),ACGAUC(3, ChronicMice));
+
+disp(['Autocorrellogram correlation - Match/Non-match vs Within/Match: p=' num2str(round(pAUC(2,1).*3*100)./100)])
+disp(['Autocorrellogram correlation - Match/Non-match vs Within/Non-match: p=' num2str(round(pAUC(2,2).*3*100)./100)])
+disp(['Autocorrellogram correlation - Within/Match vs Within/Non-match: p=' num2str(round(pAUC(2,3).*3*100)./100)])
+
+%% Natural images
+if any(~isnan(NatImgAUC(:)))
+subplot(4, 3, 9)
+hold on
+h1 = histogram(NatImgAUC(1, ChronicMice), edges);
+h1.FaceColor = nanmean(AUCCols([2,3],:),1);
+% h1.FaceAlpha = 0.5;
+h1.EdgeColor = nanmean(AUCCols([2,3],:),1);
+
+h2 = histogram(NatImgAUC(2, ChronicMice), edges);
+h2.FaceColor = nanmean(AUCCols([1,2],:),1);
+% h2.FaceAlpha = 0.5;
+h2.EdgeColor = nanmean(AUCCols([1,2],:),1);
+
+
+h3 = histogram(NatImgAUC(3, ChronicMice), edges);
+h3.FaceColor = nanmean(AUCCols([1,3],:),1);
+% h2.FaceAlpha = 0.5;
+h3.EdgeColor = nanmean(AUCCols([1,3],:),1);
+
+line([nanmedian(NatImgAUC(1, ChronicMice)), nanmedian(NatImgAUC(1, ChronicMice))], get(gca, 'ylim'), 'Color', nanmean(AUCCols([2,3],:),1))
+line([nanmedian(NatImgAUC(2, ChronicMice)), nanmedian(NatImgAUC(2, ChronicMice))], get(gca, 'ylim'), 'Color', nanmean(AUCCols([1,2],:),1))
+line([nanmedian(NatImgAUC(3, ChronicMice)), nanmedian(NatImgAUC(3, ChronicMice))], get(gca, 'ylim'), 'Color', nanmean(AUCCols([1,3],:),1))
+
+xlabel('AUC cross-correlation')
+ylabel('Nr sessions')
+makepretty
+
+% Statistics
+[~,pAUC(3,1)] = ttest(NatImgAUC(1, ChronicMice),NatImgAUC(2, ChronicMice));
+[~,pAUC(3,2)] = ttest(NatImgAUC(1, ChronicMice),NatImgAUC(3, ChronicMice));
+[~,pAUC(3,3)] = ttest(NatImgAUC(2, ChronicMice),NatImgAUC(3, ChronicMice));
+
+disp(['Fingerprint Natural Images - Match/Non-match vs Within/Match: p=' num2str(round(pAUC(3,1).*3*100)./100)])
+disp(['Fingerprint Natural Images - Match/Non-match vs Within/Non-match: p=' num2str(round(pAUC(3,2).*3*100)./100)])
+disp(['Fingerprint Natural Images - Within/Match vs Within/Non-match: p=' num2str(round(pAUC(3,3).*3*100)./100)])
+end
+%%
+if any(~isnan(RFAUC(:)))
+    subplot(4, 3, 12)
+    hold on
+    h1 = histogram(RFAUC(1, :), edges);
+    h1.FaceColor = nanmean(AUCCols([2,3],:),1);
+    % h1.FaceAlpha = 0.5;
+    h1.EdgeColor = nanmean(AUCCols([2,3],:),1);
+
+
+    h2 = histogram(RFAUC(2, :), edges);
+    h2.FaceColor = nanmean(AUCCols([2,1],:),1);
+    % h2.FaceAlpha = 0.5;
+    h2.EdgeColor = nanmean(AUCCols([2,1],:),1);
+
+    h3 = histogram(RFAUC(3, :), edges);
+    h3.FaceColor = nanmean(AUCCols([1,3],:),1);
+    % h2.FaceAlpha = 0.5;
+    h3.EdgeColor = nanmean(AUCCols([1,3],:),1);
+    line([nanmedian(RFAUC(1, :)), nanmedian(RFAUC(1, :))], get(gca, 'ylim'), 'Color', nanmean(AUCCols([2,3],:),1))
+    line([nanmedian(RFAUC(2, :)), nanmedian(RFAUC(2, :))], get(gca, 'ylim'), 'Color', nanmean(AUCCols([2,1],:),1))
+    line([nanmedian(RFAUC(3, :)), nanmedian(RFAUC(3, :))], get(gca, 'ylim'), 'Color', nanmean(AUCCols([1,3],:),1))
+
+    xlabel('AUC RF distance')
+    ylabel('Nr sessions')
+    makepretty
+
+    % Statistics
+    [~,pAUC(4,1)] = ttest(RFAUC(1, ChronicMice),RFAUC(2, ChronicMice));
+    [~,pAUC(4,2)] = ttest(RFAUC(1, ChronicMice),RFAUC(3, ChronicMice));
+    [~,pAUC(4,3)] = ttest(RFAUC(2, ChronicMice),RFAUC(3, ChronicMice));
+
+    disp(['Receptive field distance - Match/Non-match vs Within/Match: p=' num2str(round(pAUC(4,1).*3*100)./100)])
+    disp(['Receptive field distance - Match/Non-match vs Within/Non-match: p=' num2str(round(pAUC(4,2).*3*100)./100)])
+    disp(['Receptive field distance - Within/Match vs Within/Non-match: p=' num2str(round(pAUC(4,3).*3*100)./100)])
+
+end
+saveas(gcf, fullfile(SaveDir, 'FunctionScoreFigAcrossMice.fig'))
+saveas(gcf, fullfile(SaveDir, 'FunctionScoreFigAcrossMice.bmp'))
