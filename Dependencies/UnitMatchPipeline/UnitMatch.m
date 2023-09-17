@@ -79,10 +79,12 @@ OriginalClusterIDs = clusinfo.cluster_id;
 UniqueID = 1:length(OriginalClusterIDs); % Initial assumption: All clusters are unique
 if param.GoodUnitsOnly
     Good_Idx = find(clusinfo.Good_ID); %Only care about good units at this point
+    if isempty(Good_Idx)
+        error('No good units in these recordings (yet asking for it). check!')
+    end
 else
     Good_Idx = 1:length(clusinfo.Good_ID);
     disp('Use all units including MUA and noise')
-
 end
 GoodRecSesID = clusinfo.RecSesID(Good_Idx);
 
