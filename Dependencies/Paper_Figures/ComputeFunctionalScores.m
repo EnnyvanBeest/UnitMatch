@@ -294,7 +294,7 @@ end
 
 %% Get natural images fingerprints correlations
 
-if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) % If it already exists in table, skip this entire thing
+% if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) % If it already exists in table, skip this entire thing
     % Param for processing
     proc.window = [-0.3 0.5 ... % around onset
         0.0 0.5]; % around offset
@@ -358,7 +358,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) % If it alre
     corrWCCA_big = .5*corrWCCA_big+.5*corrWCCA_big'; % not sure that's needed?
     
     MatchTable.NatImCorr = corrWCCA_big(:);
-end
+% end
 
 %% Write to table
 
@@ -607,48 +607,50 @@ for id = 1:ntimes
 
     NatImCorr = reshape(MatchTable.NatImCorr, nclus, nclus);
 
-    subplot(4, 3, 11)
-    bins = min(NatImCorr(:)):0.1:max(NatImCorr(:));
-    Vector = [bins(1) + 0.1 / 2:0.1:bins(end) - 0.1 / 2];
-    hw = histcounts(NatImCorr(WithinIdx), bins) ./ length(WithinIdx);
-    hm = histcounts(NatImCorr(MatchIdx), bins) ./ length(MatchIdx);
-    hn = histcounts(NatImCorr(NonMatchIdx), bins) ./ length(NonMatchIdx);
-    plot(Vector, hw, 'color', [0.5, 0.5, 0.5])
-    hold on
-    plot(Vector, hm, 'color', [0, 0.5, 0])
-    plot(Vector, hn, 'color', [0, 0, 0])
-    xlabel('NatIm Fingerprint')
-    ylabel('Proportion|Group')
-    legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
-    axis square
-    makepretty
+    if ~all(isnan(NatImCorr(:)))
+        subplot(4, 3, 11)
+        bins = min(NatImCorr(:)):0.1:max(NatImCorr(:));
+        Vector = [bins(1) + 0.1 / 2:0.1:bins(end) - 0.1 / 2];
+        hw = histcounts(NatImCorr(WithinIdx), bins) ./ length(WithinIdx);
+        hm = histcounts(NatImCorr(MatchIdx), bins) ./ length(MatchIdx);
+        hn = histcounts(NatImCorr(NonMatchIdx), bins) ./ length(NonMatchIdx);
+        plot(Vector, hw, 'color', [0.5, 0.5, 0.5])
+        hold on
+        plot(Vector, hm, 'color', [0, 0.5, 0])
+        plot(Vector, hn, 'color', [0, 0, 0])
+        xlabel('NatIm Fingerprint')
+        ylabel('Proportion|Group')
+        legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
+        axis square
+        makepretty
+        subplot(4, 3, 12)
+        if any(MatchIdx)
+            labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
+            scores = [NatImCorr(MatchIdx)', NatImCorr(NonMatchIdx)'];
+            [X, Y, ~, AUC1] = perfcurve(labels, scores, 1);
+            h(1) = plot(X, Y, 'color', [0, 0.25, 0]);
+            hold all
+            labels = [ones(1, numel(MatchIdx)), zeros(1, numel(WithinIdx))];
+            scores = [NatImCorr(MatchIdx)', NatImCorr(WithinIdx)'];
+            [X, Y, ~, AUC2] = perfcurve(labels, scores, 1);
+            h(2) = plot(X, Y, 'color', [0, 0.5, 0]);
+        end
 
-    subplot(4, 3, 12)
-    if any(MatchIdx)
-        labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
-        scores = [NatImCorr(MatchIdx)', NatImCorr(NonMatchIdx)'];
-        [X, Y, ~, AUC1] = perfcurve(labels, scores, 1);
-        h(1) = plot(X, Y, 'color', [0, 0.25, 0]);
-        hold all
-        labels = [ones(1, numel(MatchIdx)), zeros(1, numel(WithinIdx))];
-        scores = [NatImCorr(MatchIdx)', NatImCorr(WithinIdx)'];
-        [X, Y, ~, AUC2] = perfcurve(labels, scores, 1);
-        h(2) = plot(X, Y, 'color', [0, 0.5, 0]);
+        labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
+        scores = [NatImCorr(WithinIdx)', NatImCorr(NonMatchIdx)'];
+        [X, Y, ~, AUC3] = perfcurve(labels, scores, 1);
+        h(3) = plot(X, Y, 'color', [0.25, 0.25, 0.25]);
+        axis square
+
+        plot([0, 1], [0, 1], 'k--')
+        xlabel('False positive rate')
+        ylabel('True positive rate')
+        legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
+        title(sprintf('NatIm Fingerprint AUC: %.3f, %.3f, %.3f', AUC1, AUC2, AUC3))
+        makepretty
+        drawnow %Something to look at while ACG calculations are ongoing
+
     end
-
-    labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
-    scores = [NatImCorr(WithinIdx)', NatImCorr(NonMatchIdx)'];
-    [X, Y, ~, AUC3] = perfcurve(labels, scores, 1);
-    h(3) = plot(X, Y, 'color', [0.25, 0.25, 0.25]);
-    axis square
-
-    plot([0, 1], [0, 1], 'k--')
-    xlabel('False positive rate')
-    ylabel('True positive rate')
-    legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
-    title(sprintf('NatIm Fingerprint AUC: %.3f, %.3f, %.3f', AUC1, AUC2, AUC3))
-    makepretty
-    drawnow %Something to look at while ACG calculations are ongoing
 
     %% save
     set(gcf, 'units', 'normalized', 'outerposition', [0, 0, 1, 1])
