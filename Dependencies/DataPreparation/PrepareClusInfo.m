@@ -431,14 +431,13 @@ for subsesid = 1:length(KiloSortPaths)
                 unitType = bc_getQualityUnitType(paramBC, qMetric);
                 %                 unitType(:) = 1; ???
 
-                %{
                 % Commmented by CB for now    
-                spike_templates_0idx = readNPY([savePath filesep 'spike_templates.npy']);
+                spike_templates_0idx = readNPY([myClusFile(1).folder filesep 'spike_templates.npy']);
                 spikeTemplates = spike_templates_0idx + 1;
                 uniqueTemplates = unique(spikeTemplates);
+                tmpGUI = load(fullfile(savePath,'templates.qualityMetricDetailsforGUI'));
                 % need to load forGUI.tempWv??
-                bc_plotGlobalQualityMetric(qMetric, paramBC, unitType, uniqueTemplates, forGUI.tempWv);
-                %}
+                bc_plotGlobalQualityMetric(qMetric, paramBC, unitType, uniqueTemplates, tmpGUI.forGUI.tempWv);
 
                 %                 load(fullfile(savePath, 'qMetric.mat'))
             end

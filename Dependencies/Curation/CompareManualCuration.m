@@ -1,5 +1,14 @@
 Check = cell(4,length(MiceOpt));
+CurationThrs = 0.5; %minimal curation consensus (normally 0.5, which means 75% of curators need to agree)
+MouseCols = distinguishable_colors(length(MiceOpt));
+QMetricDistrFig = figure('name','QM')
 
+
+
+QMetricOfInterest = {'nPeaks','nTroughs','spatialDecaySlope','waveformDuration_peakTrough','waveformBaselineFlatness','percentageSpikesMissing_gaussian', 'nSpikes','fractionRPVs_estimatedTauR','rawAmplitude','signalToNoiseRatio','presenceRatio'}
+ThrsName = {'maxNPeaks','maxNTroughs','minSpatialDecaySlope','minWvDuration','maxWvBaselineFraction','maxPercSpikesMissing','minNumSpikes','maxRPVviolations','minAmplitude','minSNR','minPresenceRatio'}
+LnStls = {'-','--'}
+PercAboveThrs = nan(length(MiceOpt),length(QMetricOfInterest),2);
 for midx = 1:length(MiceOpt)
     % compare
     tmpdir = dir(fullfile(SaveDir,MiceOpt{midx},'UnitMatch','UnitMatch.mat'));
@@ -148,17 +157,17 @@ for midx = 1:length(MiceOpt)
 
     % If PyKS said match
     disp('Compared to Stitched Kilosort:')
-    disp(['Manual Scorers found ' num2str(round(sum(AvgMan(PyKS==1)>0)./sum(PyKS==1)*1000)/10) '% of PyKS Matches to be a match'])
-    disp(['Manual Scorers found ' num2str(round(sum(AvgMan(PyKS==1)<0)./sum(PyKS==1)*1000)/10) '% of PyKS Matches to be a non-match'])
-    disp(['Manual Scorers found ' num2str(round(sum(AvgMan(PyKS==0)>0)./sum(PyKS==0)*1000)/10) '% of PyKS Non-matches to be a match'])
-    disp(['Manual Scorers found ' num2str(round(sum(AvgMan(PyKS==0)<0)./sum(PyKS==0)*1000)/10) '% of PyKS Non-matches to be a non-match'])
+    disp(['Manual Scorers found ' num2str(round(sum(AvgMan(PyKS==1)>CurationThrs)./sum(PyKS==1)*1000)/10) '% of PyKS Matches to be a match'])
+    disp(['Manual Scorers found ' num2str(round(sum(AvgMan(PyKS==1)<CurationThrs)./sum(PyKS==1)*1000)/10) '% of PyKS Matches to be a non-match'])
+    disp(['Manual Scorers found ' num2str(round(sum(AvgMan(PyKS==0)>CurationThrs)./sum(PyKS==0)*1000)/10) '% of PyKS Non-matches to be a match'])
+    disp(['Manual Scorers found ' num2str(round(sum(AvgMan(PyKS==0)<CurationThrs)./sum(PyKS==0)*1000)/10) '% of PyKS Non-matches to be a non-match'])
 
     % If UM said Match
     disp('Compared to UnitMatch:')
-    disp(['Manual Scorers found ' num2str(round(sum(AvgMan(MatchProb>0.5)>0)./sum(MatchProb>0.5)*1000)/10) '% of UnitMatch Matches to be a match'])
-    disp(['Manual Scorers found ' num2str(round(sum(AvgMan(MatchProb>0.5)<0)./sum(MatchProb>0.5)*1000)/10) '% of UnitMatch Matches to be a non-match'])
-    disp(['Manual Scorers found ' num2str(round(sum(AvgMan(MatchProb<0.5)>0)./sum(MatchProb<0.5)*1000)/10) '% of UnitMatch Non-matches to be a match'])
-    disp(['Manual Scorers found ' num2str(round(sum(AvgMan(MatchProb<0.5)<0)./sum(MatchProb<0.5)*1000)/10) '% of UnitMatch Non-matches to be a non-match'])
+    disp(['Manual Scorers found ' num2str(round(sum(AvgMan(MatchProb>0.5)>CurationThrs)./sum(MatchProb>0.5)*1000)/10) '% of UnitMatch Matches to be a match'])
+    disp(['Manual Scorers found ' num2str(round(sum(AvgMan(MatchProb>0.5)<CurationThrs)./sum(MatchProb>0.5)*1000)/10) '% of UnitMatch Matches to be a non-match'])
+    disp(['Manual Scorers found ' num2str(round(sum(AvgMan(MatchProb<0.5)>CurationThrs)./sum(MatchProb<0.5)*1000)/10) '% of UnitMatch Non-matches to be a match'])
+    disp(['Manual Scorers found ' num2str(round(sum(AvgMan(MatchProb<0.5)<CurationThrs)./sum(MatchProb<0.5)*1000)/10) '% of UnitMatch Non-matches to be a non-match'])
 
 
     if midx == 1
@@ -250,11 +259,11 @@ for midx = 1:length(MiceOpt)
     hold on
     clear h
     for id = 1:size(Manual,1)
-        h(id) = scatter(midx+0.05*id,sum(Manual(id,AvgMan>0.5)==1)./sum(AvgMan>0.5),30,cols(id,:),'filled');
+        h(id) = scatter(midx+0.05*id,sum(Manual(id,AvgMan>CurationThrs)==1)./sum(AvgMan>CurationThrs),30,cols(id,:),'filled');
     end
-    h(id+1) = scatter(midx,sum(MatchProb(AvgMan>0.5)>0.5)./sum(AvgMan>0.5),50,[0 0 0],'filled');
-    h(id+2) = scatter(midx-0.1,sum(PyKS(AvgMan>0.5)==1)./sum(AvgMan>0.5),50,[0.5 0.5 0.5],'filled');
-    h(id+3) = scatter(midx-0.05,sum(RankThreshold(AvgMan>0.5)==1)./sum(AvgMan>0.5),50,[0.75 0.75 0.75],'filled');
+    h(id+1) = scatter(midx,sum(MatchProb(AvgMan>CurationThrs)>0.5)./sum(AvgMan>CurationThrs),50,[0 0 0],'filled');
+    h(id+2) = scatter(midx-0.1,sum(PyKS(AvgMan>CurationThrs)==1)./sum(AvgMan>CurationThrs),50,[0.5 0.5 0.5],'filled');
+    h(id+3) = scatter(midx-0.05,sum(RankThreshold(AvgMan>CurationThrs)==1)./sum(AvgMan>CurationThrs),50,[0.75 0.75 0.75],'filled');
 
     ylabel('Defined as match (proportion)')
     title(['Average manual score match'])
@@ -271,11 +280,11 @@ for midx = 1:length(MiceOpt)
     hold on
     clear h
     for id = 1:size(Manual,1)
-        h(id) = scatter(midx+0.05*id,sum(Manual(id,AvgMan<-0.5)==1)./sum(AvgMan<-0.5),30,cols(id,:),'filled');
+        h(id) = scatter(midx+0.05*id,sum(Manual(id,AvgMan<-CurationThrs)==1)./sum(AvgMan<-CurationThrs),30,cols(id,:),'filled');
     end
-    h(id+1) = scatter(midx,sum(MatchProb(AvgMan<-0.5)>0.5)./sum(AvgMan<-0.5),50,[0 0 0],'filled');
-    h(id+2) = scatter(midx-0.1,sum(PyKS(AvgMan<-0.5)==1)./sum(AvgMan<-0.5),50,[0.5 0.5 0.5],'filled');
-    h(id+3) = scatter(midx-0.05,sum(RankThreshold(AvgMan<-0.5)==1)./sum(AvgMan<-0.5),50,[0.75 0.75 0.75],'filled');
+    h(id+1) = scatter(midx,sum(MatchProb(AvgMan<-CurationThrs)>0.5)./sum(AvgMan<-CurationThrs),50,[0 0 0],'filled');
+    h(id+2) = scatter(midx-0.1,sum(PyKS(AvgMan<-CurationThrs)==1)./sum(AvgMan<-CurationThrs),50,[0.5 0.5 0.5],'filled');
+    h(id+3) = scatter(midx-0.05,sum(RankThreshold(AvgMan<-CurationThrs)==1)./sum(AvgMan<-CurationThrs),50,[0.75 0.75 0.75],'filled');
 
     ylabel('Defined as match (proportion)')
 
@@ -293,11 +302,11 @@ for midx = 1:length(MiceOpt)
     hold on
     clear h
     for id = 1:size(Manual,1)
-        h(id) = scatter(midx+0.05*id,sum(Manual(id,abs(AvgMan)<=0.5)==1)./sum(abs(AvgMan)<=0.5),30,cols(id,:),'filled');
+        h(id) = scatter(midx+0.05*id,sum(Manual(id,abs(AvgMan)<=CurationThrs)==1)./sum(abs(AvgMan)<=CurationThrs),30,cols(id,:),'filled');
     end
-    h(id+1) = scatter(midx,sum(MatchProb(abs(AvgMan)<=0.5)>0.5)./sum(abs(AvgMan)<=0.5),50,[0 0 0],'filled');
-    h(id+2) = scatter(midx-0.1,sum(PyKS(abs(AvgMan)<=0.5)==1)./sum(abs(AvgMan)<=0.5),50,[0.5 0.5 0.5],'filled');
-    h(id+3) = scatter(midx-0.05,sum(RankThreshold(abs(AvgMan)<=0.5)==1)./sum(abs(AvgMan)<=0.5),50,[0.75 0.75 0.75],'filled');
+    h(id+1) = scatter(midx,sum(MatchProb(abs(AvgMan)<=CurationThrs)>0.5)./sum(abs(AvgMan)<=CurationThrs),50,[0 0 0],'filled');
+    h(id+2) = scatter(midx-0.1,sum(PyKS(abs(AvgMan)<=CurationThrs)==1)./sum(abs(AvgMan)<=CurationThrs),50,[0.5 0.5 0.5],'filled');
+    h(id+3) = scatter(midx-0.05,sum(RankThreshold(abs(AvgMan)<=CurationThrs)==1)./sum(abs(AvgMan)<=CurationThrs),50,[0.75 0.75 0.75],'filled');
 
     ylabel('Defined as match (proportion)')
     if midx == length(MiceOpt)
@@ -318,9 +327,9 @@ for midx = 1:length(MiceOpt)
     end
     hold on
     clear h
-    h(1) = scatter(midx,sum(AvgMan>0.5)./length(AvgMan),60,[0 0.5 0],'filled');
-    h(2) = scatter(midx,sum(AvgMan<-0.5)./length(AvgMan),60,[0.5 0 0],'filled');
-    h(3) = scatter(midx,sum(abs(AvgMan)<=0.5)./length(AvgMan),60,[0 0 0.5],'filled');
+    h(1) = scatter(midx,sum(AvgMan>CurationThrs)./length(AvgMan),60,[0 0.5 0],'filled');
+    h(2) = scatter(midx,sum(AvgMan<-CurationThrs)./length(AvgMan),60,[0.5 0 0],'filled');
+    h(3) = scatter(midx,sum(abs(AvgMan)<=CurationThrs)./length(AvgMan),60,[0 0 0.5],'filled');
     title('Fraction')
     if midx == length(MiceOpt)
         legend(h,{'Everyone says match','Everyone says no match','Uncertain'})
@@ -407,22 +416,22 @@ for midx = 1:length(MiceOpt)
 
      %% Show which blind IDs to look at
      disp('BlindID (with functional scores) for which users think it''s a match, but UM not')
-     idx = find(AvgMan' >0.5 & (MatchProb < 0.5));
+     idx = find(AvgMan' >CurationThrs & (MatchProb < 0.5));
      ReOrderedTbl.BlindID(idx)
      Check{1,midx} =  ReOrderedTbl.BlindID(idx);
 
      disp('BlindID (with functional scores) for which users think it''s not a match, but UM not')
-     idx = find(AvgMan' <-0.5 & (MatchProb > 0.5));
+     idx = find(AvgMan' <-CurationThrs & (MatchProb > 0.5));
      ReOrderedTbl.BlindID(idx) 
      Check{2,midx} =  ReOrderedTbl.BlindID(idx)
 
      disp('BlindID (with functional scores) for which users think it''s a match, but KS not')
-     idx = find(AvgMan' >0.5 & (PyKS' == 0));
+     idx = find(AvgMan' >CurationThrs & (PyKS' == 0));
      ReOrderedTbl.BlindID(idx)
      Check{3,midx} =  ReOrderedTbl.BlindID(idx);
 
      disp('BlindID (with functional scores) for which users think it''s not a match, but KS not')
-     idx = find(AvgMan' <-0.5 & (PyKS' == 1));
+     idx = find(AvgMan' <-CurationThrs & (PyKS' == 1));
      ReOrderedTbl.BlindID(idx) 
      Check{4,midx} =  ReOrderedTbl.BlindID(idx)
 
@@ -433,10 +442,10 @@ for midx = 1:length(MiceOpt)
          figure(VENNFig)
      end
      subplot(ceil(sqrt(length(MiceOpt))),round(sqrt(length(MiceOpt))),midx)
-     Idx = (AvgMan'>0.5 | PyKS'==1 | MatchProb>0.5);
+     Idx = (AvgMan'>CurationThrs | PyKS'==1 | MatchProb>0.5);
      ManThrs = sum(MatchProb>0.5);
-     h= vennRGB([sum(PyKS(Idx)'==1 & MatchProb(Idx)<=0.5 & AvgMan(Idx)'<=0.5)./ManThrs sum(PyKS(Idx)'==1 & MatchProb(Idx)>0.5 & AvgMan(Idx)'<=0.5)./ManThrs sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'<=0.5)./ManThrs sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'>0.5)./ManThrs ...
-        sum(PyKS(Idx)'==0 & MatchProb(Idx)<=0.5 & AvgMan(Idx)'>0.5)./ManThrs sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'>0.5)./ManThrs sum(PyKS(Idx)'==1 & AvgMan(Idx)'>0.5&MatchProb(Idx)>0.5)./ManThrs],0.01);
+     h= vennRGB([sum(PyKS(Idx)'==1 & MatchProb(Idx)<=0.5 & AvgMan(Idx)'<=CurationThrs)./ManThrs sum(PyKS(Idx)'==1 & MatchProb(Idx)>0.5 & AvgMan(Idx)'<=CurationThrs)./ManThrs sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'<=CurationThrs)./ManThrs sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'>CurationThrs)./ManThrs ...
+        sum(PyKS(Idx)'==0 & MatchProb(Idx)<=0.5 & AvgMan(Idx)'>CurationThrs)./ManThrs sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'>CurationThrs)./ManThrs sum(PyKS(Idx)'==1 & AvgMan(Idx)'>CurationThrs&MatchProb(Idx)>0.5)./ManThrs],0.01);
      title(MiceOpt{midx})
 
 
@@ -455,8 +464,44 @@ for midx = 1:length(MiceOpt)
          nTracked = nan(size(tmpscores,2),length(MiceOpt));
      end
      nTracked(:,midx) = sum(tmpscores>0.5,1)./length(tmpscores);
+
+     %% Quality metrics:
+%      figure(QMetricDistrFig)
+     d = dir(fullfile(UMparam.KSDir{1}, '**', 'templates._bc_qMetrics.parquet'));
+     for id = 1:length(d)
+         qMetricsPath = d(id).folder;
+         [qparam, qMetric, ~] = bc_loadSavedMetrics(qMetricsPath);
+         tblid = ismember(qMetric.clusterID-1,OriID(recses==id));
+         
+         for qid = 1:length(QMetricOfInterest)
+%              subplot(ceil(sqrt(length(QMetricOfInterest))),round(sqrt(length(QMetricOfInterest))),qid)
+%              hold on
+             eval(['tmp = qMetric.' QMetricOfInterest{qid} '(tblid);'])
+             eval(['thrs = qparam.' ThrsName{qid} ';'])
+             PercAboveThrs(midx,qid,id) = sum(tmp>thrs)./length(tblid);
+%              [hc,bins] = histcounts(tmp,0:0.1:1);
+%              hqm(midx) = plot(bins(2:end)-(bins(2)-bins(1))./2,hc./length(tmp),'LineStyle',LnStls{id},'color',MouseCols(midx,:));
+%              makepretty
+% 
+%              title(QMetricOfInterest{qid})
+%              xlabel('Normalized score')
+%              ylabel('Proportion of units')
+
+         end
+     end
+     drawnow
 end
-  
+figure('name','QMetric')
+for qid = 1:length(QMetricOfInterest)
+    subplot(ceil(sqrt(length(QMetricOfInterest))),round(sqrt(length(QMetricOfInterest))),qid)
+    bar(squeeze(PercAboveThrs(:,qid,:)))
+    title(QMetricOfInterest{qid})
+    makepretty
+    ylabel('Proportion > threshold')
+    set(gca,'XTickLabel',MiceOpt)
+
+ end
+%   legend(hqm(:),MiceOpt)
 figure('name','Tracking Performance')
 cols = cat(1,[0 0 0],[0 0 1],[1 0 0],[0 0.75 0]);
 TakeIdx = find(ismember(AllScorerNames,{'AvgScorer','UM','KS','RankTr'}));

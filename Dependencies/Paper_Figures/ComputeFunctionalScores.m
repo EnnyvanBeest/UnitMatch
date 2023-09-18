@@ -90,10 +90,21 @@ end
 if ~any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) % If it already exists in table, skip this entire thing
 
 
-    % paper:
-%     pairid = [247 448]; % this is a known pair of units
-%     figure;
-%     hold on
+    % for paper a figure:
+    %     figure
+    %     MatchProbability = reshape(MatchTable.MatchProb, nclus, nclus);
+    %     [r, c] = find(MatchProbability > UMparam.ProbabilityThreshold); %Find matches
+    %     Pairs = cat(2, r, c);
+    %     Pairs = sortrows(Pairs);
+    %     Pairs = unique(Pairs, 'rows');
+    %
+    %     pairidx = recses(Pairs(:,1)) == 1 & recsesGood(Pairs(:,2))==2;
+    %     PairsTmp = Pairs(pairidx,:);
+    %     % Only use every 'unit' once --> take the highest scoring matches
+    %     [~,id1,~]=unique(PairsTmp(:,1),'stable');
+    %     PairsTmp = PairsTmp(id1,:);
+    %     [~,id1,~]=unique(PairsTmp(:,2),'stable');
+    %     PairsTmp = PairsTmp(id1,:);
     %% Compute cross-correlation matrices for individual recordings
     disp('Computing cross-correlation fingerprint')
     SessionCorrelations = cell(1, nRec);
@@ -107,18 +118,15 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) % If it
         for uid = 1:numel(Good_Idx)
             sr(uid, :) = histcounts(sp.st(sp.spikeTemplates == OriIDAll(Good_Idx(uid)) & sp.RecSes == recsesall(Good_Idx(uid))), edges);
         end
-% 
-%         subplot(2,nRec,rid)
-%         plot(sr(pairid(rid)-SessionSwitch(rid)+1,1:10000)>0,'k');
-%         makepretty
-%         ylabel('Spike')
-%         subplot(2,nRec,2+rid)
-%         imagesc(sr(:,1:10000)); hold on
-%         colormap(flipud(gray))
-%         plot(AllSessionCorrelations{1,2}(pairid(2),:));
-%         xlabel('time')
-%         ylabel('Other units')
-%         makepretty
+
+        %         Unit2TakeIdx = PairsTmp(1:60,rid); % Only take each unit once
+
+        %         subplot(1,nRec,rid)
+        %         imagesc(sr(Unit2TakeIdx-SessionSwitch(rid)+1,1:10000),[0 1]); hold on
+        %         colormap(flipud(gray))
+        %         xlabel('time')
+        %         ylabel('Reference units')
+        %         makepretty
 
         % Define folds (two halves)
         idx_fold1 = 1:floor(size(sr, 2)./2);
@@ -302,32 +310,34 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) % If it alre
     proc.smoothSize = 5; % PSTH smoothing filter
     gw = gausswin(proc.smoothSize,3);
     proc.smWin = gw./sum(gw);
-    
+
     nRec = numel(UMparam.AllRawPaths);
     nClu = nan(1,nRec); for ss = 1:nRec; nClu(ss) = numel(unique(MatchTable.ID1(MatchTable.RecSes1 == ss))); end
     spikeData_cv = cell(1,2*nRec);
+    natimgflag = 0;
     for ss = 1:nRec
         % Get the original binFile (also for stitched?)
         binFileRef = fullfile(UMparam.AllRawPaths(ss).folder,UMparam.AllRawPaths(ss).name);
-        
+
         % Find the associated experiments
         exp2keep = getNatImExpRef(binFileRef);
 
         if ~isempty(exp2keep)
+            natimgflag = 1;
             % Get the spikes
-%             if ~UMparam.RunPyKSChronicStitched
-%                 sortingPath = fullfile(UMparam.AllRawPaths(ss).folder,'pyKS','output');
-%                 st = readNPY(fullfile(sortingPath,'spike_times.npy'));
-%                 st = double(st)/30000;
-%                 clu = readNPY(fullfile(sortingPath,'spike_clusters.npy'));
-%             end
+            %             if ~UMparam.RunPyKSChronicStitched
+            %                 sortingPath = fullfile(UMparam.AllRawPaths(ss).folder,'pyKS','output');
+            %                 st = readNPY(fullfile(sortingPath,'spike_times.npy'));
+            %                 st = double(st)/30000;
+            %                 clu = readNPY(fullfile(sortingPath,'spike_clusters.npy'));
+            %             end
             st = sp.st(sp.RecSes == RecOpt(ss));
             clu = sp.spikeTemplates(sp.RecSes == RecOpt(ss));
-            
+
             spikesAll.times = st;
             spikesAll.clusters = clu;
             spikesAll.clusterIDs = unique(clu); % follow the same units across days
-            
+
             % Get the natim responses
             spikeData = getNatImResp(spikesAll,exp2keep,binFileRef,proc);
             clusterIDs = spikesAll.clusterIDs;
@@ -339,25 +349,27 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) % If it alre
             spikeData_cv{currIdx+2} = spikeData(:,:,cluIdx,2:2:end); % even
         end
     end
-    
+
     % Perform CCA across recordings
-    [corrWCCA, ~] = natim.computeCCA(spikeData_cv);
-    
-    % Reshape the matrix to a single one with correct clusters
-    %%% SIMILAR TO WHAT ENNY IS DOING (e.g., 1x2 and 2x1, but not 1x1 and 2x2);
-    %%% NOT OPTIMAL SINCE NOT USING ALL THE POSSIBLE PAIRS
-    corrWCCA_big = nan(sum(nClu),sum(nClu));
-    corrWCCA_1x2 = corrWCCA(1:2:end, 2:2:end);
-    for ss1 = 1:nRec
-        for ss2 = 1:nRec
-            if ~isnan(corrWCCA_1x2{ss1,ss2})
-                corrWCCA_big(sum(nClu(1:ss1-1))+1:sum(nClu(1:ss1)), sum(nClu(1:ss2-1))+1:sum(nClu(1:ss2))) = corrWCCA_1x2{ss1,ss2};
+    if natimgflag
+        [corrWCCA, ~] = natim.computeCCA(spikeData_cv);
+
+        % Reshape the matrix to a single one with correct clusters
+        %%% SIMILAR TO WHAT ENNY IS DOING (e.g., 1x2 and 2x1, but not 1x1 and 2x2);
+        %%% NOT OPTIMAL SINCE NOT USING ALL THE POSSIBLE PAIRS
+        corrWCCA_big = nan(sum(nClu),sum(nClu));
+        corrWCCA_1x2 = corrWCCA(1:2:end, 2:2:end);
+        for ss1 = 1:nRec
+            for ss2 = 1:nRec
+                if ~isnan(corrWCCA_1x2{ss1,ss2})
+                    corrWCCA_big(sum(nClu(1:ss1-1))+1:sum(nClu(1:ss1)), sum(nClu(1:ss2-1))+1:sum(nClu(1:ss2))) = corrWCCA_1x2{ss1,ss2};
+                end
             end
         end
+        corrWCCA_big = .5*corrWCCA_big+.5*corrWCCA_big'; % not sure that's needed?
+
+        MatchTable.NatImCorr = corrWCCA_big(:);
     end
-    corrWCCA_big = .5*corrWCCA_big+.5*corrWCCA_big'; % not sure that's needed?
-    
-    MatchTable.NatImCorr = corrWCCA_big(:);
 end
 
 %% Write to table
@@ -446,7 +458,7 @@ for id = 1:ntimes
         [X, Y, ~, AUC1] = perfcurve(labels, scores, 1);
         h(1) = plot(X, Y, 'color', [0, 0.25, 0]);
         hold all
-        labels = [ones(1, numel(MatchIdx)), zeros(1, numel(WithinIdx))];
+        labels = [zeros(1, numel(MatchIdx)), ones(1, numel(WithinIdx))];
         scores = [FingerprintCor(MatchIdx)', FingerprintCor(WithinIdx)'];
         [X, Y, ~, AUC2] = perfcurve(labels, scores, 1);
         h(2) = plot(X, Y, 'color', [0, 0.5, 0]);
@@ -510,7 +522,7 @@ for id = 1:ntimes
         [X, Y, ~, AUC1] = perfcurve(labels, scores, 1);
         h(1) = plot(X, Y, 'color', [0, 0.25, 0]);
         hold all
-        labels = [ones(1, numel(MatchIdx)), zeros(1, numel(WithinIdx))];
+        labels = [zeros(1, numel(MatchIdx)), ones(1, numel(WithinIdx))];
         scores = [ACGCor(MatchIdx)', ACGCor(WithinIdx)'];
         [X, Y, ~, AUC2] = perfcurve(labels, scores, 1);
         h(2) = plot(X, Y, 'color', [0, 0.5, 0]);
@@ -592,64 +604,64 @@ for id = 1:ntimes
     %% Plot Natural images
 
     subplot(4, 3, 10)
-    imagesc(reshape(MatchTable.NatImCorr, nclus, nclus))
-    hold on
-    colormap(flipud(gray))
-    makepretty
-    xlabel('Unit_i')
-    ylabel('Unit_j')
-    hold on
-    arrayfun(@(X) line([SessionSwitch(X), SessionSwitch(X)], get(gca, 'ylim'), 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
-    arrayfun(@(X) line(get(gca, 'xlim'), [SessionSwitch(X), SessionSwitch(X)], 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
-    title('NatIm Fingerprint')
-    axis square
-    freezeColors
+    if natimgflag
+        imagesc(reshape(MatchTable.NatImCorr, nclus, nclus))
+        hold on
+        colormap(flipud(gray))
+        makepretty
+        xlabel('Unit_i')
+        ylabel('Unit_j')
+        hold on
+        arrayfun(@(X) line([SessionSwitch(X), SessionSwitch(X)], get(gca, 'ylim'), 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
+        arrayfun(@(X) line(get(gca, 'xlim'), [SessionSwitch(X), SessionSwitch(X)], 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
+        title('NatIm Fingerprint')
+        axis square
+        freezeColors
 
-    NatImCorr = reshape(MatchTable.NatImCorr, nclus, nclus);
+        NatImCorr = reshape(MatchTable.NatImCorr, nclus, nclus);
+        subplot(4, 3, 11)
+        bins = min(NatImCorr(:)):0.1:max(NatImCorr(:));
+        Vector = [bins(1) + 0.1 / 2:0.1:bins(end) - 0.1 / 2];
+        hw = histcounts(NatImCorr(WithinIdx), bins) ./ length(WithinIdx);
+        hm = histcounts(NatImCorr(MatchIdx), bins) ./ length(MatchIdx);
+        hn = histcounts(NatImCorr(NonMatchIdx), bins) ./ length(NonMatchIdx);
+        plot(Vector, hw, 'color', [0.5, 0.5, 0.5])
+        hold on
+        plot(Vector, hm, 'color', [0, 0.5, 0])
+        plot(Vector, hn, 'color', [0, 0, 0])
+        xlabel('NatIm Fingerprint')
+        ylabel('Proportion|Group')
+        legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
+        axis square
+        makepretty
 
-    subplot(4, 3, 11)
-    bins = min(NatImCorr(:)):0.1:max(NatImCorr(:));
-    Vector = [bins(1) + 0.1 / 2:0.1:bins(end) - 0.1 / 2];
-    hw = histcounts(NatImCorr(WithinIdx), bins) ./ length(WithinIdx);
-    hm = histcounts(NatImCorr(MatchIdx), bins) ./ length(MatchIdx);
-    hn = histcounts(NatImCorr(NonMatchIdx), bins) ./ length(NonMatchIdx);
-    plot(Vector, hw, 'color', [0.5, 0.5, 0.5])
-    hold on
-    plot(Vector, hm, 'color', [0, 0.5, 0])
-    plot(Vector, hn, 'color', [0, 0, 0])
-    xlabel('NatIm Fingerprint')
-    ylabel('Proportion|Group')
-    legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
-    axis square
-    makepretty
+        subplot(4, 3, 12)
+        if any(MatchIdx)
+            labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
+            scores = [NatImCorr(MatchIdx)', NatImCorr(NonMatchIdx)'];
+            [X, Y, ~, AUC1] = perfcurve(labels, scores, 1);
+            h(1) = plot(X, Y, 'color', [0, 0.25, 0]);
+            hold all
+            labels = [zeros(1, numel(MatchIdx)), ones(1, numel(WithinIdx))];
+            scores = [NatImCorr(MatchIdx)', NatImCorr(WithinIdx)'];
+            [X, Y, ~, AUC2] = perfcurve(labels, scores, 1);
+            h(2) = plot(X, Y, 'color', [0, 0.5, 0]);
+        end
 
-    subplot(4, 3, 12)
-    if any(MatchIdx)
-        labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
-        scores = [NatImCorr(MatchIdx)', NatImCorr(NonMatchIdx)'];
-        [X, Y, ~, AUC1] = perfcurve(labels, scores, 1);
-        h(1) = plot(X, Y, 'color', [0, 0.25, 0]);
-        hold all
-        labels = [ones(1, numel(MatchIdx)), zeros(1, numel(WithinIdx))];
-        scores = [NatImCorr(MatchIdx)', NatImCorr(WithinIdx)'];
-        [X, Y, ~, AUC2] = perfcurve(labels, scores, 1);
-        h(2) = plot(X, Y, 'color', [0, 0.5, 0]);
+        labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
+        scores = [NatImCorr(WithinIdx)', NatImCorr(NonMatchIdx)'];
+        [X, Y, ~, AUC3] = perfcurve(labels, scores, 1);
+        h(3) = plot(X, Y, 'color', [0.25, 0.25, 0.25]);
+        axis square
+
+        plot([0, 1], [0, 1], 'k--')
+        xlabel('False positive rate')
+        ylabel('True positive rate')
+        legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
+        title(sprintf('NatIm Fingerprint AUC: %.3f, %.3f, %.3f', AUC1, AUC2, AUC3))
+        makepretty
+        drawnow %Something to look at while ACG calculations are ongoing
     end
-
-    labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
-    scores = [NatImCorr(WithinIdx)', NatImCorr(NonMatchIdx)'];
-    [X, Y, ~, AUC3] = perfcurve(labels, scores, 1);
-    h(3) = plot(X, Y, 'color', [0.25, 0.25, 0.25]);
-    axis square
-
-    plot([0, 1], [0, 1], 'k--')
-    xlabel('False positive rate')
-    ylabel('True positive rate')
-    legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
-    title(sprintf('NatIm Fingerprint AUC: %.3f, %.3f, %.3f', AUC1, AUC2, AUC3))
-    makepretty
-    drawnow %Something to look at while ACG calculations are ongoing
-
     %% save
     set(gcf, 'units', 'normalized', 'outerposition', [0, 0, 1, 1])
     saveas(gcf, fullfile(SaveDir, [addname, 'FunctionalScoreSeparability.fig']))

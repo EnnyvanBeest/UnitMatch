@@ -1,7 +1,7 @@
 %% User Input
 %% Path information
 DataDir = {'H:\MatchingUnits\RawData'}; % Raw data folders, typically servers were e.g. *.cbin files are stored
-SaveDir = 'H:\MatchingUnits\Output\Concatenated1Day'; %'H:\MatchingUnits\Output\NotConcatenated';% % 'H:\MatchingUnits\Output\ManyRecordings'%Folder where to store the results
+SaveDir = 'H:\MatchingUnits\Output\Concatenated1Day'; %%'H:\MatchingUnits\Output\NotConcatenated';%  'H:\MatchingUnits\Output\ManyRecordings'%Folder where to store the results
 tmpdatafolder = 'H:\MatchingUnits\Tmp'; % temporary folder for temporary decompression of data 
 KilosortDir = 'H:\MatchingUnits\KilosortOutput'; % Kilosort output folder
 GithubDir = 'C:\Users\EnnyB\Documents\GitHub'; % Github directory
@@ -19,7 +19,7 @@ PrepareClusInfoparams.CopyToTmpFirst = 1; % If 1, copy data to local first, don'
 PrepareClusInfoparams.DecompressLocal = 1; % If 1, uncompress data first if it's currently compressed (= necessary for unitmatch and faster for QualityMetrics)
 
 % Storing preprocessed data?
-PrepareClusInfoparams.ReLoadAlways = 0; % If 1, SP & Clusinfo are always loaded from KS output
+PrepareClusInfoparams.ReLoadAlways = 1; % If 1, SP & Clusinfo are always loaded from KS output
 PrepareClusInfoparams.saveSp = 1; % Save SP struct for easy loading of preprocessed data
 PrepareClusInfoparams.binsz = 0.01; %Bin size for PSTHs in seconds
 
@@ -36,7 +36,7 @@ PrepareClusInfoparams.separateIMRO = 0; % Run for every IMRO separately (for mem
 PrepareClusInfoparams.UseHistology = 0; % Use real coordinates (3D space of tracked probes if available)
 
 % UnitMatch Parameters:
-% All parameters to choose from: {'AmplitudeSim','spatialdecaySim','WavformMSE','WVCorr','CentroidDist','CentroidVar','CentroidDistRecentered','TrajAngleSim','TrajDistSim'};
+% All parameters to choose from: {'AmplitudeSim','spatialdecaySim','WavformMSE','WVCorr','CentroidDist','CentroidVar','CentroidDistRecentered','TrajAngleSim','TrajDistSim','spatialdecayfitSim'};
 % WavformSim is average of WVCorr and WavformMSE
 % CentroidOverlord is average of CentroidDistRecentered and CentroidVar
 PrepareClusInfoparams.Scores2Include = {'CentroidDist','WavformSim','CentroidOverlord','spatialdecaySim','AmplitudeSim','TrajAngleSim'}; %{'AmplitudeSim','spatialdecayfitSim','WavformSim','CentroidDist','CentroidVar','TrajAngleSim'}; % 

@@ -66,7 +66,6 @@ for midx = 1:length(MiceOpt)
     %% Prepare cluster information
     PrepareClusInfoparams = PrepareClusInfo(AllKiloSortPaths,PrepareClusInfoparams);
     PrepareClusInfoparams.RecType = RecordingType{midx};%
-
     %% Run UnitMatch
     UnitMatchExist = dir(fullfile(PrepareClusInfoparams.SaveDir,'**','UnitMatch.mat'));
     if isempty(UnitMatchExist) || PrepareClusInfoparams.RedoUnitMatch
@@ -106,4 +105,4 @@ for midx = 1:length(MiceOpt)
 
 
 end
-
+% 

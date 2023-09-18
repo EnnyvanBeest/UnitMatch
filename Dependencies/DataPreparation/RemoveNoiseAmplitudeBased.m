@@ -59,4 +59,5 @@ title('Spikes after noise removal')
 hold on
 drawnow
 
+sp.noisespkes = rmidx;
 return
