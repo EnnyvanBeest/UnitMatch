@@ -19,6 +19,9 @@ function exp2keep = getNatImExpRef(binFile)
     for ee = 1:numel(expFolders)
         expFolder = fullfile(expFolders(ee).folder,expFolders(ee).name);
         blockFile = dir(fullfile(expFolder,'*Block*'));
+        if numel(blockFile)>1
+            blockFile = blockFile(contains({blockFile.name},expDate));
+        end
         if isempty(blockFile)
             continue
         end
@@ -61,6 +64,25 @@ function exp2keep = getNatImExpRef(binFile)
                     % ephys before but never sure will be in kilotrode
                     [~,ephysFolder] = fileparts(binFile.folder);
                     alignmentFileEphys = dir(fullfile(alignmentFolder, sprintf('correct_timeline_%s_to_%s.npy',timeRef,ephysFolder)));
+                    if isempty(alignmentFileEphys)
+                        %%% NOT EVEN SURE THIS IS NECESSARY. SEEMS TO NOT
+                        %%% WORK ANYWAY.
+                        % Get ephys tag
+                        d = dir(fullfile(server, subject, expDate, 'ephys*', '*')); % 2020-02-13 hack by CB due to data organization (several experiments per day, that need to be in 'ephys' folder (@Anna) due to rigbox)
+                        d(~[d.isdir]) = [];
+                        tags = {[]};
+                        if numel(d)>=1
+                            for q = 1:numel(d)
+                                tags{q} = d(q).name(numel(subject)+2:end);
+                            end
+                        end
+                        tags = tags(cellfun(@(x) ~isempty(x), tags));
+                        tag = tags(cell2mat(cellfun(@(x) contains(ephysFolder,x),tags,'uni',0)));
+                        if numel(tag)>1
+                            error('Too many ephys tags corresponding?')
+                        end
+                        alignmentFileEphys = dir(fullfile(alignmentFolder, sprintf('correct_timeline_%s_to_ephys_%s.npy',timeRef,tag{1})));
+                    end
                     if ~isempty(alignmentFileEphys)
                         exp2keep = cat(1,exp2keep,{expFolder});
                     else
@@ -75,6 +97,6 @@ function exp2keep = getNatImExpRef(binFile)
     exp2keep = unique(exp2keep);
 
     if isempty(exp2keep)
-        warning('Couldn''t find any associated Natural Images experiment.')
+        warning('Couldn''t find any associated Natural Images experiment for %s.', binFile.name)
     end
 end

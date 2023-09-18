@@ -302,7 +302,7 @@ end
 
 %% Get natural images fingerprints correlations
 
-if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) % If it already exists in table, skip this entire thing
+% if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) % If it already exists in table, skip this entire thing
     % Param for processing
     proc.window = [-0.3 0.5 ... % around onset
         0.0 0.5]; % around offset
@@ -370,7 +370,11 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) % If it alre
 
         MatchTable.NatImCorr = corrWCCA_big(:);
     end
-end
+
+    corrWCCA_big = .5*corrWCCA_big+.5*corrWCCA_big'; % not sure that's needed?
+    
+    MatchTable.NatImCorr = corrWCCA_big(:);
+
 
 %% Write to table
 
@@ -635,6 +639,23 @@ for id = 1:ntimes
         axis square
         makepretty
 
+
+    if ~all(isnan(NatImCorr(:)))
+        subplot(4, 3, 11)
+        bins = min(NatImCorr(:)):0.1:max(NatImCorr(:));
+        Vector = [bins(1) + 0.1 / 2:0.1:bins(end) - 0.1 / 2];
+        hw = histcounts(NatImCorr(WithinIdx), bins) ./ length(WithinIdx);
+        hm = histcounts(NatImCorr(MatchIdx), bins) ./ length(MatchIdx);
+        hn = histcounts(NatImCorr(NonMatchIdx), bins) ./ length(NonMatchIdx);
+        plot(Vector, hw, 'color', [0.5, 0.5, 0.5])
+        hold on
+        plot(Vector, hm, 'color', [0, 0.5, 0])
+        plot(Vector, hn, 'color', [0, 0, 0])
+        xlabel('NatIm Fingerprint')
+        ylabel('Proportion|Group')
+        legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
+        axis square
+        makepretty
         subplot(4, 3, 12)
         if any(MatchIdx)
             labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
@@ -642,7 +663,8 @@ for id = 1:ntimes
             [X, Y, ~, AUC1] = perfcurve(labels, scores, 1);
             h(1) = plot(X, Y, 'color', [0, 0.25, 0]);
             hold all
-            labels = [zeros(1, numel(MatchIdx)), ones(1, numel(WithinIdx))];
+           labels = [zeros(1, numel(MatchIdx)), ones(1, numel(WithinIdx))];
+
             scores = [NatImCorr(MatchIdx)', NatImCorr(WithinIdx)'];
             [X, Y, ~, AUC2] = perfcurve(labels, scores, 1);
             h(2) = plot(X, Y, 'color', [0, 0.5, 0]);
@@ -662,6 +684,7 @@ for id = 1:ntimes
         makepretty
         drawnow %Something to look at while ACG calculations are ongoing
     end
+
     %% save
     set(gcf, 'units', 'normalized', 'outerposition', [0, 0, 1, 1])
     saveas(gcf, fullfile(SaveDir, [addname, 'FunctionalScoreSeparability.fig']))

@@ -1,7 +1,7 @@
 % SummarizeAcrossMice
 FSCoreFig = figure('name', 'Functional Scores');
 
-% INitialize
+% Initialize
 bins = -1:0.1:1;
 Vector = [bins(1) + 0.1 / 2:0.1:bins(end) - 0.1 / 2];
 FingerPrintRAcrossMice = nan(length(Vector), 3, length(MiceOpt)); % Vector / within,Match,Non-match / mice
@@ -28,7 +28,7 @@ AUCACGCurves = [];
 AUCNImCurves = [];
 AUCRFCurves = [];
 
-AUCCols = [0 0.7 0; 1 0 0; 0 0 0.7] %WIthin %Match %non-match
+AUCCols = [0 0.7 0; 1 0 0; 0 0 0.7]; %WIthin %Match %non-match
 aucprecision = [0:0.05:1];
 for midx = 1:length(MiceOpt)
     tmpfile = dir(fullfile(SaveDir, MiceOpt{midx}, 'UnitMatch', 'UnitMatch.mat'));
@@ -169,7 +169,7 @@ for midx = 1:length(MiceOpt)
             thesedaysidx = find(ismember(recses, [did1, did2]));
             % can possibly only track these many units:
             nMax = min([sum(recses(thesedaysidx) == did1), sum(recses(thesedaysidx) == did2)]);
-            if nMax < 25
+            if nMax < 5
                 continue
             end
             if sum(recses(thesedaysidx) == did1)>sum(recses(thesedaysidx) == did2)
@@ -278,18 +278,22 @@ for midx = 1:length(MiceOpt)
             % find closest precision value for every X
             [~,idx1] = min(abs(aucprecision-X),[],1);
             Y2 = Y(idx1);
+            labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
+            scores = [FingerprintCor(WithinIdx)', FingerprintCor(NonMatchIdx)'];
+            [X, Y, ~, AUC3] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+            h(3) = plot(X, Y, 'color', nanmean(AUCCols([1,3],:),1));
+            % find closest precision value for every X
+            [~,idx1] = min(abs(aucprecision-X),[],1);
+            Y3 = Y(idx1);
+            axis square
         else
             AUC1 = nan;
             AUC2 = nan;
+            AUC3 = nan;
+            Y1 = nan(numel(aucprecision),1);
+            Y2 = nan(numel(aucprecision),1);
+            Y3 = nan(numel(aucprecision),1);
         end
-        labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
-        scores = [FingerprintCor(WithinIdx)', FingerprintCor(NonMatchIdx)'];
-        [X, Y, ~, AUC3] = perfcurve(labels, scores, 1,'XVals',aucprecision);
-        h(3) = plot(X, Y, 'color', nanmean(AUCCols([1,3],:),1));
-        % find closest precision value for every X
-        [~,idx1] = min(abs(aucprecision-X),[],1);
-        Y3 = Y(idx1);
-        axis square
         FingerprintAUC(:, midx) = [AUC1, AUC2, AUC3];
         AUCFPCurves = cat(3,AUCFPCurves,[Y1,Y2,Y3]);
 
@@ -316,7 +320,7 @@ for midx = 1:length(MiceOpt)
 
         subplot(4, 3, 4)
         hold on
-
+        
         hw = histcounts(ACGCor(WithinIdx), bins) ./ length(WithinIdx);
         hm = histcounts(ACGCor(MatchIdx), bins) ./ length(MatchIdx);
         hn = histcounts(ACGCor(NonMatchIdx), bins) ./ length(NonMatchIdx);
@@ -334,30 +338,41 @@ for midx = 1:length(MiceOpt)
 
         subplot(4, 3, 5)
         hold on
-        labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
-        scores = [ACGCor(MatchIdx)', ACGCor(NonMatchIdx)'];
-        [X, Y, ~, AUC1] = perfcurve(labels, scores, 1,'XVals',aucprecision);
-        h(1) = plot(X, Y, 'color', nanmean(AUCCols([2,3],:),1));
-        % find closest precision value for every X
-        [~,idx1] = min(abs(aucprecision-X),[],1);
-        Y1 = Y(idx1);
-        hold all
-        labels = [zeros(1, numel(MatchIdx)), ones(1, numel(WithinIdx))];
-        scores = [ACGCor(MatchIdx)', ACGCor(WithinIdx)'];
-        [X, Y, ~, AUC2] = perfcurve(labels, scores, 1,'XVals',aucprecision);
-        h(2) = plot(X, Y, 'color', nanmean(AUCCols([1,2],:),1));
-        % find closest precision value for every X
-        [~,idx1] = min(abs(aucprecision-X),[],1);
-        Y2 = Y(idx1);
-        labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
-        scores = [ACGCor(WithinIdx)', ACGCor(NonMatchIdx)'];
-        [X, Y, ~, AUC3] = perfcurve(labels, scores, 1,'XVals',aucprecision);
-        h(3) = plot(X, Y, 'color', nanmean(AUCCols([1,3],:),1));
-        % find closest precision value for every X
-        [~,idx1] = min(abs(aucprecision-X),[],1);
-        Y3 = Y(idx1);
-        axis square
+        clear h
+        if ~isempty(MatchIdx)
+            labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
+            scores = [ACGCor(MatchIdx)', ACGCor(NonMatchIdx)'];
+            [X, Y, ~, AUC1] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+            h(1) = plot(X, Y, 'color', nanmean(AUCCols([2,3],:),1));
+            % find closest precision value for every X
+            [~,idx1] = min(abs(aucprecision-X),[],1);
+            Y1 = Y(idx1);
+            hold all
+            labels = [zeros(1, numel(MatchIdx)), ones(1, numel(WithinIdx))];
+            scores = [ACGCor(MatchIdx)', ACGCor(WithinIdx)'];
+            [X, Y, ~, AUC2] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+            h(2) = plot(X, Y, 'color', nanmean(AUCCols([1,2],:),1));
+            % find closest precision value for every X
+            [~,idx1] = min(abs(aucprecision-X),[],1);
+            Y2 = Y(idx1);
+            labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
+            scores = [ACGCor(WithinIdx)', ACGCor(NonMatchIdx)'];
+            [X, Y, ~, AUC3] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+            h(3) = plot(X, Y, 'color', nanmean(AUCCols([1,3],:),1));
+            % find closest precision value for every X
+            [~,idx1] = min(abs(aucprecision-X),[],1);
+            Y3 = Y(idx1);
+            axis square
+        else
+            AUC1 = nan;
+            AUC2 = nan;
+            AUC3 = nan;
+            Y1 = nan(numel(aucprecision),1);
+            Y2 = nan(numel(aucprecision),1);
+            Y3 = nan(numel(aucprecision),1);
+        end
         ACGAUC(:, midx) = [AUC1, AUC2, AUC3];
+        AUCACGCurves = cat(3,AUCACGCurves,[Y1,Y2,Y3]);
 
         plot([0, 1], [0, 1], 'k--')
         xlabel('False positive rate')
@@ -366,14 +381,13 @@ for midx = 1:length(MiceOpt)
         makepretty
         drawnow %Something to look at while ACG calculations are ongoing
 
-        AUCACGCurves = cat(3,AUCACGCurves,[Y1,Y2,Y3]);
 
 
     end
     %% Natural Images correlation
     if any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) && MatchesExpected == 1
         figure(FSCoreFig)
-        FingerprintCor = reshape(MatchTable.NatImCorr, nclus, nclus);
+        NatImCorr = reshape(MatchTable.NatImCorr, nclus, nclus);
 
 
         subplot(4, 3, 7)
@@ -397,9 +411,9 @@ for midx = 1:length(MiceOpt)
         subplot(4, 3, 8)
         hold on
         clear h
-        if length(MatchIdx) > 10
+        if ~isempty(MatchIdx) && ~all(isnan(NatImCorr(:)))
             labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
-            scores = [NatImCorr(MatchIdx)', FingerprintCor(NonMatchIdx)'];
+            scores = [NatImCorr(MatchIdx)', NatImCorr(NonMatchIdx)'];
             [X, Y, ~, AUC1] = perfcurve(labels, scores, 1,'XVals',aucprecision);
             h(1) = plot(X, Y, 'color', nanmean(AUCCols([2,3],:),1));
             % find closest precision value for every X
@@ -407,27 +421,30 @@ for midx = 1:length(MiceOpt)
             Y1 = Y(idx1);
             hold all
             labels = [zeros(1, numel(MatchIdx)), ones(1, numel(WithinIdx))];
-            scores = [NatImCorr(MatchIdx)', FingerprintCor(WithinIdx)'];
+            scores = [NatImCorr(MatchIdx)', NatImCorr(WithinIdx)'];
             [X, Y, ~, AUC2] = perfcurve(labels, scores, 1,'XVals',aucprecision);
             h(2) = plot(X, Y, 'color',nanmean(AUCCols([1,2],:),1));
             % find closest precision value for every X
             [~,idx1] = min(abs(aucprecision-X),[],1);
             Y2 = Y(idx1);
+            labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
+            scores = [NatImCorr(WithinIdx)', NatImCorr(NonMatchIdx)'];
+            [X, Y, ~, AUC3] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+            h(3) = plot(X, Y, 'color', nanmean(AUCCols([1,3],:),1));
+            % find closest precision value for every X
+            [~,idx1] = min(abs(aucprecision-X),[],1);
+            Y3 = Y(idx1);
+            axis square
         else
             AUC1 = nan;
             AUC2 = nan;
+            AUC3 = nan;
+            Y1 = nan(numel(aucprecision),1);
+            Y2 = nan(numel(aucprecision),1);
+            Y3 = nan(numel(aucprecision),1);
         end
-
-        labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
-        scores = [NatImCorr(WithinIdx)', FingerprintCor(NonMatchIdx)'];
-        [X, Y, ~, AUC3] = perfcurve(labels, scores, 1,'XVals',aucprecision);
-        h(3) = plot(X, Y, 'color', nanmean(AUCCols([1,3],:),1));
-        % find closest precision value for every X
-        [~,idx1] = min(abs(aucprecision-X),[],1);
-        Y3 = Y(idx1);
-        axis square
-
         NatImgAUC(:, midx) = [AUC1, AUC2, AUC3];
+        AUCNImCurves = cat(3,AUCNImCurves,[Y1,Y2,Y3]);
 
         plot([0, 1], [0, 1], 'k--')
         xlabel('False positive rate')
@@ -441,7 +458,6 @@ for midx = 1:length(MiceOpt)
         makepretty
         drawnow %Something to look at while ACG calculations are ongoing
 
-        AUCNImCurves = cat(3,AUCNImCurves,[Y1,Y2,Y3]);
 
     end
     %% Receptive Field (?)
@@ -467,31 +483,42 @@ for midx = 1:length(MiceOpt)
 
 
         subplot(4, 3, 11)
-        hold on
-        labels = [zeros(1, numel(MatchIdx)), ones(1, numel(NonMatchIdx))];
-        scores = [RFDist(MatchIdx)', RFDist(NonMatchIdx)'];
-        [X, Y, ~, AUC1] = perfcurve(labels, scores, 1,'XVals',aucprecision);
-        h(1) = plot(X, Y, 'color', nanmean(AUCCols([2,3],:),1));
-        % find closest precision value for every X
-        [~,idx1] = min(abs(aucprecision-X),[],1);
-        Y1 = Y(idx1);
-        hold all
-        labels = [zeros(1, numel(MatchIdx)), ones(1, numel(WithinIdx))];
-        scores = [RFDist(MatchIdx)', RFDist(WithinIdx)'];
-        [X, Y, ~, AUC2] = perfcurve(labels, scores, 1,'XVals',aucprecision);
-        h(2) = plot(X, Y, 'color', nanmean(AUCCols([1,2],:),1));
-        % find closest precision value for every X
-        [~,idx1] = min(abs(aucprecision-X),[],1);
-        Y2 = Y(idx1);
-        labels = [zeros(1, numel(WithinIdx)), ones(1, numel(NonMatchIdx))];
-        scores = [RFDist(WithinIdx)', RFDist(NonMatchIdx)'];
-        [X, Y, ~, AUC3] = perfcurve(labels, scores, 1,'XVals',aucprecision);
-        h(3) = plot(X, Y, 'color', nanmean(AUCCols([1,3],:),1));
-        % find closest precision value for every X
-        [~,idx1] = min(abs(aucprecision-X),[],1);
-        Y3 = Y(idx1);
-        axis square
+                hold on
+        clear h
+        if ~isempty(MatchIdx)
+            labels = [zeros(1, numel(MatchIdx)), ones(1, numel(NonMatchIdx))];
+            scores = [RFDist(MatchIdx)', RFDist(NonMatchIdx)'];
+            [X, Y, ~, AUC1] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+            h(1) = plot(X, Y, 'color', nanmean(AUCCols([2,3],:),1));
+            % find closest precision value for every X
+            [~,idx1] = min(abs(aucprecision-X),[],1);
+            Y1 = Y(idx1);
+            hold all
+            labels = [zeros(1, numel(MatchIdx)), ones(1, numel(WithinIdx))];
+            scores = [RFDist(MatchIdx)', RFDist(WithinIdx)'];
+            [X, Y, ~, AUC2] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+            h(2) = plot(X, Y, 'color', nanmean(AUCCols([1,2],:),1));
+            % find closest precision value for every X
+            [~,idx1] = min(abs(aucprecision-X),[],1);
+            Y2 = Y(idx1);
+            labels = [zeros(1, numel(WithinIdx)), ones(1, numel(NonMatchIdx))];
+            scores = [RFDist(WithinIdx)', RFDist(NonMatchIdx)'];
+            [X, Y, ~, AUC3] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+            h(3) = plot(X, Y, 'color', nanmean(AUCCols([1,3],:),1));
+            % find closest precision value for every X
+            [~,idx1] = min(abs(aucprecision-X),[],1);
+            Y3 = Y(idx1);
+            axis square
+        else
+            AUC1 = nan;
+            AUC2 = nan;
+            AUC3 = nan;
+            Y1 = nan(numel(aucprecision),1);
+            Y2 = nan(numel(aucprecision),1);
+            Y3 = nan(numel(aucprecision),1);
+        end
         RFAUC(:, midx) = [AUC1, AUC2, AUC3];
+        AUCRFCurves = cat(3,AUCRFCurves,[Y1,Y2,Y3]);
 
         plot([0, 1], [0, 1], 'k--')
         xlabel('False positive rate')
@@ -500,7 +527,6 @@ for midx = 1:length(MiceOpt)
         makepretty
         drawnow %Something to look at while ACG calculations are ongoing
 
-        AUCRFCurves = cat(3,AUCRFCurves,[Y1,Y2,Y3]);
 
     end
 
@@ -593,7 +619,7 @@ xlim([0.5,sum(tmpUM(1,:)==1) + 0.5])
 xlabel('SessionID')
 ylabel('Units Traced (%)')
 hc = colorbar;
-hc.Label.String = '\Delta Recording days'
+hc.Label.String = '\Delta Recording days';
 colormap(cool)
 makepretty
 
@@ -742,12 +768,12 @@ xlabel('ACG Correlation')
 ylabel('Proportion|Group')
 makepretty
 
-if any(~isnan(NatImgAUC(:)))
+if any(~isnan(AllNMCor(:)))
     subplot(4,3,7)
     clear h
     hold on
     for hid = 1:3
-        h(hid) = shadedErrorBar(Vector, squeeze(nanmean(NatImgAUC(hid,:,:),3)),squeeze(nanstd(NatImgAUC(hid,:,:),[],3))./sqrt(size(NatImgAUC,3)-1));
+        h(hid) = shadedErrorBar(Vector, squeeze(nanmean(AllNMCor(hid,:,:),3)),squeeze(nanstd(AllNMCor(hid,:,:),[],3))./sqrt(size(AllNMCor,3)-1));
         h(hid).mainLine.Color = AUCCols(hid,:);
         h(hid).patch.FaceColor = AUCCols(hid,:);
         h(hid).edge(1).Color = AUCCols(hid,:);
