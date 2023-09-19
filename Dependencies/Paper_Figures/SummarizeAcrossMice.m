@@ -30,6 +30,7 @@ AUCRFCurves = [];
 
 AUCCols = [0 0.7 0; 1 0 0; 0 0 0.7]; %WIthin %Match %non-match
 aucprecision = [0:0.05:1];
+clear UMTrackingPerformancePerMouse
 for midx = 1:length(MiceOpt)
     tmpfile = dir(fullfile(SaveDir, MiceOpt{midx}, 'UnitMatch', 'UnitMatch.mat'));
     if isempty(tmpfile)
@@ -81,8 +82,8 @@ for midx = 1:length(MiceOpt)
     ChannelPos = UMparam.channelpos;
 
     %% How many units vs number of units were tracked?
-    TrackingPerformance = nan(4, 0); % MatchesExpected, Difference between recording day, % Tracked units %maximum possibility
-    TrackingPerformanceKS = nan(4, 0); % MatchesExpected, Difference between recording day, % Tracked units %maximum possibility
+    TrackingPerformance = nan(5, 0); % MatchesExpected, Difference between recording day, % Tracked units %maximum possibility % Difference in number of units
+    TrackingPerformanceKS = nan(5, 0); % MatchesExpected, Difference between recording day, % Tracked units %maximum possibility
     AllDeltaDays = nan(1,nRecs);
     ProbeSN = cell(1,nRecs); % To make sure the same probe was used, read the Serial number from the params file an store.
     for did1 = 1:nRecs
@@ -169,7 +170,8 @@ for midx = 1:length(MiceOpt)
             thesedaysidx = find(ismember(recses, [did1, did2]));
             % can possibly only track these many units:
             nMax = min([sum(recses(thesedaysidx) == did1), sum(recses(thesedaysidx) == did2)]);
-            if nMax < 5
+            diffN = sum(recses(thesedaysidx) == did2)-sum(recses(thesedaysidx) == did1);
+            if nMax < 25
                 continue
             end
             if sum(recses(thesedaysidx) == did1)>sum(recses(thesedaysidx) == did2)
@@ -180,9 +182,12 @@ for midx = 1:length(MiceOpt)
             if nMatches>nMax
                 keyboard
             end
-            TrackingPerformance = cat(2, TrackingPerformance, [MatchesExpected, double(DDay), nMatches, nMax]');
-            if MatchesExpected == 1 && (nMatches/nMax)==0
+            TrackingPerformance = cat(2, TrackingPerformance, [MatchesExpected, double(DDay), nMatches, nMax, diffN]');
+            if MatchesExpected == 1 && (nMatches/nMax)<0.15 && double(DDay)<2
                 warning(['No matches unexpectedly for ' MiceOpt{midx}])
+            end
+            if MatchesExpected == 0 && (nMatches/nMax)>0.15
+                warning(['Some matches unexpectedly for ' MiceOpt{midx}])
             end
 
             if sum(recses(thesedaysidx) == did1)>sum(recses(thesedaysidx) == did2)
@@ -191,7 +196,7 @@ for midx = 1:length(MiceOpt)
                 nMatches = sum(ismember(OriID(recses==did1),OriID(recses==did2)));
             end
             if UseKSLabels
-                TrackingPerformanceKS = cat(2, TrackingPerformanceKS, [MatchesExpected, double(DDay), nMatches, nMax]');
+                TrackingPerformanceKS = cat(2, TrackingPerformanceKS, [MatchesExpected, double(DDay), nMatches, nMax, diffN]');
             end
         end
     end
@@ -657,6 +662,36 @@ xlabel('Tracked units (%)')
 ylabel('Pairs of days (%)')
 legend(RecTypeOpt)
 makepretty
+
+%% Split per type of recordings
+RecTypeOpt = {'Different IMRO tables','Chronic - same IMRO'}
+rectypeid = nan(1,size(tmpUM,2));
+rectypeid(find(tmpUM(1,:) == 0)) = 1; % Acute
+% rectypeid(find(tmpUM(1,:) > 0 & tmpUM(1,:) <1 )) = 2; % Some IMRO differences
+rectypeid(find(tmpUM(1,:) == 1)) = 2; %Chronic, same IMRO
+OneDayDiffIdx = tmpUM(2,:)==1;
+
+AllDat = tmpUM(3,OneDayDiffIdx)./tmpUM(4,OneDayDiffIdx).*100;
+stepsz = 10;
+Edges = floor(min(AllDat)):stepsz:round(max(AllDat)+stepsz);
+histvec = floor(min(AllDat))+stepsz/2:stepsz:round(max(AllDat)+stepsz)-stepsz/2;
+
+cols = [0 0 1; 0 1 0; 1 0 0];
+figure('name','TrackedUnits (%)')
+clear h
+hold on
+for tid = 1:length(RecTypeOpt)
+    hc = histcounts(AllDat(rectypeid(OneDayDiffIdx)==tid),Edges)./sum(rectypeid(OneDayDiffIdx)==tid);
+    h(tid) = plot(histvec,hc.*100,'color',cols(tid,:));
+    %     h(tid).FaceColor = cols(tid,:);
+    %     h(tid).EdgeColor = cols(tid,:);
+    %     h(tid).FaceAlpha = 0.5;
+end
+xlabel('Tracked units (%)')
+ylabel('Pairs of days (%)')
+legend(RecTypeOpt)
+makepretty
+
 
 
 %% Across days
