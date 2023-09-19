@@ -52,6 +52,7 @@ WithinIdx(LocDist>param.NeighbourDist) = false;
 labels = [ones(1,sum(SameIdx(:))), zeros(1,sum(WithinIdx(:)))];
 paramNames = {'waveformTimePointSim','spatialdecaySim','spatialdecayfitSim','AmplitudeSim','WVCorr','WavformMSE','WavformSim','CentroidDist','CentroidVar','CentroidDistRecentered','CentroidOverlord','TrajAngleSim','TrajDistSim','LocTrajectorySim'};
 AUC = nan(1,length(paramNames));
+
 %% Compute Metrics
 disp('Computing Metric similarity between pairs of units...')
 timercounter = tic;
@@ -213,9 +214,9 @@ channelpos_AllCat = unique(cat(1,AllchannelCoord{:}),'rows');
 AllowFlipping = false(size(channelpos_AllCat,2),nclus); % Dimension x channel
 for uid = 1:nclus
     if param.RunPyKSChronicStitched
-        channelpos = Allchannelpos{1};
+        channelpos = AllchannelCoord{1};
     else
-        channelpos = Allchannelpos{recsesGood(uid)};
+        channelpos = AllchannelCoord{recsesGood(uid)};
     end
     if isnan(MaxChannel(uid,1))
         continue
@@ -223,7 +224,7 @@ for uid = 1:nclus
     %Load channels
     ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChannel(uid,1),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius); %Averaging over 10 channels helps with drift
     Locs = channelpos(ChanIdx,:);
-    AllowFlipping(cell2mat(arrayfun(@(X) length(unique(Locs(:,X))),1:size(Locs,2),'Uni',0))<=2,:) = true;
+    AllowFlipping(cell2mat(arrayfun(@(X) length(unique(Locs(:,X))),1:size(Locs,2),'Uni',0))<=2 & cell2mat(arrayfun(@(X) length(unique(Locs(:,X))),1:size(Locs,2),'Uni',0))>1,:) = true;
 end
 FlipDim = find(any(AllowFlipping,2));
 
