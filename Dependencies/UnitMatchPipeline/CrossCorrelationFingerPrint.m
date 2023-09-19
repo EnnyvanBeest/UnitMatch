@@ -100,6 +100,9 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelationsFingerprint
             % Save Fingerprint correlations
             FingerprintRAll(clusIdxD1All,clusIdxD2All) = FingerprintR;
 
+            % Find SigMask
+            SigMask(clusIdxD1All,clusIdxD2All) = FingerprintR >= quantile(FingerprintR,0.99,1) & FingerprintR >= quantile(FingerprintR,0.99,2);
+
             % Find rank
             FingerprintR(isnan(FingerprintR)) = -1; % should not participate to the rank
             [~,idx] = sort(FingerprintR,2,'descend');
@@ -107,8 +110,6 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelationsFingerprint
                 RankScoreAll(clusIdxD1All(c),clusIdxD2All(idx(c,:))) = 1:numel(clusIdxD2All);
             end
 
-            % Find SigMask
-            SigMask(clusIdxD1All,clusIdxD2All) = FingerprintR >= quantile(FingerprintR,0.99,2);
         end
     end
 

@@ -19,7 +19,7 @@ PrepareClusInfoparams.CopyToTmpFirst = 1; % If 1, copy data to local first, don'
 PrepareClusInfoparams.DecompressLocal = 1; % If 1, uncompress data first if it's currently compressed (= necessary for unitmatch and faster for QualityMetrics)
 
 % Storing preprocessed data?
-PrepareClusInfoparams.ReLoadAlways = 1; % If 1, SP & Clusinfo are always loaded from KS output
+PrepareClusInfoparams.ReLoadAlways = 0; % If 1, SP & Clusinfo are always loaded from KS output
 PrepareClusInfoparams.saveSp = 1; % Save SP struct for easy loading of preprocessed data
 PrepareClusInfoparams.binsz = 0.01; %Bin size for PSTHs in seconds
 
@@ -43,8 +43,8 @@ PrepareClusInfoparams.Scores2Include = {'CentroidDist','WavformSim','CentroidOve
 PrepareClusInfoparams.ApplyExistingBayesModel = 0; %If 1, use probability distributions made available by us - 
 PrepareClusInfoparams.AssignUniqueID = 1; % Assign UniqueID 
 PrepareClusInfoparams.GoodUnitsOnly = 1; % Include only good untis in the UnitMatch analysis - faster and more sensical
-PrepareClusInfoparams.MakePlotsOfPairs = 0; % Plots pairs for inspection (UnitMatch)
-PrepareClusInfoparams.GUI = 0; % Flick through and do manual curation of matching - only works if MakePlotsofPairs = 1
+PrepareClusInfoparams.MakePlotsOfPairs = 1; % Plots pairs for inspection (UnitMatch)
+PrepareClusInfoparams.GUI = 1; % Flick through and do manual curation of matching - only works if MakePlotsofPairs = 1
 
 %% Automatic from here
 PrepareClusInfoparams.SaveDir = SaveDir; % Save results here

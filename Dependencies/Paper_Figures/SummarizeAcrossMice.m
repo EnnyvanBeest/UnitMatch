@@ -40,7 +40,7 @@ for midx = 1:length(MiceOpt)
     MatchTable = tmpFile.MatchTable; %Extract matchtable
     UMparam = tmpFile.UMparam; % Extract parameters
     UniqueIDConversion = tmpFile.UniqueIDConversion; % Extract UniqueID Conversion
-
+  
     % Load AUCS
     if exist(fullfile(SaveDir, MiceOpt{midx}, 'UnitMatch', 'AUC.mat'))
         AUC = load(fullfile(SaveDir, MiceOpt{midx}, 'UnitMatch', 'AUC.mat'))';
@@ -82,6 +82,7 @@ for midx = 1:length(MiceOpt)
     ChannelPos = UMparam.channelpos;
 
     %% How many units vs number of units were tracked?
+    CrossCorrMatching = nan(0,4); % number of units matched with cross-correlation, % number of units matched of those % Number of units match with UM, % number of units mof those matched with Cross Corr
     TrackingPerformance = nan(5, 0); % MatchesExpected, Difference between recording day, % Tracked units %maximum possibility % Difference in number of units
     TrackingPerformanceKS = nan(5, 0); % MatchesExpected, Difference between recording day, % Tracked units %maximum possibility
     AllDeltaDays = nan(1,nRecs);
@@ -166,6 +167,22 @@ for midx = 1:length(MiceOpt)
             else
                 MatchesExpected = 0;
             end
+
+             
+            % Units found to match based on 
+            %cross-correlation activity
+            rowidx = find(MatchTable.RecSes1 == did1 & MatchTable.RecSes2 == did2);
+            % find all pairs with a significant fingerprint cross-correlation
+            SigR = find(MatchTable.SigFingerprintR(rowidx) == 1 & MatchTable.RankScore(rowidx) == 1);
+            NXCorr = length(SigR);
+            NXCorrUM = sum(MatchTable.MatchProb(rowidx(SigR))>0.5);
+
+            % OTher way around
+            SigUM = find(MatchTable.MatchProb(rowidx) > 0.5);
+            NUM = length(SigUM);
+            NUMXCorr = sum(MatchTable.SigFingerprintR(rowidx(SigUM))==1);
+
+            CrossCorrMatching = cat(1, CrossCorrMatching, [NXCorr, NXCorrUM, NUM, NUMXCorr]);
 
             thesedaysidx = find(ismember(recses, [did1, did2]));
             % can possibly only track these many units:

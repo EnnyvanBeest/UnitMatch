@@ -45,6 +45,14 @@ for id = 1:length(lowselfscores) % Add these for plotting - inspection
     Pairs{end+1} = [lowselfscores(id), lowselfscores(id)];
 end
 
+RankSc = reshape(MatchTable.SigFingerprintR,nclus,nclus);
+Rank = reshape(MatchTable.RankScore,nclus,nclus);
+[HighRankLowProbr HighRankLowProbc] = find(RankSc==1 & Rank == 1 & MatchProb<0.5);
+PairsRank = [HighRankLowProbr,HighRankLowProbc];
+for id = 1:size(PairsRank,1)
+    Pairs{end+1} = PairsRank(id,:);
+end
+
 PyKSLabel = false(nclus, nclus);
 label = MatchProb > UMparam.ProbabilityThreshold;
 
