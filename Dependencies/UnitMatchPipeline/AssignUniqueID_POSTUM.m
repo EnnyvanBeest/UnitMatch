@@ -62,11 +62,12 @@ end
 
 %% Serial assigning of Unique ID (Day by day)
 disp('Assigning correct Unique ID values now')
-% MatchProbability = arrayfun(@(X) MatchTable.MatchProb(ismember(MatchTable.UID1,Pairs(X,1))&ismember(MatchTable.UID2,Pairs(X,2))),1:size(Pairs,1));
-% [~,sortidx] = sort(MatchProbability,'descend');
-% Pairs = Pairs(sortidx,:); %Pairs, but now sorted by match probability
 for recid = 1:length(RecOpt)-1
     SubPairs = Pairs(GoodRecSesID(Pairs(:,1)) == recid & GoodRecSesID(Pairs(:,2)) <= recid+1,:); %Same or next day only
+
+    MatchProbability = arrayfun(@(X) MatchTable.MatchProb(ismember(MatchTable.UID1,SubPairs(X,1))&ismember(MatchTable.UID2,SubPairs(X,2))),1:size(SubPairs,1));
+    [~,sortidx] = sort(MatchProbability,'descend');
+    SubPairs = SubPairs(sortidx,:); %Pairs, but now sorted by match probability
 
     for id = 1:size(SubPairs,1)
         % Matchprobability should be high enough
