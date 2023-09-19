@@ -331,7 +331,6 @@ while flag<2
     x2 = ProjectedLocationPerTPAllFlips(:,:,waveidx(1):waveidx(end-1),:,:);
     % The distance traveled (Eucledian)
     TrajDist = squeeze(vecnorm(x1-x2,2,1));
-    clear x1 x2
     % Difference in angle between two time points
     LocAngle = nan(size(TrajDist,1),size(TrajDist,2),size(TrajDist,3),size(TrajDist,4),0);
     countid=1;
@@ -346,6 +345,7 @@ while flag<2
     end
     % Sum the angles across dimensions
     LocAngle = nansum(LocAngle,5);
+    clear x1 x2
 
     % Actually just taking the weighted sum of angles is better
     x1 = repmat(squeeze(LocAngle(:,:,1,:)),[1 1 1 nclus]);
