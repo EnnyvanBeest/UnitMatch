@@ -85,6 +85,7 @@ for midx = 1:length(MiceOpt)
             DrawPairsUnitMatch(UMparam.SaveDir,DrawBlind);
             if UMparam.GUI
                 FigureFlick(UMparam.SaveDir)
+                pause
             end
         end
 

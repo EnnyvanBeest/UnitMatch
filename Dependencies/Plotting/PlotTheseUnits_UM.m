@@ -322,7 +322,18 @@ for pairid=1:length(Pairs)
     else
         tmp2 = 'nan';
     end
-    title(['Trajectory length: ' tmp ', angle: ' tmp2])
+    if ~isnan(tmp) | ~isnan(tmp2)
+        title(['Trajectory length: ' tmp ', angle: ' tmp2])
+    end
+    if exist('LocTrajectorySim')
+        tmp = cell2mat(arrayfun(@(X) [num2str(round(LocTrajectorySim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp(end)=[];
+    else
+        tmp = 'nan';
+    end   
+    if ~isnan(tmp) 
+        title(['Trajectory Similarity: ' tmp ])
+    end
 
     subplot(3,6,[9,10])
     xlabel('Xpos (um)')
