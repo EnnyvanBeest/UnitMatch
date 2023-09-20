@@ -55,7 +55,7 @@ function exp2keep = getNatImExpRef(binFile)
                         timeRef = extractAfter(alignmentFileBlock.name,"timeline_");
                         timeRef = timeRef(1:end-4);
                     else
-                        warning('Block wasn''t aligned to timeline.')
+                        fprintf('Block %d wasn''t aligned to timeline.\n',ee)
                         continue
                     end
 
@@ -65,15 +65,15 @@ function exp2keep = getNatImExpRef(binFile)
                     [~,ephysFolder] = fileparts(binFile.folder);
                     alignmentFileEphys = dir(fullfile(alignmentFolder, sprintf('correct_timeline_%s_to_%s.npy',timeRef,ephysFolder)));
                     if isempty(alignmentFileEphys)
-                        %%% NOT EVEN SURE THIS IS NECESSARY. SEEMS TO NOT
-                        %%% WORK ANYWAY.
+                        %%% HACK BECAUSE TAGS ARE WEIRD SOMETIMES
                         % Get ephys tag
-                        d = dir(fullfile(server, subject, expDate, 'ephys*', '*')); % 2020-02-13 hack by CB due to data organization (several experiments per day, that need to be in 'ephys' folder (@Anna) due to rigbox)
-                        d(~[d.isdir]) = [];
+                        dEphys = dir(fullfile(server, subject, expDate, 'ephys*', '*')); 
+                        dEphys(ismember({dEphys.name},{'.','..'})) = [];
+                        dEphys(~[dEphys.isdir]) = [];
                         tags = {[]};
-                        if numel(d)>=1
-                            for q = 1:numel(d)
-                                tags{q} = d(q).name(numel(subject)+2:end);
+                        if numel(dEphys)>=1
+                            for q = 1:numel(dEphys)
+                                tags{q} = dEphys(q).name(numel(subject)+2:end);
                             end
                         end
                         tags = tags(cellfun(@(x) ~isempty(x), tags));
@@ -81,12 +81,43 @@ function exp2keep = getNatImExpRef(binFile)
                         if numel(tag)>1
                             error('Too many ephys tags corresponding?')
                         end
-                        alignmentFileEphys = dir(fullfile(alignmentFolder, sprintf('correct_timeline_%s_to_ephys_%s.npy',timeRef,tag{1})));
+                        if ~isempty(tag)
+                            alignmentFileEphys = dir(fullfile(alignmentFolder, sprintf('correct_timeline_%s_to_ephys_%s.npy',timeRef,tag{1})));
+                            if isempty(alignmentFileEphys)
+                                % Sometime the "g0" has been removed at the end
+                                alignmentFileEphys = dir(fullfile(alignmentFolder, sprintf('correct_timeline_%s_to_ephys_%s.npy',timeRef,regexprep(tag{1},'_g\d',''))));
+                            end
+                        end
+                        if isempty(alignmentFileEphys)
+                            % Check if several "natim" ephys... If yes,
+                            % check that currently looking at the first. 
+                            % If all good, consider that it's ok. 
+                            alignmentFileEphys = dir(fullfile(alignmentFolder, sprintf('correct_timeline_%s_to_ephys_.npy',timeRef)));
+                            if ~isempty(alignmentFileEphys)
+                                fprintf('tricky situation -- there''s an undefined alignment file for this timeline...\n')
+                                if contains(lower(binFile.name),'natim2')
+                                    printf('File called natim2. Check if there''s a one?\n')
+                                    if numel(unique({dEphys.folder}))==1
+                                        cbinFilesForDate = dir(fullfile(dEphys(1).folder,'**','*.ap.cbin'));
+                                    else
+                                        cbinFilesForDate = dir(fullfile(server, subject, expDate,'**','*.ap.cbin')); % can't take ephys folder because there can be several...
+                                    end
+                                    if numel(cbinFilesForDate)>1
+                                        if sum(contains({cbinFilesForDate.name},'natim','IgnoreCase',1))>1
+                                            warning('Several natim, won''t align the current one. Check?')
+                                            alignmentFileEphys = [];
+                                        end
+                                    end
+                                else
+                                    fprintf('Assume it''s the correct one.\n')
+                                end
+                            end
+                        end
                     end
                     if ~isempty(alignmentFileEphys)
                         exp2keep = cat(1,exp2keep,{expFolder});
                     else
-                        warning('Ephys wasn''t aligned to timeline.')
+                        fprintf('Ephys wasn''t aligned to timeline %d.\n', timeRef)
                         continue
                     end
                 end
@@ -98,5 +129,8 @@ function exp2keep = getNatImExpRef(binFile)
 
     if isempty(exp2keep)
         warning('Couldn''t find any associated Natural Images experiment for %s.', binFile.name)
+        if contains(lower(binFile.name),'natim')
+            warning('But there''s ''natim'' in the name of the file. Double-check?')
+        end
     end
 end
