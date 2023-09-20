@@ -615,7 +615,7 @@ while flag<2
     disp('Computing total score...')
     timercounter = tic;
     %     priorMatch = 1-((nclus+nclus.*sqrt(ndays-1))./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days)
-    priorMatch = 1-((nclus+nclus.*sqrt(ndays-1)*param.ExpectMatches)./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days)
+    priorMatch = 1-((nclus+nclus.*sqrt(ndays-1)*2*param.ExpectMatches)./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days) % Times 2 for symmetry
 
     leaveoutmatches = false(nclus,nclus,length(Scores2Include)); %Used later
     figure;
@@ -675,6 +675,9 @@ while flag<2
         Predictors = cat(3,Predictors,tmp);
         TotalScore=TotalScore+tmp;
     end
+
+    % Normalize TotalScore
+    TotalScore = (TotalScore-min(TotalScore(:)))./(max(TotalScore(:))-min(TotalScore(:)));
 
     figure('name','Predictor Matrix of max dist pairs')
     %  Score correlation matrix

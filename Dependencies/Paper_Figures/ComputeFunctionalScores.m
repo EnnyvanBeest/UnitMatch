@@ -317,10 +317,21 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) % If it alre
     natimgflag = 0;
     for ss = 1:nRec
         % Get the original binFile (also for stitched?)
-        binFileRef = fullfile(UMparam.AllRawPaths(ss).folder,UMparam.AllRawPaths(ss).name);
+        if iscell(UMparam.AllRawPaths)
+            binFileRef = fullfile(UMparam.AllRawPaths{ss});
+        else
+            binFileRef = fullfile(UMparam.AllRawPaths(ss).folder,UMparam.AllRawPaths(ss).name);
+        end
 
         % Find the associated experiments
-        exp2keep = getNatImExpRef(binFileRef);
+        if ispc
+            exp2keep = getNatImExpRef(binFileRef);
+        else
+            exp2keep = [];
+            % Julie Fabre: on linux the servers are mounted differently, and the above
+            % function needs to be substantially changed to work. Since I
+            % don't need to run it, just added an "ispc" flag. 
+        end
 
         if ~isempty(exp2keep)
             natimgflag = 1;
@@ -347,6 +358,8 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) % If it alre
             currIdx = (ss-1)*2;
             spikeData_cv{currIdx+1} = spikeData(:,:,cluIdx,1:2:end); % odd
             spikeData_cv{currIdx+2} = spikeData(:,:,cluIdx,2:2:end); % even
+        else
+            natimgflag = 0;
         end
     end
 
