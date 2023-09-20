@@ -29,13 +29,16 @@ if length(DepthOnProbe) == length(recsesAll)/2
 end
 DepthOnProbe = DepthOnProbe(Good_Idx);
 
-[X,Y]=meshgrid(recsesAll(Good_Idx));
 nclus = length(Good_Idx);
 ndays = length(unique(GoodRecSesID));
 SessionSwitch = arrayfun(@(X) find(GoodRecSesID==X,1,'first'),unique(GoodRecSesID),'Uni',0);
 SessionSwitch(cellfun(@isempty,SessionSwitch))=[];
 SessionSwitch = [cell2mat(SessionSwitch); nclus+1];
 drift = nan;
+% Do in batches
+batchsz = 1000;
+nbatch = ceil(nclus./batchsz);
+
 
 % Save AUCs to help find best parameters
 disp('Computing location distances between pairs of units...')
@@ -109,6 +112,7 @@ paramid = find(ismember(paramNames,'spatialdecayfitSim'));
 x1 = repmat(Amplitude(:,1),[1 numel(Amplitude(:,1))]);
 x2 = repmat(Amplitude(:,2),[1 numel(Amplitude(:,2))]);
 AmplitudeSim = abs(x1 - x2')./nanmean(abs(cat(3,x1,x2')),3);
+clear Amplitude
 % Remove extreme outliers
 % AmplitudeSim((AmplitudeSim)>quantile(AmplitudeSim(:),0.9999)) = quantile(AmplitudeSim(:),0.9999);
 
@@ -222,7 +226,9 @@ for uid = 1:nclus
     AllowFlipping(cell2mat(arrayfun(@(X) length(unique(Locs(:,X))),1:size(Locs,2),'Uni',0))<=2 & cell2mat(arrayfun(@(X) length(unique(Locs(:,X))),1:size(Locs,2),'Uni',0))>1,:) = true;
 end
 FlipDim = find(any(AllowFlipping,2));
-
+% Housekeeping
+clear AllowFlipping
+clear AllchannelCoord
 % Flip trajectory for flip dimensions
 ProjectedLocationPerTPAllFlips = nan(size(ProjectedLocationPerTP,1),size(ProjectedLocationPerTP,2),size(ProjectedLocationPerTP,3),size(ProjectedLocationPerTP,4),length(FlipDim));
 for flipid = 1:length(FlipDim)
@@ -234,7 +240,10 @@ for flipid = 1:length(FlipDim)
     ProjectedLocationPerTPAllFlips(:,:,:,:,flipid) = ProjectedLocationPerTP;
     ProjectedLocationPerTPAllFlips(FlipDim(flipid),:,:,:,flipid) = newvals;
 end
-
+% Housekeeping
+clear newvals
+clear tmpdat
+clear range
 ProjectedLocationPerTPAllFlips = cat(5,ProjectedLocationPerTP,ProjectedLocationPerTPAllFlips); % add them all together
 
 flag=0;
@@ -259,11 +268,32 @@ while flag<2
     disp('Computing location distances between pairs of units, per individual time point of the waveform...')
     % Difference in distance between centroids of two halfs of the recording
 
-    x1 = repmat(squeeze(ProjectedLocationPerTPAllFlips(:,:,waveidx,1,:)),[1 1 1 1 nclus]);
-    x2 = permute(repmat(squeeze(ProjectedLocationPerTPAllFlips(:,:,waveidx,2,:)),[1 1 1 1 nclus]),[1 5 3 4 2]); %Switch the two nclus around
-    EuclDist = squeeze(vecnorm(x1-x2,2,1)); % Euclidean distance
-    w = squeeze(isnan(abs(x1(1,:,:,:,:)-x2(1,:,:,:,:))));
-    EuclDist(w) = nan;
+    % Clean up variables; this gets intense
+    clear x
+    clear X
+    clear Y
+    clear y
+
+    % memory efficient?
+    EuclDist = nan(nclus,length(waveidx),2,nclus);
+    for batchid1 = 1:nbatch
+        idx = (batchid1-1)*batchsz+1:batchsz*batchid1;
+        idx(idx>nclus) = [];
+        for batchid2 = 1:nbatch
+
+            idx2 = (batchid2-1)*batchsz+1:batchsz*batchid2;
+            idx2(idx2>nclus) = [];
+
+            x1 = repmat(squeeze(ProjectedLocationPerTPAllFlips(:,idx,waveidx,1,:)),[1 1 1 1 numel(idx2)]);
+            x2 = permute(repmat(squeeze(ProjectedLocationPerTPAllFlips(:,idx2,waveidx,2,:)),[1 1 1 1 numel(idx)]),[1,5,3,4,2]);%Switch the two nclus around
+
+            w = squeeze(isnan(abs(x1(1,:,:,:,:)-x2(1,:,:,:,:))));
+            tmpEu = squeeze(vecnorm(x1-x2,2,1)); % Distance
+            tmpEu(w) = nan;
+            EuclDist(idx,:,:,idx2) = tmpEu; % Euclidean distance
+        end
+    end
+
     % Average location
     CentroidDist = squeeze(nanmin(squeeze(nanmean(EuclDist,2)),[],2));%
 
@@ -297,12 +327,27 @@ while flag<2
     %     EuclDist2 = squeeze(sqrt(nansum((x1-x2).^2,1))); % Euclidean distance
     %     w = squeeze(isnan(abs(x1(1,:,:,:)-x2(1,:,:,:))));
     %     EuclDist2(w) = nan;
+    disp('Computing location distances between pairs of units, per individual time point of the waveform, Recentered...')
     ProjectedLocationPerTPRecentered = permute(permute(ProjectedLocationPerTPAllFlips,[1,2,4,3,5]) - ProjectedLocation,[1,2,4,3,5]);
-    x1 = repmat(squeeze(ProjectedLocationPerTPRecentered(:,:,waveidx,1,:)),[1 1 1 1 nclus]);
-    x2 = permute(repmat(squeeze(ProjectedLocationPerTPRecentered(:,:,waveidx,2,:)),[1 1 1 1 nclus]),[1 5 3 4 2]); %switch nclus around
-    EuclDist2 = squeeze(vecnorm(x1-x2,2,1)); % Euclidean distance
-    w = squeeze(isnan(abs(x1(1,:,:,:,:)-x2(1,:,:,:,:))));
-    EuclDist2(w) = nan;
+    EuclDist2 = nan(nclus,length(waveidx),2,nclus);
+    for batchid1 = 1:nbatch
+        idx = (batchid1-1)*batchsz+1:batchsz*batchid1;
+        idx(idx>nclus) = [];
+        for batchid2 = 1:nbatch
+
+            idx2 = (batchid2-1)*batchsz+1:batchsz*batchid2;
+            idx2(idx2>nclus) = [];
+
+            x1 = repmat(squeeze(ProjectedLocationPerTPRecentered(:,idx,waveidx,1,:)),[1 1 1 1 numel(idx2)]);
+            x2 = permute(repmat(squeeze(ProjectedLocationPerTPRecentered(:,idx2,waveidx,2,:)),[1 1 1 1 numel(idx)]),[1,5,3,4,2]);%Switch the two nclus around
+
+            w = squeeze(isnan(abs(x1(1,:,:,:,:)-x2(1,:,:,:,:))));
+            tmpEu = squeeze(vecnorm(x1-x2,2,1)); % Distance
+            tmpEu(w) = nan;
+            EuclDist2(idx,:,:,idx2) = tmpEu; % Euclidean distance
+        end
+    end
+
     % Average location
     CentroidDistRecentered = squeeze(nanmin(nanmean(EuclDist2,2),[],3));% minimum across flips
     CentroidDistRecentered = 1-(CentroidDistRecentered-nanmin(CentroidDistRecentered(:)))./(quantile(CentroidDistRecentered(:),0.99)-nanmin(CentroidDistRecentered(:)));
@@ -319,7 +364,6 @@ while flag<2
     [x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
 
     disp('Computing location angle (direction) differences between pairs of units, per individual time point of the waveform...')
-
     x1 = ProjectedLocationPerTPAllFlips(:,:,waveidx(2):waveidx(end),:,:);
     x2 = ProjectedLocationPerTPAllFlips(:,:,waveidx(1):waveidx(end-1),:,:);
     % The distance traveled (Eucledian)
@@ -536,7 +580,24 @@ while flag<2
         saveas(gcf,fullfile(SaveDir,'WithinSessionDistributions.bmp'))
 
     end
+
+    %% Normalize included scores for every recording session x session
+    for scid = 1:length(Scores2Include)
+        eval(['tmpscore=' Scores2Include{scid} ';']) %Extract score
+
+        for did = 1:ndays
+            for did2 = 1:ndays
+                tmp = tmpscore(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1); %Extract
+                tmp = (tmp-nanmin(tmp(:)))./(nanmax(tmp(:))-nanmin(tmp(:))); % Normalize
+                 tmpscore(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1) = tmp; % Put back
+            end
+        end
+        eval([Scores2Include{scid} '=tmpscore;']) %Extract score)
+    end
+
     %% Calculate total score
+    [X,Y]=meshgrid(recsesAll(Good_Idx));
+
     IncludeThesePairs = find(EuclDist<maxdist);
 
     disp('Computing total score...')
@@ -615,7 +676,7 @@ while flag<2
 
     figure('name','TotalScore')
     subplot(2,2,1)
-    imagesc(TotalScore(SortingOrder,SortingOrder),[0 length(Scores2Include)]);
+    imagesc(TotalScore(SortingOrder,SortingOrder),[0 1]);
     title('Total Score')
     xlabel('Unit_i')
     ylabel('Unit_j')
@@ -663,9 +724,9 @@ while flag<2
             tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1)=nan;
         end
     end
-    hd = histcounts(diag(tmp),0:0.1:length(Scores2Include));%./nclus + 0.0001;
-    hnd = histcounts(tmp(~eye(size(tmp))),0:0.1:length(Scores2Include));%./sum(~isnan(tmp(~eye(size(tmp))))) +0.0001;
-    plot(0.05:0.1:length(Scores2Include)-0.05,hd,'-','color',[0 0.7 0]); hold on; plot(0.05:0.1:length(Scores2Include)-0.05,hnd,'b-')
+    hd = histcounts(diag(tmp),0:0.1:1);%./nclus + 0.0001;
+    hnd = histcounts(tmp(~eye(size(tmp))),0:0.1:1);%./sum(~isnan(tmp(~eye(size(tmp))))) +0.0001;
+    plot(0.05:0.1:1-0.05,hd,'-','color',[0 0.7 0]); hold on; plot(0.05:0.1:1-0.05,hnd,'b-')
     tmp = TotalScore;
     % Take centroid dist > maxdist out
     tmp(EuclDist>param.NeighbourDist)=nan;
@@ -673,8 +734,8 @@ while flag<2
     for did = 1:ndays
         tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1)=nan;
     end
-    ha = histcounts(tmp(:),0:0.1:length(Scores2Include));%./sum(~isnan(tmp(:))) + 0.0001;
-    plot(0.05:0.1:length(Scores2Include)-0.05,ha,'-','color',[1 0 0]);
+    ha = histcounts(tmp(:),0:0.1:1);%./sum(~isnan(tmp(:))) + 0.0001;
+    plot(0.05:0.1:1-0.05,ha,'-','color',[1 0 0]);
     set(gca,'yscale','linear')
     line([ThrsOpt ThrsOpt],get(gca,'ylim'),'LineStyle','--','color',[0 0 0])
     xlabel('TotalScore')
