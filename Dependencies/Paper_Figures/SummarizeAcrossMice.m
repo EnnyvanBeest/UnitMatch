@@ -173,7 +173,7 @@ for midx = 1:length(MiceOpt)
             %cross-correlation activity
             rowidx = find(MatchTable.RecSes1 == did1 & MatchTable.RecSes2 == did2);
             % find all pairs with a significant fingerprint cross-correlation
-            SigR = find(MatchTable.SigFingerprintR(rowidx) == 1 & MatchTable.RankScore(rowidx) == 1);
+            SigR = find(MatchTable.SigFingerprintR(rowidx) == 1);
             NXCorr = length(SigR);
             NXCorrUM = sum(MatchTable.MatchProb(rowidx(SigR))>0.5);
 

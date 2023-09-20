@@ -2,31 +2,43 @@
 % Load all data
 % Find available datasets (always using dates as folders)
 clear DateOpt
-%dd = arrayfun(@(X) fullfile(DataDir{DataDir2Use(X)},MiceOpt{X},'*-*'),1:length(MiceOpt),'UniformOutput',0);
+% %dd = arrayfun(@(X) fullfile(DataDir{DataDir2Use(X)},MiceOpt{X},'*-*'),1:length(MiceOpt),'UniformOutput',0);
 DateOpt = arrayfun(@(X) dir(fullfile(DataDir{DataDir2Use(X)},MiceOpt{X},'*-*')),1:length(MiceOpt),'UniformOutput',0); % DataDir2Use = server
 DateOpt = cellfun(@(X) X([X.isdir]),DateOpt,'UniformOutput',0);
 DateOpt = cellfun(@(X) {X.name},DateOpt,'UniformOutput',0);
 
 for midx = 1:length(MiceOpt)
     %% Loading data from kilosort/phy easily
-    myKsDir = fullfile(KilosortDir,MiceOpt{midx});
-    subksdirs = dir(fullfile(myKsDir,'**','Probe*')); %This changed because now I suddenly had 2 probes per recording
-    if length(subksdirs)<1
-        clear subksdirs
-        subksdirs.folder = myKsDir; %Should be a struct array
-        subksdirs.name = 'Probe0';
+    if ~isempty(KilosortDir)
+        myKsDir = fullfile(KilosortDir,MiceOpt{midx});
+        subksdirs = dir(fullfile(myKsDir,'**','Probe*')); %This changed because now I suddenly had 2 probes per recording
+        if length(subksdirs)<1
+            clear subksdirs
+            subksdirs.folder = myKsDir; %Should be a struct array
+            subksdirs.name = 'Probe0';
+        end
+        ProbeOpt = (unique({subksdirs(:).name}));
+
+        myKsDir = fullfile(KilosortDir,MiceOpt{midx});
+        % Check for multiple subfolders?
+        subsesopt = dir(fullfile(myKsDir,'**','channel_positions.npy'));
+        subsesopt=arrayfun(@(X) subsesopt(X).folder,1:length(subsesopt),'Uni',0);
+        % Remove anything that contains the name 'noise'
+        subsesopt(cellfun(@(X) contains(X,'NOISE'),subsesopt)) = [];
+    else
+        myKsDir = fullfile(DataDir{DataDir2Use(midx)},MiceOpt{midx});
+        subsesopt = [];
+        for did = 1:length(DateOpt{midx})
+            disp(['Finding all pyKS directories in ' myKsDir ', ' DateOpt{midx}{did}])
+            tmpfiles = dir(fullfile(myKsDir,DateOpt{midx}{did},'**','pyKS'));
+            tmpfiles(cellfun(@(X) ismember(X,{'.','..'}),{tmpfiles(:).name})) = [];
+            % Conver to string
+            tmpfiles = arrayfun(@(X) fullfile(tmpfiles(X).folder,tmpfiles(X).name),1:length(tmpfiles),'uni',0);
+            subsesopt = [subsesopt, tmpfiles];
+        end
     end
 
-    ProbeOpt = (unique({subksdirs(:).name}));
-
-    myKsDir = fullfile(KilosortDir,MiceOpt{midx});
-    % Check for multiple subfolders?
-    subsesopt = dir(fullfile(myKsDir,'**','channel_positions.npy'));
-    subsesopt=arrayfun(@(X) subsesopt(X).folder,1:length(subsesopt),'Uni',0);
-    % Remove anything that contains the name 'noise'
-    subsesopt(cellfun(@(X) contains(X,'NOISE'),subsesopt)) = [];
-
-
+   
     if strcmp(RecordingType{midx},'Chronic')
         if ~PrepareClusInfoparams.RunPyKSChronicStitched %MatchUnitsAcrossDays
             disp('Unit matching in Matlab')
