@@ -6,7 +6,7 @@ Redo = 0;
 if nargin < 3 || isempty(loadMATsToSave)
     TmpFile = matfile(fullfile(SaveDir, 'UnitMatch.mat')); % Access saved file
 else
-    load(fullfile(SaveDir, 'UnitMatch.mat'));
+    TmpFile = load(fullfile(SaveDir, 'UnitMatch.mat'));
 end
 
 UMparam = TmpFile.UMparam; % Extract parameters
@@ -96,7 +96,7 @@ if DrawBlind
         % add some diagonal (i=j within)
         addIisJ = randsample(nclus, round(0.1*npairs), 0);
         addIisJ = repmat(addIisJ, 1, 2);
-        Pairs = cat(2, Pairs, arrayfun(@(X) addIisJ(X, :), 1:length(addIisJ), 'Uni', 0));
+        Pairs = cat(2, Papirs, arrayfun(@(X) addIisJ(X, :), 1:length(addIisJ), 'Uni', 0));
         % Randomly shuffle Pairs so we don't have matches grouped together and
         % different order for different runs
         Pairs = Pairs(randsample(length(Pairs), length(Pairs), 0));

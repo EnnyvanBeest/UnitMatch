@@ -1,3 +1,48 @@
+MiceOpt = {'JF067','JF078','JFAL035','JF084'};%, 'JF082'};
+
+savedirs = {'/home/netshare/zinu/JF067/UnitMatch_/UnitMatch.mat',...
+    '/home/netshare/zinu/JF078/UnitMatch/site1/UnitMatch.mat',...
+    '/home/netshare/zinu/JFAL035/UnitMatch/site1/UnitMatch.mat', ...
+    '/home/netshare/zaru/JF084/UnitMatch/site1/UnitMatch.mat'};
+ %% Parameters and settings
+PrepareClusInfoparams.RunPyKSChronicStitched = 0; % Default 0. if 1, run PyKS chronic recordings stitched when same IMRO table was used
+PrepareClusInfoparams.CopyToTmpFirst = 1; % If 1, copy data to local first, don't run from server (= advised!)
+PrepareClusInfoparams.DecompressLocal = 1; % If 1, uncompress data first if it's currently compressed (= necessary for unitmatch and faster for QualityMetrics)
+PrepareClusInfoparams.deNoise = 0;
+PrepareClusInfoparams.nSavedChans = 385;
+PrepareClusInfoparams.nSyncChans = 1;
+
+% Storing preprocessed data?
+PrepareClusInfoparams.ReLoadAlways = 1; % If 1, SP & Clusinfo are always loaded from KS output
+PrepareClusInfoparams.saveSp = 1; % Save SP struct for easy loading of preprocessed data
+PrepareClusInfoparams.binsz = 0.01; %Bin size for PSTHs in seconds
+PrepareClusInfoparams.deNoise = 1; %whether to try and denoise data
+
+% Quality Metrics
+PrepareClusInfoparams.RunQualityMetrics = 1; % If 1, Run the quality metrics (Bombcell @JulieFabre)
+PrepareClusInfoparams.RedoQM = 0; %if 1, redo quality metrics if it already exists
+PrepareClusInfoparams.InspectQualityMetrics = 0; % If 1, Inspect the quality matrix/data set using the GUI (manual inspection)
+PrepareClusInfoparams.loadPCs = 0; % Only necessary when computiong isoluation metrics/drift in QM. You save a lot of time keeping this at 0
+
+% UnitMatch
+PrepareClusInfoparams.UnitMatch = 1; % If 1, find identical units across sessions or oversplits in a fast and flexible way
+PrepareClusInfoparams.RedoUnitMatch = 1; % if 1, Redo unitmatch
+PrepareClusInfoparams.separateIMRO = 0; % Run for every IMRO separately (for memory reasons or when having multiple probes this might be a good idea)
+
+% UnitMatch Parameters:
+% All parameters to choose from: {'AmplitudeSim','spatialdecaySim','WavformMSE','WVCorr','CentroidDist','CentroidVar','CentroidDistRecentered','TrajAngleSim','TrajDistSim'};
+% WavformSim is average of WVCorr and WavformMSE
+% CentroidOverlord is average of CentroidDistRecentered and CentroidVar
+PrepareClusInfoparams.Scores2Include = {'CentroidDist', 'WavformSim', 'CentroidOverlord', 'spatialdecaySim', 'AmplitudeSim', 'TrajAngleSim'}; %{'AmplitudeSim','spatialdecayfitSim','WavformSim','CentroidDist','CentroidVar','TrajAngleSim'}; %
+PrepareClusInfoparams.ApplyExistingBayesModel = 0; %If 1, use probability distributions made available by us -
+PrepareClusInfoparams.MakePlotsOfPairs = 0; % Plots pairs for inspection (UnitMatch)
+PrepareClusInfoparams.AssignUniqueID = 1; % Assign UniqueID
+PrepareClusInfoparams.GoodUnitsOnly = 1; % Include only good untis in the UnitMatch analysis - faster and more sensical
+PrepareClusInfoparams.extractSync = 0;
+PrepareClusInfoparams.plot = 0;
+
+
+PrepareClusInfoparams.loadMATsToSave = 1;
 % SummarizeAcrossMice
 FSCoreFig = figure('name', 'Functional Scores');
 
@@ -14,23 +59,25 @@ EPosAndNeg = nan(3, length(MiceOpt));
 UseKSLabels = PrepareClusInfoparams.RunPyKSChronicStitched;
 RecSesPerUIDAllMice = cell(1,length(MiceOpt));
 for midx = 1:length(MiceOpt)
-    tmpfile = dir(fullfile(SaveDir, MiceOpt{midx}, 'UnitMatch', 'UnitMatch.mat'));
+
+    tmpfile = dir(savedirs{midx});
+    SaveDir = tmpfile.folder;
     if isempty(tmpfile)
         continue
     end
     load(fullfile(tmpfile.folder, tmpfile.name));
-    MatchTable = TmpFile.MatchTable; %Extract matchtable
-    UMparam = TmpFile.UMparam; % Extract parameters
+   % MatchTable = TmpFile.MatchTable; %Extract matchtable
+   % UMparam = TmpFile.UMparam; % Extract parameters
 
     % Load AUCS
-    if exist(fullfile(SaveDir, MiceOpt{midx}, 'UnitMatch', 'AUC.mat'))
-        AUC = load(fullfile(SaveDir, MiceOpt{midx}, 'UnitMatch', 'AUC.mat'))';
-        if midx == 1
-            AUCParams = AUC.AUCStruct.ParamNames;
-            AUCVals = nan(length(AUCParams), length(MiceOpt));
-        end
-        AUCVals(:, midx) = AUC.AUCStruct.AUC;
-    end
+    % if exist(fullfile(savedirs ,'..', 'AUC.mat'))
+    %     AUC = load(fullfile(savedirs ,'..', 'AUC.mat'))';
+    %     if midx == 1
+    %         AUCParams = AUC.AUCStruct.ParamNames;
+    %         AUCVals = nan(length(AUCParams), length(MiceOpt));
+    %     end
+    %     AUCVals(:, midx) = AUC.AUCStruct.AUC;
+    % end
 
 
     % Extract groups
@@ -44,7 +91,7 @@ for midx = 1:length(MiceOpt)
         NonMatchIdx = find((MatchTable.ID1 ~= MatchTable.ID2)); % Not the same unit
     end
     % Extract cluster information
-    UniqueIDConversion = TmpFile.UniqueIDConversion;
+%    UniqueIDConversion = TmpFile.UniqueIDConversion;
     if UMparam.GoodUnitsOnly
         GoodId = logical(UniqueIDConversion.GoodID);
     else
@@ -118,62 +165,62 @@ for midx = 1:length(MiceOpt)
     end
 
     %% Fingerprint correlation
-    figure(FSCoreFig)
-    FingerprintCor = reshape(MatchTable.FingerprintCor, nclus, nclus);
+    % figure(FSCoreFig)
+    % FingerprintCor = reshape(MatchTable.FingerprintCor, nclus, nclus);
+    % 
+    % 
+    % subplot(3, 3, 1)
+    % hold on
+    % 
+    % hw = histcounts(FingerprintCor(WithinIdx), bins) ./ length(WithinIdx);
+    % hm = histcounts(FingerprintCor(MatchIdx), bins) ./ length(MatchIdx);
+    % hn = histcounts(FingerprintCor(NonMatchIdx), bins) ./ length(NonMatchIdx);
+    % FingerPrintRAcrossMice(:, :, midx) = cat(1, hw, hm, hn)';
+    % plot(Vector, hw, 'color', [0, 0, 0.5])
+    % plot(Vector, hm, 'color', [0, 0.5, 0])
+    % plot(Vector, hn, 'color', [0.5, 0, 0])
+    % xlabel('Cross-correlation Fingerprint')
+    % ylabel('Proportion|Group')
+    % legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
+    % axis square
+    % makepretty
 
+    % subplot(3, 3, 2)
+    % hold on
+    % clear h
+    % if length(MatchIdx) > 10
+    %     labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
+    %     scores = [FingerprintCor(MatchIdx)', FingerprintCor(NonMatchIdx)'];
+    %     [X, Y, ~, AUC1] = perfcurve(labels, scores, 1);
+    %     h(1) = plot(X, Y, 'color', [0.25, 0.25, 0]);
+    %     hold all
+    %     labels = [ones(1, numel(MatchIdx)), zeros(1, numel(WithinIdx))];
+    %     scores = [FingerprintCor(MatchIdx)', FingerprintCor(WithinIdx)'];
+    %     [X, Y, ~, AUC2] = perfcurve(labels, scores, 1);
+    %     h(2) = plot(X, Y, 'color', [0, 0.5, 0.5]);
+    % else
+    %     AUC1 = nan;
+    %     AUC2 = nan;
+    % end
 
-    subplot(3, 3, 1)
-    hold on
-
-    hw = histcounts(FingerprintCor(WithinIdx), bins) ./ length(WithinIdx);
-    hm = histcounts(FingerprintCor(MatchIdx), bins) ./ length(MatchIdx);
-    hn = histcounts(FingerprintCor(NonMatchIdx), bins) ./ length(NonMatchIdx);
-    FingerPrintRAcrossMice(:, :, midx) = cat(1, hw, hm, hn)';
-    plot(Vector, hw, 'color', [0, 0, 0.5])
-    plot(Vector, hm, 'color', [0, 0.5, 0])
-    plot(Vector, hn, 'color', [0.5, 0, 0])
-    xlabel('Cross-correlation Fingerprint')
-    ylabel('Proportion|Group')
-    legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
-    axis square
-    makepretty
-
-    subplot(3, 3, 2)
-    hold on
-    clear h
-    if length(MatchIdx) > 10
-        labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
-        scores = [FingerprintCor(MatchIdx)', FingerprintCor(NonMatchIdx)'];
-        [X, Y, ~, AUC1] = perfcurve(labels, scores, 1);
-        h(1) = plot(X, Y, 'color', [0.25, 0.25, 0]);
-        hold all
-        labels = [ones(1, numel(MatchIdx)), zeros(1, numel(WithinIdx))];
-        scores = [FingerprintCor(MatchIdx)', FingerprintCor(WithinIdx)'];
-        [X, Y, ~, AUC2] = perfcurve(labels, scores, 1);
-        h(2) = plot(X, Y, 'color', [0, 0.5, 0.5]);
-    else
-        AUC1 = nan;
-        AUC2 = nan;
-    end
-
-    labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
-    scores = [FingerprintCor(WithinIdx)', FingerprintCor(NonMatchIdx)'];
-    [X, Y, ~, AUC3] = perfcurve(labels, scores, 1);
-    h(3) = plot(X, Y, 'color', [0.5, 0, 0.5]);
-    axis square
-    FingerprintAUC(:, midx) = [AUC1, AUC2, AUC3];
-
-    plot([0, 1], [0, 1], 'k--')
-    xlabel('False positive rate')
-    ylabel('True positive rate')
-    if length(MatchIdx) > 10
-        legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
-    else
-        legend([h(3)], 'Within vs No Match', 'Location', 'best')
-    end
-    title('Cross-Correlation Fingerprint')
-    makepretty
-    drawnow %Something to look at while ACG calculations are ongoing
+    % labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
+    % scores = [FingerprintCor(WithinIdx)', FingerprintCor(NonMatchIdx)'];
+    % [X, Y, ~, AUC3] = perfcurve(labels, scores, 1);
+    % h(3) = plot(X, Y, 'color', [0.5, 0, 0.5]);
+    % axis square
+    % FingerprintAUC(:, midx) = [AUC1, AUC2, AUC3];
+    % 
+    % plot([0, 1], [0, 1], 'k--')
+    % xlabel('False positive rate')
+    % ylabel('True positive rate')
+    % if length(MatchIdx) > 10
+    %     legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
+    % else
+    %     legend([h(3)], 'Within vs No Match', 'Location', 'best')
+    % end
+    % title('Cross-Correlation Fingerprint')
+    % makepretty
+    % drawnow %Something to look at while ACG calculations are ongoing
 
     %% Autocorrelogram
     if any(ismember(MatchTable.Properties.VariableNames, 'ACGCorr'))
@@ -409,7 +456,7 @@ xlim([0.5,size(tmpUM,2) + 0.5])
 xlabel('SessionID')
 ylabel('nUnits')
 hc = colorbar;
-hc.Label.String = '\Delta Recording days'
+hc.Label.String = '\Delta Recording days';
 colormap(cool)
 makepretty
 
@@ -422,7 +469,7 @@ hold on
 cols = lines(length(UMTrackingPerformancePerMouse));
 for midx = 1:length(UMTrackingPerformancePerMouse)
 
-    scatter(UMTrackingPerformancePerMouse{midx}(1,:)+0.2*midx,UMTrackingPerformancePerMouse{midx}(2,:)./UMTrackingPerformancePerMouse{midx}(3,:),20,cols(midx,:),'filled')
+    scatter(UMTrackingPerformancePerMouse{midx}(1,:)+0.2*midx,UMTrackingPerformancePerMouse{midx}(2,:)./UMTrackingPerformancePerMouse{midx}(3,:),20,cols(midx,:).*100,'filled')
 
 end
 

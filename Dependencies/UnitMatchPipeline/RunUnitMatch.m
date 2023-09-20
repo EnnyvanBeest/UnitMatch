@@ -110,7 +110,7 @@ if Params.UnitMatch
                         decompDataFile = bc_extractCbinData(fullfile(Params.RawDataPaths(id).folder, Params.RawDataPaths(id).name), ...
                             [], [], 0, fullfile(Params.tmpdatafolder, strrep(Params.RawDataPaths(id).name, 'cbin', 'bin')));
                         paramBC.rawFile = decompDataFile;
-                        % Decompression
+                        % DecompressionFscore
                         %                         success = pyrunfile("MTSDecomp_From_Matlab.py","success",datapath = strrep(fullfile(RawDataPaths(id).folder,RawDataPaths(id).name),'\','/'),...
                         %                             JsonPath =  strrep(fullfile(RawDataPaths(id).folder,strrep(RawDataPaths(id).name,'cbin','ch')),'\','/'), savepath = strrep(fullfile(Params.tmpdatafolder,strrep(RawDataPaths(id).name,'cbin','bin')),'\','/'));
                         %                         % Also copy metafile

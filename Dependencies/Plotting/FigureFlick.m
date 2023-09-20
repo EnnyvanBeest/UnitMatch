@@ -29,7 +29,7 @@ function FigureFlick(UMDir,user,recompute, loadMATsToSave)
     
     % Load matchtable
     UMFile = dir(fullfile(UMDir,'UnitMatch.mat'));
-    load(fullfile(UMFile.folder,UMFile.name))
+    TmpFile =load(fullfile(UMFile.folder,UMFile.name));
     if nargin == 3 || ~isempty(loadMATsToSave)
         MatchTable = TmpFile.MatchTable;
     else
