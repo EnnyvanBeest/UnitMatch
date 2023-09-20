@@ -6,7 +6,7 @@ DateOpt = arrayfun(@(X) dir(fullfile(DataDir{DataDir2Use(X)},MiceOpt{X},'*-*')),
 DateOpt = cellfun(@(X) X([X.isdir]),DateOpt,'UniformOutput',0);
 DateOpt = cellfun(@(X) {X.name},DateOpt,'UniformOutput',0);
 
-maxses = 2; %For debugging we might want to do only maxses nr at a time
+maxses = inf; %For debugging we might want to do only maxses nr at a time
 for midx = 1:length(MiceOpt)
     myKsDir = fullfile(KilosortDir,MiceOpt{midx});
     subksdirs = dir(fullfile(myKsDir,'Probe*')); %This changed because now I suddenly had 2 probes per recording
