@@ -366,7 +366,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) % If it alre
 
     % Perform CCA across recordings
     if natimgflag
-        [corrWCCA, ~] = natim.computeCCA(spikeData_cv);
+        [corrWCCA, ~] = computeNatImCorr(spikeData_cv);
 
         % Reshape the matrix to a single one with correct clusters
         %%% SIMILAR TO WHAT ENNY IS DOING (e.g., 1x2 and 2x1, but not 1x1 and 2x2);
