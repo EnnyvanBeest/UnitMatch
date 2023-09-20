@@ -360,6 +360,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) % If it alre
             spikeData_cv{currIdx+2} = spikeData(:,:,cluIdx,2:2:end); % even
         else
             natimgflag = 0;
+            break
         end
     end
 
