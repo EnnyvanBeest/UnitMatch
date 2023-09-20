@@ -82,6 +82,7 @@ timercounter = tic;
 x1 = repmat(spatialdecay(:,1),[1 numel(spatialdecay(:,1))]);
 x2 = repmat(spatialdecay(:,2),[1 numel(spatialdecay(:,2))]);
 spatialdecaySim = abs(x1 - x2')./nanmean(cat(3,x1,x2'),3);
+clear x1 x2
 % Make (more) normal
 spatialdecaySim = sqrt(spatialdecaySim);
 spatialdecaySim = 1-((spatialdecaySim-nanmin(spatialdecaySim(:)))./(quantile(spatialdecaySim(:),0.99)-nanmin(spatialdecaySim(:))));
@@ -95,6 +96,7 @@ paramid = find(ismember(paramNames,'spatialdecaySim'));
 x1 = repmat(spatialdecayfit(:,1),[1 numel(spatialdecayfit(:,1))]);
 x2 = repmat(spatialdecayfit(:,2),[1 numel(spatialdecayfit(:,2))]);
 spatialdecayfitSim = abs(x1 - x2')./nanmean(cat(3,x1,x2'),3);
+clear x1 x2
 % Remove extreme outliers
 spatialdecayfitSim(spatialdecayfitSim<0) = quantile(spatialdecayfitSim(:),0.9999);
 spatialdecayfitSim((spatialdecayfitSim)>quantile(spatialdecayfitSim(:),0.9999)) = quantile(spatialdecayfitSim(:),0.9999);
@@ -113,6 +115,7 @@ x1 = repmat(Amplitude(:,1),[1 numel(Amplitude(:,1))]);
 x2 = repmat(Amplitude(:,2),[1 numel(Amplitude(:,2))]);
 AmplitudeSim = abs(x1 - x2')./nanmean(abs(cat(3,x1,x2')),3);
 clear Amplitude
+clear x1 x2
 % Remove extreme outliers
 % AmplitudeSim((AmplitudeSim)>quantile(AmplitudeSim(:),0.9999)) = quantile(AmplitudeSim(:),0.9999);
 
@@ -148,10 +151,12 @@ paramid = find(ismember(paramNames,'WVCorr'));
 
 
 ProjectedWaveformNorm = cat(3,x1,x2);
+clear x1 x2
 ProjectedWaveformNorm = (ProjectedWaveformNorm-nanmin(ProjectedWaveformNorm,[],1))./(nanmax(ProjectedWaveformNorm,[],1)-nanmin(ProjectedWaveformNorm,[],1));
 x1 = repmat(ProjectedWaveformNorm(:,:,1),[1 1 size(ProjectedWaveformNorm,2)]);
 x2 = permute(repmat(ProjectedWaveformNorm(:,:,2),[1 1 size(ProjectedWaveformNorm,2)]),[1 3 2]);
 RawWVMSE = squeeze(nanmean((x1 - x2).^2));
+clear x1 x2
 
 % sort of Normalize distribution
 RawWVMSENorm = sqrt(RawWVMSE);
@@ -266,7 +271,7 @@ while flag<2
     saveas(gcf,fullfile(SaveDir,'ProjectedLocation.bmp'))
 
     disp('Computing location distances between pairs of units, per individual time point of the waveform...')
-    % Difference in distance between centroids of two halfs of the recording
+    % Difference in distance between centroids of two halves of the recording
 
     % Clean up variables; this gets intense
     clear x
@@ -294,6 +299,8 @@ while flag<2
         end
     end
 
+
+    clear x1 x2
     % Average location
     CentroidDist = squeeze(nanmin(squeeze(nanmean(EuclDist,2)),[],2));%
 
@@ -348,6 +355,8 @@ while flag<2
         end
     end
 
+
+    clear x1 x2
     % Average location
     CentroidDistRecentered = squeeze(nanmin(nanmean(EuclDist2,2),[],3));% minimum across flips
     CentroidDistRecentered = 1-(CentroidDistRecentered-nanmin(CentroidDistRecentered(:)))./(quantile(CentroidDistRecentered(:),0.99)-nanmin(CentroidDistRecentered(:)));
@@ -382,12 +391,14 @@ while flag<2
     end
     % Sum the angles across dimensions
     LocAngle = nansum(LocAngle,5);
+    clear x1 x2
 
     % Actually just taking the weighted sum of angles is better
     x1 = repmat(squeeze(LocAngle(:,:,1,:)),[1 1 1 nclus]);
     x2 = permute(repmat(squeeze(LocAngle(:,:,2,1)),[1 1 1 nclus]),[4 2 3 1]); %switch nclus around
     AngleSubtraction = abs(x1-x2);
     AngleSubtraction(isnan(abs(x1-x2))) = 2*pi; %punish points with nan
+    clear x1 x2
     TrajAngleSim = squeeze(nanmin(nansum(AngleSubtraction,2),[],3)); % sum of angles, minimum across flips
     TrajAngleSim = 1-((TrajAngleSim-nanmin(TrajAngleSim(:)))./(quantile(TrajAngleSim(:),0.99)-nanmin(TrajAngleSim(:))));
     TrajAngleSim(TrajAngleSim<0 | isnan(TrajAngleSim))=0;
@@ -400,6 +411,7 @@ while flag<2
     x2 = permute(repmat(squeeze(TrajDist(:,:,2,:)),[1 1 1 nclus]),[4 2 3 1]); % switch nclus around
     % Distance similarity (subtract for each pair of units)
     TrajDistCompared = abs(x1-x2);%
+    clear x1 x2
     TrajDistSim = squeeze(nanmin(nansum(TrajDistCompared,2),[],3)); %and take minimum across flips
     TrajDistSim = sqrt(TrajDistSim); % Make more normal
     TrajDistSim = 1-((TrajDistSim-nanmin(TrajDistSim(:)))./(quantile(TrajDistSim(:),0.99)-nanmin(TrajDistSim(:))));
