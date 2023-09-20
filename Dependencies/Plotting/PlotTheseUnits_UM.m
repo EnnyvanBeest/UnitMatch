@@ -322,7 +322,7 @@ for pairid=1:length(Pairs)
     else
         tmp2 = 'nan';
     end
-    if ~isnan(tmp) | ~isnan(tmp2)
+    if ~isnan(tmp) & ~isnan(tmp2)
         title(['Trajectory length: ' tmp ', angle: ' tmp2])
     end
     if exist('LocTrajectorySim')
