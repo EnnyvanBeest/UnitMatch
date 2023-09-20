@@ -390,8 +390,8 @@ if 0
     % Difference in amplitude from maximum amplitude
     spdctmp = abs(spikeMap(NewPeakLoc,ChanIdx,cv)); %(abs(spikeMap(NewPeakLoc,MaxChannel(uid,cv),cv))-abs(spikeMap(NewPeakLoc,ChanIdx,cv)))./abs(spikeMap(NewPeakLoc,MaxChannel(uid,cv),cv));
     % Remove zero
-    spdctmp(Distance2MaxChan==0) = [];
-    Distance2MaxChan(Distance2MaxChan==0) = [];
+%     spdctmp(Distance2MaxChan==0) = [];
+%     Distance2MaxChan(Distance2MaxChan==0) = [];
 
     % Spatial decay (average oer micron)
     scatter(Distance2MaxChan,spdctmp,20,[0 0 0],'filled')
