@@ -593,19 +593,19 @@ while flag<2
 
     end
 
-    %% Normalize included scores for every recording session x session
-    for scid = 1:length(Scores2Include)
-        eval(['tmpscore=' Scores2Include{scid} ';']) %Extract score
-
-        for did = 1:ndays
-            for did2 = 1:ndays
-                tmp = tmpscore(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1); %Extract
-                tmp = (tmp-nanmin(tmp(:)))./(nanmax(tmp(:))-nanmin(tmp(:))); % Normalize
-                 tmpscore(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1) = tmp; % Put back
-            end
-        end
-        eval([Scores2Include{scid} '=tmpscore;']) %Extract score)
-    end
+%     %% Normalize included scores for every recording session x session
+%     for scid = 1:length(Scores2Include)
+%         eval(['tmpscore=' Scores2Include{scid} ';']) %Extract score
+% 
+%         for did = 1:ndays
+%             for did2 = 1:ndays
+%                 tmp = tmpscore(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1); %Extract
+%                 tmp = (tmp-nanmin(tmp(:)))./(nanmax(tmp(:))-nanmin(tmp(:))); % Normalize
+%                  tmpscore(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1) = tmp; % Put back
+%             end
+%         end
+%         eval([Scores2Include{scid} '=tmpscore;']) %Extract score)
+%     end
 
     %% Calculate total score
     [X,Y]=meshgrid(recsesAll(Good_Idx));
