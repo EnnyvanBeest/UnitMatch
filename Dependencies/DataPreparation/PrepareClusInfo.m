@@ -432,7 +432,7 @@ for subsesid = 1:length(KiloSortPaths)
                 %                 unitType(:) = 1; ???
 
                 % Commmented by CB for now    
-                spike_templates_0idx = readNPY([savePath filesep 'spike_templates.npy']); % changed back 20230920 JF 
+                spike_templates_0idx = readNPY([myClusFile(1).folder filesep 'spike_templates.npy']); % changed back 20230920 JF 
                 spikeTemplates = spike_templates_0idx + 1;
                 uniqueTemplates = unique(spikeTemplates);
                 tmpGUI = load(fullfile(savePath,'templates.qualityMetricDetailsforGUI'));
