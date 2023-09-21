@@ -336,12 +336,6 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) % If it alre
         if ~isempty(exp2keep)
             natimgflag = 1;
             % Get the spikes
-            %             if ~UMparam.RunPyKSChronicStitched
-            %                 sortingPath = fullfile(UMparam.AllRawPaths(ss).folder,'pyKS','output');
-            %                 st = readNPY(fullfile(sortingPath,'spike_times.npy'));
-            %                 st = double(st)/30000;
-            %                 clu = readNPY(fullfile(sortingPath,'spike_clusters.npy'));
-            %             end
             st = sp.st(sp.RecSes == RecOpt(ss));
             clu = sp.spikeTemplates(sp.RecSes == RecOpt(ss));
 
