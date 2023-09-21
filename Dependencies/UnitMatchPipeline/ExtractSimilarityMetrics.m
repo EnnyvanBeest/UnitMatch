@@ -593,7 +593,7 @@ while flag<2
 
     end
 
-%     %% Normalize included scores for every recording session x session
+    %% Normalize included scores for every recording session x session
 %     for scid = 1:length(Scores2Include)
 %         eval(['tmpscore=' Scores2Include{scid} ';']) %Extract score
 % 

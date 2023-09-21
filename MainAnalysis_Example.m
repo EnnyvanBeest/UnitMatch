@@ -1,7 +1,7 @@
 %% User Input
 %% Path information
 DataDir =  {'H:\MatchingUnits\RawDataMonthApart'};%{'H:\MatchingUnits\RawData'}; %;%Raw data folders, typically servers were e.g. *.cbin files are stored
-SaveDir = 'H:\MatchingUnits\Output\MonthApart'%'H:\MatchingUnits\Output\NotConcatenated %'H:\MatchingUnits\Output\Concatenated1Day'; %%;%  'H:\MatchingUnits\Output\ManyRecordings'%Folder where to store the results
+SaveDir = 'H:\MatchingUnits\Output\MonthApartStitched'%'H:\MatchingUnits\Output\NotConcatenated %'H:\MatchingUnits\Output\Concatenated1Day'; %%;%  'H:\MatchingUnits\Output\ManyRecordings'%Folder where to store the results
 tmpdatafolder = 'H:\MatchingUnits\Tmp'; % temporary folder for temporary decompression of data 
 KilosortDir = 'H:\MatchingUnits\KilosortOutputMonthApart';%'H:\MatchingUnits\KilosortOutput'; % Kilosort output folder
 GithubDir = 'C:\Users\EnnyB\Documents\GitHub'; % Github directory

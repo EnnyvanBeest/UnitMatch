@@ -287,8 +287,8 @@ for id = 1:2
         SelfScore = TotalScore(logical(eye(size(MatchProbability))));
         OtherScores = TotalScore; %First being TotalScore, second being TemplateMatch
         ThrsScore = min(TotalScore(label==1));
-        Edges = [0:0.1:6];
-        Vector = [0.05:0.1:6-0.05];
+         Edges = [0:0.1:1];
+        Vector = [0.05:0.1:1-0.05];
     end
     OtherScores(logical(eye(size(MatchProbability)))) = nan; %Get rid of diagonal
     OtherScores(EuclDist>param.NeighbourDist) = nan;%Remove units that were too far away

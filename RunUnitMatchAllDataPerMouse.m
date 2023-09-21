@@ -89,7 +89,7 @@ for midx = 1:length(MiceOpt)
 
         %% Function analysis
         UMparam.SaveDir = fullfile(SaveDir,MiceOpt{midx},'UnitMatch')
-        ComputeFunctionalScores(UMparam.SaveDir)
+        ComputeFunctionalScores(UMparam.SaveDir,1)
 
         %% Figures
         if UMparam.MakePlotsOfPairs

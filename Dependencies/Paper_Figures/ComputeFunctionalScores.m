@@ -290,6 +290,21 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'ACGCorr')) % If it alread
     %% Correlation between ACG
     ACGCorr = corr(squeeze(ACGMat(:, 1, :)), squeeze(ACGMat(:, 2, :)));
     MatchTable.ACGCorr = ACGCorr(:);
+
+    ACGCorr(isnan(ACGCorr)) = nanmin(ACGCorr(:)); % should not participate to the rank
+    % Find rank
+    for did1 = 1:nRec
+        for did2 = 1:nRec
+            % Get the indices
+            clusIdxD1All = SessionSwitch(did1):SessionSwitch(did1+1)-1;
+            clusIdxD2All = SessionSwitch(did2):SessionSwitch(did2+1)-1;
+            [~,idx] = sort(ACGCorr(clusIdxD1All,clusIdxD2All),2,'descend');
+            for c = 1:numel(clusIdxD1All)
+                ACGRankScore(clusIdxD1All(c),clusIdxD2All(idx(c,:))) = 1:numel(clusIdxD2All);
+            end
+        end
+    end
+    MatchTable.ACGRankScore = ACGRankScore(:);
 end
 
 %% Get FR difference
@@ -298,6 +313,22 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'FRDiff'))
     FR = repmat(permute(FR, [2, 1]), [1, 1, nclus]);
     FRDiff = abs(squeeze(FR(:, 2, :)-permute(FR(:, 1, :), [3, 2, 1])));
     MatchTable.FRDiff = FRDiff(:);
+
+    FRDiff(isnan(FRDiff)) = nanmax(FRDiff(:)); % should not participate to the rank
+    % Find rank
+    for did1 = 1:nRec
+        for did2 = 1:nRec
+            % Get the indices
+            clusIdxD1All = SessionSwitch(did1):SessionSwitch(did1+1)-1;
+            clusIdxD2All = SessionSwitch(did2):SessionSwitch(did2+1)-1;
+            [~,idx] = sort(FRDiff(clusIdxD1All,clusIdxD2All),2,'ascend');
+            for c = 1:numel(clusIdxD1All)
+                FRRankScore(clusIdxD1All(c),clusIdxD2All(idx(c,:))) = 1:numel(clusIdxD2All);
+            end
+        end
+    end
+    MatchTable.FRRankScore = FRRankScore(:);
+
 end
 
 %% Get natural images fingerprints correlations
@@ -372,6 +403,23 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) % If it alre
     corrWCCA_big = .5*corrWCCA_big+.5*corrWCCA_big'; % not sure that's needed?
 
     MatchTable.NatImCorr = corrWCCA_big(:);
+
+
+    % RANK
+    corrWCCA_big(isnan(corrWCCA_big)) = nanmin(corrWCCA_big(:)); % should not participate to the rank
+    % Find rank
+    for did1 = 1:nRec
+        for did2 = 1:nRec
+            % Get the indices
+            clusIdxD1All = SessionSwitch(did1):SessionSwitch(did1+1)-1;
+            clusIdxD2All = SessionSwitch(did2):SessionSwitch(did2+1)-1;
+            [~,idx] = sort(corrWCCA_big(clusIdxD1All,clusIdxD2All),2,'descend');
+            for c = 1:numel(clusIdxD1All)
+                NImgRankScore(clusIdxD1All(c),clusIdxD2All(idx(c,:))) = 1:numel(clusIdxD2All);
+            end
+        end
+    end
+    MatchTable.NImgRankScore = NImgRankScore(:);
 
 end
 %% Write to table
