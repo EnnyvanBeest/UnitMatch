@@ -24,8 +24,8 @@ OriginalClusterIDs = clusinfo.cluster_id;
 recsesAll = clusinfo.RecSesID;
 recsesGood = recsesAll(Good_Idx);
 DepthOnProbe = clusinfo.depth;
-if length(DepthOnProbe) == length(recsesAll)/2
-    DepthOnProbe = [DepthOnProbe DepthOnProbe]; %Stitched
+while length(DepthOnProbe) < length(recsesAll)
+    DepthOnProbe = [DepthOnProbe; DepthOnProbe]; %Stitched
 end
 DepthOnProbe = DepthOnProbe(Good_Idx);
 

@@ -187,7 +187,14 @@ if RunPyKSChronicStitched
     for uid = 1:nclus
         pairstmp = find(OriginalClusterIDs(Good_Idx)==OriginalClusterIDs(Good_Idx(uid)))';
         if length(pairstmp)>1
-            PairsPyKS = cat(1,PairsPyKS,pairstmp);
+            for id1 = 1:length(pairstmp)
+                for id2 = 1:length(pairstmp)
+                    if id1 >= id2
+                        continue
+                    end
+                    PairsPyKS = cat(1,PairsPyKS,[pairstmp(id1),pairstmp(id2)]);
+                end
+            end
         end
     end
 

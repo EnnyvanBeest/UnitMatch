@@ -135,7 +135,7 @@ for uid = 1:nclus
         channelpos = Allchannelpos{recsesGood(uid)};
     catch ME
         % assume they all have the same configuration
-        channelpos = Allchannelpos{recsesGood(uid)-1};
+        channelpos = Allchannelpos{1};
     end
 
     % Extract channel positions that are relevant and extract mean location

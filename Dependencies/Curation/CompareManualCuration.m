@@ -445,10 +445,6 @@ for midx = 1:length(MiceOpt)
      Idx = (AvgMan'>CurationThrs | PyKS'==1 | MatchProb>0.5);
      ManThrs = sum(MatchProb>0.5);
 
-     A = find(PyKS==1);
-     B = find(MatchProb>0.5)';
-     C = find(AvgMan>CurationThrs);
-
       h = venn( [sum(PyKS(Idx)'==1 & MatchProb(Idx)<=0.5 & AvgMan(Idx)'<=CurationThrs)./ManThrs sum(PyKS(Idx)'==1 & MatchProb(Idx)>0.5 & AvgMan(Idx)'<=CurationThrs)./ManThrs sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'<=CurationThrs)./ManThrs sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'>CurationThrs)./ManThrs ...
         sum(PyKS(Idx)'==0 & MatchProb(Idx)<=0.5 & AvgMan(Idx)'>CurationThrs)./ManThrs sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'>CurationThrs)./ManThrs sum(PyKS(Idx)'==1 & AvgMan(Idx)'>CurationThrs&MatchProb(Idx)>0.5)./ManThrs] )
 

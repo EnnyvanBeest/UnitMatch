@@ -2,7 +2,7 @@
 FSCoreFig = figure('name', 'Functional Scores');
 
 % Initialize
-TakeRank = 0; %if 0 , take cross-correlation scores (these may be less informative than rank)
+TakeRank = 1 %if 0 , take cross-correlation scores (these may be less informative than rank)
 if TakeRank
     stepsz = 1;
     bins = -20:stepsz:-1;
