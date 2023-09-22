@@ -95,12 +95,7 @@ for subsesid = 1:length(KiloSortPaths)
     AllUniqueTemplates = [];
     cluster_id = [];
     recses = [];
-    if any(strfind(KiloSortPaths{subsesid}, 'Probe'))
-        probeid = str2num(KiloSortPaths{subsesid}(strfind(KiloSortPaths{subsesid}, 'Probe') + 5));
-    else
-        disp('Probe ID unknown')
-        probeid = 0;
-    end
+ 
 
     %% save data paths information
     if Params.RunPyKSChronicStitched %CALL THIS STITCHED --> Only works when using RunPyKS2_FromMatlab as well from this toolbox
@@ -506,10 +501,10 @@ for subsesid = 1:length(KiloSortPaths)
     if exist('theseuniqueTemplates', 'var') && iscell(theseuniqueTemplates)
         recsesAlltmp = arrayfun(@(X) repmat(addthis+X, 1, length(theseuniqueTemplates{X})), [1:length(theseuniqueTemplates)], 'UniformOutput', 0);
         recsesAll = cat(1, recsesAll(:), cat(2, recsesAlltmp{:})');
-        ProbeAll = cat(1, ProbeAll(:), repmat(probeid, 1, length(cat(2, recsesAlltmp{:})))');
+        ProbeAll = cat(1, ProbeAll(:), repmat(probeSN, 1, length(cat(2, recsesAlltmp{:})))'); % Replace to serial number
     else
         recsesAll = cat(1, recsesAll(:), repmat(addthis+1, 1, length(Good_IDtmp))');
-        ProbeAll = cat(1, ProbeAll(:), repmat(probeid, 1, length(Good_IDtmp))');
+        ProbeAll = cat(1, ProbeAll(:), repmat(probeSN, 1, length(Good_IDtmp))'); % Replace to serial numer
     end
     sp.RecSes = sp.SessionID + countid - 1; %Keep track of recording session, as cluster IDs are not unique across sessions
 

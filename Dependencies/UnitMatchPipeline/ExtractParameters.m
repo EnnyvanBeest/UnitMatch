@@ -75,11 +75,12 @@ if isfield(clusinfo,'Coordinates') && param.UseHistology% Allow for real coordin
 
 else
     % Add 3rd dimension of probe-ids
+    ProbeOpt = unique(clusinfo.ProbeID);
     RecOpt = unique(RecSes);
     for recid = 1:length(RecOpt)
         probeid = unique(clusinfo.ProbeID(clusinfo.RecSesID==RecOpt(recid)));
         if length(Allchannelpos) >= recid
-        Allchannelpos{recid} = cat(2,repmat(probeid,size(Allchannelpos{recid},1),1),Allchannelpos{recid});
+            Allchannelpos{recid} = cat(2,repmat(find(ismember(ProbeOpt,probeid)),size(Allchannelpos{recid},1),1),Allchannelpos{recid});
         end
     end
 end
