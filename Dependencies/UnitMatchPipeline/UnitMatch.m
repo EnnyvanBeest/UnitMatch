@@ -102,6 +102,7 @@ SessionSwitch = arrayfun(@(X) find(GoodRecSesID==X,1,'first'),unique(recsesGood)
 SessionSwitch(cellfun(@isempty,SessionSwitch))=[];
 SessionSwitch = [cell2mat(SessionSwitch); nclus+1];
 
+
 %% Extract raw waveforms
 % This script does the actual extraction (if necessary) and saves out paths
 % to NPY for individual unit data
@@ -187,7 +188,14 @@ if RunPyKSChronicStitched
     for uid = 1:nclus
         pairstmp = find(OriginalClusterIDs(Good_Idx)==OriginalClusterIDs(Good_Idx(uid)))';
         if length(pairstmp)>1
-            PairsPyKS = cat(1,PairsPyKS,pairstmp);
+            for id1 = 1:length(pairstmp)
+                for id2 = 1:length(pairstmp)
+                    if id1 >= id2
+                        continue
+                    end
+                    PairsPyKS = cat(1,PairsPyKS,[pairstmp(id1),pairstmp(id2)]);
+                end
+            end
         end
     end
 
@@ -287,8 +295,8 @@ for id = 1:2
         SelfScore = TotalScore(logical(eye(size(MatchProbability))));
         OtherScores = TotalScore; %First being TotalScore, second being TemplateMatch
         ThrsScore = min(TotalScore(label==1));
-        Edges = [0:0.1:6];
-        Vector = [0.05:0.1:6-0.05];
+         Edges = [0:0.1:1];
+        Vector = [0.05:0.1:1-0.05];
     end
     OtherScores(logical(eye(size(MatchProbability)))) = nan; %Get rid of diagonal
     OtherScores(EuclDist>param.NeighbourDist) = nan;%Remove units that were too far away

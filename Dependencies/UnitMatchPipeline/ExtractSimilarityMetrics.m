@@ -24,8 +24,8 @@ OriginalClusterIDs = clusinfo.cluster_id;
 recsesAll = clusinfo.RecSesID;
 recsesGood = recsesAll(Good_Idx);
 DepthOnProbe = clusinfo.depth;
-if length(DepthOnProbe) == length(recsesAll)/2
-    DepthOnProbe = [DepthOnProbe DepthOnProbe]; %Stitched
+while length(DepthOnProbe) < length(recsesAll)
+    DepthOnProbe = [DepthOnProbe; DepthOnProbe]; %Stitched
 end
 DepthOnProbe = DepthOnProbe(Good_Idx);
 
@@ -594,18 +594,18 @@ while flag<2
     end
 
     %% Normalize included scores for every recording session x session
-    for scid = 1:length(Scores2Include)
-        eval(['tmpscore=' Scores2Include{scid} ';']) %Extract score
-
-        for did = 1:ndays
-            for did2 = 1:ndays
-                tmp = tmpscore(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1); %Extract
-                tmp = (tmp-nanmin(tmp(:)))./(nanmax(tmp(:))-nanmin(tmp(:))); % Normalize
-                 tmpscore(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1) = tmp; % Put back
-            end
-        end
-        eval([Scores2Include{scid} '=tmpscore;']) %Extract score)
-    end
+%     for scid = 1:length(Scores2Include)
+%         eval(['tmpscore=' Scores2Include{scid} ';']) %Extract score
+% 
+%         for did = 1:ndays
+%             for did2 = 1:ndays
+%                 tmp = tmpscore(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1); %Extract
+%                 tmp = (tmp-nanmin(tmp(:)))./(nanmax(tmp(:))-nanmin(tmp(:))); % Normalize
+%                  tmpscore(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1) = tmp; % Put back
+%             end
+%         end
+%         eval([Scores2Include{scid} '=tmpscore;']) %Extract score)
+%     end
 
     %% Calculate total score
     [X,Y]=meshgrid(recsesAll(Good_Idx));
@@ -615,7 +615,7 @@ while flag<2
     disp('Computing total score...')
     timercounter = tic;
     %     priorMatch = 1-((nclus+nclus.*sqrt(ndays-1))./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days)
-    priorMatch = 1-((nclus+nclus.*sqrt(ndays-1)*param.ExpectMatches)./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days)
+    priorMatch = 1-((nclus+nclus.*sqrt(ndays-1)*2*param.ExpectMatches)./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days) % Times 2 for symmetry
 
     leaveoutmatches = false(nclus,nclus,length(Scores2Include)); %Used later
     figure;
@@ -675,6 +675,9 @@ while flag<2
         Predictors = cat(3,Predictors,tmp);
         TotalScore=TotalScore+tmp;
     end
+
+    % Normalize TotalScore
+    TotalScore = (TotalScore-min(TotalScore(:)))./(max(TotalScore(:))-min(TotalScore(:)));
 
     figure('name','Predictor Matrix of max dist pairs')
     %  Score correlation matrix

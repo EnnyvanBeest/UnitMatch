@@ -444,8 +444,15 @@ for midx = 1:length(MiceOpt)
      subplot(ceil(sqrt(length(MiceOpt))),round(sqrt(length(MiceOpt))),midx)
      Idx = (AvgMan'>CurationThrs | PyKS'==1 | MatchProb>0.5);
      ManThrs = sum(MatchProb>0.5);
-     h= vennRGB([sum(PyKS(Idx)'==1 & MatchProb(Idx)<=0.5 & AvgMan(Idx)'<=CurationThrs)./ManThrs sum(PyKS(Idx)'==1 & MatchProb(Idx)>0.5 & AvgMan(Idx)'<=CurationThrs)./ManThrs sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'<=CurationThrs)./ManThrs sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'>CurationThrs)./ManThrs ...
-        sum(PyKS(Idx)'==0 & MatchProb(Idx)<=0.5 & AvgMan(Idx)'>CurationThrs)./ManThrs sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'>CurationThrs)./ManThrs sum(PyKS(Idx)'==1 & AvgMan(Idx)'>CurationThrs&MatchProb(Idx)>0.5)./ManThrs],0.01);
+
+      h = venn( [sum(PyKS(Idx)'==1 & MatchProb(Idx)<=0.5 & AvgMan(Idx)'<=CurationThrs)./ManThrs sum(PyKS(Idx)'==1 & MatchProb(Idx)>0.5 & AvgMan(Idx)'<=CurationThrs)./ManThrs sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'<=CurationThrs)./ManThrs sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'>CurationThrs)./ManThrs ...
+        sum(PyKS(Idx)'==0 & MatchProb(Idx)<=0.5 & AvgMan(Idx)'>CurationThrs)./ManThrs sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'>CurationThrs)./ManThrs sum(PyKS(Idx)'==1 & AvgMan(Idx)'>CurationThrs&MatchProb(Idx)>0.5)./ManThrs] )
+      axis square
+      axis off
+      makepretty
+
+%      h= vennRGB([sum(PyKS(Idx)'==1 & MatchProb(Idx)<=0.5 & AvgMan(Idx)'<=CurationThrs)./ManThrs sum(PyKS(Idx)'==1 & MatchProb(Idx)>0.5 & AvgMan(Idx)'<=CurationThrs)./ManThrs sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'<=CurationThrs)./ManThrs sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'>CurationThrs)./ManThrs ...
+%         sum(PyKS(Idx)'==0 & MatchProb(Idx)<=0.5 & AvgMan(Idx)'>CurationThrs)./ManThrs sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'>CurationThrs)./ManThrs sum(PyKS(Idx)'==1 & AvgMan(Idx)'>CurationThrs&MatchProb(Idx)>0.5)./ManThrs],0.01);
      title(MiceOpt{midx})
 
 
@@ -538,7 +545,14 @@ makepretty
 
 figure(VENNFig)
 subplot(3,2,6)
-vennRGB([10 10 10 10 10 10 10],0.1)
+% vennEulerDiagram({[1,2,3],[3,4,5],[3,4,6]}, 'drawProportional', true, 'SetLabels', ["KS"; "UM"; "Cur"]);
+venn([10 10 10 10 10 10 10])
+makepretty
+axis off
+axis square
+
+
+% venn({[1,2,3],[3,4,5],[3,4,6]},0.1)
 if 0
 midx = 5
 Check{1,midx}(ismember(Check{1,midx},Check{3,midx}))

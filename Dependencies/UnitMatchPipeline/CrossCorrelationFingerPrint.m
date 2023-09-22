@@ -105,7 +105,7 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelationsFingerprint
             SigMask(clusIdxD1All,clusIdxD2All) = FingerprintR >= nanmedian(FingerprintR,1) + 2*nanstd(FingerprintR,[],1) & FingerprintR >= nanmedian(FingerprintR,2) + 2*nanstd(FingerprintR,[],2);
 
             % Find rank
-            FingerprintR(isnan(FingerprintR)) = -1; % should not participate to the rank
+            FingerprintR(isnan(FingerprintR)) = nanmin(FingerprintR(:)); % should not participate to the rank
             [~,idx] = sort(FingerprintR,2,'descend');
             for c = 1:numel(clusIdxD1All)
                 RankScoreAll(clusIdxD1All(c),clusIdxD2All(idx(c,:))) = 1:numel(clusIdxD2All);

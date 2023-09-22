@@ -38,6 +38,13 @@ end
 clusinfo = clusinfoNew;
 clear clusinfoNew
 
+if sum(clusinfo.Good_ID)<25
+    disp('Less than 25 neurons.. skip')
+    UMparam.Error = 'Too Little Units'
+    return
+end
+
+
 %% UnitMatch Parameters
 % Use some bombcell parameters
 if Params.RunQualityMetrics
@@ -126,7 +133,7 @@ if Params.UnitMatch
         GlobalUnitMatchClock = tic;
         [UniqueIDConversion, MatchTable, WaveformInfo, UMparam] = UnitMatch(clusinfo, UMparam);
         UMrunTime = toc(GlobalUnitMatchClock);
-        save(fullfile(UMparam.SaveDir, 'UnitMatch.mat'), 'UniqueIDConversion', 'MatchTable', 'WaveformInfo', 'UMparam', 'UMrunTime')
+        save(fullfile(UMparam.SaveDir, 'UnitMatch.mat'), 'UniqueIDConversion', 'MatchTable', 'WaveformInfo', 'UMparam', 'UMrunTime','-v7.3')
         DataSizeParam = CalculateDuration(UMparam.SaveDir,ephys_dirs);
         disp(['UnitMatch took ', num2str(round(UMrunTime/60*10)/10), ' minute(s) to run'])
 
