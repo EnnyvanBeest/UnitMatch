@@ -15,7 +15,6 @@ function Params = PrepareClusInfo(KiloSortPaths, Params, RawDataPaths)
 % Params.InspectQualityMetrics =0; % Inspect the quality metrics/data set using the GUI
 % Params.UnitMatch = 1; % Matching chronic recording using QM instead of using pyks chronic output
 % Params.RedoUnitMatch = 0; % Redo unitmatch
-% Params.SaveDir% Directory to save QM and UnitMatch results
 % Params.tmpdatafolder %Directory to temporarily decompress data --> must
 % be large enough!
 
@@ -46,7 +45,6 @@ try
         Params.InspectQualityMetrics = 0; % Inspect the quality metrics/data set using the GUI
         Params.UnitMatch = 1; % Matching chronic recording using QM instead of using pyks chronic output
         Params.RedoUnitMatch = 0; % Redo unitmatch
-        Params.SaveDir = KiloSortPaths(1); % Directory to save QM and UnitMatch results
         Params.tmpdatafolder = KiloSortPaths(1); %
         Params.binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
         Params.saveSp = 0;
@@ -139,6 +137,9 @@ for subsesid = 1:length(KiloSortPaths)
             rawD = spikeStruct.dat_path;
             rawD = rawD(strfind(rawD, '"')+1:end);
             rawD = rawD(1:strfind(rawD, '"')-1);
+            if any(strfind(rawD,'../'))
+            rawD = rawD(strfind(rawD,'../')+3:end)
+            end
             tmpdr = rawD;
             rawD = dir(rawD);
             if isempty(rawD)
@@ -190,14 +191,7 @@ for subsesid = 1:length(KiloSortPaths)
         if tmpparam.RunQualityMetrics == Params.RunQualityMetrics && tmpparam.RunPyKSChronicStitched == Params.RunPyKSChronicStitched && ...
                 tmpparam.separateIMRO == Params.separateIMRO
             disp(['Found existing data in ', KiloSortPaths{subsesid}, ', Using this...'])
-            %         load(fullfile(Params.SaveDir,'PreparedData.mat'))
-
-            % Use UnitMatch Output if available
-            %         if Params.UnitMatch
-            %             disp('Using UnitMatch Clusters!')
-            %             sp.clu = sp.UniqClu; %Temporary replace for rest of code
-            %             clusinfo.cluster_id = clusinfo.UniqueID;
-            %         end
+          
             countid = countid + 1;
             continue
         end
@@ -431,11 +425,12 @@ for subsesid = 1:length(KiloSortPaths)
                 unitType = bc_getQualityUnitType(paramBC, qMetric);
                 %                 unitType(:) = 1; ???
 
-                % Commmented by CB for now    
-                spike_templates_0idx = readNPY([myClusFile(1).folder filesep 'spike_templates.npy']); % changed back 20230920 JF 
+                % Commmented by CB for now
+                spike_templates_0idx = readNPY([myClusFile(1).folder filesep 'spike_templates.npy']); % changed back 20230920 JF
                 spikeTemplates = spike_templates_0idx + 1;
                 uniqueTemplates = unique(spikeTemplates);
-                tmpGUI = load(fullfile(savePath,'templates.qualityMetricDetailsforGUI'));
+                tmpfile = dir(fullfile(savePath,'**','templates.qualityMetricDetailsforGUI.mat'));
+                tmpGUI = load(fullfile(tmpfile.folder,tmpfile.name));
                 % need to load forGUI.tempWv??
                 bc_plotGlobalQualityMetric(qMetric, paramBC, unitType, uniqueTemplates, tmpGUI.forGUI.tempWv);
 

@@ -78,7 +78,7 @@ end
 
 %% Actual pipeline
 %% PyKS - run pykilosort from Matlab/Python integration
-RunPyKS2_FromMatlab
+ RunPyKS2_FromMatlab
 
 %% Runs unitmatch across all data from a mouse to generate a table
 RunUnitMatchAllDataPerMouse
