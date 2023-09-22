@@ -128,7 +128,12 @@ for subsesid = 1:length(KiloSortPaths)
                 rawD = cat(2, rawD{:});
             end
         else
-            rawD = dir(fullfile(RawDataPaths(subsesid).folder, RawDataPaths(subsesid).name));
+            if isstruct(RawDataPaths)
+                rawD = dir(fullfile(RawDataPaths(subsesid).folder, RawDataPaths(subsesid).name));
+            else
+                rawD = dir(fullfile(RawDataPaths{subsesid}));
+            end
+            
         end
 
         RawDataPaths = rawD;
@@ -156,11 +161,9 @@ for subsesid = 1:length(KiloSortPaths)
         else
             if isstruct(RawDataPaths)
                 rawD = dir(fullfile(RawDataPaths(subsesid).folder, RawDataPaths(subsesid).name));
-
             else
                 rawD = dir(fullfile(RawDataPaths{subsesid}));
             end
-
         end
         AllKiloSortPaths = {AllKiloSortPaths{:}, KiloSortPaths{subsesid}};
     end
