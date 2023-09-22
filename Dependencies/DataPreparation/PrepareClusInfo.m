@@ -414,8 +414,13 @@ for subsesid = 1:length(KiloSortPaths)
 
                 %             idx = ismember(sp.spikeTemplates,clusidtmp(Good_IDtmp)); %Only include good units
                 %careful; spikeSites zero indexed
+                if isempty(sp.pcFeat)
+                    spfeat = [];
+                else
+                    spfeat = sp.pcFeat(idx, :, :);
+                end
                 [qMetric, unitType] = bc_runAllQualityMetrics(paramBC, sp.st(idx)*sp.sample_rate, sp.spikeTemplates(idx)+1, ...
-                    templateWaveforms, sp.tempScalingAmps(idx), sp.pcFeat(idx, :, :), sp.pcFeatInd+1, channelpostmp, savePath); % Be careful, bombcell needs 1-indexed!
+                    templateWaveforms, sp.tempScalingAmps(idx), spfeat, sp.pcFeatInd+1, channelpostmp, savePath); % Be careful, bombcell needs 1-indexed!
 
             else
                 paramBC.rawFile = fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'bin'));

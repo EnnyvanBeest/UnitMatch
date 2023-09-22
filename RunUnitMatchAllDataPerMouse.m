@@ -76,6 +76,10 @@ for midx = 1:length(MiceOpt)
         continue
     end
 
+    %% Prepare cluster information
+    PrepareClusInfoparams = PrepareClusInfo(AllKiloSortPaths,PrepareClusInfoparams);
+    PrepareClusInfoparams.RecType = RecordingType{midx};%
+
     %% Might want to run UM for separate IMRO tables & Probes (although UM can handle running all at the same time and takes position into account)
     if ~PrepareClusInfoparams.separateIMRO
         RunSet = ones(1,length(AllKiloSortPaths)); %Run everything at the same time
@@ -114,10 +118,7 @@ for midx = 1:length(MiceOpt)
         UnitMatchExist = dir(fullfile(PrepareClusInfoparams.SaveDir,'**','UnitMatch.mat'));
         if isempty(UnitMatchExist) || PrepareClusInfoparams.RedoUnitMatch
 
-            %% Prepare cluster information
-            PrepareClusInfoparams = PrepareClusInfo(AllKiloSortPaths(idx),PrepareClusInfoparams);
-            PrepareClusInfoparams.RecType = RecordingType{midx};%
-
+            
             %% Evaluate (within unit ID cross-v alidation)
             UMparam = RunUnitMatch(AllKiloSortPaths(idx),PrepareClusInfoparams);
 
