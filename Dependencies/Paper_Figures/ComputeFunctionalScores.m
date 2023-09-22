@@ -395,7 +395,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) % If it alre
     corrWCCA_1x2 = corrMat(1:2:end, 2:2:end);
     for ss1 = 1:nRec
         for ss2 = 1:nRec
-            if ~isnan(corrWCCA_1x2{ss1,ss2})
+            if ~all(isnan(corrWCCA_1x2{ss1,ss2}(:)))
                 corrWCCA_big(sum(nClu(1:ss1-1))+1:sum(nClu(1:ss1)), sum(nClu(1:ss2-1))+1:sum(nClu(1:ss2))) = corrWCCA_1x2{ss1,ss2};
             end
         end
