@@ -1,25 +1,25 @@
 %% User Input
 %% Path information
-DataDir =  {'H:\MatchingUnits\RawData'}; %{'H:\MatchingUnits\RawDataMonthApart'};%;%Raw data folders, typically servers were e.g. *.cbin files are stored
-SaveDir = 'H:\MatchingUnits\Output\NotConcatenated' %'H:\MatchingUnits\Output\Concatenated1Day'; %'H:\MatchingUnits\Output\MonthApartStitched'%%;%  'H:\MatchingUnits\Output\ManyRecordings'%Folder where to store the results
+DataDir =  {'H:\MatchingUnits\RawDataMonthApart'};%;{'H:\MatchingUnits\RawData'}; %%Raw data folders, typically servers were e.g. *.cbin files are stored
+SaveDir = 'H:\MatchingUnits\Output\MonthApartStitched'%'H:\MatchingUnits\Output\NotConcatenated' %'H:\MatchingUnits\Output\Concatenated1Day'; %%;%  'H:\MatchingUnits\Output\ManyRecordings'%Folder where to store the results
 tmpdatafolder = 'H:\MatchingUnits\Tmp'; % temporary folder for temporary decompression of data 
-KilosortDir = 'H:\MatchingUnits\KilosortOutput'; %'H:\MatchingUnits\KilosortOutputMonthApart';% Kilosort output folder
+KilosortDir = '\\znas.cortexlab.net\Lab\Share\Celian\UnitMatch\KilosortOutputMonthApart';% 'H:\MatchingUnits\KilosortOutputMonthApart';% 'H:\MatchingUnits\KilosortOutput'; %Kilosort output folder
 GithubDir = 'C:\Users\EnnyB\Documents\GitHub'; % Github directory
 PythonEXE = 'C:\Users\EnnyB\anaconda3\envs\pyks2\pythonw.exe' % Python version to run python code in:
 
 %% Information on experiments
-MiceOpt = {'AL032','AV008','CB016','EB019','JF067'}; % Add all mice you want to analyze
+MiceOpt = {'AL032'};%,'AV008','CB016','EB019','JF067'}; % Add all mice you want to analyze
 DataDir2Use = repmat(1,[1,length(MiceOpt)]); % In case you have multiple DataDir, index which directory is used for each mouse
 RecordingType = repmat({'Chronic'},1,length(MiceOpt)); % And whether recordings were Chronic (default)
 RecordingType(ismember(MiceOpt,{''}))={'Acute'}; %EB014', % Or maybe acute?
 
 %% Parameters on how to prepare units/data for analysis
-PrepareClusInfoparams.RunPyKSChronicStitched = 0; % Default 0. if 1, run PyKS chronic recordings stitched when same IMRO table was used
+PrepareClusInfoparams.RunPyKSChronicStitched = 1; % Default 0. if 1, run PyKS chronic recordings stitched when same IMRO table was used
 PrepareClusInfoparams.CopyToTmpFirst = 1; % If 1, copy data to local first, don't run from server (= advised!)
 PrepareClusInfoparams.DecompressLocal = 1; % If 1, uncompress data first if it's currently compressed (= necessary for unitmatch and faster for QualityMetrics)
 
 % Storing preprocessed data?
-PrepareClusInfoparams.ReLoadAlways = 0; % If 1, SP & Clusinfo are always loaded from KS output
+PrepareClusInfoparams.ReLoadAlways = 1; % If 1, SP & Clusinfo are always loaded from KS output
 PrepareClusInfoparams.saveSp = 1; % Save SP struct for easy loading of preprocessed data
 PrepareClusInfoparams.binsz = 0.01; %Bin size for PSTHs in seconds
 

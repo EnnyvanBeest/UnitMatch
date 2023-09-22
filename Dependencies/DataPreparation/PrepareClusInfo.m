@@ -432,7 +432,11 @@ for subsesid = 1:length(KiloSortPaths)
                 tmpfile = dir(fullfile(savePath,'**','templates.qualityMetricDetailsforGUI.mat'));
                 tmpGUI = load(fullfile(tmpfile.folder,tmpfile.name));
                 % need to load forGUI.tempWv??
+                try
                 bc_plotGlobalQualityMetric(qMetric, paramBC, unitType, uniqueTemplates, tmpGUI.forGUI.tempWv);
+                catch ME
+                    disp(ME)
+                end
 
                 %                 load(fullfile(savePath, 'qMetric.mat'))
             end

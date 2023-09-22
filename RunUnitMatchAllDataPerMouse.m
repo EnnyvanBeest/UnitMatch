@@ -106,8 +106,8 @@ for midx = 1:length(MiceOpt)
         if isempty(idx)
             continue
         end
-        if nRuns == 1
-            PrepareClusInfoparams.SaveDir = fullfile(SaveDir,MiceOpt{midx});
+        if ~PrepareClusInfoparams.separateIMRO
+            PrepareClusInfoparams.SaveDir = fullfile(SaveDir,MiceOpt{midx},'AllProbes','AllIMRO');
         else
             PrepareClusInfoparams.SaveDir = fullfile(SaveDir,MiceOpt{midx},ProbeOpt{PosComb(1,runid)},['IMRO_' num2str(PosComb(2,runid))]);
         end
