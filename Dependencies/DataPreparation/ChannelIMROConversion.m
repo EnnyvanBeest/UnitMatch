@@ -1,4 +1,4 @@
-function channelPos = ChannelIMROConversion(datapath,drawthis)
+function [channelPos, probeSN] = ChannelIMROConversion(datapath,drawthis)
 %Extract actual channelPositions from metafile
 
 
@@ -8,6 +8,9 @@ if nargin==0
 end
 %Extract meta file
 meta = ReadMeta2(datapath);
+
+%Extract probe serial number
+probeSN = str2num(meta.imDatPrb_sn);
 
 %Extract Shank map
 Shankmap = meta.snsShankMap;

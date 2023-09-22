@@ -75,6 +75,7 @@ channelpos = [];
 
 AllKiloSortPaths = cell(1, 0);
 AllChannelPos = cell(1, 0);
+AllProbeSN = cell(1, 0);
 countid = 1;
 % figure;
 cols = jet(length(KiloSortPaths));
@@ -179,8 +180,9 @@ for subsesid = 1:length(KiloSortPaths)
     end
 
     %% Is it correct channelpos though...? Check using raw data
-    channelpostmpconv = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done
+    [channelpostmpconv, probeSN] = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done
     AllChannelPos{countid} = channelpostmpconv;
+    AllProbeSN{countid} = probeSN;
 
     %% Load existing?
     if exist(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat')) && ~Params.RedoQM && ~Params.ReLoadAlways
@@ -430,11 +432,11 @@ for subsesid = 1:length(KiloSortPaths)
                 spike_templates_0idx = readNPY([myClusFile(1).folder filesep 'spike_templates.npy']); % changed back 20230920 JF
                 spikeTemplates = spike_templates_0idx + 1;
                 uniqueTemplates = unique(spikeTemplates);
-                tmpfile = dir(fullfile(savePath,'**','templates.qualityMetricDetailsforGUI.mat'));
-                tmpGUI = load(fullfile(tmpfile.folder,tmpfile.name));
                 % need to load forGUI.tempWv??
                 try
-                bc_plotGlobalQualityMetric(qMetric, paramBC, unitType, uniqueTemplates, tmpGUI.forGUI.tempWv);
+                    tmpfile = dir(fullfile(savePath,'**','templates.qualityMetricDetailsforGUI.mat'));
+                    tmpGUI = load(fullfile(tmpfile.folder,tmpfile.name));
+                    bc_plotGlobalQualityMetric(qMetric, paramBC, unitType, uniqueTemplates, tmpGUI.forGUI.tempWv);
                 catch ME
                     disp(ME)
                 end
@@ -564,6 +566,7 @@ for subsesid = 1:length(KiloSortPaths)
 end
 
 Params.AllChannelPos = AllChannelPos;
+Params.AllProbeSN = AllProbeSN;
 Params.RawDataPaths = RawDataPaths;
 Params.DecompressionFlag = DecompressionFlag;
 
