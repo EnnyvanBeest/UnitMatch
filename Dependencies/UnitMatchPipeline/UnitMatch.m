@@ -102,6 +102,7 @@ SessionSwitch = arrayfun(@(X) find(GoodRecSesID==X,1,'first'),unique(recsesGood)
 SessionSwitch(cellfun(@isempty,SessionSwitch))=[];
 SessionSwitch = [cell2mat(SessionSwitch); nclus+1];
 
+
 %% Extract raw waveforms
 % This script does the actual extraction (if necessary) and saves out paths
 % to NPY for individual unit data

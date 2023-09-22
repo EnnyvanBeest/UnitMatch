@@ -38,6 +38,13 @@ end
 clusinfo = clusinfoNew;
 clear clusinfoNew
 
+if sum(clusinfo.Good_ID)<25
+    disp('Less than 25 neurons.. skip')
+    UMparam.Error = 'Too Little Units'
+    return
+end
+
+
 %% UnitMatch Parameters
 % Use some bombcell parameters
 if Params.RunQualityMetrics

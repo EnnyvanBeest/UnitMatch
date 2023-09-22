@@ -38,7 +38,11 @@ for midx = 1:length(MiceOpt)
         end
     end
 
-   
+    if isempty(subsesopt)
+        display(['No data found for ' MiceOpt{midx} ', continue...'])
+        continue
+    end
+
     if strcmp(RecordingType{midx},'Chronic')
         if ~PrepareClusInfoparams.RunPyKSChronicStitched %MatchUnitsAcrossDays
             disp('Unit matching in Matlab')
@@ -62,60 +66,98 @@ for midx = 1:length(MiceOpt)
     channelposition(cellfun(@isempty,channelposition))=[];
     AllKiloSortPaths = subsesopt;
 
-
-    %% Create saving directoryed
+    %% Create saving directory
     clear params
-    thisIMRO = '';
-    thisdate = [];
     if ~exist(fullfile(SaveDir,MiceOpt{midx}))
         mkdir(fullfile(SaveDir,MiceOpt{midx}))
     end
-    PrepareClusInfoparams.SaveDir = fullfile(SaveDir,MiceOpt{midx});
     if isempty(subsesopt)
         disp(['No data found for ' MiceOpt{midx}])
         continue
     end
-    %% Prepare cluster information
-    PrepareClusInfoparams = PrepareClusInfo(AllKiloSortPaths,PrepareClusInfoparams);
-    PrepareClusInfoparams.RecType = RecordingType{midx};%
-    %% Run UnitMatch
-    UnitMatchExist = dir(fullfile(PrepareClusInfoparams.SaveDir,'**','UnitMatch.mat'));
-    if isempty(UnitMatchExist) || PrepareClusInfoparams.RedoUnitMatch
-        %% Evaluate (within unit ID cross-v alidation)
-        UMparam = RunUnitMatch(AllKiloSortPaths,PrepareClusInfoparams);
 
-        %% Evaluate (within unit ID cross-validation)
-        EvaluatingUnitMatch(UMparam.SaveDir);
-
-        %% Function analysis
-        UMparam.SaveDir = fullfile(SaveDir,MiceOpt{midx},'UnitMatch')
-        ComputeFunctionalScores(UMparam.SaveDir,1)
-
-        %% Figures
-        if UMparam.MakePlotsOfPairs
-            DrawBlind = 0; %1 for blind drawing (for manual judging of pairs)
-            DrawPairsUnitMatch(UMparam.SaveDir,DrawBlind);
-            if UMparam.GUI
-                FigureFlick(UMparam.SaveDir)
-                pause
-            end
-        end
-
-        %% QM
-        try
-            QualityMetricsROCs(UMparam.SaveDir);
-        catch ME
-            disp(['Couldn''t do Quality metrics for ' MiceOpt{midx}])
-        end
-
+    %% Might want to run UM for separate IMRO tables & Probes (although UM can handle running all at the same time and takes position into account)
+    if ~PrepareClusInfoparams.separateIMRO
+        RunSet = ones(1,length(AllKiloSortPaths)); %Run everything at the same time
+        nRuns = 1;
     else
-        UMparam = PrepareClusInfoparams;
-        UMparam.SaveDir = fullfile(PrepareClusInfoparams.SaveDir,'UnitMatch');
+        % Extract different IMRO tables
+        channelpositionMatrix = cat(3,channelposition{:});
+        [UCHanOpt,~,idIMRO] = unique(reshape(channelpositionMatrix,size(channelpositionMatrix,1)*size(channelpositionMatrix,2),[])','rows','stable');
+        UCHanOpt = reshape(UCHanOpt',size(channelpositionMatrix,1),size(channelpositionMatrix,2),[]);
+
+        % Extract unique probes used
+        ProbePerPath = cellfun(@(X) X(strfind(X,'Probe'):strfind(X,'Probe')+5),AllKiloSortPaths,'Uni',0);
+        [ProbeOpt,~,idProbe] = unique(ProbePerPath);
+
+        PosComb = combvec(1:length(ProbeOpt),1:size(UCHanOpt,3)); % Possible combinations Probe X IMRO
+        % Assign a number to each KS path related to PosComb
+        RunSet = nan(1,length(AllKiloSortPaths));
+        for ksid = 1:length(AllKiloSortPaths)
+            RunSet(ksid) = find(PosComb(2,:)==idIMRO(ksid) & PosComb(1,:)==idProbe(ksid));
+        end
+        nRuns = length(PosComb);
     end
 
-    %%
-    disp(['Preprocessed data for ' MiceOpt{midx}])
+
+    %% Run UnitMatch
+    for runid = 1:nRuns
+        idx = find(RunSet==runid);
+        if isempty(idx)
+            continue
+        end
+        if nRuns == 1
+            PrepareClusInfoparams.SaveDir = fullfile(SaveDir,MiceOpt{midx});
+        else
+            PrepareClusInfoparams.SaveDir = fullfile(SaveDir,MiceOpt{midx},ProbeOpt{PosComb(1,runid)},['IMRO_' num2str(PosComb(2,runid))]);
+        end
+        UnitMatchExist = dir(fullfile(PrepareClusInfoparams.SaveDir,'**','UnitMatch.mat'));
+        if isempty(UnitMatchExist) || PrepareClusInfoparams.RedoUnitMatch
+
+            %% Prepare cluster information
+            PrepareClusInfoparams = PrepareClusInfo(AllKiloSortPaths(idx),PrepareClusInfoparams);
+            PrepareClusInfoparams.RecType = RecordingType{midx};%
+
+            %% Evaluate (within unit ID cross-v alidation)
+            UMparam = RunUnitMatch(AllKiloSortPaths(idx),PrepareClusInfoparams);
+
+            if isfield(UMparam,'Error')
+                continue
+            end
+
+            %% Evaluate (within unit ID cross-validation)
+            EvaluatingUnitMatch(UMparam.SaveDir);
+
+            %% Function analysis
+            UMparam.SaveDir = fullfile(PrepareClusInfoparams.SaveDir,'UnitMatch');
+            ComputeFunctionalScores(UMparam.SaveDir,1)
+
+            %% Figures
+            if UMparam.MakePlotsOfPairs
+                DrawBlind = 0; %1 for blind drawing (for manual judging of pairs)
+                DrawPairsUnitMatch(UMparam.SaveDir,DrawBlind);
+                if UMparam.GUI
+                    FigureFlick(UMparam.SaveDir)
+                    pause
+                end
+            end
+
+            %% QM
+            try
+                QualityMetricsROCs(UMparam.SaveDir);
+            catch ME
+                disp(['Couldn''t do Quality metrics for ' MiceOpt{midx}])
+            end
+
+        else
+            UMparam = PrepareClusInfoparams;
+            UMparam.SaveDir = fullfile(PrepareClusInfoparams.SaveDir,'UnitMatch');
+        end
+
+        %%
+        disp(['Preprocessed data for ' MiceOpt{midx} ' run  ' num2str(runid) '/' num2str(nRuns)])
 
 
+    end
 end
-% 
+%
