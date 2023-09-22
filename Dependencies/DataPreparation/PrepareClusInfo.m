@@ -362,9 +362,11 @@ for subsesid = 1:length(KiloSortPaths)
 
             if length(rawD) > 1 % DO NOT DELETE!
                 savePath = fullfile(myClusFile(1).folder, num2str(id));
+                kilosortPath = myClusFile(1).folder;
                 idx = sp.SessionID == id;
             else
                 savePath = fullfile(KiloSortPaths{subsesid});
+                kilosortPath = savePath;
                 idx = sp.SessionID == 1;
             end
 
@@ -432,7 +434,7 @@ for subsesid = 1:length(KiloSortPaths)
                 %                 unitType(:) = 1; ???
 
                 % Commmented by CB for now    
-                spike_templates_0idx = readNPY([savePath filesep 'spike_templates.npy']); % changed back 20230920 JF 
+                spike_templates_0idx = readNPY([kilosortPath filesep 'spike_templates.npy']); % changed back 20230920 JF 
                 spikeTemplates = spike_templates_0idx + 1;
                 uniqueTemplates = unique(spikeTemplates);
                 tmpGUI = load(fullfile(savePath,'templates.qualityMetricDetailsforGUI'));
