@@ -7,7 +7,7 @@ function Params = PrepareClusInfo(KiloSortPaths, Params, RawDataPaths)
 % chronic recordings with same IMRO table: give a list with all sessions)
 
 % Params: with:
-% Params.loadPCs=1;
+% Params.loadPCs=0;
 % Params.RunPyKSChronicStitched = 1
 % Params.DecompressLocal = 1; %if 1, uncompress data first if it's currently compressed
 % Params.RedoQM = 0; %if 1, redo quality metrics if it already exists
@@ -36,7 +36,7 @@ end
 try
     if nargin < 2
         disp('No params given. Use default - although this is not advised...')
-        Params.loadPCs = 1;
+        Params.loadPCs = 0;
         Params.RunPyKSChronicStitched = 1;
         Params.DecompressLocal = 1; %if 1, uncompress data first if it's currently compressed
         Params.CleanUpTemporary = 1; % Clean up temporary data
@@ -53,9 +53,7 @@ try
         Params.nSavedChans = 385;
         Params.nSyncChans = 1;
     end
-    if Params.RunQualityMetrics
-        Params.loadPCs = 1; %If you want to run QM you need this
-    end
+
 
     if nargin < 3
         disp('Finding raw ephys data using the params.py file from (py)kilosort output')
