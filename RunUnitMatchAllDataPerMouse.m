@@ -121,11 +121,15 @@ for midx = 1:length(MiceOpt)
             %% Evaluate (within unit ID cross-v alidation)
             UMparam = RunUnitMatch(AllKiloSortPaths(idx),PrepareClusInfoparams);
 
+            if isfield(UMparam,'Error')
+                continue
+            end
+
             %% Evaluate (within unit ID cross-validation)
             EvaluatingUnitMatch(UMparam.SaveDir);
 
             %% Function analysis
-            UMparam.SaveDir = fullfile(SaveDir,MiceOpt{midx},'UnitMatch')
+            UMparam.SaveDir = fullfile(PrepareClusInfoparams.SaveDir,'UnitMatch');
             ComputeFunctionalScores(UMparam.SaveDir,1)
 
             %% Figures
