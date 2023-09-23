@@ -69,6 +69,13 @@ for midx = 1:length(MiceOpt)
     PrepareClusInfoparams = PrepareClusInfo(AllKiloSortPaths,PrepareClusInfoparams);
     PrepareClusInfoparams.RecType = RecordingType{midx};%
 
+    % Remove empty ones
+    EmptyFolders = find(cellfun(@isempty,PrepareClusInfoparams.AllChannelPos));
+    AllKiloSortPaths(EmptyFolders) = [];
+    PrepareClusInfoparams.AllChannelPos(EmptyFolders) = [];
+    PrepareClusInfoparams.AllProbeSN(EmptyFolders) = [];
+    PrepareClusInfoparams.RawDataPaths(EmptyFolders) = [];
+
     %% Might want to run UM for separate IMRO tables & Probes (although UM can handle running all at the same time and takes position into account)
     if ~PrepareClusInfoparams.separateIMRO
         RunSet = ones(1,length(AllKiloSortPaths)); %Run everything at the same time
