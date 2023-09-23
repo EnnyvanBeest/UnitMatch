@@ -34,6 +34,7 @@ ndays = length(unique(GoodRecSesID));
 SessionSwitch = arrayfun(@(X) find(GoodRecSesID==X,1,'first'),unique(GoodRecSesID),'Uni',0);
 SessionSwitch(cellfun(@isempty,SessionSwitch))=[];
 SessionSwitch = [cell2mat(SessionSwitch); nclus+1];
+nCellsPerSession = diff(SessionSwitch);
 drift = nan;
 % Do in batches
 batchsz = 1000;
@@ -615,7 +616,8 @@ while flag<2
     disp('Computing total score...')
     timercounter = tic;
     %     priorMatch = 1-((nclus+nclus.*sqrt(ndays-1))./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days)
-    priorMatch = 1-((nclus+nclus.*sqrt(ndays-1)*2*param.ExpectMatches)./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days) % Times 2 for symmetry
+%     priorMatch = 1-((nclus+nclus.*sqrt(ndays-1)*2*param.ExpectMatches)./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days) % Times 2 for symmetry
+    priorMatch = 1-((sum(nCellsPerSession.*ndays).*param.ExpectMatches)./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days) % Times 2 for symmetry
 
     leaveoutmatches = false(nclus,nclus,length(Scores2Include)); %Used later
     figure;

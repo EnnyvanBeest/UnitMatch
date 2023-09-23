@@ -19,7 +19,7 @@ PrepareClusInfoparams.CopyToTmpFirst = 1; % If 1, copy data to local first, don'
 PrepareClusInfoparams.DecompressLocal = 1; % If 1, uncompress data first if it's currently compressed (= necessary for unitmatch and faster for QualityMetrics)
 
 % Storing preprocessed data?
-PrepareClusInfoparams.ReLoadAlways = 1; % If 1, SP & Clusinfo are always loaded from KS output
+PrepareClusInfoparams.ReLoadAlways = 0; % If 1, SP & Clusinfo are always loaded from KS output
 PrepareClusInfoparams.saveSp = 1; % Save SP struct for easy loading of preprocessed data
 PrepareClusInfoparams.binsz = 0.01; %Bin size for PSTHs in seconds
 

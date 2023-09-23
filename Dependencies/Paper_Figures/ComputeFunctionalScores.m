@@ -342,15 +342,15 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) % If it alre
     gw = gausswin(proc.smoothSize,3);
     proc.smWin = gw./sum(gw);
 
-    nRec = numel(UMparam.AllRawPaths);
-    nClu = nan(1,nRec); for ss = 1:nRec; nClu(ss) = numel(unique(MatchTable.ID1(MatchTable.RecSes1 == ss))); end
+    nRec = length(RecOpt); % not always the same!! numel(UMparam.AllRawPaths);
+    nClu = nan(1,nRec); for ss = 1:nRec; nClu(ss) = numel(unique(MatchTable.ID1(MatchTable.RecSes1 == RecOpt(ss)))); end
     spikeData_cv = cell(1,2*nRec);
     for ss = 1:nRec
         % Get the original binFile (also for stitched?)
         if iscell(UMparam.AllRawPaths)
-            binFileRef = fullfile(UMparam.AllRawPaths{ss});
+            binFileRef = fullfile(UMparam.AllRawPaths{RecOpt(ss)});
         else
-            binFileRef = fullfile(UMparam.AllRawPaths(ss).folder,UMparam.AllRawPaths(ss).name);
+            binFileRef = fullfile(UMparam.AllRawPaths(RecOpt(ss)).folder,UMparam.AllRawPaths(RecOpt(ss)).name);
         end
 
         % Find the associated experiments
@@ -365,22 +365,30 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) % If it alre
 
         if ~isempty(exp2keep)
             % Get the spikes
+            try
             st = sp.st(sp.RecSes == RecOpt(ss));
             clu = sp.spikeTemplates(sp.RecSes == RecOpt(ss));
+            catch ME
+                keyboard
+            end
 
             spikesAll.times = st;
             spikesAll.clusters = clu;
             spikesAll.clusterIDs = unique(clu); % follow the same units across days
 
             % Get the natim responses
-            spikeData = getNatImResp(spikesAll,exp2keep,binFileRef,proc);
-            clusterIDs = spikesAll.clusterIDs;
+            try
+                spikeData = getNatImResp(spikesAll,exp2keep,binFileRef,proc);
+                clusterIDs = spikesAll.clusterIDs;
 
-            % Split in two halves and subselect units
-            cluIdx = ismember(clusterIDs,unique(MatchTable.ID1(MatchTable.RecSes1 == ss)));
-            currIdx = (ss-1)*2;
-            spikeData_cv{currIdx+1} = spikeData(:,:,cluIdx,1:2:end); % odd
-            spikeData_cv{currIdx+2} = spikeData(:,:,cluIdx,2:2:end); % even
+                % Split in two halves and subselect units
+                cluIdx = ismember(clusterIDs,unique(MatchTable.ID1(MatchTable.RecSes1 == RecOpt(ss))));
+                currIdx = (ss-1)*2;
+                spikeData_cv{currIdx+1} = spikeData(:,:,cluIdx,1:2:end); % odd
+                spikeData_cv{currIdx+2} = spikeData(:,:,cluIdx,2:2:end); % even
+            catch ME
+                disp(ME)
+            end
         end
     end
 
@@ -396,7 +404,11 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) % If it alre
     for ss1 = 1:nRec
         for ss2 = 1:nRec
             if ~all(isnan(corrWCCA_1x2{ss1,ss2}(:)))
+                try
                 corrWCCA_big(sum(nClu(1:ss1-1))+1:sum(nClu(1:ss1)), sum(nClu(1:ss2-1))+1:sum(nClu(1:ss2))) = corrWCCA_1x2{ss1,ss2};
+                catch ME
+                    keyboard
+                end
             end
         end
     end
