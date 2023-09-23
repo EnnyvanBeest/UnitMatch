@@ -176,8 +176,8 @@ for subsesid = 1:length(KiloSortPaths)
 
     %% Is it correct channelpos though...? Check using raw data
     [channelpostmpconv, probeSN] = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done
-    AllChannelPos{countid} = channelpostmpconv;
-    AllProbeSN{countid} = probeSN;
+    AllChannelPos{subsesid} = channelpostmpconv;
+    AllProbeSN{subsesid} = probeSN;
 
     %% Load existing?
     if exist(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat')) && ~Params.RedoQM && ~Params.ReLoadAlways
@@ -561,7 +561,7 @@ for subsesid = 1:length(KiloSortPaths)
             disp(ME)
         end
     end
-
+    close all
     countid = countid + 1;
 end
 
@@ -572,7 +572,7 @@ Params.DecompressionFlag = DecompressionFlag;
 
 %% Remove temporary files
 if isstruct(RawDataPaths)
-    if any(ismember({RawDataPaths(:).folder}, Params.tmpdatafolder))
+    if any(cellfun(@(X) strcmp(X,Params.tmpdatafolder), {RawDataPaths(:).folder}))
         Params.CleanUpTemporary = 1;
     end
 end
