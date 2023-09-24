@@ -95,12 +95,7 @@ for subsesid = 1:length(KiloSortPaths)
     AllUniqueTemplates = [];
     cluster_id = [];
     recses = [];
-    if any(strfind(KiloSortPaths{subsesid}, 'Probe'))
-        probeid = str2num(KiloSortPaths{subsesid}(strfind(KiloSortPaths{subsesid}, 'Probe') + 5));
-    else
-        disp('Probe ID unknown')
-        probeid = 0;
-    end
+ 
 
     %% save data paths information
     if Params.RunPyKSChronicStitched %CALL THIS STITCHED --> Only works when using RunPyKS2_FromMatlab as well from this toolbox
@@ -181,8 +176,8 @@ for subsesid = 1:length(KiloSortPaths)
 
     %% Is it correct channelpos though...? Check using raw data
     [channelpostmpconv, probeSN] = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done
-    AllChannelPos{countid} = channelpostmpconv;
-    AllProbeSN{countid} = probeSN;
+    AllChannelPos{subsesid} = channelpostmpconv;
+    AllProbeSN{subsesid} = probeSN;
 
     %% Load existing?
     if exist(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat')) && ~Params.RedoQM && ~Params.ReLoadAlways
@@ -414,8 +409,13 @@ for subsesid = 1:length(KiloSortPaths)
 
                 %             idx = ismember(sp.spikeTemplates,clusidtmp(Good_IDtmp)); %Only include good units
                 %careful; spikeSites zero indexed
+                if isempty(sp.pcFeat)
+                    spfeat = [];
+                else
+                    spfeat = sp.pcFeat(idx, :, :);
+                end
                 [qMetric, unitType] = bc_runAllQualityMetrics(paramBC, sp.st(idx)*sp.sample_rate, sp.spikeTemplates(idx)+1, ...
-                    templateWaveforms, sp.tempScalingAmps(idx), sp.pcFeat(idx, :, :), sp.pcFeatInd+1, channelpostmp, savePath); % Be careful, bombcell needs 1-indexed!
+                    templateWaveforms, sp.tempScalingAmps(idx), spfeat, sp.pcFeatInd+1, channelpostmp, savePath); % Be careful, bombcell needs 1-indexed!
 
             else
                 paramBC.rawFile = fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'bin'));
@@ -501,10 +501,10 @@ for subsesid = 1:length(KiloSortPaths)
     if exist('theseuniqueTemplates', 'var') && iscell(theseuniqueTemplates)
         recsesAlltmp = arrayfun(@(X) repmat(addthis+X, 1, length(theseuniqueTemplates{X})), [1:length(theseuniqueTemplates)], 'UniformOutput', 0);
         recsesAll = cat(1, recsesAll(:), cat(2, recsesAlltmp{:})');
-        ProbeAll = cat(1, ProbeAll(:), repmat(probeid, 1, length(cat(2, recsesAlltmp{:})))');
+        ProbeAll = cat(1, ProbeAll(:), repmat(probeSN, 1, length(cat(2, recsesAlltmp{:})))'); % Replace to serial number
     else
         recsesAll = cat(1, recsesAll(:), repmat(addthis+1, 1, length(Good_IDtmp))');
-        ProbeAll = cat(1, ProbeAll(:), repmat(probeid, 1, length(Good_IDtmp))');
+        ProbeAll = cat(1, ProbeAll(:), repmat(probeSN, 1, length(Good_IDtmp))'); % Replace to serial numer
     end
     sp.RecSes = sp.SessionID + countid - 1; %Keep track of recording session, as cluster IDs are not unique across sessions
 
@@ -561,7 +561,7 @@ for subsesid = 1:length(KiloSortPaths)
             disp(ME)
         end
     end
-
+    close all
     countid = countid + 1;
 end
 
@@ -572,7 +572,7 @@ Params.DecompressionFlag = DecompressionFlag;
 
 %% Remove temporary files
 if isstruct(RawDataPaths)
-    if any(ismember({RawDataPaths(:).folder}, Params.tmpdatafolder))
+    if any(cellfun(@(X) strcmp(X,Params.tmpdatafolder), {RawDataPaths(:).folder}))
         Params.CleanUpTemporary = 1;
     end
 end

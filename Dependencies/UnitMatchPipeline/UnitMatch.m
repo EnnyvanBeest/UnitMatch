@@ -101,6 +101,8 @@ ndays = length(unique(recsesGood));
 SessionSwitch = arrayfun(@(X) find(GoodRecSesID==X,1,'first'),unique(recsesGood),'Uni',0);
 SessionSwitch(cellfun(@isempty,SessionSwitch))=[];
 SessionSwitch = [cell2mat(SessionSwitch); nclus+1];
+nCellsPerSession = diff(SessionSwitch);
+param.nExpectedMatches = sum(nCellsPerSession)+sum((nCellsPerSession.*sqrt(ndays-1).*param.ExpectMatches)); % Expecting less matches with more days
 
 
 %% Extract raw waveforms

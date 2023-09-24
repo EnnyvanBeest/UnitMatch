@@ -34,6 +34,7 @@ ndays = length(unique(GoodRecSesID));
 SessionSwitch = arrayfun(@(X) find(GoodRecSesID==X,1,'first'),unique(GoodRecSesID),'Uni',0);
 SessionSwitch(cellfun(@isempty,SessionSwitch))=[];
 SessionSwitch = [cell2mat(SessionSwitch); nclus+1];
+nCellsPerSession = diff(SessionSwitch);
 drift = nan;
 % Do in batches
 batchsz = 1000;
@@ -615,7 +616,8 @@ while flag<2
     disp('Computing total score...')
     timercounter = tic;
     %     priorMatch = 1-((nclus+nclus.*sqrt(ndays-1))./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days)
-    priorMatch = 1-((nclus+nclus.*sqrt(ndays-1)*2*param.ExpectMatches)./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days) % Times 2 for symmetry
+%     priorMatch = 1-((nclus+nclus.*sqrt(ndays-1)*2*param.ExpectMatches)./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days) % Times 2 for symmetry
+    priorMatch = 1-(param.nExpectedMatches./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days) % Times 2 for symmetry
 
     leaveoutmatches = false(nclus,nclus,length(Scores2Include)); %Used later
     figure;
@@ -823,7 +825,7 @@ while flag<2
                 continue
             end
             drift = nanmedian(nanmean(ProjectedLocation(:,BestPairs(idx,1),:),3)-nanmean(ProjectedLocation(:,BestPairs(idx,2),:),3),2);
-            disp(['Median drift recording ' num2str(did) ' calculated: X=' num2str(drift(1)) ', Y=' num2str(drift(2))])
+            disp(['Median drift recording ' num2str(did) ' calculated: X=' num2str(drift(1)) ', Y=' num2str(drift(2)) ', Z=' num2str(drift(3))])
 
             if flag
                 break
@@ -1046,7 +1048,6 @@ if 0 % THis can be used to look at some example projections
 
 
     %% Similarity scores for the two pairs
-
     figure('name','Similarity scores')
     subplot(1,2,1)
     bar(cat(1,squeeze(Predictors(Pairs(1),Pairs(3),:)),squeeze(TotalScore(Pairs(1),Pairs(3))./6)),'FaceColor',cols(3,:),'EdgeColor','none')
@@ -1054,7 +1055,7 @@ if 0 % THis can be used to look at some example projections
     ylabel('Normalized Score')
     makepretty
 
-  subplot(1,2,2)
+    subplot(1,2,2)
     bar(cat(1,squeeze(Predictors(Pairs(1),Pairs(2),:)),squeeze(TotalScore(Pairs(1),Pairs(2))./6)),'FaceColor',cols(2,:),'EdgeColor','none')
     set(gca,'XTick',1:size(Predictors,3)+1,'XTickLabel',{'C','W','V','D','A',char(920),'T'},'YAxisLocation','right','YTickLabelRotation',90,'XTickLabelRotation',90)
     ylabel('Normalized Score')
