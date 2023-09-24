@@ -21,12 +21,24 @@ for subsesid = 1:length(AllKiloSortPaths)
 end
 
 % Add all cluster information in one 'cluster' struct - can be used for further analysis
+% Apparently sometimes clusinfo does not have the same fields (KS version?)
+fields = fieldnames(clusinfo{1});
+IncludeField = true(1,length(fields));
+for sesid=2:length(clusinfo)
+    IncludeField(~ismember(fields,fieldnames(clusinfo{sesid}))) = false;
+end
+for sesid=1:length(clusinfo)
+    thesefields = fieldnames(clusinfo{sesid});
+    clusinfo{sesid} = rmfield(clusinfo{sesid},thesefields(ismember(thesefields,fields(find(~IncludeField))))); % REmove fields
+end
+
+% Continue adding them together
 clusinfo = [clusinfo{:}];
 clusinfoNew = struct;
-fields = fieldnames(clusinfo(1));
+fields = {fields{find(IncludeField)}}';
 for fieldid = 1:length(fields)
     try
-        eval(['clusinfoNew.', fields{fieldid}, '= cat(1,clusinfo(:).', fields{fieldid}, ');'])
+        eval(['clusinfoNew.', fields{fieldid}, '= cat(1,clusinfo(:).', fields{fieldid} ');'])
     catch ME
         try
             eval(['clusinfoNew.', fields{fieldid}, '= cat(2,clusinfo(:).', fields{fieldid}, ');'])

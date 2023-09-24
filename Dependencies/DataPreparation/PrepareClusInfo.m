@@ -144,10 +144,20 @@ for subsesid = 1:length(KiloSortPaths)
             if isempty(rawD)
                 rawD = dir(strrep(tmpdr, 'bin', 'cbin'));
             end
-
+            % Try another way
+            if isempty(rawD)
+                FolderParts = strsplit(KiloSortPaths{subsesid},{'pyKS','PyKS'});
+                rawD = dir(fullfile(FolderParts{1},'*bin'));
+%                 rawD = fullfile(rawD.folder,rawD.name);            
+            end
 
             % Save for later
-            RawDataPaths(subsesid) = rawD;
+            try
+                RawDataPaths(subsesid) = rawD;
+            catch ME
+                disp(ME)
+                keyboard
+            end
 
             if isempty(rawD)
                 disp('Bug...?')

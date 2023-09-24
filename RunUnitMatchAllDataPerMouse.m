@@ -100,7 +100,7 @@ for midx = 1:length(MiceOpt)
     ORIParams = PrepareClusInfoparams; % RESET
 
     %% Run UnitMatch
-    for runid = 20:nRuns
+    for runid = 1:nRuns
         PrepareClusInfoparams = ORIParams; % RESET
         idx = find(RunSet==runid);
         if isempty(idx)
