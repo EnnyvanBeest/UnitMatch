@@ -571,7 +571,7 @@ for id = 1:ntimes
     plot(Vector, hn, 'color', [0, 0, 0])
     xlabel('Autocorrelogram Correlation')
     ylabel('Proportion|Group')
-    legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
+%     legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
     axis square
 
     makepretty
@@ -596,7 +596,7 @@ for id = 1:ntimes
     plot([0, 1], [0, 1], 'k--')
     xlabel('False positive rate')
     ylabel('True positive rate')
-    legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
+%     legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
     title(sprintf('Autocorrelogram AUC: %.3f, %.3f, %.3f', AUC1, AUC2, AUC3))
     makepretty
     axis square
@@ -633,7 +633,7 @@ for id = 1:ntimes
     plot(Vector, hn, 'color', [0, 0, 0])
     xlabel('Firing rate differences')
     ylabel('Proportion|Group')
-    legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
+%     legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
     makepretty
     axis square
 
@@ -658,7 +658,7 @@ for id = 1:ntimes
     plot([0, 1], [0, 1], 'k--')
     xlabel('False positive rate')
     ylabel('True positive rate')
-    legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
+%     legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
     title(sprintf('Firing rate differences AUC: %.3f, %.3f, %.3f', AUC1, AUC2, AUC3))
     makepretty
 
@@ -694,7 +694,7 @@ for id = 1:ntimes
         plot(Vector, hn, 'color', [0, 0, 0])
         xlabel('NatIm Fingerprint')
         ylabel('Proportion|Group')
-        legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
+%         legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
         axis square
         makepretty
     
@@ -710,13 +710,14 @@ for id = 1:ntimes
         plot(Vector, hn, 'color', [0, 0, 0])
         xlabel('NatIm Fingerprint')
         ylabel('Proportion|Group')
-        legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
+%         legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
         axis square
         makepretty
         subplot(4, 3, 12)
-        if any(MatchIdx)
+        if any(MatchIdx) & ~all(isnan(NatImCorr(MatchIdx)))
             labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
             scores = [NatImCorr(MatchIdx)', NatImCorr(NonMatchIdx)'];
+                
             [X, Y, ~, AUC1] = perfcurve(labels, scores, 1);
             h(1) = plot(X, Y, 'color', [0, 0.25, 0]);
             hold all
@@ -736,7 +737,7 @@ for id = 1:ntimes
         plot([0, 1], [0, 1], 'k--')
         xlabel('False positive rate')
         ylabel('True positive rate')
-        legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
+%         legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
         title(sprintf('NatIm Fingerprint AUC: %.3f, %.3f, %.3f', AUC1, AUC2, AUC3))
         makepretty
         drawnow %Something to look at while ACG calculations are ongoing

@@ -23,7 +23,7 @@ nCellsPerSession = diff(SessionSwitch);
 IncludeThesePairs = find(EuclDist<param.maxdist);
 % Prepare a set INCLUDING the cross-validated self-scores, otherwise the probability
 % distributions are just weird
-priorMatch = 1-((sum(nCellsPerSession.*ndays).*param.ExpectMatches)./length(IncludeThesePairs)); %
+priorMatch = 1-(param.nExpectedMatches./length(IncludeThesePairs)); %
 
 % priorMatch = 1-((nclus+nclus.*sqrt(ndays-1)*2*param.ExpectMatches)./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days) *2 for symmetry
 % priorMatch = 1-(nclus*ndays)./(nclus*nclus); %Now use the actual expected prior for bayes'
@@ -57,7 +57,7 @@ MaxPerf = [0 0];
 runid = 0;
 % Priors = [0.5 0.5];
 
-priorMatch = 1-((sum(nCellsPerSession.*ndays).*param.ExpectMatches)./nclus.^2) %
+priorMatch = 1-(param.nExpectedMatches./nclus.^2) %
 Priors = [priorMatch 1-priorMatch];
 BestMdl = [];
 Tbl = array2table(reshape(Predictors,[],size(Predictors,3)),'VariableNames',Scores2Include); %All parameters
