@@ -2,7 +2,7 @@
 FSCoreFig = figure('name', 'Functional Scores');
 
 % Initialize
-TakeRank = 1 %if 0 , take cross-correlation scores (these may be less informative than rank)
+TakeRank = 0 %if 0 , take cross-correlation scores (these may be less informative than rank)
 if TakeRank
     stepsz = 1;
     bins = -20:stepsz:-1;
@@ -37,17 +37,20 @@ AUCNImCurves = [];
 AUCRFCurves = [];
 
 AUCCols = [0 0.7 0; 1 0 0; 0 0 0.7]; %WIthin %Match %non-match
-aucprecision = [0:0.01:1];
+aucprecision = [0:0.05:1];
 clear UMTrackingPerformancePerMouse
 for midx = 1:length(MiceOpt)
+    fprintf('Reference %s...\n', MiceOpt{midx})
+
     tmpfile = dir(fullfile(SaveDir, MiceOpt{midx}, 'UnitMatch', 'UnitMatch.mat'));
     if isempty(tmpfile)
         continue
     end
-    tmpFile = matfile(fullfile(tmpfile.folder, tmpfile.name));
-    MatchTable = tmpFile.MatchTable; %Extract matchtable
-    UMparam = tmpFile.UMparam; % Extract parameters
-    UniqueIDConversion = tmpFile.UniqueIDConversion; % Extract UniqueID Conversion
+
+    fprintf('Loading the data...\n')
+    tic
+    load(fullfile(tmpfile.folder, tmpfile.name), 'MatchTable', 'UMparam', 'UniqueIDConversion');
+    toc
 
     % Load AUCS
     if exist(fullfile(SaveDir, MiceOpt{midx}, 'UnitMatch', 'AUC.mat'))
@@ -90,6 +93,7 @@ for midx = 1:length(MiceOpt)
     ChannelPos = UMparam.channelpos;
 
     %% How many units vs number of units were tracked?
+    fprintf('Evaluating tracked units...\n')
     CrossCorrMatching = nan(0,4); % number of units matched with cross-correlation, % number of units matched of those % Number of units match with UM, % number of units mof those matched with Cross Corr
     TrackingPerformance = nan(5, 0); % MatchesExpected, Difference between recording day, % Tracked units %maximum possibility % Difference in number of units
     TrackingPerformanceKS = nan(5, 0); % MatchesExpected, Difference between recording day, % Tracked units %maximum possibility
@@ -231,45 +235,46 @@ for midx = 1:length(MiceOpt)
         KSTrackingPerformancePerMouse{midx} = TrackingPerformanceKS;
     end
 
-    %% UniqueID X tracking
-    [UniqueIDOpt,idx1,idx2] = unique(UniqueID); %UID options
-    DayOpt = unique(AllDeltaDays);
-    dayses = AllDeltaDays(recses); % Get in days after first recording
-    RecSesPerUID = arrayfun(@(X) (ismember(DayOpt,dayses(idx2==X))),1:numel(UniqueIDOpt),'Uni',0); % Extract which recording sessions a unite appears in
-    RecSesPerUID = double(cat(1,RecSesPerUID{:}));
-    for nrec = 1:size(RecSesPerUID,2)
-        RecSesPerUID(RecSesPerUID(:,nrec)>0,nrec) = RecSesPerUID(RecSesPerUID(:,nrec)>0,nrec)+(size(RecSesPerUID,2)-nrec)+1;
-    end
-    if midx == 1
-        MatrixFig = figure('name','TrackingAcrossDaysMatrix');
-    else
-        figure(MatrixFig)
-    end
-%     [sortval,idx1,sortidx] = unique(RecSesPerUID,'rows');
-    [sortval,sortidx] = sort(sum(RecSesPerUID,2),'descend');
-    subplot(ceil(sqrt(length(MiceOpt))),round(sqrt(length(MiceOpt))),midx)
-    h = imagesc(1:length(DayOpt),[],RecSesPerUID(sortidx,:));
-    set(gca,'XTick',1:length(DayOpt),'XTickLabel',DayOpt)
-    colormap(flipud(gray))
-    title(MiceOpt{midx})
-    xlabel('Days since first recording')
-    ylabel('Tracked Units')
-    makepretty
-    RecSesPerUIDAllMice{midx} = RecSesPerUID; % Save for later use
-
-    %% Extra Positives/negatives
-    MatchProb = reshape(MatchTable.MatchProb, nclus, nclus);
-    %Extra Positive
-    EPosAndNeg(1, midx) = sum(MatchProb(NonMatchIdx) > UMparam.ProbabilityThreshold) ./ length(NonMatchIdx);
-
-    %Extra Negative
-    EPosAndNeg(2, midx) = sum(MatchProb(WithinIdx) < UMparam.ProbabilityThreshold) ./ length(WithinIdx);
-
-    if UseKSLabels
-        EPosAndNeg(3, midx) = sum(MatchProb(MatchIdx) < UMparam.ProbabilityThreshold) ./ length(MatchIdx);
-    end
+%     %% UniqueID X tracking
+%     [UniqueIDOpt,idx1,idx2] = unique(UniqueID); %UID options
+%     DayOpt = unique(AllDeltaDays);
+%     dayses = AllDeltaDays(recses); % Get in days after first recording
+%     RecSesPerUID = arrayfun(@(X) (ismember(DayOpt,dayses(idx2==X))),1:numel(UniqueIDOpt),'Uni',0); % Extract which recording sessions a unite appears in
+%     RecSesPerUID = double(cat(1,RecSesPerUID{:}));
+%     for nrec = 1:size(RecSesPerUID,2)
+%         RecSesPerUID(RecSesPerUID(:,nrec)>0,nrec) = RecSesPerUID(RecSesPerUID(:,nrec)>0,nrec)+(size(RecSesPerUID,2)-nrec)+1;
+%     end
+%     if midx == 1
+%         MatrixFig = figure('name','TrackingAcrossDaysMatrix');
+%     else
+%         figure(MatrixFig)
+%     end
+% %     [sortval,idx1,sortidx] = unique(RecSesPerUID,'rows');
+%     [sortval,sortidx] = sort(sum(RecSesPerUID,2),'descend');
+%     subplot(ceil(sqrt(length(MiceOpt))),round(sqrt(length(MiceOpt))),midx)
+%     h = imagesc(1:length(DayOpt),[],RecSesPerUID(sortidx,:));
+%     set(gca,'XTick',1:length(DayOpt),'XTickLabel',DayOpt)
+%     colormap(flipud(gray))
+%     title(MiceOpt{midx})
+%     xlabel('Days since first recording')
+%     ylabel('Tracked Units')
+%     makepretty
+%     RecSesPerUIDAllMice{midx} = RecSesPerUID; % Save for later use
+% 
+%     %% Extra Positives/negatives
+%     MatchProb = reshape(MatchTable.MatchProb, nclus, nclus);
+%     %Extra Positive
+%     EPosAndNeg(1, midx) = sum(MatchProb(NonMatchIdx) > UMparam.ProbabilityThreshold) ./ length(NonMatchIdx);
+% 
+%     %Extra Negative
+%     EPosAndNeg(2, midx) = sum(MatchProb(WithinIdx) < UMparam.ProbabilityThreshold) ./ length(WithinIdx);
+% 
+%     if UseKSLabels
+%         EPosAndNeg(3, midx) = sum(MatchProb(MatchIdx) < UMparam.ProbabilityThreshold) ./ length(MatchIdx);
+%     end
 
     %% Fingerprint correlation
+    fprintf('Plotting fingerprints...\n')
     if any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) && MatchesExpected == 1
         figure(FSCoreFig)
         if TakeRank
@@ -645,7 +650,7 @@ for midx = 1:length(MiceOpt)
 
     end
 
-
+    fprintf('Done!\n')
 end
 
 %% AUC
