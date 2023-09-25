@@ -1,16 +1,10 @@
 function ComputeFunctionalScores(SaveDir, loadMATsToSave)
 
-if nargin < 2 || isempty(loadMATsToSave)
-    TmpFile = matfile(fullfile(SaveDir, 'UnitMatch.mat')); % Access saved file
-else
-    TmpFile = load(fullfile(SaveDir, 'UnitMatch.mat'));
-end
-UMparam = TmpFile.UMparam; % Extract parameters
+
+load(fullfile(SaveDir, 'UnitMatch.mat'), 'MatchTable', 'UMparam', 'UniqueIDConversion');
 UMparam.binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
-MatchTable = TmpFile.MatchTable; % Load Matchtable
 
 % Extract cluster information
-UniqueIDConversion = TmpFile.UniqueIDConversion;
 if UMparam.GoodUnitsOnly
     GoodId = logical(UniqueIDConversion.GoodID);
 else
@@ -181,29 +175,10 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) % If it
     Pairs = unique(Pairs, 'rows');
     [FingerprintR, RankScoreAll, SigMask, AllSessionCorrelations] = CrossCorrelationFingerPrint(sessionCorrelationsAll, Pairs, OriID, recses, drawdrosscorr);
 
-
-
     % Save in table
     MatchTable.FingerprintCor = FingerprintR(:);
     MatchTable.RankScore = RankScoreAll(:);
     MatchTable.SigFingerprintR = SigMask(:);
-
-
-    if nargin < 2 || isempty(loadMATsToSave)
-        TmpFile.Properties.Writable = true;
-    end
-    TmpFile.MatchTable = MatchTable; % Overwrite
-    TmpFile.AllSessionCorrelations = AllSessionCorrelations;
-
-    if nargin < 2 || isempty(loadMATsToSave)
-
-        TmpFile.Properties.Writable = false;
-    else
-
-        movefile(fullfile(SaveDir, 'UnitMatch.mat'), fullfile(SaveDir, 'UnitMatch_prev.mat'))
-        save(fullfile(SaveDir, 'UnitMatch.mat'),'-struct','TmpFile');
-        delete(fullfile(SaveDir, 'UnitMatch_prev.mat'))
-    end
 
     %% Compare to functional scores
 
@@ -436,21 +411,13 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) % If it alre
 end
 %% Write to table
 
-if nargin < 2 || isempty(loadMATsToSave)
-    TmpFile.Properties.Writable = true;
-end
-TmpFile.MatchTable = MatchTable; % Overwrite
+movefile(fullfile(SaveDir, 'UnitMatch.mat'), fullfile(SaveDir, 'UnitMatch_prev.mat'))
+save(fullfile(SaveDir, 'UnitMatch.mat'), 'MatchTable', 'UMparam', 'UniqueIDConversion');
 if exist('AllSessionCorrelations','var')
-    TmpFile.AllSessionCorrelations = AllSessionCorrelations;
+    save(fullfile(SaveDir, 'UnitMatch.mat'), 'AllSessionCorrelations', '-append');
 end
+delete(fullfile(SaveDir, 'UnitMatch_prev.mat'))
 
-if nargin < 2 || isempty(loadMATsToSave)
-    TmpFile.Properties.Writable = false;
-else
-    movefile(fullfile(SaveDir, 'UnitMatch.mat'), fullfile(SaveDir, 'UnitMatch_prev.mat'))
-    save(fullfile(SaveDir, 'UnitMatch.mat'),'-struct','TmpFile');
-    delete(fullfile(SaveDir, 'UnitMatch_prev.mat'))
-end
 %% Extract groups
 if UMparam.RunPyKSChronicStitched
     ntimes = 2;

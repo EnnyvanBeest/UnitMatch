@@ -2,7 +2,7 @@
 FSCoreFig = figure('name', 'Functional Scores');
 
 % Initialize
-TakeRank = 1 %if 0 , take cross-correlation scores (these may be less informative than rank)
+TakeRank = 0 %if 0 , take cross-correlation scores (these may be less informative than rank)
 if TakeRank
     stepsz = 1;
     bins = -20:stepsz:-1;
@@ -37,17 +37,20 @@ AUCNImCurves = [];
 AUCRFCurves = [];
 
 AUCCols = [0 0.7 0; 1 0 0; 0 0 0.7]; %WIthin %Match %non-match
-aucprecision = [0:0.01:1];
+aucprecision = [0:0.05:1];
 clear UMTrackingPerformancePerMouse
 for midx = 1:length(MiceOpt)
+    fprintf('Reference %s...\n', MiceOpt{midx})
+
     tmpfile = dir(fullfile(SaveDir, MiceOpt{midx}, 'UnitMatch', 'UnitMatch.mat'));
     if isempty(tmpfile)
         continue
     end
-    tmpFile = matfile(fullfile(tmpfile.folder, tmpfile.name));
-    MatchTable = tmpFile.MatchTable; %Extract matchtable
-    UMparam = tmpFile.UMparam; % Extract parameters
-    UniqueIDConversion = tmpFile.UniqueIDConversion; % Extract UniqueID Conversion
+
+    fprintf('Loading the data...\n')
+    tic
+    load(fullfile(tmpfile.folder, tmpfile.name), 'MatchTable', 'UMparam', 'UniqueIDConversion');
+    toc
 
     % Load AUCS
     if exist(fullfile(SaveDir, MiceOpt{midx}, 'UnitMatch', 'AUC.mat'))
@@ -90,6 +93,7 @@ for midx = 1:length(MiceOpt)
     ChannelPos = UMparam.channelpos;
 
     %% How many units vs number of units were tracked?
+    fprintf('Evaluating tracked units...\n')
     CrossCorrMatching = nan(0,4); % number of units matched with cross-correlation, % number of units matched of those % Number of units match with UM, % number of units mof those matched with Cross Corr
     TrackingPerformance = nan(5, 0); % MatchesExpected, Difference between recording day, % Tracked units %maximum possibility % Difference in number of units
     TrackingPerformanceKS = nan(5, 0); % MatchesExpected, Difference between recording day, % Tracked units %maximum possibility
@@ -270,6 +274,7 @@ for midx = 1:length(MiceOpt)
     end
 
     %% Fingerprint correlation
+    fprintf('Plotting fingerprints...\n')
     if any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) && MatchesExpected == 1
         figure(FSCoreFig)
         if TakeRank
@@ -645,7 +650,7 @@ for midx = 1:length(MiceOpt)
 
     end
 
-
+    fprintf('Done!\n')
 end
 
 %% AUC
