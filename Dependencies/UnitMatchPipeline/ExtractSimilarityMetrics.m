@@ -636,7 +636,7 @@ while flag<2
             TotalScoreAcrossDays(X==Y)=nan;
 
             subplot(2,length(Scores2Include),scid)
-            h=imagesc(triu(TotalScore,1),[0 base+1]);
+            h=imagesc(TotalScore,[0 base+1]);
             title([Scores2Include{scid}])
             xlabel('Unit_i')
             ylabel('Unit_j')
@@ -654,7 +654,7 @@ while flag<2
             end
             subplot(2,length(Scores2Include),scid+(length(Scores2Include)))
             leaveoutmatches(:,:,scid)=TotalScore>ThrsOpt;
-            imagesc(triu(TotalScore>ThrsOpt,1))
+            imagesc(TotalScore>ThrsOpt)
             hold on
             title(['Thresholding at ' num2str(ThrsOpt)])
             xlabel('Unit_i')
@@ -710,6 +710,18 @@ while flag<2
 
     % Make initial threshold --> to be optimized
     ThrsOpt = quantile(TotalScore(IncludeThesePairs),priorMatch); %Select best ones only later
+
+    % What would be the threshold if we take the intersection of same X
+    % neighbors?
+    tmp = TotalScore;
+    % Take centroid dist > maxdist out
+    tmp(EuclDist>param.NeighbourDist)=nan;
+    hd = histcounts(diag(tmp),0:0.01:1);%./nclus + 0.0001;
+    hnd = histcounts(tmp(~eye(size(tmp))),0:0.01:1);%./sum(~isnan(tmp(~eye(size(tmp))))) +0.0001;
+    ScoreVector = 0.005:0.01:1-0.005;
+    ThrsOpt = max([ScoreVector(find(hd>hnd,1,'first')) ThrsOpt]); % Sometimes prior is way too optimistic, so take the maximum of these two
+
+
     subplot(2,2,2)
     imagesc(TotalScore(SortingOrder,SortingOrder)>ThrsOpt)
     hold on
@@ -729,9 +741,7 @@ while flag<2
 
 
     subplot(2,2,3)
-    tmp = TotalScore;
-    % Take centroid dist > maxdist out
-    tmp(EuclDist>param.NeighbourDist)=nan;
+  
     % Take between session out
     for did = 1:ndays
         for did2 = 1:ndays
@@ -741,9 +751,9 @@ while flag<2
             tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1)=nan;
         end
     end
-    hd = histcounts(diag(tmp),0:0.1:1);%./nclus + 0.0001;
-    hnd = histcounts(tmp(~eye(size(tmp))),0:0.1:1);%./sum(~isnan(tmp(~eye(size(tmp))))) +0.0001;
-    plot(0.05:0.1:1-0.05,hd,'-','color',[0 0.7 0]); hold on; plot(0.05:0.1:1-0.05,hnd,'b-')
+    hd = histcounts(diag(tmp),0:0.01:1);%./nclus + 0.0001;
+    hnd = histcounts(tmp(~eye(size(tmp))),0:0.01:1);%./sum(~isnan(tmp(~eye(size(tmp))))) +0.0001;
+    plot(ScoreVector,hd,'-','color',[0 0.7 0]); hold on; plot(ScoreVector,hnd,'b-')
     tmp = TotalScore;
     % Take centroid dist > maxdist out
     tmp(EuclDist>param.NeighbourDist)=nan;
@@ -751,8 +761,8 @@ while flag<2
     for did = 1:ndays
         tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1)=nan;
     end
-    ha = histcounts(tmp(:),0:0.1:1);%./sum(~isnan(tmp(:))) + 0.0001;
-    plot(0.05:0.1:1-0.05,ha,'-','color',[1 0 0]);
+    ha = histcounts(tmp(:),0:0.01:1);%./sum(~isnan(tmp(:))) + 0.0001;
+    plot(ScoreVector,ha,'-','color',[1 0 0]);
     set(gca,'yscale','linear')
     line([ThrsOpt ThrsOpt],get(gca,'ylim'),'LineStyle','--','color',[0 0 0])
     xlabel('TotalScore')
@@ -827,18 +837,18 @@ while flag<2
             drift = nanmedian(nanmean(ProjectedLocation(:,BestPairs(idx,1),:),3)-nanmean(ProjectedLocation(:,BestPairs(idx,2),:),3),2);
             disp(['Median drift recording ' num2str(did) ' calculated: X=' num2str(drift(1)) ', Y=' num2str(drift(2)) ', Z=' num2str(drift(3))])
 
-            if flag
-                break
+            if ~flag
+
+                ProjectedLocation(1,GoodRecSesID==did+1,:)=ProjectedLocation(1,GoodRecSesID==did+1,:)+drift(1);
+                ProjectedLocation(2,GoodRecSesID==did+1,:)=ProjectedLocation(2,GoodRecSesID==did+1,:)+drift(2);
+                ProjectedLocation(3,GoodRecSesID==did+1,:)=ProjectedLocation(3,GoodRecSesID==did+1,:)+drift(3);
+
+                ProjectedLocationPerTP(1,GoodRecSesID==did+1,:,:) = ProjectedLocationPerTP(1,GoodRecSesID==did+1,:,:) + drift(1);
+                ProjectedLocationPerTP(2,GoodRecSesID==did+1,:,:) = ProjectedLocationPerTP(2,GoodRecSesID==did+1,:,:) + drift(2);
+                ProjectedLocationPerTP(3,GoodRecSesID==did+1,:,:) = ProjectedLocationPerTP(3,GoodRecSesID==did+1,:,:) + drift(3);
+                close all
+
             end
-            ProjectedLocation(1,GoodRecSesID==did+1,:)=ProjectedLocation(1,GoodRecSesID==did+1,:)+drift(1);
-            ProjectedLocation(2,GoodRecSesID==did+1,:)=ProjectedLocation(2,GoodRecSesID==did+1,:)+drift(2);
-            ProjectedLocation(3,GoodRecSesID==did+1,:)=ProjectedLocation(3,GoodRecSesID==did+1,:)+drift(3);
-
-            ProjectedLocationPerTP(1,GoodRecSesID==did+1,:,:) = ProjectedLocationPerTP(1,GoodRecSesID==did+1,:,:) + drift(1);
-            ProjectedLocationPerTP(2,GoodRecSesID==did+1,:,:) = ProjectedLocationPerTP(2,GoodRecSesID==did+1,:,:) + drift(2);
-            ProjectedLocationPerTP(3,GoodRecSesID==did+1,:,:) = ProjectedLocationPerTP(3,GoodRecSesID==did+1,:,:) + drift(3);
-
-            close all
 
         end
     else

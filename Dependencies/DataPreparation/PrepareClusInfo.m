@@ -1,4 +1,4 @@
-function Params = PrepareClusInfo(KiloSortPaths, Params, RawDataPaths)
+function Params = PrepareClusInfo(KiloSortPaths, Params, RawDataPathsInput)
 % Prepares cluster information for subsequent analysis
 
 %% Inputs:
@@ -68,14 +68,17 @@ end
 if ~isfield(Params, 'CleanUpTemporary')
     Params.CleanUpTemporary = 1; % Clean up temporary folder
 end
-
+if ~isfield(Params, 'MinRecordingDuration')
+    Params.MinRecordingDuration = 10; % Clean up temporary folder
+end
 %% Initialize everything
 channelmap = [];
 channelpos = [];
 
-AllKiloSortPaths = cell(1, 0);
-AllChannelPos = cell(1, 0);
-AllProbeSN = cell(1, 0);
+AllKiloSortPaths = cell(1, length(KiloSortPaths));
+AllChannelPos = cell(1, length(KiloSortPaths));
+AllProbeSN = cell(1, length(KiloSortPaths));
+RawDataPaths = cell(1, length(KiloSortPaths));
 countid = 1;
 % figure;
 cols = jet(length(KiloSortPaths));
@@ -120,16 +123,16 @@ for subsesid = 1:length(KiloSortPaths)
                 rawD = cat(2, rawD{:});
             end
         else
-            if isstruct(RawDataPaths)
-                rawD = dir(fullfile(RawDataPaths(subsesid).folder, RawDataPaths(subsesid).name));
+            if isstruct(RawDataPathsInput)
+                rawD = dir(fullfile(RawDataPathsInput(subsesid).folder, RawDataPathsInput(subsesid).name));
             else
-                rawD = dir(fullfile(RawDataPaths{subsesid}));
+                rawD = dir(fullfile(RawDataPathsInput{subsesid}));
             end
             
         end
 
-        RawDataPaths = rawD;
-        AllKiloSortPaths = cat(2, AllKiloSortPaths{:}, repmat(KiloSortPaths(subsesid), 1, length(rawD)));
+        RawDataPaths{subsesid} = rawD; % Definitely save as cell
+        AllKiloSortPaths{subsesid} = repmat(KiloSortPaths(subsesid), 1, length(rawD));
     else
         if UseParamsKS
             spikeStruct = loadParamsPy(fullfile(KiloSortPaths{subsesid}, 'params.py'));
@@ -153,7 +156,7 @@ for subsesid = 1:length(KiloSortPaths)
 
             % Save for later
             try
-                RawDataPaths(subsesid) = rawD;
+                RawDataPaths{subsesid} = rawD;
             catch ME
                 disp(ME)
                 keyboard
@@ -170,7 +173,7 @@ for subsesid = 1:length(KiloSortPaths)
                 rawD = dir(fullfile(RawDataPaths{subsesid}));
             end
         end
-        AllKiloSortPaths = {AllKiloSortPaths{:}, KiloSortPaths{subsesid}};
+        AllKiloSortPaths{subsesid} = KiloSortPaths{subsesid};
     end
     DecompressionFlag = 0;
 
@@ -184,8 +187,12 @@ for subsesid = 1:length(KiloSortPaths)
         channelmaptmp(end+1:length(channelpostmp)) = length(channelmaptmp):length(channelpostmp) - 1;
     end
 
-    %% Is it correct channelpos though...? Check using raw data
-    [channelpostmpconv, probeSN] = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done
+    %% Is it correct channelpos though...? Check using raw data. While reading this information, also extract recording duration and Serial number of probe
+    [channelpostmpconv, probeSN, recordingduration] = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done
+    if recordingduration<Params.MinRecordingDuration 
+        disp([KiloSortPaths{subsesid} ' recording too short, skip...'])
+        continue
+    end
     AllChannelPos{subsesid} = channelpostmpconv;
     AllProbeSN{subsesid} = probeSN;
 
@@ -588,9 +595,10 @@ if isstruct(RawDataPaths)
 end
 
 CleanUpCheckFlag = nan; % Put to 1 is own responsibility! Make sure not to delete stuff from the server directly!
-if 0 %Params.DecompressLocal && Params.CleanUpTemporary
+if Params.DecompressLocal && Params.CleanUpTemporary
+    
+    if isnan(CleanUpCheckFlag) && any(cellfun(@(X) exist(fullfile(Params.tmpdatafolder, strrep(X.name, 'cbin', 'bin'))),RawDataPaths(find(~cellfun(@isempty,RawDataPaths)))))
 
-    if isnan(CleanUpCheckFlag) && exist(fullfile(Params.tmpdatafolder, strrep(RawDataPaths(1).name, 'cbin', 'bin')))
         answer = questdlg(['Automatically remove data from ', Params.tmpdatafolder, '?'], ...
             'REMOVING -- CHECK!!!', ...
             'YES', 'NO', 'YES');
@@ -599,6 +607,8 @@ if 0 %Params.DecompressLocal && Params.CleanUpTemporary
         else
             CleanUpCheckFlag = 0;
         end
+    else
+            CleanUpCheckFlag = 0;
     end
     if CleanUpCheckFlag
         clear memMapData

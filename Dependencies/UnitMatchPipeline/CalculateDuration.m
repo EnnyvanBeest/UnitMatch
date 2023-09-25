@@ -11,8 +11,8 @@ else
     meta_path = tmp.UMparam.AllRawPaths;
 end
 for id = 1:length(meta_path)
-    if isstruct(meta_path(id))
-        meta = ReadMeta2(meta_path(id).folder);
+    if isstruct(meta_path{id})
+        meta = ReadMeta2(meta_path{id}.folder);
     else
         meta_folder = dir(meta_path{id});
         meta = ReadMeta2(meta_folder.folder);

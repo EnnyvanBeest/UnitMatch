@@ -1,4 +1,4 @@
-function [channelPos, probeSN] = ChannelIMROConversion(datapath,drawthis)
+function [channelPos, probeSN, recordingduration] = ChannelIMROConversion(datapath,drawthis)
 %Extract actual channelPositions from metafile
 
 
@@ -12,6 +12,8 @@ meta = ReadMeta2(datapath);
 %Extract probe serial number
 probeSN = str2num(meta.imDatPrb_sn);
 
+% Recording duration in minutes
+recordingduration = str2num(meta.fileTimeSecs)./60;
 %Extract Shank map
 Shankmap = meta.snsShankMap;
 % Split in channels
