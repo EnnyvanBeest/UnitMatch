@@ -235,43 +235,43 @@ for midx = 1:length(MiceOpt)
         KSTrackingPerformancePerMouse{midx} = TrackingPerformanceKS;
     end
 
-%     %% UniqueID X tracking
-%     [UniqueIDOpt,idx1,idx2] = unique(UniqueID); %UID options
-%     DayOpt = unique(AllDeltaDays);
-%     dayses = AllDeltaDays(recses); % Get in days after first recording
-%     RecSesPerUID = arrayfun(@(X) (ismember(DayOpt,dayses(idx2==X))),1:numel(UniqueIDOpt),'Uni',0); % Extract which recording sessions a unite appears in
-%     RecSesPerUID = double(cat(1,RecSesPerUID{:}));
-%     for nrec = 1:size(RecSesPerUID,2)
-%         RecSesPerUID(RecSesPerUID(:,nrec)>0,nrec) = RecSesPerUID(RecSesPerUID(:,nrec)>0,nrec)+(size(RecSesPerUID,2)-nrec)+1;
-%     end
-%     if midx == 1
-%         MatrixFig = figure('name','TrackingAcrossDaysMatrix');
-%     else
-%         figure(MatrixFig)
-%     end
-% %     [sortval,idx1,sortidx] = unique(RecSesPerUID,'rows');
-%     [sortval,sortidx] = sort(sum(RecSesPerUID,2),'descend');
-%     subplot(ceil(sqrt(length(MiceOpt))),round(sqrt(length(MiceOpt))),midx)
-%     h = imagesc(1:length(DayOpt),[],RecSesPerUID(sortidx,:));
-%     set(gca,'XTick',1:length(DayOpt),'XTickLabel',DayOpt)
-%     colormap(flipud(gray))
-%     title(MiceOpt{midx})
-%     xlabel('Days since first recording')
-%     ylabel('Tracked Units')
-%     makepretty
-%     RecSesPerUIDAllMice{midx} = RecSesPerUID; % Save for later use
-% 
-%     %% Extra Positives/negatives
-%     MatchProb = reshape(MatchTable.MatchProb, nclus, nclus);
-%     %Extra Positive
-%     EPosAndNeg(1, midx) = sum(MatchProb(NonMatchIdx) > UMparam.ProbabilityThreshold) ./ length(NonMatchIdx);
-% 
-%     %Extra Negative
-%     EPosAndNeg(2, midx) = sum(MatchProb(WithinIdx) < UMparam.ProbabilityThreshold) ./ length(WithinIdx);
-% 
-%     if UseKSLabels
-%         EPosAndNeg(3, midx) = sum(MatchProb(MatchIdx) < UMparam.ProbabilityThreshold) ./ length(MatchIdx);
-%     end
+    %% UniqueID X tracking
+    [UniqueIDOpt,idx1,idx2] = unique(UniqueID); %UID options
+    DayOpt = unique(AllDeltaDays);
+    dayses = AllDeltaDays(recses); % Get in days after first recording
+    RecSesPerUID = arrayfun(@(X) (ismember(DayOpt,dayses(idx2==X))),1:numel(UniqueIDOpt),'Uni',0); % Extract which recording sessions a unite appears in
+    RecSesPerUID = double(cat(1,RecSesPerUID{:}));
+    for nrec = 1:size(RecSesPerUID,2)
+        RecSesPerUID(RecSesPerUID(:,nrec)>0,nrec) = RecSesPerUID(RecSesPerUID(:,nrec)>0,nrec)+(size(RecSesPerUID,2)-nrec)+1;
+    end
+    if midx == 1
+        MatrixFig = figure('name','TrackingAcrossDaysMatrix');
+    else
+        figure(MatrixFig)
+    end
+%     [sortval,idx1,sortidx] = unique(RecSesPerUID,'rows');
+    [sortval,sortidx] = sort(sum(RecSesPerUID,2),'descend');
+    subplot(ceil(sqrt(length(MiceOpt))),round(sqrt(length(MiceOpt))),midx)
+    h = imagesc(1:length(DayOpt),[],RecSesPerUID(sortidx,:));
+    set(gca,'XTick',1:length(DayOpt),'XTickLabel',DayOpt)
+    colormap(flipud(gray))
+    title(MiceOpt{midx})
+    xlabel('Days since first recording')
+    ylabel('Tracked Units')
+    makepretty
+    RecSesPerUIDAllMice{midx} = RecSesPerUID; % Save for later use
+
+    %% Extra Positives/negatives
+    MatchProb = reshape(MatchTable.MatchProb, nclus, nclus);
+    %Extra Positive
+    EPosAndNeg(1, midx) = sum(MatchProb(NonMatchIdx) > UMparam.ProbabilityThreshold) ./ length(NonMatchIdx);
+
+    %Extra Negative
+    EPosAndNeg(2, midx) = sum(MatchProb(WithinIdx) < UMparam.ProbabilityThreshold) ./ length(WithinIdx);
+
+    if UseKSLabels
+        EPosAndNeg(3, midx) = sum(MatchProb(MatchIdx) < UMparam.ProbabilityThreshold) ./ length(MatchIdx);
+    end
 
     %% Fingerprint correlation
     fprintf('Plotting fingerprints...\n')
