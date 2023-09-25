@@ -102,7 +102,7 @@ SessionSwitch = arrayfun(@(X) find(GoodRecSesID==X,1,'first'),unique(recsesGood)
 SessionSwitch(cellfun(@isempty,SessionSwitch))=[];
 SessionSwitch = [cell2mat(SessionSwitch); nclus+1];
 nCellsPerSession = diff(SessionSwitch);
-param.nExpectedMatches = sum(nCellsPerSession)+(nanmedian(nCellsPerSession).*(ndays-1).*param.ExpectMatches); % Should we expect less matches with more days??
+param.nExpectedMatches = sum(nCellsPerSession)+(nanmedian(nCellsPerSession).*(ndays-1).*2.*param.ExpectMatches); % Should we expect less matches with more days??
 
 
 %% Extract raw waveforms

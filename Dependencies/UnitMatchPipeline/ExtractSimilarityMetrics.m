@@ -719,7 +719,7 @@ while flag<2
     hd = histcounts(diag(tmp),0:0.01:1);%./nclus + 0.0001;
     hnd = histcounts(tmp(~eye(size(tmp))),0:0.01:1);%./sum(~isnan(tmp(~eye(size(tmp))))) +0.0001;
     ScoreVector = 0.005:0.01:1-0.005;
-    ThrsOpt = max([ScoreVector(find(hd>hnd,1,'first')) ThrsOpt]); % Sometimes prior is way too optimistic, so take the maximum of these two
+%     ThrsOpt = max([ScoreVector(find(hd>hnd,1,'first')) ThrsOpt]); % Sometimes prior is way too optimistic, so take the maximum of these two
 
 
     subplot(2,2,2)
