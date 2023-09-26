@@ -648,7 +648,7 @@ for id = 1:ntimes
     freezeColors
 
 
-    if ~all(isnan(NatImCorr(:)))
+    if ~all(isnan(NatImCorr(MatchIdx)))
         subplot(4, 3, 11)
         bins = min(NatImCorr(:)):0.1:max(NatImCorr(:));
         Vector = [bins(1) + 0.1 / 2:0.1:bins(end) - 0.1 / 2];

@@ -102,7 +102,6 @@ SessionSwitch = arrayfun(@(X) find(GoodRecSesID==X,1,'first'),unique(recsesGood)
 SessionSwitch(cellfun(@isempty,SessionSwitch))=[];
 SessionSwitch = [cell2mat(SessionSwitch); nclus+1];
 nCellsPerSession = diff(SessionSwitch);
-param.nExpectedMatches = sum(nCellsPerSession)+(nanmedian(nCellsPerSession).*(ndays-1).*2.*param.ExpectMatches); % Should we expect less matches with more days??
 
 
 %% Extract raw waveforms
@@ -114,7 +113,7 @@ Path4UnitNPY = ExtractAndSaveAverageWaveforms(clusinfo,param);
 [AllWVBParameters,param] = ExtractParameters(Path4UnitNPY,clusinfo,param);
 
 %% Metrics
-ExtractSimilarityMetrics(Scores2Include,AllWVBParameters,clusinfo,param)% All Scores2Include are pushed to the workspace
+param = ExtractSimilarityMetrics(Scores2Include,AllWVBParameters,clusinfo,param);% All Scores2Include are pushed to the workspace
 
 %% Naive bayes classifier
 [MatchProbability,label,Tbl,BestMdl] = RunNaiveBayes(Predictors,TotalScore,Scores2Include,clusinfo,param,SortingOrder,EuclDist);
