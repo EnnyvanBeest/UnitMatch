@@ -411,12 +411,10 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) % If it alre
 end
 %% Write to table
 
-movefile(fullfile(SaveDir, 'UnitMatch.mat'), fullfile(SaveDir, 'UnitMatch_prev.mat'))
-save(fullfile(SaveDir, 'UnitMatch.mat'), 'MatchTable', 'UMparam', 'UniqueIDConversion');
+save(fullfile(SaveDir, 'UnitMatch.mat'), 'MatchTable', 'UMparam', 'UniqueIDConversion', '-append');
 if exist('AllSessionCorrelations','var')
     save(fullfile(SaveDir, 'UnitMatch.mat'), 'AllSessionCorrelations', '-append');
 end
-delete(fullfile(SaveDir, 'UnitMatch_prev.mat'))
 
 %% Extract groups
 if UMparam.RunPyKSChronicStitched
