@@ -322,10 +322,10 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) % If it alre
     spikeData_cv = cell(1,2*nRec);
     for ss = 1:nRec
         % Get the original binFile (also for stitched?)
-        if iscell(UMparam.AllRawPaths{RecOpt(ss)})
+        if iscell(UMparam.AllRawPaths(RecOpt(ss)))
             binFileRef = fullfile(UMparam.AllRawPaths{RecOpt(ss)});
         else
-            binFileRef = fullfile(UMparam.AllRawPaths{RecOpt(ss)}.folder,UMparam.AllRawPaths{RecOpt(ss)}.name);
+            binFileRef = fullfile(UMparam.AllRawPaths(RecOpt(ss)).folder,UMparam.AllRawPaths(RecOpt(ss)).name);
         end
 
         % Find the associated experiments
@@ -393,19 +393,24 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) % If it alre
 
 
     % RANK
-    corrWCCA_big(isnan(corrWCCA_big)) = nanmin(corrWCCA_big(:)); % should not participate to the rank
+    corrWCCA_big_noNaN = corrWCCA_big;
+    corrWCCA_big_noNaN(isnan(corrWCCA_big)) = nanmin(corrWCCA_big(:)); % should not participate to the rank
     % Find rank
+    NImgRankScore = nan(size(corrWCCA_big));
     for did1 = 1:nRec
         for did2 = 1:nRec
             % Get the indices
             clusIdxD1All = SessionSwitch(did1):SessionSwitch(did1+1)-1;
             clusIdxD2All = SessionSwitch(did2):SessionSwitch(did2+1)-1;
-            [~,idx] = sort(corrWCCA_big(clusIdxD1All,clusIdxD2All),2,'descend');
-            for c = 1:numel(clusIdxD1All)
-                NImgRankScore(clusIdxD1All(c),clusIdxD2All(idx(c,:))) = 1:numel(clusIdxD2All);
+            if ~all(isnan(mat2vec(corrWCCA_big(clusIdxD1All,clusIdxD2All))))
+                [~,idx] = sort(corrWCCA_big_noNaN(clusIdxD1All,clusIdxD2All),2,'descend');
+                for c = 1:numel(clusIdxD1All)
+                    NImgRankScore(clusIdxD1All(c),clusIdxD2All(idx(c,:))) = 1:numel(clusIdxD2All);
+                end
             end
         end
     end
+    NImgRankScore(isnan(corrWCCA_big)) = nan;
     MatchTable.NImgRankScore = NImgRankScore(:);
 
 end
