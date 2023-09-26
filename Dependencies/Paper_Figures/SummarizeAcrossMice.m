@@ -460,7 +460,7 @@ for midx = 1:length(MiceOpt)
         subplot(4, 3, 8)
         hold on
         clear h
-        if ~isempty(MatchIdx) && ~all(isnan(NatImCorr(:)))
+        if ~isempty(MatchIdx) && ~all(isnan(NatImCorr(MatchIdx)))
             labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
             scores = [NatImCorr(MatchIdx)', NatImCorr(NonMatchIdx)'];
             [X, Y, ~, AUC1] = perfcurve(labels, scores, 1,'XVals',aucprecision);
@@ -595,7 +595,7 @@ for midx = 1:length(MiceOpt)
         plot(bins(1)+stepsz/2:stepsz:bins(end)-stepsz/2, hw, 'color', AUCCols(1,:))
         plot(bins(1)+stepsz/2:stepsz:bins(end)-stepsz/2, hm, 'color', AUCCols(2,:))
         plot(bins(1)+stepsz/2:stepsz:bins(end)-stepsz/2, hn, 'color', AUCCols(3,:))
-        xlabel('Receptive Field Distance')
+        xlabel('Firing Rate Distance')
         ylabel('Proportion|Group')
         axis square
         makepretty

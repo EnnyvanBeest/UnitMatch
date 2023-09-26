@@ -167,12 +167,13 @@ for subsesid = 1:length(KiloSortPaths)
                 keyboard
             end
         else
-            if isstruct(RawDataPaths)
-                rawD = dir(fullfile(RawDataPaths(subsesid).folder, RawDataPaths(subsesid).name));
+            if isstruct(RawDataPathsInput)
+                rawD = RawDataPathsInput(subsesid);
             else
-                rawD = dir(fullfile(RawDataPaths{subsesid}));
+                rawD = dir(fullfile(RawDataPathsInput{subsesid}));
             end
         end
+        RawDataPaths{subsesid} = rawD; % Definitely save as cell
         AllKiloSortPaths{subsesid} = KiloSortPaths{subsesid};
     end
     DecompressionFlag = 0;
