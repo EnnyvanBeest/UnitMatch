@@ -69,6 +69,9 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelationsFingerprint
                         PairsTmp = PairsTmp(id1,:);
                         Unit2TakeIdx = [Unit2TakeIdx; PairsTmp(:,2)];
                     end
+                    if length(Unit2TakeIdx)<25
+                        continue % It really doesn't make sense to compute this with little ref neurons
+                    end
                     Unit2TakeIdxAll = find(recsesGood == RecOpt(dayopt(did)));
     
                     % Extract the part of the correlation matrix with these
