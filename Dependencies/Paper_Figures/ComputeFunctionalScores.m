@@ -19,6 +19,10 @@ recsesall = UniqueIDConversion.recsesAll;
 AllKSDir = UMparam.KSDir; %original KS Dir
 nclus = length(UniqueID);
 
+if length(UMparam.AllRawPaths{1}) > 1 %Reshape for Stitched
+    UMparam.AllRawPaths = arrayfun(@(X) UMparam.AllRawPaths{1}(X),1:length(UMparam.AllRawPaths{1}),'uni',0);
+end
+
 % Load SP
 disp('Loading spike information...')
 nKSFiles = length(AllKSDir);

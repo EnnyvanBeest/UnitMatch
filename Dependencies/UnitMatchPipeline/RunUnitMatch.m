@@ -81,7 +81,11 @@ UMparam.channelpos = Params.AllChannelPos;
 UMparam.AllRawPaths = Params.RawDataPaths;
 UMparam.UseHistology = Params.UseHistology;
 if isstruct(Params.RawDataPaths{1})
-    UMparam.AllDecompPaths = cellfun(@(X) fullfile(Params.tmpdatafolder, strrep(X.name, 'cbin', 'bin')), Params.RawDataPaths, 'Uni', 0);
+    if length(Params.RawDataPaths)==1
+        UMparam.AllDecompPaths = arrayfun(@(X) fullfile(Params.tmpdatafolder, strrep(X.name, 'cbin', 'bin')), Params.RawDataPaths{1}, 'Uni', 0);;
+    else
+        UMparam.AllDecompPaths = cellfun(@(X) fullfile(Params.tmpdatafolder, strrep(X.name, 'cbin', 'bin')), Params.RawDataPaths, 'Uni', 0);
+    end
 else
     allDecompPaths_dirs = arrayfun(@(X) dir(Params.RawDataPaths{X}), 1:length(Params.RawDataPaths), 'Uni', 0);
     UMparam.AllDecompPaths = arrayfun(@(X) fullfile(Params.tmpdatafolder, strrep(allDecompPaths_dirs{X}.name, 'cbin', 'bin')), 1:length(allDecompPaths_dirs), 'Uni', 0);
