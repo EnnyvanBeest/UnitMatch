@@ -69,6 +69,7 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelationsFingerprint
                         PairsTmp = PairsTmp(id1,:);
                         Unit2TakeIdx = [Unit2TakeIdx; PairsTmp(:,2)];
                     end
+                  
                     Unit2TakeIdxAll = find(recsesGood == RecOpt(dayopt(did)));
     
                     % Extract the part of the correlation matrix with these

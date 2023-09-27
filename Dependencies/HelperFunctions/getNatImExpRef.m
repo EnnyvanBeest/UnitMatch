@@ -26,6 +26,11 @@ function exp2keep = getNatImExpRef(binFile)
             continue
         end
         load(fullfile(blockFile.folder,blockFile.name));
+        
+        if numel(block.stimWindowUpdateTimes) < 223
+            warning('Incomplete block. Skip.\n')
+            continue
+        end
 
         if contains(block.expDef,'imageWorld')
             if contains(block.rigName,'zelda')

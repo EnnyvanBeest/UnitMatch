@@ -1,4 +1,4 @@
-function ExtractSimilarityMetrics(Scores2Include,AllWVBParameters,clusinfo,param,drawthis)
+function param = ExtractSimilarityMetrics(Scores2Include,AllWVBParameters,clusinfo,param,drawthis)
 
 if nargin<5
     drawthis=1;
@@ -593,19 +593,6 @@ while flag<2
 
     end
 
-    %% Normalize included scores for every recording session x session
-%     for scid = 1:length(Scores2Include)
-%         eval(['tmpscore=' Scores2Include{scid} ';']) %Extract score
-% 
-%         for did = 1:ndays
-%             for did2 = 1:ndays
-%                 tmp = tmpscore(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1); %Extract
-%                 tmp = (tmp-nanmin(tmp(:)))./(nanmax(tmp(:))-nanmin(tmp(:))); % Normalize
-%                  tmpscore(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1) = tmp; % Put back
-%             end
-%         end
-%         eval([Scores2Include{scid} '=tmpscore;']) %Extract score)
-%     end
 
     %% Calculate total score
     [X,Y]=meshgrid(recsesAll(Good_Idx));
@@ -614,58 +601,7 @@ while flag<2
 
     disp('Computing total score...')
     timercounter = tic;
-    %     priorMatch = 1-((nclus+nclus.*sqrt(ndays-1))./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days)
-    priorMatch = 1-((nclus+nclus.*sqrt(ndays-1)*2*param.ExpectMatches)./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days) % Times 2 for symmetry
 
-    leaveoutmatches = false(nclus,nclus,length(Scores2Include)); %Used later
-    figure;
-    if length(Scores2Include)>1
-        for scid=1:length(Scores2Include)
-            ScoresTmp = Scores2Include(scid);
-            %             ScoresTmp(scid)=[];
-
-            TotalScore = zeros(nclus,nclus);
-            for scid2=1:length(ScoresTmp)
-                eval(['TotalScore=TotalScore+' ScoresTmp{scid2} ';'])
-            end
-            base = length(ScoresTmp)-1;
-
-            TotalScoreAcrossDays = TotalScore;
-            TotalScoreAcrossDays(X==Y)=nan;
-
-            subplot(2,length(Scores2Include),scid)
-            h=imagesc(triu(TotalScore,1),[0 base+1]);
-            title([Scores2Include{scid}])
-            xlabel('Unit_i')
-            ylabel('Unit_j')
-            hold on
-            arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
-            arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
-            colormap(flipud(gray))
-            colorbar
-            makepretty
-
-            % Thresholds
-            ThrsOpt = quantile(TotalScore(IncludeThesePairs),priorMatch); %Select best ones only later
-            if ThrsOpt == max(TotalScore(IncludeThesePairs))
-                ThrsOpt = ThrsOpt-0.1;
-            end
-            subplot(2,length(Scores2Include),scid+(length(Scores2Include)))
-            leaveoutmatches(:,:,scid)=TotalScore>ThrsOpt;
-            imagesc(triu(TotalScore>ThrsOpt,1))
-            hold on
-            title(['Thresholding at ' num2str(ThrsOpt)])
-            xlabel('Unit_i')
-            ylabel('Unit_j')
-            hold on
-            arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
-            arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
-            colormap(flipud(gray))
-            colorbar
-            %     axis square
-            makepretty
-        end
-    end
     TotalScore = zeros(nclus,nclus);
     Predictors = zeros(nclus,nclus,0);
     for sid=1:length(Scores2Include)
@@ -706,8 +642,56 @@ while flag<2
 %         scatter(find(SortingOrder==Pairs(1)),find(SortingOrder==Pairs(2)),5,cols(2,:),'filled')
 
 
-    % Make initial threshold --> to be optimized
-    ThrsOpt = quantile(TotalScore(IncludeThesePairs),priorMatch); %Select best ones only later
+    %% Make initial threshold --> to be optimized
+    %     Take initial distributions for same and neighbors within day
+    subplot(2,2,3)
+    stepsz = 0.01;
+    ScoreVector = stepsz./2:stepsz:1-stepsz./2;
+    Bins = 0:stepsz:1;
+
+    tmp = TotalScore;
+    tmp(EuclDist>param.NeighbourDist)=nan;
+
+    % Take between session out
+    for did = 1:ndays
+        for did2 = 1:ndays
+            if did==did2
+                continue
+            end
+            tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1)=nan;
+        end
+    end
+    hd = histcounts(diag(tmp),Bins)./nclus;
+    hnd = histcounts(tmp(~eye(size(tmp))),Bins)./sum(~isnan(tmp(~eye(size(tmp)))));
+    hp = histcounts(tmp(:),Bins)./sum(~isnan(tmp(:)));
+    plot(ScoreVector,hd,'-','color',[0 0.7 0]); hold on; plot(ScoreVector,hnd,'b-')
+    ThrsOpt = ScoreVector(find(smooth(hd,3)>smooth(hnd,3)&ScoreVector'>0.6,1,'first'));
+    [muw, sw] = normfit(tmp(~isnan(tmp) & tmp<ThrsOpt));
+
+
+    tmp = TotalScore;
+    % Take centroid dist > maxdist out
+    tmp(EuclDist>param.NeighbourDist)=nan;
+    % Take within session out
+    for did = 1:ndays
+        tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1)=nan;
+    end
+    ha = histcounts(tmp(:),Bins)./sum(~isnan(tmp(:)));
+    plot(ScoreVector,ha,'-','color',[1 0 0]);
+%     plot(ScoreVector,hp,'--','color',[1 0 0]);
+    [mua, sa] = normfit(tmp(~isnan(tmp)  & tmp<ThrsOpt));
+
+    if ~flag
+        ThrsOpt = ThrsOpt-abs(muw-mua); % Correct for general scores being lower across days (e.g. unresolved drift)
+    end
+    line([ThrsOpt ThrsOpt],get(gca,'ylim'),'LineStyle','--','color',[0 0 0])
+    xlabel('TotalScore')
+    ylabel('number of pairs')
+    makepretty
+    title('Total score distributions')
+    legend('Same Unit','Neighbors','Across','Threshold','Location', 'best')
+
+
     subplot(2,2,2)
     imagesc(TotalScore(SortingOrder,SortingOrder)>ThrsOpt)
     hold on
@@ -726,39 +710,8 @@ while flag<2
     %     scatter(find(SortingOrder==Pairs(1)),find(SortingOrder==Pairs(2)),5,cols(2,:),'filled')
 
 
-    subplot(2,2,3)
-    tmp = TotalScore;
-    % Take centroid dist > maxdist out
-    tmp(EuclDist>param.NeighbourDist)=nan;
-    % Take between session out
-    for did = 1:ndays
-        for did2 = 1:ndays
-            if did==did2
-                continue
-            end
-            tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1)=nan;
-        end
-    end
-    hd = histcounts(diag(tmp),0:0.1:1);%./nclus + 0.0001;
-    hnd = histcounts(tmp(~eye(size(tmp))),0:0.1:1);%./sum(~isnan(tmp(~eye(size(tmp))))) +0.0001;
-    plot(0.05:0.1:1-0.05,hd,'-','color',[0 0.7 0]); hold on; plot(0.05:0.1:1-0.05,hnd,'b-')
-    tmp = TotalScore;
-    % Take centroid dist > maxdist out
-    tmp(EuclDist>param.NeighbourDist)=nan;
-    % Take within session out
-    for did = 1:ndays
-        tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1)=nan;
-    end
-    ha = histcounts(tmp(:),0:0.1:1);%./sum(~isnan(tmp(:))) + 0.0001;
-    plot(0.05:0.1:1-0.05,ha,'-','color',[1 0 0]);
-    set(gca,'yscale','linear')
-    line([ThrsOpt ThrsOpt],get(gca,'ylim'),'LineStyle','--','color',[0 0 0])
-    xlabel('TotalScore')
-    ylabel('number of pairs')
-    makepretty
-    title('Total score distributions')
-    legend('Same Unit','Neighbors','Across','Threshold','Location', 'best')
-
+    param.nExpectedMatches = sum(TotalScore(:)>ThrsOpt);
+    priorMatch = 1-(param.nExpectedMatches./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days) % Times 2 for symmetry
 
     %% CUmulative density function
     subplot(2,2,4)
@@ -792,8 +745,8 @@ while flag<2
         tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1)=nan;
     end
     if any(~isnan(tmp(:)))
-   [h,stats] = cdfplot(tmp(:)); %pAcross sessions
-    h.Color = [1 0 0];
+        [h,stats] = cdfplot(tmp(:)); %pAcross sessions
+        h.Color = [1 0 0];
     end
 %     [h,stats] = cdfplot(tmp(tmp(:)<ThrsOpt)); %putative matches
 %     h.Color = [0.5 0.2 0];
@@ -807,6 +760,58 @@ while flag<2
 
     saveas(gcf,fullfile(SaveDir,'TotalScore.fig'))
     saveas(gcf,fullfile(SaveDir,'TotalScore.bmp'))
+
+
+    %% More plots
+    leaveoutmatches = false(nclus,nclus,length(Scores2Include)); %Used later
+    figure;
+    if length(Scores2Include)>1
+        for scid=1:length(Scores2Include)
+            ScoresTmp = Scores2Include(scid);
+            %             ScoresTmp(scid)=[];
+
+            TotalScoreLO = zeros(nclus,nclus);
+            for scid2=1:length(ScoresTmp)
+                eval(['TotalScoreLO=TotalScoreLO+' ScoresTmp{scid2} ';'])
+            end
+            base = length(ScoresTmp)-1;
+
+            TotalScoreAcrossDays = TotalScoreLO;
+            TotalScoreAcrossDays(X==Y)=nan;
+
+            subplot(2,length(Scores2Include),scid)
+            h=imagesc(TotalScoreLO,[0 base+1]);
+            title([Scores2Include{scid}])
+            xlabel('Unit_i')
+            ylabel('Unit_j')
+            hold on
+            arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+            arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+            colormap(flipud(gray))
+            colorbar
+            makepretty
+
+            % Thresholds
+            ThrsOptLO = quantile(TotalScoreLO(IncludeThesePairs),priorMatch); %Select best ones only later
+            if ThrsOptLO == max(TotalScoreLO(IncludeThesePairs))
+                ThrsOptLO = ThrsOptLO-0.1;
+            end
+            subplot(2,length(Scores2Include),scid+(length(Scores2Include)))
+            leaveoutmatches(:,:,scid)=TotalScoreLO>ThrsOptLO;
+            imagesc(TotalScoreLO>ThrsOptLO)
+            hold on
+            title(['Thresholding at ' num2str(ThrsOptLO)])
+            xlabel('Unit_i')
+            ylabel('Unit_j')
+            hold on
+            arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+            arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+            colormap(flipud(gray))
+            colorbar
+            %     axis square
+            makepretty
+        end
+    end
 
     %% three ways to define candidate scores
     % Total score larger than threshold
@@ -823,20 +828,20 @@ while flag<2
                 continue
             end
             drift = nanmedian(nanmean(ProjectedLocation(:,BestPairs(idx,1),:),3)-nanmean(ProjectedLocation(:,BestPairs(idx,2),:),3),2);
-            disp(['Median drift recording ' num2str(did) ' calculated: X=' num2str(drift(1)) ', Y=' num2str(drift(2))])
+            disp(['Median drift recording ' num2str(did) ' calculated: X=' num2str(drift(1)) ', Y=' num2str(drift(2)) ', Z=' num2str(drift(3))])
 
-            if flag
-                break
+            if ~flag
+
+                ProjectedLocation(1,GoodRecSesID==did+1,:)=ProjectedLocation(1,GoodRecSesID==did+1,:)+drift(1);
+                ProjectedLocation(2,GoodRecSesID==did+1,:)=ProjectedLocation(2,GoodRecSesID==did+1,:)+drift(2);
+                ProjectedLocation(3,GoodRecSesID==did+1,:)=ProjectedLocation(3,GoodRecSesID==did+1,:)+drift(3);
+
+                ProjectedLocationPerTP(1,GoodRecSesID==did+1,:,:) = ProjectedLocationPerTP(1,GoodRecSesID==did+1,:,:) + drift(1);
+                ProjectedLocationPerTP(2,GoodRecSesID==did+1,:,:) = ProjectedLocationPerTP(2,GoodRecSesID==did+1,:,:) + drift(2);
+                ProjectedLocationPerTP(3,GoodRecSesID==did+1,:,:) = ProjectedLocationPerTP(3,GoodRecSesID==did+1,:,:) + drift(3);
+                close all
+
             end
-            ProjectedLocation(1,GoodRecSesID==did+1,:)=ProjectedLocation(1,GoodRecSesID==did+1,:)+drift(1);
-            ProjectedLocation(2,GoodRecSesID==did+1,:)=ProjectedLocation(2,GoodRecSesID==did+1,:)+drift(2);
-            ProjectedLocation(3,GoodRecSesID==did+1,:)=ProjectedLocation(3,GoodRecSesID==did+1,:)+drift(3);
-
-            ProjectedLocationPerTP(1,GoodRecSesID==did+1,:,:) = ProjectedLocationPerTP(1,GoodRecSesID==did+1,:,:) + drift(1);
-            ProjectedLocationPerTP(2,GoodRecSesID==did+1,:,:) = ProjectedLocationPerTP(2,GoodRecSesID==did+1,:,:) + drift(2);
-            ProjectedLocationPerTP(3,GoodRecSesID==did+1,:,:) = ProjectedLocationPerTP(3,GoodRecSesID==did+1,:,:) + drift(3);
-
-            close all
 
         end
     else
@@ -1046,7 +1051,6 @@ if 0 % THis can be used to look at some example projections
 
 
     %% Similarity scores for the two pairs
-
     figure('name','Similarity scores')
     subplot(1,2,1)
     bar(cat(1,squeeze(Predictors(Pairs(1),Pairs(3),:)),squeeze(TotalScore(Pairs(1),Pairs(3))./6)),'FaceColor',cols(3,:),'EdgeColor','none')
@@ -1054,7 +1058,7 @@ if 0 % THis can be used to look at some example projections
     ylabel('Normalized Score')
     makepretty
 
-  subplot(1,2,2)
+    subplot(1,2,2)
     bar(cat(1,squeeze(Predictors(Pairs(1),Pairs(2),:)),squeeze(TotalScore(Pairs(1),Pairs(2))./6)),'FaceColor',cols(2,:),'EdgeColor','none')
     set(gca,'XTick',1:size(Predictors,3)+1,'XTickLabel',{'C','W','V','D','A',char(920),'T'},'YAxisLocation','right','YTickLabelRotation',90,'XTickLabelRotation',90)
     ylabel('Normalized Score')

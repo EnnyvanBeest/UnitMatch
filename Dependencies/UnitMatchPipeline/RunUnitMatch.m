@@ -21,12 +21,24 @@ for subsesid = 1:length(AllKiloSortPaths)
 end
 
 % Add all cluster information in one 'cluster' struct - can be used for further analysis
+% Apparently sometimes clusinfo does not have the same fields (KS version?)
+fields = fieldnames(clusinfo{1});
+IncludeField = true(1,length(fields));
+for sesid=2:length(clusinfo)
+    IncludeField(~ismember(fields,fieldnames(clusinfo{sesid}))) = false;
+end
+for sesid=1:length(clusinfo)
+    thesefields = fieldnames(clusinfo{sesid});
+    clusinfo{sesid} = rmfield(clusinfo{sesid},thesefields(ismember(thesefields,fields(find(~IncludeField))))); % REmove fields
+end
+
+% Continue adding them together
 clusinfo = [clusinfo{:}];
 clusinfoNew = struct;
-fields = fieldnames(clusinfo(1));
+fields = {fields{find(IncludeField)}}';
 for fieldid = 1:length(fields)
     try
-        eval(['clusinfoNew.', fields{fieldid}, '= cat(1,clusinfo(:).', fields{fieldid}, ');'])
+        eval(['clusinfoNew.', fields{fieldid}, '= cat(1,clusinfo(:).', fields{fieldid} ');'])
     catch ME
         try
             eval(['clusinfoNew.', fields{fieldid}, '= cat(2,clusinfo(:).', fields{fieldid}, ');'])
@@ -68,8 +80,8 @@ UMparam.KSDir = AllKiloSortPaths;
 UMparam.channelpos = Params.AllChannelPos;
 UMparam.AllRawPaths = Params.RawDataPaths;
 UMparam.UseHistology = Params.UseHistology;
-if isstruct(Params.RawDataPaths)
-    UMparam.AllDecompPaths = arrayfun(@(X) fullfile(Params.tmpdatafolder, strrep(Params.RawDataPaths(X).name, 'cbin', 'bin')), 1:length(Params.RawDataPaths), 'Uni', 0);
+if isstruct(Params.RawDataPaths{1})
+    UMparam.AllDecompPaths = cellfun(@(X) fullfile(Params.tmpdatafolder, strrep(X.name, 'cbin', 'bin')), Params.RawDataPaths, 'Uni', 0);
 else
     allDecompPaths_dirs = arrayfun(@(X) dir(Params.RawDataPaths{X}), 1:length(Params.RawDataPaths), 'Uni', 0);
     UMparam.AllDecompPaths = arrayfun(@(X) fullfile(Params.tmpdatafolder, strrep(allDecompPaths_dirs{X}.name, 'cbin', 'bin')), 1:length(allDecompPaths_dirs), 'Uni', 0);
@@ -103,8 +115,8 @@ if Params.UnitMatch
         % Need to decompress if decompression wasn't done yet
         for id = 1:length(Params.RawDataPaths)
             ephysap_tmp = [];
-            if isstruct(Params.RawDataPaths)
-                ephysap_path = fullfile(Params.RawDataPaths(id).folder, Params.RawDataPaths(id).name);
+            if isstruct(Params.RawDataPaths{id})
+                ephysap_path = fullfile(Params.RawDataPaths{id}.folder, Params.RawDataPaths{id}.name);
             else
                 ephysap_path = fullfile(Params.RawDataPaths{id});
             end

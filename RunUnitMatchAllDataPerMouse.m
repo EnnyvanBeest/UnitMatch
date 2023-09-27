@@ -52,18 +52,7 @@ for midx = 1:length(MiceOpt)
             subsesopt = subsesopt(cell2mat(cellfun(@(X) any(strfind(X,'Chronic')),subsesopt,'UniformOutput',0))); %Use chronic output from pyks
         end
     end
-
-    % Copy file and then run pykilosort on it
-    channelposition = cell(1,length(subsesopt));
-    for id = 1:length(subsesopt)
-        tmpfile = dir(fullfile(subsesopt{id},'channel_positions.npy'));
-        if isempty(tmpfile)
-            continue
-        end
-        channelposition{id} = readNPY(fullfile(tmpfile.folder,tmpfile.name));
-    end
-    subsesopt(cellfun(@isempty,channelposition))=[];
-    channelposition(cellfun(@isempty,channelposition))=[];
+ 
     AllKiloSortPaths = subsesopt;
 
     %% Create saving directory
@@ -76,20 +65,29 @@ for midx = 1:length(MiceOpt)
         continue
     end
 
+    %% Prepare cluster information
+    PrepareClusInfoparams = PrepareClusInfo(AllKiloSortPaths,PrepareClusInfoparams);
+    PrepareClusInfoparams.RecType = RecordingType{midx};%
+
+    % Remove empty ones
+    EmptyFolders = find(cellfun(@isempty,PrepareClusInfoparams.AllChannelPos));
+    AllKiloSortPaths(EmptyFolders) = [];
+    PrepareClusInfoparams.AllChannelPos(EmptyFolders) = [];
+    PrepareClusInfoparams.AllProbeSN(EmptyFolders) = [];
+    PrepareClusInfoparams.RawDataPaths(EmptyFolders) = [];
+
     %% Might want to run UM for separate IMRO tables & Probes (although UM can handle running all at the same time and takes position into account)
     if ~PrepareClusInfoparams.separateIMRO
         RunSet = ones(1,length(AllKiloSortPaths)); %Run everything at the same time
         nRuns = 1;
     else
         % Extract different IMRO tables
-        channelpositionMatrix = cat(3,channelposition{:});
+        channelpositionMatrix = cat(3,PrepareClusInfoparams.AllChannelPos{:});
         [UCHanOpt,~,idIMRO] = unique(reshape(channelpositionMatrix,size(channelpositionMatrix,1)*size(channelpositionMatrix,2),[])','rows','stable');
         UCHanOpt = reshape(UCHanOpt',size(channelpositionMatrix,1),size(channelpositionMatrix,2),[]);
 
         % Extract unique probes used
-        ProbePerPath = cellfun(@(X) X(strfind(X,'Probe'):strfind(X,'Probe')+5),AllKiloSortPaths,'Uni',0);
-        [ProbeOpt,~,idProbe] = unique(ProbePerPath);
-
+        [ProbeOpt,~,idProbe]  = unique([PrepareClusInfoparams.AllProbeSN{:}]);
         PosComb = combvec(1:length(ProbeOpt),1:size(UCHanOpt,3)); % Possible combinations Probe X IMRO
         % Assign a number to each KS path related to PosComb
         RunSet = nan(1,length(AllKiloSortPaths));
@@ -98,26 +96,29 @@ for midx = 1:length(MiceOpt)
         end
         nRuns = length(PosComb);
     end
-
+   
+    ORIParams = PrepareClusInfoparams; % RESET
 
     %% Run UnitMatch
     for runid = 1:nRuns
+        PrepareClusInfoparams = ORIParams; % RESET
         idx = find(RunSet==runid);
         if isempty(idx)
             continue
         end
-        if nRuns == 1
-            PrepareClusInfoparams.SaveDir = fullfile(SaveDir,MiceOpt{midx});
+        if ~PrepareClusInfoparams.separateIMRO
+            PrepareClusInfoparams.SaveDir = fullfile(SaveDir,MiceOpt{midx},'AllProbes','AllIMRO');
         else
-            PrepareClusInfoparams.SaveDir = fullfile(SaveDir,MiceOpt{midx},ProbeOpt{PosComb(1,runid)},['IMRO_' num2str(PosComb(2,runid))]);
+            PrepareClusInfoparams.SaveDir = fullfile(SaveDir,MiceOpt{midx},['Probe' num2str(PosComb(1,runid)-1)],['IMRO_' num2str(PosComb(2,runid))]);
+            PrepareClusInfoparams.AllChannelPos = PrepareClusInfoparams.AllChannelPos(idx);
+            PrepareClusInfoparams.AllProbeSN = PrepareClusInfoparams.AllProbeSN(idx);
+            PrepareClusInfoparams.RawDataPaths = PrepareClusInfoparams.RawDataPaths(idx);
         end
         UnitMatchExist = dir(fullfile(PrepareClusInfoparams.SaveDir,'**','UnitMatch.mat'));
+        
         if isempty(UnitMatchExist) || PrepareClusInfoparams.RedoUnitMatch
 
-            %% Prepare cluster information
-            PrepareClusInfoparams = PrepareClusInfo(AllKiloSortPaths(idx),PrepareClusInfoparams);
-            PrepareClusInfoparams.RecType = RecordingType{midx};%
-
+            
             %% Evaluate (within unit ID cross-v alidation)
             UMparam = RunUnitMatch(AllKiloSortPaths(idx),PrepareClusInfoparams);
 

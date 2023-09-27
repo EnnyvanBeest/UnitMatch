@@ -1,16 +1,10 @@
 function ComputeFunctionalScores(SaveDir, loadMATsToSave)
 
-if nargin < 2 || isempty(loadMATsToSave)
-    TmpFile = matfile(fullfile(SaveDir, 'UnitMatch.mat')); % Access saved file
-else
-    TmpFile = load(fullfile(SaveDir, 'UnitMatch.mat'));
-end
-UMparam = TmpFile.UMparam; % Extract parameters
+
+load(fullfile(SaveDir, 'UnitMatch.mat'), 'MatchTable', 'UMparam', 'UniqueIDConversion');
 UMparam.binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
-MatchTable = TmpFile.MatchTable; % Load Matchtable
 
 % Extract cluster information
-UniqueIDConversion = TmpFile.UniqueIDConversion;
 if UMparam.GoodUnitsOnly
     GoodId = logical(UniqueIDConversion.GoodID);
 else
@@ -181,29 +175,10 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) % If it
     Pairs = unique(Pairs, 'rows');
     [FingerprintR, RankScoreAll, SigMask, AllSessionCorrelations] = CrossCorrelationFingerPrint(sessionCorrelationsAll, Pairs, OriID, recses, drawdrosscorr);
 
-
-
     % Save in table
     MatchTable.FingerprintCor = FingerprintR(:);
     MatchTable.RankScore = RankScoreAll(:);
     MatchTable.SigFingerprintR = SigMask(:);
-
-
-    if nargin < 2 || isempty(loadMATsToSave)
-        TmpFile.Properties.Writable = true;
-    end
-    TmpFile.MatchTable = MatchTable; % Overwrite
-    TmpFile.AllSessionCorrelations = AllSessionCorrelations;
-
-    if nargin < 2 || isempty(loadMATsToSave)
-
-        TmpFile.Properties.Writable = false;
-    else
-
-        movefile(fullfile(SaveDir, 'UnitMatch.mat'), fullfile(SaveDir, 'UnitMatch_prev.mat'))
-        save(fullfile(SaveDir, 'UnitMatch.mat'),'-struct','TmpFile');
-        delete(fullfile(SaveDir, 'UnitMatch_prev.mat'))
-    end
 
     %% Compare to functional scores
 
@@ -342,15 +317,15 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) % If it alre
     gw = gausswin(proc.smoothSize,3);
     proc.smWin = gw./sum(gw);
 
-    nRec = numel(UMparam.AllRawPaths);
-    nClu = nan(1,nRec); for ss = 1:nRec; nClu(ss) = numel(unique(MatchTable.ID1(MatchTable.RecSes1 == ss))); end
+    nRec = length(RecOpt); % not always the same!! numel(UMparam.AllRawPaths);
+    nClu = nan(1,nRec); for ss = 1:nRec; nClu(ss) = numel(unique(MatchTable.ID1(MatchTable.RecSes1 == RecOpt(ss)))); end
     spikeData_cv = cell(1,2*nRec);
     for ss = 1:nRec
         % Get the original binFile (also for stitched?)
-        if iscell(UMparam.AllRawPaths)
-            binFileRef = fullfile(UMparam.AllRawPaths{ss});
+        if iscell(UMparam.AllRawPaths(RecOpt(ss)))
+            binFileRef = fullfile(UMparam.AllRawPaths{RecOpt(ss)});
         else
-            binFileRef = fullfile(UMparam.AllRawPaths(ss).folder,UMparam.AllRawPaths(ss).name);
+            binFileRef = fullfile(UMparam.AllRawPaths(RecOpt(ss)).folder,UMparam.AllRawPaths(RecOpt(ss)).name);
         end
 
         % Find the associated experiments
@@ -365,22 +340,30 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) % If it alre
 
         if ~isempty(exp2keep)
             % Get the spikes
+            try
             st = sp.st(sp.RecSes == RecOpt(ss));
             clu = sp.spikeTemplates(sp.RecSes == RecOpt(ss));
+            catch ME
+                keyboard
+            end
 
             spikesAll.times = st;
             spikesAll.clusters = clu;
             spikesAll.clusterIDs = unique(clu); % follow the same units across days
 
             % Get the natim responses
-            spikeData = getNatImResp(spikesAll,exp2keep,binFileRef,proc);
-            clusterIDs = spikesAll.clusterIDs;
+            try
+                spikeData = getNatImResp(spikesAll,exp2keep,binFileRef,proc);
+                clusterIDs = spikesAll.clusterIDs;
 
-            % Split in two halves and subselect units
-            cluIdx = ismember(clusterIDs,unique(MatchTable.ID1(MatchTable.RecSes1 == ss)));
-            currIdx = (ss-1)*2;
-            spikeData_cv{currIdx+1} = spikeData(:,:,cluIdx,1:2:end); % odd
-            spikeData_cv{currIdx+2} = spikeData(:,:,cluIdx,2:2:end); % even
+                % Split in two halves and subselect units
+                cluIdx = ismember(clusterIDs,unique(MatchTable.ID1(MatchTable.RecSes1 == RecOpt(ss))));
+                currIdx = (ss-1)*2;
+                spikeData_cv{currIdx+1} = spikeData(:,:,cluIdx,1:2:end); % odd
+                spikeData_cv{currIdx+2} = spikeData(:,:,cluIdx,2:2:end); % even
+            catch ME
+                disp(ME)
+            end
         end
     end
 
@@ -396,7 +379,11 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) % If it alre
     for ss1 = 1:nRec
         for ss2 = 1:nRec
             if ~all(isnan(corrWCCA_1x2{ss1,ss2}(:)))
+                try
                 corrWCCA_big(sum(nClu(1:ss1-1))+1:sum(nClu(1:ss1)), sum(nClu(1:ss2-1))+1:sum(nClu(1:ss2))) = corrWCCA_1x2{ss1,ss2};
+                catch ME
+                    keyboard
+                end
             end
         end
     end
@@ -406,39 +393,34 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) % If it alre
 
 
     % RANK
-    corrWCCA_big(isnan(corrWCCA_big)) = nanmin(corrWCCA_big(:)); % should not participate to the rank
+    corrWCCA_big_noNaN = corrWCCA_big;
+    corrWCCA_big_noNaN(isnan(corrWCCA_big)) = nanmin(corrWCCA_big(:)); % should not participate to the rank
     % Find rank
+    NImgRankScore = nan(size(corrWCCA_big));
     for did1 = 1:nRec
         for did2 = 1:nRec
             % Get the indices
             clusIdxD1All = SessionSwitch(did1):SessionSwitch(did1+1)-1;
             clusIdxD2All = SessionSwitch(did2):SessionSwitch(did2+1)-1;
-            [~,idx] = sort(corrWCCA_big(clusIdxD1All,clusIdxD2All),2,'descend');
-            for c = 1:numel(clusIdxD1All)
-                NImgRankScore(clusIdxD1All(c),clusIdxD2All(idx(c,:))) = 1:numel(clusIdxD2All);
+            if ~all(isnan(mat2vec(corrWCCA_big(clusIdxD1All,clusIdxD2All))))
+                [~,idx] = sort(corrWCCA_big_noNaN(clusIdxD1All,clusIdxD2All),2,'descend');
+                for c = 1:numel(clusIdxD1All)
+                    NImgRankScore(clusIdxD1All(c),clusIdxD2All(idx(c,:))) = 1:numel(clusIdxD2All);
+                end
             end
         end
     end
+    NImgRankScore(isnan(corrWCCA_big)) = nan;
     MatchTable.NImgRankScore = NImgRankScore(:);
 
 end
 %% Write to table
 
-if nargin < 2 || isempty(loadMATsToSave)
-    TmpFile.Properties.Writable = true;
-end
-TmpFile.MatchTable = MatchTable; % Overwrite
+save(fullfile(SaveDir, 'UnitMatch.mat'), 'MatchTable', 'UMparam', 'UniqueIDConversion', '-append');
 if exist('AllSessionCorrelations','var')
-    TmpFile.AllSessionCorrelations = AllSessionCorrelations;
+    save(fullfile(SaveDir, 'UnitMatch.mat'), 'AllSessionCorrelations', '-append');
 end
 
-if nargin < 2 || isempty(loadMATsToSave)
-    TmpFile.Properties.Writable = false;
-else
-    movefile(fullfile(SaveDir, 'UnitMatch.mat'), fullfile(SaveDir, 'UnitMatch_prev.mat'))
-    save(fullfile(SaveDir, 'UnitMatch.mat'),'-struct','TmpFile');
-    delete(fullfile(SaveDir, 'UnitMatch_prev.mat'))
-end
 %% Extract groups
 if UMparam.RunPyKSChronicStitched
     ntimes = 2;
@@ -559,7 +541,7 @@ for id = 1:ntimes
     plot(Vector, hn, 'color', [0, 0, 0])
     xlabel('Autocorrelogram Correlation')
     ylabel('Proportion|Group')
-    legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
+%     legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
     axis square
 
     makepretty
@@ -584,7 +566,7 @@ for id = 1:ntimes
     plot([0, 1], [0, 1], 'k--')
     xlabel('False positive rate')
     ylabel('True positive rate')
-    legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
+%     legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
     title(sprintf('Autocorrelogram AUC: %.3f, %.3f, %.3f', AUC1, AUC2, AUC3))
     makepretty
     axis square
@@ -621,7 +603,7 @@ for id = 1:ntimes
     plot(Vector, hn, 'color', [0, 0, 0])
     xlabel('Firing rate differences')
     ylabel('Proportion|Group')
-    legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
+%     legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
     makepretty
     axis square
 
@@ -646,7 +628,7 @@ for id = 1:ntimes
     plot([0, 1], [0, 1], 'k--')
     xlabel('False positive rate')
     ylabel('True positive rate')
-    legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
+%     legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
     title(sprintf('Firing rate differences AUC: %.3f, %.3f, %.3f', AUC1, AUC2, AUC3))
     makepretty
 
@@ -669,7 +651,7 @@ for id = 1:ntimes
     freezeColors
 
 
-    if ~all(isnan(NatImCorr(:)))
+    if ~all(isnan(NatImCorr(MatchIdx)))
         subplot(4, 3, 11)
         bins = min(NatImCorr(:)):0.1:max(NatImCorr(:));
         Vector = [bins(1) + 0.1 / 2:0.1:bins(end) - 0.1 / 2];
@@ -682,7 +664,7 @@ for id = 1:ntimes
         plot(Vector, hn, 'color', [0, 0, 0])
         xlabel('NatIm Fingerprint')
         ylabel('Proportion|Group')
-        legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
+%         legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
         axis square
         makepretty
     
@@ -698,13 +680,14 @@ for id = 1:ntimes
         plot(Vector, hn, 'color', [0, 0, 0])
         xlabel('NatIm Fingerprint')
         ylabel('Proportion|Group')
-        legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
+%         legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
         axis square
         makepretty
         subplot(4, 3, 12)
-        if any(MatchIdx)
+        if any(MatchIdx) & ~all(isnan(NatImCorr(MatchIdx)))
             labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
             scores = [NatImCorr(MatchIdx)', NatImCorr(NonMatchIdx)'];
+                
             [X, Y, ~, AUC1] = perfcurve(labels, scores, 1);
             h(1) = plot(X, Y, 'color', [0, 0.25, 0]);
             hold all
@@ -724,7 +707,7 @@ for id = 1:ntimes
         plot([0, 1], [0, 1], 'k--')
         xlabel('False positive rate')
         ylabel('True positive rate')
-        legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
+%         legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
         title(sprintf('NatIm Fingerprint AUC: %.3f, %.3f, %.3f', AUC1, AUC2, AUC3))
         makepretty
         drawnow %Something to look at while ACG calculations are ongoing

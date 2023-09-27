@@ -1,4 +1,4 @@
-function Params = PrepareClusInfo(KiloSortPaths, Params, RawDataPaths)
+function Params = PrepareClusInfo(KiloSortPaths, Params, RawDataPathsInput)
 % Prepares cluster information for subsequent analysis
 
 %% Inputs:
@@ -7,7 +7,7 @@ function Params = PrepareClusInfo(KiloSortPaths, Params, RawDataPaths)
 % chronic recordings with same IMRO table: give a list with all sessions)
 
 % Params: with:
-% Params.loadPCs=1;
+% Params.loadPCs=0;
 % Params.RunPyKSChronicStitched = 1
 % Params.DecompressLocal = 1; %if 1, uncompress data first if it's currently compressed
 % Params.RedoQM = 0; %if 1, redo quality metrics if it already exists
@@ -36,7 +36,7 @@ end
 try
     if nargin < 2
         disp('No params given. Use default - although this is not advised...')
-        Params.loadPCs = 1;
+        Params.loadPCs = 0;
         Params.RunPyKSChronicStitched = 1;
         Params.DecompressLocal = 1; %if 1, uncompress data first if it's currently compressed
         Params.CleanUpTemporary = 1; % Clean up temporary data
@@ -53,9 +53,7 @@ try
         Params.nSavedChans = 385;
         Params.nSyncChans = 1;
     end
-    if Params.RunQualityMetrics
-        Params.loadPCs = 1; %If you want to run QM you need this
-    end
+
 
     if nargin < 3
         disp('Finding raw ephys data using the params.py file from (py)kilosort output')
@@ -70,13 +68,17 @@ end
 if ~isfield(Params, 'CleanUpTemporary')
     Params.CleanUpTemporary = 1; % Clean up temporary folder
 end
-
+if ~isfield(Params, 'MinRecordingDuration')
+    Params.MinRecordingDuration = 10; % Clean up temporary folder
+end
 %% Initialize everything
 channelmap = [];
 channelpos = [];
 
-AllKiloSortPaths = cell(1, 0);
-AllChannelPos = cell(1, 0);
+AllKiloSortPaths = cell(1, length(KiloSortPaths));
+AllChannelPos = cell(1, length(KiloSortPaths));
+AllProbeSN = cell(1, length(KiloSortPaths));
+RawDataPaths = cell(1, length(KiloSortPaths));
 countid = 1;
 % figure;
 cols = jet(length(KiloSortPaths));
@@ -96,12 +98,7 @@ for subsesid = 1:length(KiloSortPaths)
     AllUniqueTemplates = [];
     cluster_id = [];
     recses = [];
-    if any(strfind(KiloSortPaths{subsesid}, 'Probe'))
-        probeid = str2num(KiloSortPaths{subsesid}(strfind(KiloSortPaths{subsesid}, 'Probe') + 5));
-    else
-        disp('Probe ID unknown')
-        probeid = 0;
-    end
+ 
 
     %% save data paths information
     if Params.RunPyKSChronicStitched %CALL THIS STITCHED --> Only works when using RunPyKS2_FromMatlab as well from this toolbox
@@ -126,11 +123,16 @@ for subsesid = 1:length(KiloSortPaths)
                 rawD = cat(2, rawD{:});
             end
         else
-            rawD = dir(fullfile(RawDataPaths(subsesid).folder, RawDataPaths(subsesid).name));
+            if isstruct(RawDataPathsInput)
+                rawD = dir(fullfile(RawDataPathsInput(subsesid).folder, RawDataPathsInput(subsesid).name));
+            else
+                rawD = dir(fullfile(RawDataPathsInput{subsesid}));
+            end
+            
         end
 
-        RawDataPaths = rawD;
-        AllKiloSortPaths = cat(2, AllKiloSortPaths{:}, repmat(KiloSortPaths(subsesid), 1, length(rawD)));
+        RawDataPaths{subsesid} = rawD; % Definitely save as cell
+        AllKiloSortPaths{subsesid} = repmat(KiloSortPaths(subsesid), 1, length(rawD));
     else
         if UseParamsKS
             spikeStruct = loadParamsPy(fullfile(KiloSortPaths{subsesid}, 'params.py'));
@@ -145,25 +147,34 @@ for subsesid = 1:length(KiloSortPaths)
             if isempty(rawD)
                 rawD = dir(strrep(tmpdr, 'bin', 'cbin'));
             end
-
+            % Try another way
+            if isempty(rawD)
+                FolderParts = strsplit(KiloSortPaths{subsesid},{'pyKS','PyKS'});
+                rawD = dir(fullfile(FolderParts{1},'*bin'));
+%                 rawD = fullfile(rawD.folder,rawD.name);            
+            end
 
             % Save for later
-            RawDataPaths(subsesid) = rawD;
+            try
+                RawDataPaths{subsesid} = rawD;
+            catch ME
+                disp(ME)
+                keyboard
+            end
 
             if isempty(rawD)
                 disp('Bug...?')
                 keyboard
             end
         else
-            if isstruct(RawDataPaths)
-                rawD = dir(fullfile(RawDataPaths(subsesid).folder, RawDataPaths(subsesid).name));
-
+            if isstruct(RawDataPathsInput)
+                rawD = RawDataPathsInput(subsesid);
             else
-                rawD = dir(fullfile(RawDataPaths{subsesid}));
+                rawD = dir(fullfile(RawDataPathsInput{subsesid}));
             end
-
         end
-        AllKiloSortPaths = {AllKiloSortPaths{:}, KiloSortPaths{subsesid}};
+        RawDataPaths{subsesid} = rawD; % Definitely save as cell
+        AllKiloSortPaths{subsesid} = KiloSortPaths{subsesid};
     end
     DecompressionFlag = 0;
 
@@ -177,9 +188,14 @@ for subsesid = 1:length(KiloSortPaths)
         channelmaptmp(end+1:length(channelpostmp)) = length(channelmaptmp):length(channelpostmp) - 1;
     end
 
-    %% Is it correct channelpos though...? Check using raw data
-    channelpostmpconv = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done
-    AllChannelPos{countid} = channelpostmpconv;
+    %% Is it correct channelpos though...? Check using raw data. While reading this information, also extract recording duration and Serial number of probe
+    [channelpostmpconv, probeSN, recordingduration] = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done
+    if recordingduration<Params.MinRecordingDuration 
+        disp([KiloSortPaths{subsesid} ' recording too short, skip...'])
+        continue
+    end
+    AllChannelPos{subsesid} = channelpostmpconv;
+    AllProbeSN{subsesid} = probeSN;
 
     %% Load existing?
     if exist(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat')) && ~Params.RedoQM && ~Params.ReLoadAlways
@@ -413,8 +429,13 @@ for subsesid = 1:length(KiloSortPaths)
 
                 %             idx = ismember(sp.spikeTemplates,clusidtmp(Good_IDtmp)); %Only include good units
                 %careful; spikeSites zero indexed
+                if isempty(sp.pcFeat)
+                    spfeat = [];
+                else
+                    spfeat = sp.pcFeat(idx, :, :);
+                end
                 [qMetric, unitType] = bc_runAllQualityMetrics(paramBC, sp.st(idx)*sp.sample_rate, sp.spikeTemplates(idx)+1, ...
-                    templateWaveforms, sp.tempScalingAmps(idx), sp.pcFeat(idx, :, :), sp.pcFeatInd+1, channelpostmp, savePath); % Be careful, bombcell needs 1-indexed!
+                    templateWaveforms, sp.tempScalingAmps(idx), spfeat, sp.pcFeatInd+1, channelpostmp, savePath); % Be careful, bombcell needs 1-indexed!
 
             else
                 paramBC.rawFile = fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'bin'));
@@ -433,10 +454,14 @@ for subsesid = 1:length(KiloSortPaths)
 
                 spikeTemplates = spike_templates_0idx + 1;
                 uniqueTemplates = unique(spikeTemplates);
-                tmpfile = dir(fullfile(savePath,'**','templates.qualityMetricDetailsforGUI.mat'));
-                tmpGUI = load(fullfile(tmpfile.folder,tmpfile.name));
                 % need to load forGUI.tempWv??
-                bc_plotGlobalQualityMetric(qMetric, paramBC, unitType, uniqueTemplates, tmpGUI.forGUI.tempWv);
+                try
+                    tmpfile = dir(fullfile(savePath,'**','templates.qualityMetricDetailsforGUI.mat'));
+                    tmpGUI = load(fullfile(tmpfile.folder,tmpfile.name));
+                    bc_plotGlobalQualityMetric(qMetric, paramBC, unitType, uniqueTemplates, tmpGUI.forGUI.tempWv);
+                catch ME
+                    disp(ME)
+                end
 
                 %                 load(fullfile(savePath, 'qMetric.mat'))
             end
@@ -498,10 +523,10 @@ for subsesid = 1:length(KiloSortPaths)
     if exist('theseuniqueTemplates', 'var') && iscell(theseuniqueTemplates)
         recsesAlltmp = arrayfun(@(X) repmat(addthis+X, 1, length(theseuniqueTemplates{X})), [1:length(theseuniqueTemplates)], 'UniformOutput', 0);
         recsesAll = cat(1, recsesAll(:), cat(2, recsesAlltmp{:})');
-        ProbeAll = cat(1, ProbeAll(:), repmat(probeid, 1, length(cat(2, recsesAlltmp{:})))');
+        ProbeAll = cat(1, ProbeAll(:), repmat(probeSN, 1, length(cat(2, recsesAlltmp{:})))'); % Replace to serial number
     else
         recsesAll = cat(1, recsesAll(:), repmat(addthis+1, 1, length(Good_IDtmp))');
-        ProbeAll = cat(1, ProbeAll(:), repmat(probeid, 1, length(Good_IDtmp))');
+        ProbeAll = cat(1, ProbeAll(:), repmat(probeSN, 1, length(Good_IDtmp))'); % Replace to serial numer
     end
     sp.RecSes = sp.SessionID + countid - 1; %Keep track of recording session, as cluster IDs are not unique across sessions
 
@@ -558,25 +583,27 @@ for subsesid = 1:length(KiloSortPaths)
             disp(ME)
         end
     end
-
+    close all
     countid = countid + 1;
 end
 
 Params.AllChannelPos = AllChannelPos;
+Params.AllProbeSN = AllProbeSN;
 Params.RawDataPaths = RawDataPaths;
 Params.DecompressionFlag = DecompressionFlag;
 
 %% Remove temporary files
 if isstruct(RawDataPaths)
-    if any(ismember({RawDataPaths(:).folder}, Params.tmpdatafolder))
+    if any(cellfun(@(X) strcmp(X,Params.tmpdatafolder), {RawDataPaths(:).folder}))
         Params.CleanUpTemporary = 1;
     end
 end
 
 CleanUpCheckFlag = nan; % Put to 1 is own responsibility! Make sure not to delete stuff from the server directly!
-if 0 %Params.DecompressLocal && Params.CleanUpTemporary
+if Params.DecompressLocal && Params.CleanUpTemporary
+    
+    if isnan(CleanUpCheckFlag) && any(cellfun(@(X) exist(fullfile(Params.tmpdatafolder, strrep(X.name, 'cbin', 'bin'))),RawDataPaths(find(~cellfun(@isempty,RawDataPaths)))))
 
-    if isnan(CleanUpCheckFlag) && exist(fullfile(Params.tmpdatafolder, strrep(RawDataPaths(1).name, 'cbin', 'bin')))
         answer = questdlg(['Automatically remove data from ', Params.tmpdatafolder, '?'], ...
             'REMOVING -- CHECK!!!', ...
             'YES', 'NO', 'YES');
@@ -585,6 +612,8 @@ if 0 %Params.DecompressLocal && Params.CleanUpTemporary
         else
             CleanUpCheckFlag = 0;
         end
+    else
+            CleanUpCheckFlag = 0;
     end
     if CleanUpCheckFlag
         clear memMapData

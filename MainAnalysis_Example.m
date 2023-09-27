@@ -1,9 +1,9 @@
 %% User Input
 %% Path information
 DataDir =  {'H:\MatchingUnits\RawData'}; %{'H:\MatchingUnits\RawDataMonthApart'};%;%Raw data folders, typically servers were e.g. *.cbin files are stored
-SaveDir = 'H:\MatchingUnits\Output\NotConcatenated' %'H:\MatchingUnits\Output\Concatenated1Day'; %'H:\MatchingUnits\Output\MonthApartStitched'%%;%  'H:\MatchingUnits\Output\ManyRecordings'%Folder where to store the results
+SaveDir = 'H:\MatchingUnits\Output\NotConcatenated' % 'H:\MatchingUnits\Output\MonthApartStitched'%%;% 'H:\MatchingUnits\Output\Concatenated1Day'; %'H:\MatchingUnits\Output\ManyRecordings'%Folder where to store the results
 tmpdatafolder = 'H:\MatchingUnits\Tmp'; % temporary folder for temporary decompression of data 
-KilosortDir = 'H:\MatchingUnits\KilosortOutput'; %'H:\MatchingUnits\KilosortOutputMonthApart';% Kilosort output folder
+KilosortDir = 'H:\MatchingUnits\KilosortOutput'; %' 'H:\MatchingUnits\KilosortOutputMonthApart';%'\\znas.cortexlab.net\Lab\Share\Celian\UnitMatch\KilosortOutputMonthApart';% Kilosort output folder
 GithubDir = 'C:\Users\EnnyB\Documents\GitHub'; % Github directory
 PythonEXE = 'C:\Users\EnnyB\anaconda3\envs\pyks2\pythonw.exe' % Python version to run python code in:
 
