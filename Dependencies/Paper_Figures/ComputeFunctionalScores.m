@@ -1,4 +1,4 @@
-function ComputeFunctionalScores(SaveDir, loadMATsToSave)
+function ComputeFunctionalScores(SaveDir)
 
 
 load(fullfile(SaveDir, 'UnitMatch.mat'), 'MatchTable', 'UMparam', 'UniqueIDConversion');
@@ -322,10 +322,10 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) % If it alre
     spikeData_cv = cell(1,2*nRec);
     for ss = 1:nRec
         % Get the original binFile (also for stitched?)
-        if iscell(UMparam.AllRawPaths(RecOpt(ss)))
+        if iscell(UMparam.AllRawPaths{RecOpt(ss)})
             binFileRef = fullfile(UMparam.AllRawPaths{RecOpt(ss)});
         else
-            binFileRef = fullfile(UMparam.AllRawPaths(RecOpt(ss)).folder,UMparam.AllRawPaths(RecOpt(ss)).name);
+            binFileRef = fullfile(UMparam.AllRawPaths{RecOpt(ss)}.folder,UMparam.AllRawPaths{RecOpt(ss)}.name);
         end
 
         % Find the associated experiments
@@ -715,7 +715,13 @@ for id = 1:ntimes
 
     %% save
     set(gcf, 'units', 'normalized', 'outerposition', [0, 0, 1, 1])
+    try
     saveas(gcf, fullfile(SaveDir, [addname, 'FunctionalScoreSeparability.fig']))
+    catch ME
+    end
+    try
     saveas(gcf, fullfile(SaveDir, [addname, 'FunctionalScoreSeparability.png']))
+    catch ME
+    end
 end
 return
