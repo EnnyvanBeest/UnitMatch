@@ -323,7 +323,8 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) % If it alre
     for ss = 1:nRec
         % Get the original binFile (also for stitched?)
         if iscell(UMparam.AllRawPaths(RecOpt(ss)))
-            binFileRef = fullfile(UMparam.AllRawPaths{RecOpt(ss)});
+            fileThis = UMparam.AllRawPaths{RecOpt(ss)};
+            binFileRef = fullfile([fileThis.folder, fileThis.name]);
         else
             binFileRef = fullfile(UMparam.AllRawPaths(RecOpt(ss)).folder,UMparam.AllRawPaths(RecOpt(ss)).name);
         end
