@@ -322,10 +322,10 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) % If it alre
     spikeData_cv = cell(1,2*nRec);
     for ss = 1:nRec
         % Get the original binFile (also for stitched?)
-        if iscell(UMparam.AllRawPaths(RecOpt(ss)))
+        if iscell(UMparam.AllRawPaths{RecOpt(ss)})
             binFileRef = fullfile(UMparam.AllRawPaths{RecOpt(ss)});
         else
-            binFileRef = fullfile(UMparam.AllRawPaths(RecOpt(ss)).folder,UMparam.AllRawPaths(RecOpt(ss)).name);
+            binFileRef = fullfile(UMparam.AllRawPaths{RecOpt(ss)}.folder,UMparam.AllRawPaths{RecOpt(ss)}.name);
         end
 
         % Find the associated experiments

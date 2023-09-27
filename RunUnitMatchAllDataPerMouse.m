@@ -7,7 +7,8 @@ DateOpt = arrayfun(@(X) dir(fullfile(DataDir{DataDir2Use(X)},MiceOpt{X},'*-*')),
 DateOpt = cellfun(@(X) X([X.isdir]),DateOpt,'UniformOutput',0);
 DateOpt = cellfun(@(X) {X.name},DateOpt,'UniformOutput',0);
 
-for midx = 3:length(MiceOpt)
+LogError = {}; % Keep track of which runs didn't work
+for midx = 1:length(MiceOpt)
     %% Loading data from kilosort/phy easily
     if ~isempty(KilosortDir)
         myKsDir = fullfile(KilosortDir,MiceOpt{midx});
@@ -101,35 +102,36 @@ for midx = 3:length(MiceOpt)
 
     %% Run UnitMatch
     for runid = 1:nRuns
-        PrepareClusInfoparams = ORIParams; % RESET
-        idx = find(RunSet==runid);
-        if isempty(idx)
-            continue
-        end
-        if ~PrepareClusInfoparams.separateIMRO
-            PrepareClusInfoparams.SaveDir = fullfile(SaveDir,MiceOpt{midx},'AllProbes','AllIMRO');
-        else
-            PrepareClusInfoparams.SaveDir = fullfile(SaveDir,MiceOpt{midx},['Probe' num2str(PosComb(1,runid)-1)],['IMRO_' num2str(PosComb(2,runid))]);
-            PrepareClusInfoparams.AllChannelPos = PrepareClusInfoparams.AllChannelPos(idx);
-            PrepareClusInfoparams.AllProbeSN = PrepareClusInfoparams.AllProbeSN(idx);
-            PrepareClusInfoparams.RawDataPaths = PrepareClusInfoparams.RawDataPaths(idx);
-        end
-        UnitMatchExist = dir(fullfile(PrepareClusInfoparams.SaveDir,'**','UnitMatch.mat'));
-        
-        if isempty(UnitMatchExist) || PrepareClusInfoparams.RedoUnitMatch
-
-            
-            %% Evaluate (within unit ID cross-v alidation)
-            UMparam = RunUnitMatch(AllKiloSortPaths(idx),PrepareClusInfoparams);
-
-            if isfield(UMparam,'Error')
+        try
+            PrepareClusInfoparams = ORIParams; % RESET
+            idx = find(RunSet==runid);
+            if isempty(idx)
                 continue
             end
+            if ~PrepareClusInfoparams.separateIMRO
+                PrepareClusInfoparams.SaveDir = fullfile(SaveDir,MiceOpt{midx},'AllProbes','AllIMRO');
+            else
+                PrepareClusInfoparams.SaveDir = fullfile(SaveDir,MiceOpt{midx},['Probe' num2str(PosComb(1,runid)-1)],['IMRO_' num2str(PosComb(2,runid))]);
+                PrepareClusInfoparams.AllChannelPos = PrepareClusInfoparams.AllChannelPos(idx);
+                PrepareClusInfoparams.AllProbeSN = PrepareClusInfoparams.AllProbeSN(idx);
+                PrepareClusInfoparams.RawDataPaths = PrepareClusInfoparams.RawDataPaths(idx);
+            end
 
-            %% Evaluate (within unit ID cross-validation)
-            EvaluatingUnitMatch(UMparam.SaveDir);
+            UnitMatchExist = dir(fullfile(PrepareClusInfoparams.SaveDir,'**','UnitMatch.mat'));
 
-            %% Function analysis
+            if isempty(UnitMatchExist) || PrepareClusInfoparams.RedoUnitMatch
+
+                %% Evaluate (within unit ID cross-v alidation)
+                UMparam = RunUnitMatch(AllKiloSortPaths(idx),PrepareClusInfoparams);
+
+                if isfield(UMparam,'Error')
+                    continue
+                end
+
+                %% Evaluate (within unit ID cross-validation)
+                EvaluatingUnitMatch(UMparam.SaveDir);
+
+                %% Function analysis
             UMparam.SaveDir = fullfile(PrepareClusInfoparams.SaveDir,'UnitMatch');
             ComputeFunctionalScores(UMparam.SaveDir)
 
@@ -157,6 +159,11 @@ for midx = 3:length(MiceOpt)
 
         %%
         disp(['Preprocessed data for ' MiceOpt{midx} ' run  ' num2str(runid) '/' num2str(nRuns)])
+        catch ME
+            disp([MiceOpt{midx} ' run  ' num2str(runid) '/' num2str(nRuns) ' crashed... continue with others'])
+
+            LogError = {LogError{:} [MiceOpt{midx} '_run' num2str(runid)]};
+        end
 
 
     end
