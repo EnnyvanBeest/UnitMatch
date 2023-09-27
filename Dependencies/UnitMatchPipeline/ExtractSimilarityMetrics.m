@@ -681,7 +681,7 @@ while flag<2
 %     plot(ScoreVector,hp,'--','color',[1 0 0]);
     [mua, sa] = normfit(tmp(~isnan(tmp)  & tmp<ThrsOpt));
 
-    if ~flag
+    if ~flag & ~isnan(mua)
         ThrsOpt = ThrsOpt-abs(muw-mua); % Correct for general scores being lower across days (e.g. unresolved drift)
     end
     line([ThrsOpt ThrsOpt],get(gca,'ylim'),'LineStyle','--','color',[0 0 0])
@@ -711,6 +711,9 @@ while flag<2
 
 
     param.nExpectedMatches = sum(TotalScore(:)>ThrsOpt);
+    if param.nExpectedMatches==0
+        keyboard
+    end
     priorMatch = 1-(param.nExpectedMatches./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days) % Times 2 for symmetry
 
     %% CUmulative density function

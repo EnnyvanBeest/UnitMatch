@@ -7,7 +7,7 @@ DateOpt = arrayfun(@(X) dir(fullfile(DataDir{DataDir2Use(X)},MiceOpt{X},'*-*')),
 DateOpt = cellfun(@(X) X([X.isdir]),DateOpt,'UniformOutput',0);
 DateOpt = cellfun(@(X) {X.name},DateOpt,'UniformOutput',0);
 
-for midx = 1:length(MiceOpt)
+for midx = 3:length(MiceOpt)
     %% Loading data from kilosort/phy easily
     if ~isempty(KilosortDir)
         myKsDir = fullfile(KilosortDir,MiceOpt{midx});
@@ -131,7 +131,7 @@ for midx = 1:length(MiceOpt)
 
             %% Function analysis
             UMparam.SaveDir = fullfile(PrepareClusInfoparams.SaveDir,'UnitMatch');
-            ComputeFunctionalScores(UMparam.SaveDir,1)
+            ComputeFunctionalScores(UMparam.SaveDir)
 
             %% Figures
             if UMparam.MakePlotsOfPairs

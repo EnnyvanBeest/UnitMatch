@@ -1,4 +1,4 @@
-function ComputeFunctionalScores(SaveDir, loadMATsToSave)
+function ComputeFunctionalScores(SaveDir)
 
 
 load(fullfile(SaveDir, 'UnitMatch.mat'), 'MatchTable', 'UMparam', 'UniqueIDConversion');
@@ -710,7 +710,13 @@ for id = 1:ntimes
 
     %% save
     set(gcf, 'units', 'normalized', 'outerposition', [0, 0, 1, 1])
+    try
     saveas(gcf, fullfile(SaveDir, [addname, 'FunctionalScoreSeparability.fig']))
+    catch ME
+    end
+    try
     saveas(gcf, fullfile(SaveDir, [addname, 'FunctionalScoreSeparability.png']))
+    catch ME
+    end
 end
 return
