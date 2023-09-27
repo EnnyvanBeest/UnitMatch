@@ -1,4 +1,4 @@
-function ComputeFunctionalScores(SaveDir, loadMATsToSave)
+function ComputeFunctionalScores(SaveDir)
 
 
 load(fullfile(SaveDir, 'UnitMatch.mat'), 'MatchTable', 'UMparam', 'UniqueIDConversion');
@@ -326,7 +326,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) % If it alre
             fileThis = UMparam.AllRawPaths{RecOpt(ss)};
             binFileRef = fullfile([fileThis.folder, fileThis.name]);
         else
-            binFileRef = fullfile(UMparam.AllRawPaths(RecOpt(ss)).folder,UMparam.AllRawPaths(RecOpt(ss)).name);
+            binFileRef = fullfile(UMparam.AllRawPaths{RecOpt(ss)}.folder,UMparam.AllRawPaths{RecOpt(ss)}.name);
         end
 
         % Find the associated experiments
@@ -716,7 +716,13 @@ for id = 1:ntimes
 
     %% save
     set(gcf, 'units', 'normalized', 'outerposition', [0, 0, 1, 1])
+    try
     saveas(gcf, fullfile(SaveDir, [addname, 'FunctionalScoreSeparability.fig']))
+    catch ME
+    end
+    try
     saveas(gcf, fullfile(SaveDir, [addname, 'FunctionalScoreSeparability.png']))
+    catch ME
+    end
 end
 return
