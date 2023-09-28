@@ -26,11 +26,15 @@ end
 fields = fieldnames(clusinfo{1});
 IncludeField = true(1, length(fields));
 for sesid = 2:length(clusinfo)
-    IncludeField(~ismember(fields, fieldnames(clusinfo{sesid}))) = false;
+    if ~isempty(clusinfo{sesid})
+        IncludeField(~ismember(fields, fieldnames(clusinfo{sesid}))) = false;
+    end
 end
 for sesid = 1:length(clusinfo)
-    thesefields = fieldnames(clusinfo{sesid});
-    clusinfo{sesid} = rmfield(clusinfo{sesid}, thesefields(ismember(thesefields, fields(find(~IncludeField))))); % REmove fields
+    if ~isempty(clusinfo{sesid})
+        thesefields = fieldnames(clusinfo{sesid});
+        clusinfo{sesid} = rmfield(clusinfo{sesid}, thesefields(ismember(thesefields, fields(find(~IncludeField))))); % REmove fields
+    end
 end
 
 % Continue adding them together
@@ -81,7 +85,7 @@ UMparam.channelpos = Params.AllChannelPos;
 UMparam.AllRawPaths = Params.RawDataPaths;
 UMparam.UseHistology = Params.UseHistology;
 if isstruct(Params.RawDataPaths{1})
-    UMparam.AllDecompPaths = cellfun(@(X) fullfile(Params.tmpdatafolder, strrep(X.name, 'cbin', 'bin')), Params.RawDataPaths, 'Uni', 0);
+        UMparam.AllDecompPaths = cellfun(@(X) fullfile(Params.tmpdatafolder, strrep(X.name, 'cbin', 'bin')), Params.RawDataPaths);
 else
     allDecompPaths_dirs = arrayfun(@(X) dir(Params.RawDataPaths{X}), 1:length(Params.RawDataPaths), 'Uni', 0);
     UMparam.AllDecompPaths = arrayfun(@(X) fullfile(Params.tmpdatafolder, strrep(allDecompPaths_dirs{X}.name, 'cbin', 'bin')), 1:length(allDecompPaths_dirs), 'Uni', 0);
