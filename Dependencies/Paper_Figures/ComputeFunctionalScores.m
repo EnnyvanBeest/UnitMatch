@@ -1,5 +1,8 @@
-function ComputeFunctionalScores(SaveDir)
+function ComputeFunctionalScores(SaveDir, saveFig)
 
+if nargin < 2
+    saveFig = 1;
+end
 
 load(fullfile(SaveDir, 'UnitMatch.mat'), 'MatchTable', 'UMparam', 'UniqueIDConversion');
 UMparam.binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
@@ -215,8 +218,10 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) % If it
     colormap(flipud(gray))
     title('Matching probability + rank')
     makepretty
-    saveas(gcf, fullfile(SaveDir, 'RankScoreVSProbability.fig'))
-    saveas(gcf, fullfile(SaveDir, 'RankScoreVSProbability.bmp'))
+    if saveFig
+        saveas(gcf, fullfile(SaveDir, 'RankScoreVSProbability.fig'))
+        saveas(gcf, fullfile(SaveDir, 'RankScoreVSProbability.bmp'))
+    end
 
     tmpf = triu(FingerprintR);
     tmpm = triu(MatchProbability);
@@ -230,8 +235,10 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) % If it
     xlabel('Match Probability')
     ylabel('Cross-correlation fingerprint')
     makepretty
-    saveas(gcf, fullfile(SaveDir, 'RankScoreVSProbabilityScatter.fig'))
-    saveas(gcf, fullfile(SaveDir, 'RankScoreVSProbabilityScatter.bmp'))
+    if saveFig
+        saveas(gcf, fullfile(SaveDir, 'RankScoreVSProbabilityScatter.fig'))
+        saveas(gcf, fullfile(SaveDir, 'RankScoreVSProbabilityScatter.bmp'))
+    end
 end
 
 %% Get ACG fingerprints correlations
@@ -719,13 +726,15 @@ for id = 1:ntimes
 
     %% save
     set(gcf, 'units', 'normalized', 'outerposition', [0, 0, 1, 1])
-    try
-    saveas(gcf, fullfile(SaveDir, [addname, 'FunctionalScoreSeparability.fig']))
-    catch ME
-    end
-    try
-    saveas(gcf, fullfile(SaveDir, [addname, 'FunctionalScoreSeparability.png']))
-    catch ME
+    if saveFig
+        try
+            saveas(gcf, fullfile(SaveDir, [addname, 'FunctionalScoreSeparability.fig']))
+        catch ME
+        end
+        try
+            saveas(gcf, fullfile(SaveDir, [addname, 'FunctionalScoreSeparability.png']))
+        catch ME
+        end
     end
 end
 return
