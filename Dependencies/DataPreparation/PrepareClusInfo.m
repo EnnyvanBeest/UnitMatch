@@ -39,7 +39,7 @@ try
         Params.loadPCs = 0;
         Params.RunPyKSChronicStitched = 1;
         Params.DecompressLocal = 1; %if 1, uncompress data first if it's currently compressed
-        Params.CleanUpTemporary = 1; % Clean up temporary data
+        Params.CleanUpTemporary = 0; % Clean up temporary data
         Params.RedoQM = 0; %if 1, redo quality metrics if it already exists
         Params.RunQualityMetrics = 1; % If 1, Run the quality metrics
         Params.InspectQualityMetrics = 0; % Inspect the quality metrics/data set using the GUI
@@ -66,11 +66,12 @@ catch ME
     UseParamsKS = 1;
 end
 if ~isfield(Params, 'CleanUpTemporary')
-    Params.CleanUpTemporary = 1; % Clean up temporary folder
+    Params.CleanUpTemporary = 0; % Clean up temporary folder
 end
 if ~isfield(Params, 'MinRecordingDuration')
     Params.MinRecordingDuration = 10; % Clean up temporary folder
 end
+Params.CleanUpTemporary = 0; %remove
 %% Initialize everything
 channelmap = [];
 channelpos = [];

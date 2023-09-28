@@ -1,20 +1,20 @@
 %% User Input
 %% Path information
 DataDir =  {'H:\MatchingUnits\RawData'}; %{'H:\MatchingUnits\RawDataMonthApart'};%;%Raw data folders, typically servers were e.g. *.cbin files are stored
-SaveDir = 'H:\MatchingUnits\Output\Concatenated1Day'; % 'H:\MatchingUnits\Output\NotConcatenated' %'H:\MatchingUnits\Output\MonthApartStitched'%%;% %'H:\MatchingUnits\Output\ManyRecordings'%Folder where to store the results
+SaveDir = '\\znas.cortexlab.net\Lab\Share\Celian\UnitMatch\MatchTables\NewSep27\Non_Stitched'%'H:\MatchingUnits\Output\NotConcatenated' %'H:\MatchingUnits\Output\Concatenated1Day'; % 'H:\MatchingUnits\Output\MonthApartStitched'%%;% %'H:\MatchingUnits\Output\ManyRecordings'%Folder where to store the results
 tmpdatafolder = 'H:\MatchingUnits\Tmp'; % temporary folder for temporary decompression of data 
-KilosortDir = 'H:\MatchingUnits\KilosortOutput'; %' 'H:\MatchingUnits\KilosortOutputMonthApart';%'\\znas.cortexlab.net\Lab\Share\Celian\UnitMatch\KilosortOutputMonthApart';% Kilosort output folder
+KilosortDir = '\\znas.cortexlab.net\Lab\Share\Enny\UnitMatch\KSComparisonSubset';%'H:\MatchingUnits\KilosortOutput'; %' 'H:\MatchingUnits\KilosortOutputMonthApart';%'\\znas.cortexlab.net\Lab\Share\Celian\UnitMatch\KilosortOutputMonthApart';% Kilosort output folder
 GithubDir = 'C:\Users\EnnyB\Documents\GitHub'; % Github directory
 PythonEXE = 'C:\Users\EnnyB\anaconda3\envs\pyks2\pythonw.exe' % Python version to run python code in:
 
 %% Information on experiments
-MiceOpt = {'AL032','AV008','CB016','EB019','JF067'}; % Add all mice you want to analyze
+MiceOpt = {'AV008','CB016','EB019','JF067'}; %'AL032', Add all mice you want to analyze
 DataDir2Use = repmat(1,[1,length(MiceOpt)]); % In case you have multiple DataDir, index which directory is used for each mouse
 RecordingType = repmat({'Chronic'},1,length(MiceOpt)); % And whether recordings were Chronic (default)
 RecordingType(ismember(MiceOpt,{''}))={'Acute'}; %EB014', % Or maybe acute?
 
 %% Parameters on how to prepare units/data for analysis
-PrepareClusInfoparams.RunPyKSChronicStitched = 1; % Default 0. if 1, run PyKS chronic recordings stitched when same IMRO table was used
+PrepareClusInfoparams.RunPyKSChronicStitched = 0; % Default 0. if 1, run PyKS chronic recordings stitched when same IMRO table was used
 PrepareClusInfoparams.CopyToTmpFirst = 1; % If 1, copy data to local first, don't run from server (= advised!)
 PrepareClusInfoparams.DecompressLocal = 1; % If 1, uncompress data first if it's currently compressed (= necessary for unitmatch and faster for QualityMetrics)
 
@@ -31,7 +31,7 @@ PrepareClusInfoparams.loadPCs = 0; % Only necessary when computiong isoluation m
 
 % UnitMatch
 PrepareClusInfoparams.UnitMatch = 1; % If 1, find identical units across sessions or oversplits in a fast and flexible way
-PrepareClusInfoparams.RedoUnitMatch = 1; % if 1, Redo unitmatch
+PrepareClusInfoparams.RedoUnitMatch = 0; % if 1, Redo unitmatch
 PrepareClusInfoparams.separateIMRO = 0; % Run for every IMRO separately (for memory reasons or when having multiple probes this might be a good idea)
 PrepareClusInfoparams.UseHistology = 0; % Use real coordinates (3D space of tracked probes if available)
 

@@ -41,7 +41,8 @@ function exp2keep = getNatImExpRef(binFile)
 
                 % Check that that recording was aligned
                 for probeNum = 1:numel(alignment)
-                    if strcmp(alignment.ephys(probeNum).ephysPath,binFile.folder) %%% SHOULD BE ENOUGH TO IDENTIFY RECORDING?
+                    dAlign = dir(fullfile(alignment.ephys(probeNum).ephysPath,'*cbin'));
+                    if strcmp(dAlign.name,binFile.name) %%% SHOULD BE ENOUGH TO IDENTIFY RECORDING?
                         exp2keep = cat(1,exp2keep,{expFolder});
                     end
                 end
