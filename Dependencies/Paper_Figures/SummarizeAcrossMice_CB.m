@@ -76,10 +76,10 @@ for midx = 1:length(UMFolders)
 
             if ~UseKSLabels
                 numMatchedUnits{midx}(sess1,sess2) = sum((MatchTable_pair.UID1 == MatchTable_pair.UID2) & ...
-                    (MatchTable_pair.RecSes1 == sess1 & MatchTable_pair.RecSes2 == sess2))/2;
+                    (MatchTable_pair.RecSes1 ~= MatchTable_pair.RecSes2))/2;
             else
                 numMatchedUnits{midx}(sess1,sess2) = sum((MatchTable_pair.ID1 == MatchTable_pair.ID2) & ...
-                    (MatchTable_pair.RecSes1 == sess1 & MatchTable_pair.RecSes2 == sess2))/2;
+                    (MatchTable_pair.RecSes1 ~= MatchTable_pair.RecSes2))/2;
             end
 
             %% Looping through fingerprints
@@ -119,7 +119,7 @@ for midx = 1:length(UMFolders)
                 %% Check that passed the criteria
 
                 % Condition to go ahead
-                goAhead = numel(MatchIdx) >= minMatches && ... % minimum number of matches
+                goAhead = numel(MatchIdx)/2 >= minMatches && ... % minimum number of matches
                     ~all(isnan(MatchTable_pair.(FPNameCurr)(MatchIdx))); % not all nans
 
                 if ~goAhead
@@ -188,9 +188,15 @@ for fpIdx = 1:numel(FPNames)
     title(sprintf('Fingerprint %s', FPNameCurr))
 end
 
-%% 
+%%
 
 
+
+figure
+for fpIdx = 1:numel(FPNames)
+    FPNameCurr = FPNames{fpIdx};
+
+end
 Vector = minVal+stepsz/2:stepsz:maxVal-stepsz/2;
 
 %% Plots -- all mice
