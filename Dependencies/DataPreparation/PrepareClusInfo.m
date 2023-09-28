@@ -1,4 +1,4 @@
-function Params = PrepareClusInfo(KiloSortPaths, Params, RawDataPathsInput)
+function [Params, KiloSortPaths] = PrepareClusInfo(KiloSortPaths, Params, RawDataPathsInput)
 % Prepares cluster information for subsequent analysis
 
 %% Inputs:
@@ -597,6 +597,10 @@ Params.DecompressionFlag = DecompressionFlag;
 RawDataPaths = RawDataPaths(NonEmptyDays);
 Params.RawDataPaths = RawDataPaths;
 KiloSortPaths = KiloSortPaths(NonEmptyDays);
+Params.AllChannelPos = Params.AllChannelPos(NonEmptyDays);
+Params.AllProbeSN = Params.AllProbeSN(NonEmptyDays);
+Params.NonEmptyDays = NonEmptyDays;
+%Params.KSDir = Params.KSDir(NonEmptyDays);
 
 %% Remove temporary files
 if isstruct(RawDataPaths)

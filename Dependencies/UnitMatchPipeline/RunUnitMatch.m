@@ -85,7 +85,7 @@ UMparam.channelpos = Params.AllChannelPos;
 UMparam.AllRawPaths = Params.RawDataPaths;
 UMparam.UseHistology = Params.UseHistology;
 if isstruct(Params.RawDataPaths{1})
-        UMparam.AllDecompPaths = cellfun(@(X) fullfile(Params.tmpdatafolder, strrep(X.name, 'cbin', 'bin')), Params.RawDataPaths);
+        UMparam.AllDecompPaths = cellfun(@(X) fullfile(Params.tmpdatafolder, strrep(X.name, 'cbin', 'bin')), Params.RawDataPaths, 'UniformOutput', false);
 else
     allDecompPaths_dirs = arrayfun(@(X) dir(Params.RawDataPaths{X}), 1:length(Params.RawDataPaths), 'Uni', 0);
     UMparam.AllDecompPaths = arrayfun(@(X) fullfile(Params.tmpdatafolder, strrep(allDecompPaths_dirs{X}.name, 'cbin', 'bin')), 1:length(allDecompPaths_dirs), 'Uni', 0);
@@ -147,6 +147,9 @@ if Params.UnitMatch
 
         %% Run UnitMatch
         GlobalUnitMatchClock = tic;
+        if numel(UMparam.KSDir) > numel(UMparam.AllDecompPaths)
+            UMparam.KSDir = UMparam.KSDir(UMparam.N)
+        end
         [UniqueIDConversion, MatchTable, WaveformInfo, UMparam] = UnitMatch(clusinfo, UMparam);
         UMrunTime = toc(GlobalUnitMatchClock);
         save(fullfile(UMparam.SaveDir, 'UnitMatch.mat'), 'UniqueIDConversion', 'MatchTable', 'WaveformInfo', 'UMparam', 'UMrunTime', '-v7.3')
