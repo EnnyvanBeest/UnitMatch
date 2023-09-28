@@ -50,8 +50,9 @@ function [spikeData,proc] = getNatImResp(spikesAll,expFolders,binFileRef,proc)
             alignment = load(fullfile(alignmentFile.folder,alignmentFile.name));
             probeNum = [];
             for pp = 1:numel(alignment)
-                binFile = dir(fullfile(alignment.ephys(pp).ephysPath,'*ap.*bin'));
-                if strcmp(fullfile(binFile.folder,binFile.name), binFileRef)
+                binFileAlign = dir(fullfile(alignment.ephys(pp).ephysPath,'*ap.*bin'));
+                binFileRefDir = dir(binFileRef);
+                if strcmp(binFileAlign.name, binFileRefDir.name)
                     probeNum = pp;
                 end
             end

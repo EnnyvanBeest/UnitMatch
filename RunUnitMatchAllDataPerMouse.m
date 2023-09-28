@@ -53,7 +53,7 @@ for midx = 1:length(MiceOpt)
             subsesopt = subsesopt(cell2mat(cellfun(@(X) any(strfind(X,'Chronic')),subsesopt,'UniformOutput',0))); %Use chronic output from pyks
         end
     end
- 
+
     AllKiloSortPaths = subsesopt;
 
     %% Create saving directory
@@ -97,7 +97,7 @@ for midx = 1:length(MiceOpt)
         end
         nRuns = length(PosComb);
     end
-   
+
     ORIParams = PrepareClusInfoparams; % RESET
 
     %% Run UnitMatch
@@ -131,34 +131,33 @@ for midx = 1:length(MiceOpt)
                 %% Evaluate (within unit ID cross-validation)
                 EvaluatingUnitMatch(UMparam.SaveDir);
 
-                %% Function analysis
+            
+
+                %% Figures
+                if UMparam.MakePlotsOfPairs
+                    DrawBlind = 0; %1 for blind drawing (for manual judging of pairs)
+                    DrawPairsUnitMatch(UMparam.SaveDir,DrawBlind);
+                    if UMparam.GUI
+                        FigureFlick(UMparam.SaveDir)
+                        pause
+                    end
+                end
+
+                %% QM
+                try
+                    QualityMetricsROCs(UMparam.SaveDir);
+                catch ME
+                    disp(['Couldn''t do Quality metrics for ' MiceOpt{midx}])
+                end
+
+            else
+                UMparam = PrepareClusInfoparams;
+            end
+            %% Function analysis
             UMparam.SaveDir = fullfile(PrepareClusInfoparams.SaveDir,'UnitMatch');
             ComputeFunctionalScores(UMparam.SaveDir)
-
-            %% Figures
-            if UMparam.MakePlotsOfPairs
-                DrawBlind = 0; %1 for blind drawing (for manual judging of pairs)
-                DrawPairsUnitMatch(UMparam.SaveDir,DrawBlind);
-                if UMparam.GUI
-                    FigureFlick(UMparam.SaveDir)
-                    pause
-                end
-            end
-
-            %% QM
-            try
-                QualityMetricsROCs(UMparam.SaveDir);
-            catch ME
-                disp(['Couldn''t do Quality metrics for ' MiceOpt{midx}])
-            end
-
-        else
-            UMparam = PrepareClusInfoparams;
-            UMparam.SaveDir = fullfile(PrepareClusInfoparams.SaveDir,'UnitMatch');
-        end
-
-        %%
-        disp(['Preprocessed data for ' MiceOpt{midx} ' run  ' num2str(runid) '/' num2str(nRuns)])
+            %%
+            disp(['Preprocessed data for ' MiceOpt{midx} ' run  ' num2str(runid) '/' num2str(nRuns)])
         catch ME
             disp([MiceOpt{midx} ' run  ' num2str(runid) '/' num2str(nRuns) ' crashed... continue with others'])
 

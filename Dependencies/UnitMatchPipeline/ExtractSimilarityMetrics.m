@@ -560,8 +560,14 @@ while flag<2
             colorbar
             makepretty
         end
+        try
         saveas(gcf,fullfile(SaveDir,'TotalScoreComponents.fig'))
+        catch ME
+        end
+        try
         saveas(gcf,fullfile(SaveDir,'TotalScoreComponents.bmp'))
+        catch ME
+        end
 
 
         figure('name','Diagonal versus off-diagonal')
@@ -681,7 +687,7 @@ while flag<2
 %     plot(ScoreVector,hp,'--','color',[1 0 0]);
     [mua, sa] = normfit(tmp(~isnan(tmp)  & tmp<ThrsOpt));
 
-    if ~flag & ~isnan(mua)
+    if ~isnan(mua) % & ~flag 
         ThrsOpt = ThrsOpt-abs(muw-mua); % Correct for general scores being lower across days (e.g. unresolved drift)
     end
     line([ThrsOpt ThrsOpt],get(gca,'ylim'),'LineStyle','--','color',[0 0 0])

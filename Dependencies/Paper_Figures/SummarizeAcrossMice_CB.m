@@ -17,10 +17,10 @@ bins = minVal:stepsz:maxVal;
 Vector = minVal+stepsz/2:stepsz:maxVal-stepsz/2;
 UseKSLabels = PrepareClusInfoparams.RunPyKSChronicStitched;
 AUCPrecision = 0:0.01:1;
-maxMatches = 30;
+maxMatches = 10;
 
-FPNames = {'FingerprintCor','ACGCorr','FRDiff','NatImCorr'};
-% FPNames = {'RankScore','ACGRankScore','FRRankScore','NImgRankScore'};
+% FPNames = {'FingerprintCor','ACGCorr','FRDiff','NatImCorr'};
+FPNames = {'RankScore','ACGRankScore','FRRankScore','NImgRankScore'};
 
 %% Loop over mice to get all Distributions / ROCs / AUCs
 
@@ -46,22 +46,34 @@ for midx = 1:length(MiceOpt)
 
     %% Loop through pairs of sessions
 
+    days = cellfun(@(y) datenum(y), cellfun(@(x) regexp(x.folder,'\\\d*-\d*-\d*\\','match'), UMparam.AllRawPaths, 'uni', 0), 'uni', 0);
+    days = cell2mat(days) - days{1};
     deltaDays{midx} = nan(numel(sessIDs)-1,numel(sessIDs));
     numMatchedUnits{midx} = nan(numel(sessIDs)-1,numel(sessIDs));
     for sess1Idx = 1:numel(sessIDs)-1
     
         sess1 = sessIDs(sess1Idx);
-        day1 = regexp(UMparam.AllRawPaths(sess1).folder,'\d*-\d*-\d*','match'); day1 = datenum(day1{1});
+        day1 = regexp(UMparam.AllRawPaths{sess1}.folder,'\d*-\d*-\d*','match'); day1 = datenum(day1{1});
         
         for sess2Idx = sess1Idx+1:numel(sessIDs)
         
             sess2 = sessIDs(sess2Idx);
-            day2 = regexp(UMparam.AllRawPaths(sess2).folder,'\d*-\d*-\d*','match'); day2 = datenum(day2{1});
+            day2 = regexp(UMparam.AllRawPaths{sess2}.folder,'\d*-\d*-\d*','match'); day2 = datenum(day2{1});
             deltaDays{midx}(sess1,sess2) = abs(day2 - day1);
 
             %% Cut table to specific days
 
             MatchTable_pair = MatchTable(ismember(MatchTable.RecSes1, [sess1 sess2]) & ismember(MatchTable.RecSes2, [sess1 sess2]), :);
+
+            %% Number of matches
+
+            if ~UseKSLabels
+                numMatchedUnits{midx}(sess1,sess2) = sum((MatchTable_pair.UID1 == MatchTable_pair.UID2) & ...
+                    (MatchTable_pair.RecSes1 == sess1 & MatchTable_pair.RecSes2 == sess2))/2;
+            else
+                numMatchedUnits{midx}(sess1,sess2) = sum((MatchTable_pair.ID1 == MatchTable_pair.ID2) & ...
+                    (MatchTable_pair.RecSes1 == sess1 & MatchTable_pair.RecSes2 == sess2))/2;
+            end
 
             %% Looping through fingerprints
             for fpIdx = 1:numel(FPNames)
@@ -96,8 +108,6 @@ for midx = 1:length(MiceOpt)
                     MatchIdx = find((MatchTable_pair.ID1 == MatchTable_pair.ID2) & (MatchTable_pair.RecSes1 ~= MatchTable_pair.RecSes2) & validPairs); %Across session, same unit (cross-validation)
                     NonMatchIdx = find((MatchTable_pair.ID1 ~= MatchTable_pair.ID2) & validPairs); % Not the same unit
                 end
-
-                numMatchedUnits{midx}(sess1,sess2) = numel(MatchIdx);
 
                 %% Check that passed the criteria
 
@@ -137,12 +147,42 @@ end
 
 %% Plots
 
-figure;
-imagesc(numMatchedUnits{midx})
-axis equal tight
+mouseColor = winter(length(MiceOpt));
 
+% Number of matched units (matrix)
+midx = length(MiceOpt);
 figure;
-mouseColor = parula(length(MiceOpt));
+subplot(121)
+imagesc(numMatchedUnits{midx})
+xticks(1:size(deltaDays{midx},2))
+xticklabels(days)
+yticks(1:size(deltaDays{midx},1))
+yticklabels(days(1:end-1))
+axis equal tight
+colorbar
+c = colormap("gray"); colormap(flipud(c));
+subplot(122)
+scatter(deltaDays{midx}(:), mat2vec(numMatchedUnits{midx}),20,mouseColor(midx,:),'filled')
+ylabel('Number of matches')
+xlabel('\Deltadays')
+
+figure
+for fpIdx = 1:numel(FPNames)
+    FPNameCurr = FPNames{fpIdx};
+    subplot(1,numel(FPNames),fpIdx)
+    imagesc(squeeze(FPSum.(FPNameCurr).AUC{midx}(1,:,:)))
+    xticks(1:size(deltaDays{midx},2))
+    xticklabels(days)
+    yticks(1:size(deltaDays{midx},1))
+    yticklabels(days(1:end-1))
+    axis equal tight
+    colormap("RedBlue")
+    clim([0 1])
+    title(sprintf('Fingerprint %s', FPNameCurr))
+end
+
+% AUC as a function of delta days
+figure;
 for aucIdx = 1:3
     for fpIdx = 1:numel(FPNames)
         FPNameCurr = FPNames{fpIdx};
@@ -160,3 +200,5 @@ for aucIdx = 1:3
         hline(0.5)
     end
 end
+
+% Dependence of AUC on number of matched units

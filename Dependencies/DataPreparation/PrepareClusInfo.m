@@ -39,7 +39,7 @@ try
         Params.loadPCs = 0;
         Params.RunPyKSChronicStitched = 1;
         Params.DecompressLocal = 1; %if 1, uncompress data first if it's currently compressed
-        Params.CleanUpTemporary = 1; % Clean up temporary data
+        Params.CleanUpTemporary = 0; % Clean up temporary data
         Params.RedoQM = 0; %if 1, redo quality metrics if it already exists
         Params.RunQualityMetrics = 1; % If 1, Run the quality metrics
         Params.InspectQualityMetrics = 0; % Inspect the quality metrics/data set using the GUI
@@ -66,11 +66,12 @@ catch ME
     UseParamsKS = 1;
 end
 if ~isfield(Params, 'CleanUpTemporary')
-    Params.CleanUpTemporary = 1; % Clean up temporary folder
+    Params.CleanUpTemporary = 0; % Clean up temporary folder
 end
 if ~isfield(Params, 'MinRecordingDuration')
     Params.MinRecordingDuration = 10; % Clean up temporary folder
 end
+Params.CleanUpTemporary = 0; %remove
 %% Initialize everything
 channelmap = [];
 channelpos = [];
@@ -100,7 +101,7 @@ for subsesid = 1:length(KiloSortPaths)
     AllUniqueTemplates = [];
     cluster_id = [];
     recses = [];
- 
+
 
     %% save data paths information
     if Params.RunPyKSChronicStitched %CALL THIS STITCHED --> Only works when using RunPyKS2_FromMatlab as well from this toolbox
@@ -130,7 +131,7 @@ for subsesid = 1:length(KiloSortPaths)
             else
                 rawD = dir(fullfile(RawDataPathsInput{subsesid}));
             end
-            
+
         end
 
         RawDataPaths{subsesid} = rawD; % Definitely save as cell
@@ -142,7 +143,7 @@ for subsesid = 1:length(KiloSortPaths)
             rawD = rawD(strfind(rawD, '"')+1:end);
             rawD = rawD(1:strfind(rawD, '"')-1);
             if any(strfind(rawD,'../'))
-            rawD = rawD(strfind(rawD,'../')+3:end)
+                rawD = rawD(strfind(rawD,'../')+3:end)
             end
             tmpdr = rawD;
             rawD = dir(rawD);
@@ -153,7 +154,7 @@ for subsesid = 1:length(KiloSortPaths)
             if isempty(rawD)
                 FolderParts = strsplit(KiloSortPaths{subsesid},{'pyKS','PyKS'});
                 rawD = dir(fullfile(FolderParts{1},'*bin'));
-%                 rawD = fullfile(rawD.folder,rawD.name);            
+                %                 rawD = fullfile(rawD.folder,rawD.name);
             end
 
             % Save for later
@@ -192,7 +193,7 @@ for subsesid = 1:length(KiloSortPaths)
 
     %% Is it correct channelpos though...? Check using raw data. While reading this information, also extract recording duration and Serial number of probe
     [channelpostmpconv, probeSN, recordingduration] = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done
-    if recordingduration<Params.MinRecordingDuration 
+    if recordingduration<Params.MinRecordingDuration
         disp([KiloSortPaths{subsesid} ' recording too short, skip...'])
         continue
     end
@@ -209,7 +210,7 @@ for subsesid = 1:length(KiloSortPaths)
         if tmpparam.RunQualityMetrics == Params.RunQualityMetrics && tmpparam.RunPyKSChronicStitched == Params.RunPyKSChronicStitched && ...
                 tmpparam.separateIMRO == Params.separateIMRO
             disp(['Found existing data in ', KiloSortPaths{subsesid}, ', Using this...'])
-          
+
             countid = countid + 1;
             continue
         end
@@ -611,20 +612,24 @@ end
 
 CleanUpCheckFlag = nan; % Put to 1 is own responsibility! Make sure not to delete stuff from the server directly!
 if Params.DecompressLocal && Params.CleanUpTemporary
-    
-    if isnan(CleanUpCheckFlag) && any(cellfun(@(X) exist(fullfile(Params.tmpdatafolder, strrep(X.name, 'cbin', 'bin'))),RawDataPaths(find(~cellfun(@isempty,RawDataPaths)))))
+    try
+        if isnan(CleanUpCheckFlag) && any(cellfun(@(X) exist(fullfile(Params.tmpdatafolder, strrep(X.name, 'cbin', 'bin'))),RawDataPaths(find(~cellfun(@isempty,RawDataPaths)))))
 
-        answer = questdlg(['Automatically remove data from ', Params.tmpdatafolder, '?'], ...
-            'REMOVING -- CHECK!!!', ...
-            'YES', 'NO', 'YES');
-        if strcmpi(answer, 'YES')
-            CleanUpCheckFlag = 1;
+            answer = questdlg(['Automatically remove data from ', Params.tmpdatafolder, '?'], ...
+                'REMOVING -- CHECK!!!', ...
+                'YES', 'NO', 'YES');
+            if strcmpi(answer, 'YES')
+                CleanUpCheckFlag = 1;
+            else
+                CleanUpCheckFlag = 0;
+            end
         else
             CleanUpCheckFlag = 0;
         end
-    else
-            CleanUpCheckFlag = 0;
+    catch
+        CleanUpCheckFlag = 0;
     end
+
     if CleanUpCheckFlag
         clear memMapData
         clear ap_data
