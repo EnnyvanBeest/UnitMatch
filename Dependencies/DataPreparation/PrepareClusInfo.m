@@ -80,11 +80,13 @@ AllChannelPos = cell(1, length(KiloSortPaths));
 AllProbeSN = cell(1, length(KiloSortPaths));
 RawDataPaths = cell(1, length(KiloSortPaths));
 countid = 1;
+NonEmptyDays = true(length(KiloSortPaths),1);
 % figure;
 cols = jet(length(KiloSortPaths));
 for subsesid = 1:length(KiloSortPaths)
     if isempty(dir(fullfile(KiloSortPaths{subsesid}, '*.npy')))
-        continue
+        NonEmptyDays(subsesid) = false; 
+        continue;
     end
 
     %% initialize for new round
@@ -589,8 +591,12 @@ end
 
 Params.AllChannelPos = AllChannelPos;
 Params.AllProbeSN = AllProbeSN;
-Params.RawDataPaths = RawDataPaths;
 Params.DecompressionFlag = DecompressionFlag;
+
+% remove any recordings with no kilosort files 
+RawDataPaths = RawDataPaths(NonEmptyDays);
+Params.RawDataPaths = RawDataPaths;
+KiloSortPaths = KiloSortPaths(NonEmptyDays);
 
 %% Remove temporary files
 if isstruct(RawDataPaths)
