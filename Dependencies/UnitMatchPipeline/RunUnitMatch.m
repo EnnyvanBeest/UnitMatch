@@ -1,8 +1,9 @@
 function [UMparam, UniqueIDConversion, MatchTable, WaveformInfo] = RunUnitMatch(AllKiloSortPaths, Params, ephys_dirs)
 
-if nargin<3
+if nargin < 3
     ephys_dirs = [];
 end
+
 %% Here we're going to actually load in all the sessions requested - only clusinfo to save memory for unitmatch
 clusinfo = cell(1, length(AllKiloSortPaths));
 addthis = 0;
@@ -23,13 +24,13 @@ end
 % Add all cluster information in one 'cluster' struct - can be used for further analysis
 % Apparently sometimes clusinfo does not have the same fields (KS version?)
 fields = fieldnames(clusinfo{1});
-IncludeField = true(1,length(fields));
-for sesid=2:length(clusinfo)
-    IncludeField(~ismember(fields,fieldnames(clusinfo{sesid}))) = false;
+IncludeField = true(1, length(fields));
+for sesid = 2:length(clusinfo)
+    IncludeField(~ismember(fields, fieldnames(clusinfo{sesid}))) = false;
 end
-for sesid=1:length(clusinfo)
+for sesid = 1:length(clusinfo)
     thesefields = fieldnames(clusinfo{sesid});
-    clusinfo{sesid} = rmfield(clusinfo{sesid},thesefields(ismember(thesefields,fields(find(~IncludeField))))); % REmove fields
+    clusinfo{sesid} = rmfield(clusinfo{sesid}, thesefields(ismember(thesefields, fields(find(~IncludeField))))); % REmove fields
 end
 
 % Continue adding them together
@@ -38,7 +39,7 @@ clusinfoNew = struct;
 fields = {fields{find(IncludeField)}}';
 for fieldid = 1:length(fields)
     try
-        eval(['clusinfoNew.', fields{fieldid}, '= cat(1,clusinfo(:).', fields{fieldid} ');'])
+        eval(['clusinfoNew.', fields{fieldid}, '= cat(1,clusinfo(:).', fields{fieldid}, ');'])
     catch ME
         try
             eval(['clusinfoNew.', fields{fieldid}, '= cat(2,clusinfo(:).', fields{fieldid}, ');'])
@@ -50,12 +51,11 @@ end
 clusinfo = clusinfoNew;
 clear clusinfoNew
 
-if sum(clusinfo.Good_ID)<25
+if sum(clusinfo.Good_ID) < 25
     disp('Less than 25 neurons.. skip')
     UMparam.Error = 'Too Little Units'
     return
 end
-
 
 %% UnitMatch Parameters
 % Use some bombcell parameters
@@ -92,7 +92,7 @@ UMparam.binsize = Params.binsz;
 UMparam.Scores2Include = Params.Scores2Include; %
 UMparam.ApplyExistingBayesModel = Params.ApplyExistingBayesModel; %If 1, use probability distributions made available by us
 UMparam.MakePlotsOfPairs = Params.MakePlotsOfPairs; % Plot all pairs
-if isfield(Params,'GUI')
+if isfield(Params, 'GUI')
     UMparam.GUI = Params.GUI; % Open GUI for manual curation of pairs
 else
     UMparam.GUI = 0;
@@ -145,8 +145,8 @@ if Params.UnitMatch
         GlobalUnitMatchClock = tic;
         [UniqueIDConversion, MatchTable, WaveformInfo, UMparam] = UnitMatch(clusinfo, UMparam);
         UMrunTime = toc(GlobalUnitMatchClock);
-        save(fullfile(UMparam.SaveDir, 'UnitMatch.mat'), 'UniqueIDConversion', 'MatchTable', 'WaveformInfo', 'UMparam', 'UMrunTime','-v7.3')
-        DataSizeParam = CalculateDuration(UMparam.SaveDir,ephys_dirs);
+        save(fullfile(UMparam.SaveDir, 'UnitMatch.mat'), 'UniqueIDConversion', 'MatchTable', 'WaveformInfo', 'UMparam', 'UMrunTime', '-v7.3')
+        DataSizeParam = CalculateDuration(UMparam.SaveDir, ephys_dirs);
         disp(['UnitMatch took ', num2str(round(UMrunTime/60*10)/10), ' minute(s) to run'])
 
     end
