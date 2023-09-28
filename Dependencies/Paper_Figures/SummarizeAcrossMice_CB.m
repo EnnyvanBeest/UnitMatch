@@ -10,14 +10,13 @@ if TakeRank
 else
     fprintf("Taking the correlation values!\n")
     stepsz = 0.1;
-    minVal = -20;
+    minVal = -1;
     maxVal = 1;
 end
-bins = minVal:stepsz:maxVal;
-Vector = minVal+stepsz/2:stepsz:maxVal-stepsz/2;
+histBins = minVal:stepsz:maxVal;
 UseKSLabels = PrepareClusInfoparams.RunPyKSChronicStitched;
 AUCPrecision = 0:0.01:1;
-maxMatches = 10;
+minMatches = 10;
 
 % FPNames = {'FingerprintCor','ACGCorr','FRDiff','NatImCorr'};
 FPNames = {'RankScore','ACGRankScore','FRRankScore','NImgRankScore'};
@@ -25,14 +24,14 @@ FPNames = {'RankScore','ACGRankScore','FRRankScore','NImgRankScore'};
 %% Loop over mice to get all Distributions / ROCs / AUCs
 
 clear FPSum
-deltaDays = cell(1, length(MiceOpt));
-numMatchedUnits = cell(1, length(MiceOpt));
-for midx = 1:length(MiceOpt)
+deltaDays = cell(1, length(UMFolders));
+numMatchedUnits = cell(1, length(UMFolders));
+for midx = 1:length(UMFolders)
     %% Load data
     
-    fprintf('Reference %s...\n', MiceOpt{midx})
+    fprintf('Reference %s...\n', UMFolders{midx})
 
-    tmpfile = dir(fullfile(SaveDir, MiceOpt{midx}, 'UnitMatch', 'UnitMatch.mat'));
+    tmpfile = dir(fullfile(SaveDir, UMFolders{midx}, 'UnitMatch', 'UnitMatch.mat'));
     if isempty(tmpfile)
         continue
     end
@@ -43,6 +42,14 @@ for midx = 1:length(MiceOpt)
     toc
 
     sessIDs = unique(MatchTable.RecSes1);
+
+    %%% HACK
+    if ~iscell(UMparam.AllRawPaths)
+        for ii = 1:numel(UMparam.AllRawPaths)
+            tmp{ii} = UMparam.AllRawPaths(ii);
+        end
+        UMparam.AllRawPaths = tmp;
+    end
 
     %% Loop through pairs of sessions
 
@@ -112,12 +119,12 @@ for midx = 1:length(MiceOpt)
                 %% Check that passed the criteria
 
                 % Condition to go ahead
-                goAhead = numel(MatchIdx) >= maxMatches && ... % minimum number of matches
+                goAhead = numel(MatchIdx) >= minMatches && ... % minimum number of matches
                     ~all(isnan(MatchTable_pair.(FPNameCurr)(MatchIdx))); % not all nans
 
                 if ~goAhead
                     fprintf('Not enough matches (or all nans) for sessions %d & %d (%d). Skipping.\n', sess1, sess2, numel(MatchIdx))
-                    FPSum.(FPNameCurr).Distr{midx}(:,:,sess1,sess2) = nan(numel(bins)-1, 3);
+                    FPSum.(FPNameCurr).Distr{midx}(:,:,sess1,sess2) = nan(numel(histBins)-1, 3);
                     FPSum.(FPNameCurr).AUC{midx}(:,sess1,sess2) = nan(1,3);
                     FPSum.(FPNameCurr).ROC{midx}(:,:,sess1,sess2) = nan(numel(AUCPrecision), 3);
                 else
@@ -126,9 +133,9 @@ for midx = 1:length(MiceOpt)
                     FPCorr = MatchTable_pair.(FPNameCurr);
                 
                     % Compute distributions
-                    hw = histcounts(FPCorr(WithinIdx), bins) ./ length(WithinIdx);
-                    hm = histcounts(FPCorr(MatchIdx), bins) ./ length(MatchIdx);
-                    hn = histcounts(FPCorr(NonMatchIdx), bins) ./ length(NonMatchIdx);
+                    hw = histcounts(FPCorr(WithinIdx), histBins) ./ length(WithinIdx);
+                    hm = histcounts(FPCorr(MatchIdx), histBins) ./ length(MatchIdx);
+                    hn = histcounts(FPCorr(NonMatchIdx), histBins) ./ length(NonMatchIdx);
                     % Save
                     FPSum.(FPNameCurr).Distr{midx}(:,:,sess1,sess2) = [hw', hm', hn'];
 
@@ -145,12 +152,12 @@ for midx = 1:length(MiceOpt)
     end
 end
 
-%% Plots
+%% Plots -- example mouse
 
-mouseColor = winter(length(MiceOpt));
+mouseColor = winter(length(UMFolders));
 
 % Number of matched units (matrix)
-midx = length(MiceOpt);
+midx = length(UMFolders);
 figure;
 subplot(121)
 imagesc(numMatchedUnits{midx})
@@ -181,6 +188,22 @@ for fpIdx = 1:numel(FPNames)
     title(sprintf('Fingerprint %s', FPNameCurr))
 end
 
+%% 
+
+
+Vector = minVal+stepsz/2:stepsz:maxVal-stepsz/2;
+
+%% Plots -- all mice
+
+midx = length(UMFolders);
+figure;
+hold all
+for midx = 1:length(UMFolders)
+    scatter(deltaDays{midx}(:), mat2vec(numMatchedUnits{midx}),20,mouseColor(midx,:),'filled')
+end
+ylabel('Number of matches')
+xlabel('\Deltadays')
+
 % AUC as a function of delta days
 figure;
 for aucIdx = 1:3
@@ -188,7 +211,7 @@ for aucIdx = 1:3
         FPNameCurr = FPNames{fpIdx};
         subplot(3,numel(FPNames),(aucIdx-1)*numel(FPNames)+fpIdx);
         hold all
-        for midx = 1:length(MiceOpt)
+        for midx = 1:length(UMFolders)
             if ~isempty(FPSum.(FPNameCurr).AUC{midx})
                 scatter(deltaDays{midx}(:), mat2vec(FPSum.(FPNameCurr).AUC{midx}(aucIdx,:,:)),20,mouseColor(midx,:),'filled')
             end
