@@ -7,6 +7,11 @@ end
 load(fullfile(SaveDir, 'UnitMatch.mat'), 'MatchTable', 'UMparam', 'UniqueIDConversion');
 UMparam.binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
 
+if all(ismember({'FingerprintCor','ACGCorr','FRDiff','NatImCorr'},MatchTable.Properties.VariableNames)) 
+    disp('Already computed functional scores')
+    return
+end
+
 % Extract cluster information
 if UMparam.GoodUnitsOnly
     GoodId = logical(UniqueIDConversion.GoodID);
@@ -341,12 +346,16 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) || all(isnan
 
         % Find the associated experiments
         if ispc
-            exp2keep = getNatImExpRef(binFileRef);
+            try
+                exp2keep = getNatImExpRef(binFileRef);
+            catch ME
+                exp2keep = [];
+            end
         else
             exp2keep = [];
             % Julie Fabre: on linux the servers are mounted differently, and the above
             % function needs to be substantially changed to work. Since I
-            % don't need to run it, just added an "ispc" flag. 
+            % don't need to run it, just added an "ispc" flag.
         end
 
         if ~isempty(exp2keep)
