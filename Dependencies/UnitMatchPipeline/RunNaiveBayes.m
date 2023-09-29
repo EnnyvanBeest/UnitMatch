@@ -236,7 +236,6 @@ Pairs = cat(2,r,c);
 Pairs = sortrows(Pairs);
 Pairs = unique(Pairs,'rows');
 
-
 figure;
 subplot(2,2,1)
 imagesc(MatchProbability(SortingOrder,SortingOrder),[0 1])
@@ -338,9 +337,6 @@ line([param.ProbabilityThreshold,param.ProbabilityThreshold],[0 1],'color',[1 0 
 makepretty
 
 legend('Same unit','Neighbors','Across','threshold')
-
-
-
 
 saveas(gcf,fullfile(param.SaveDir,'MatchProbability.fig'))
 saveas(gcf,fullfile(param.SaveDir,'MatchProbability.bmp'))

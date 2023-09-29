@@ -12,11 +12,14 @@ else
 end
 GoodRecSesID = clusinfo.RecSesID;
 RecOpt = unique(GoodRecSesID);
+
+
 %% Initial pairing based on matchscore
 Pairs = [MatchTable.UID1(MatchTable.MatchProb>param.ProbabilityThreshold) MatchTable.UID2(MatchTable.MatchProb>param.ProbabilityThreshold)]; %
 Pairs(diff(Pairs,[],2)==0,:)=[]; %Remove own matches
 Pairs = sort(Pairs,2,'ascend'); % Only use each unique pair once
 Pairs = unique(Pairs,'stable','rows');
+
 %% ISI violations (for over splits matching)
 if param.removeoversplits
     CurrentSPPath = [];
@@ -49,36 +52,49 @@ end
 
 %% Serial assigning of Unique ID (Day by day)
 disp('Assigning correct Unique ID values now')
-for recid = 1:length(RecOpt)-1
-    SubPairs = Pairs(GoodRecSesID(Pairs(:,1)) == recid & GoodRecSesID(Pairs(:,2)) <= recid+1,:); %Same or next day only
+for recid = 1:length(RecOpt)
+    for recid2 = 1:length(RecOpt)
+        if recid2<recid
+            continue
+        end
+        SubPairs = Pairs(GoodRecSesID(Pairs(:,1)) == recid & GoodRecSesID(Pairs(:,2)) == recid2,:); %Select days
 
-    MatchProbability = arrayfun(@(X) MatchTable.MatchProb(ismember(MatchTable.UID1,SubPairs(X,1))&ismember(MatchTable.UID2,SubPairs(X,2))),1:size(SubPairs,1));
-    [~,sortidx] = sort(MatchProbability,'descend');
-    SubPairs = SubPairs(sortidx,:); %Pairs, but now sorted by match probability
+        % Average of two cross-validations and sort by that
+        MatchProbability = arrayfun(@(X) MatchTable.MatchProb(ismember(MatchTable.UID1,SubPairs(X,1))&ismember(MatchTable.UID2,SubPairs(X,2))),1:size(SubPairs,1));
+        MatchProbabilityFlip = arrayfun(@(X) MatchTable.MatchProb(ismember(MatchTable.UID1,SubPairs(X,2))&ismember(MatchTable.UID2,SubPairs(X,1))),1:size(SubPairs,1));
+        MatchProbability = nanmean(cat(1,MatchProbability,MatchProbabilityFlip),1); 
+        SubPairs(MatchProbability<0.5,:) = []; % don't bother with these
+        MatchProbability(MatchProbability<0.5) = []; % don't bother with these
 
-    for id = 1:size(SubPairs,1)
-        % Matchprobability should be high enough
-        tblidx1 = find(ismember(MatchTable.UID1,SubPairs(id,1))&ismember(MatchTable.UID2,SubPairs(id,2)));
-        if ~(MatchTable.MatchProb(tblidx1) > param.ProbabilityThreshold) %Requirement 1, match probability should be high enough
-            continue
+
+        [MatchProbability,sortidx] = sort(MatchProbability,'descend');
+        SubPairs = SubPairs(sortidx,:); %Pairs, but now sorted by match probability
+
+        for id = 1:size(SubPairs,1)
+            % Matchprobability should be high enough
+            tblidx1 = find(ismember(MatchTable.UID1,SubPairs(id,1))&ismember(MatchTable.UID2,SubPairs(id,2)));
+            if ~(MatchTable.MatchProb(tblidx1) > param.ProbabilityThreshold) %Requirement 1, match probability should be high enough
+                continue
+            end
+            % Find the cross-validated version of this pair, this should also have
+            % high enough probability
+            tblidx2 = find(ismember(MatchTable.UID1,SubPairs(id,2))&ismember(MatchTable.UID2,SubPairs(id,1)));
+            if ~(MatchTable.MatchProb(tblidx2) > param.ProbabilityThreshold) %Requirement 1, match probability should be high enough
+                continue
+            end
+            % Extra check: It should also match with all the other pairs that were
+            % already assigned!
+            % All units currently identified as this UniqueID
+            TheseOriUids = OriUniqueID(ismember(UniqueID,UniqueID(SubPairs(id,1))));
+            TheseOriUids(GoodRecSesID(TheseOriUids)<recid | GoodRecSesID(TheseOriUids)>recid2) = [];
+            % All of these need to match with the new one, if added
+            tblidx = find(((ismember(MatchTable.UID1,TheseOriUids)&ismember(MatchTable.UID2,SubPairs(id,2))) | (ismember(MatchTable.UID2,TheseOriUids)&ismember(MatchTable.UID1,SubPairs(id,2)))) & ~(MatchTable.UID1==MatchTable.UID2)); % !
+            if ~all(MatchTable.MatchProb(tblidx)>param.ProbabilityThreshold)
+                continue
+            end
+     
+            UniqueID(SubPairs(id,2)) = UniqueID(SubPairs(id,1)); %Survived, assign
         end
-        % Find the cross-validated version of this pair, this should also have
-        % high enough probability
-        tblidx2 = find(ismember(MatchTable.UID1,SubPairs(id,2))&ismember(MatchTable.UID2,SubPairs(id,1)));
-        if ~(MatchTable.MatchProb(tblidx2) > param.ProbabilityThreshold) %Requirement 1, match probability should be high enough
-            continue
-        end
-        % Extra check: It should also match with all the other pairs that were
-        % already assigned!
-        % All units currently identified as this UniqueID
-        TheseOriUids = OriUniqueID(ismember(UniqueID,UniqueID(SubPairs(id,1))));
-        TheseOriUids(GoodRecSesID(TheseOriUids)<recid | GoodRecSesID(TheseOriUids)>recid+1) = [];
-        % All of these need to match with the new one, if added
-        tblidx = find(((ismember(MatchTable.UID1,TheseOriUids)&ismember(MatchTable.UID2,SubPairs(id,2))) | (ismember(MatchTable.UID2,TheseOriUids)&ismember(MatchTable.UID1,SubPairs(id,2)))) & ~(MatchTable.UID1==MatchTable.UID2)); % !
-        if ~all(MatchTable.MatchProb(tblidx)>param.ProbabilityThreshold)
-            continue
-        end
-        UniqueID(SubPairs(id,2)) = UniqueID(SubPairs(id,1)); %Survived, assign
     end
 end
 %% Replace in table

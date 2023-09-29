@@ -101,7 +101,6 @@ ndays = length(unique(recsesGood));
 SessionSwitch = arrayfun(@(X) find(GoodRecSesID==X,1,'first'),unique(recsesGood),'Uni',0);
 SessionSwitch(cellfun(@isempty,SessionSwitch))=[];
 SessionSwitch = [cell2mat(SessionSwitch); nclus+1];
-nCellsPerSession = diff(SessionSwitch);
 
 
 %% Extract raw waveforms

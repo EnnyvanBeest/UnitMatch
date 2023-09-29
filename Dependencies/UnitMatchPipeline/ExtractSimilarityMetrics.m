@@ -302,7 +302,7 @@ while flag<2
 
     clear x1 x2
     % Average location
-    CentroidDist = squeeze(nanmin(squeeze(nanmean(EuclDist,2)),[],2));%
+    CentroidDist = squeeze(nanmin(squeeze(EuclDist(:,param.NewPeakLoc-param.waveidx==0,:,:)),[],2));%
 
 
     % Normalize each of them from 0 to 1, 1 being the 'best'
@@ -528,7 +528,8 @@ while flag<2
     disp(['Extracting projected location took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])
 
     % Average EuclDist
-    EuclDist = squeeze(nanmin(nanmean(EuclDist,2),[],3));
+    EuclDist = squeeze(nanmin(squeeze(EuclDist(:,param.NewPeakLoc-param.waveidx==0,:,:)),[],2));%
+
     % Plotting order (sort units based on distance)
     [~,SortingOrder] = arrayfun(@(X) sort(EuclDist(1,SessionSwitch(X):SessionSwitch(X+1)-1)),1:ndays,'Uni',0);
     SortingOrder = arrayfun(@(X) squeeze(SortingOrder{X}+SessionSwitch(X)-1),1:ndays,'Uni',0);
