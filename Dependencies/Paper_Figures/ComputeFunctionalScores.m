@@ -346,11 +346,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) || all(isnan
 
         % Find the associated experiments
         if ispc
-            try
-                exp2keep = getNatImExpRef(binFileRef);
-            catch ME
-                exp2keep = [];
-            end
+            exp2keep = getNatImExpRef(binFileRef);
         else
             exp2keep = [];
             % Julie Fabre: on linux the servers are mounted differently, and the above
@@ -360,35 +356,26 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) || all(isnan
 
         if ~isempty(exp2keep)
             % Get the spikes
-            try
             st = sp.st(sp.RecSes == RecOpt(ss));
             clu = sp.spikeTemplates(sp.RecSes == RecOpt(ss));
-            catch ME
-                keyboard
-            end
 
             spikesAll.times = st;
             spikesAll.clusters = clu;
             spikesAll.clusterIDs = unique(clu); % follow the same units across days
 
             % Get the natim responses
-            try
-                spikeData = getNatImResp(spikesAll,exp2keep,binFileRef,proc);
-                clusterIDs = spikesAll.clusterIDs;
+            spikeData = getNatImResp(spikesAll,exp2keep,binFileRef,proc);
+            clusterIDs = spikesAll.clusterIDs;
 
-                % Split in two halves and subselect units
-                cluIdx = ismember(clusterIDs,unique(MatchTable.ID1(MatchTable.RecSes1 == RecOpt(ss))));
-                currIdx = (ss-1)*2;
-                spikeData_cv{currIdx+1} = spikeData(:,:,cluIdx,1:2:end); % odd
-                spikeData_cv{currIdx+2} = spikeData(:,:,cluIdx,2:2:end); % even
-            catch ME
-                disp(ME)
-            end
+            % Split in two halves and subselect units
+            cluIdx = ismember(clusterIDs,unique(MatchTable.ID1(MatchTable.RecSes1 == RecOpt(ss))));
+            currIdx = (ss-1)*2;
+            spikeData_cv{currIdx+1} = spikeData(:,:,cluIdx,1:2:end); % odd
+            spikeData_cv{currIdx+2} = spikeData(:,:,cluIdx,2:2:end); % even
         end
     end
 
     % Perform CCA across recordings
-
     [corrMat, ~] = computeNatImCorr(spikeData_cv);
 
     % Reshape the matrix to a single one with correct clusters
@@ -399,11 +386,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) || all(isnan
     for ss1 = 1:nRec
         for ss2 = 1:nRec
             if ~all(isnan(corrWCCA_1x2{ss1,ss2}(:)))
-                try
                 corrWCCA_big(sum(nClu(1:ss1-1))+1:sum(nClu(1:ss1)), sum(nClu(1:ss2-1))+1:sum(nClu(1:ss2))) = corrWCCA_1x2{ss1,ss2};
-                catch ME
-                    keyboard
-                end
             end
         end
     end
