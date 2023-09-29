@@ -43,6 +43,14 @@ for midx = 1:length(UMFolders)
 
     sessIDs = unique(MatchTable.RecSes1);
 
+    % Initialize
+    for fpIdx = 1:numel(FPNames)
+        FPNameCurr = FPNames{fpIdx};
+        FPSum.(FPNameCurr).Distr{midx} = nan(numel(histBins)-1, 3, numel(sessIDs)-1, numel(sessIDs));
+        FPSum.(FPNameCurr).AUC{midx} = nan(3, numel(sessIDs)-1, numel(sessIDs));
+        FPSum.(FPNameCurr).ROC{midx} = nan(numel(AUCPrecision), 3, numel(sessIDs)-1, numel(sessIDs));
+    end
+                
     %%% HACK
     if ~iscell(UMparam.AllRawPaths)
         for ii = 1:numel(UMparam.AllRawPaths)
@@ -66,7 +74,7 @@ for midx = 1:length(UMFolders)
         
             sess2 = sessIDs(sess2Idx);
             day2 = regexp(UMparam.AllRawPaths{sess2}.folder,'\d*-\d*-\d*','match'); day2 = datenum(day2{1});
-            deltaDays{midx}(sess1,sess2) = abs(day2 - day1);
+            deltaDays{midx}(sess1Idx,sess2Idx) = abs(day2 - day1);
 
             %% Cut table to specific days
 
@@ -75,11 +83,11 @@ for midx = 1:length(UMFolders)
             %% Number of matches
 
             if ~UseKSLabels
-                numMatchedUnits{midx}(sess1,sess2) = sum((MatchTable_pair.UID1 == MatchTable_pair.UID2) & ...
-                    (MatchTable_pair.RecSes1 == sess1 & MatchTable_pair.RecSes2 == sess2))/2;
+                numMatchedUnits{midx}(sess1Idx,sess2Idx) = sum((MatchTable_pair.UID1 == MatchTable_pair.UID2) & ...
+                    (MatchTable_pair.RecSes1 ~= MatchTable_pair.RecSes2))/2;
             else
-                numMatchedUnits{midx}(sess1,sess2) = sum((MatchTable_pair.ID1 == MatchTable_pair.ID2) & ...
-                    (MatchTable_pair.RecSes1 == sess1 & MatchTable_pair.RecSes2 == sess2))/2;
+                numMatchedUnits{midx}(sess1Idx,sess2Idx) = sum((MatchTable_pair.ID1 == MatchTable_pair.ID2) & ...
+                    (MatchTable_pair.RecSes1 ~= MatchTable_pair.RecSes2))/2;
             end
 
             %% Looping through fingerprints
@@ -119,14 +127,11 @@ for midx = 1:length(UMFolders)
                 %% Check that passed the criteria
 
                 % Condition to go ahead
-                goAhead = numel(MatchIdx) >= minMatches && ... % minimum number of matches
+                goAhead = numel(MatchIdx)/2 >= minMatches && ... % minimum number of matches
                     ~all(isnan(MatchTable_pair.(FPNameCurr)(MatchIdx))); % not all nans
 
                 if ~goAhead
                     fprintf('Not enough matches (or all nans) for sessions %d & %d (%d). Skipping.\n', sess1, sess2, numel(MatchIdx))
-                    FPSum.(FPNameCurr).Distr{midx}(:,:,sess1,sess2) = nan(numel(histBins)-1, 3);
-                    FPSum.(FPNameCurr).AUC{midx}(:,sess1,sess2) = nan(1,3);
-                    FPSum.(FPNameCurr).ROC{midx}(:,:,sess1,sess2) = nan(numel(AUCPrecision), 3);
                 else
                     %% Compute fingerprint correlations and AUCs
 
@@ -137,15 +142,15 @@ for midx = 1:length(UMFolders)
                     hm = histcounts(FPCorr(MatchIdx), histBins) ./ length(MatchIdx);
                     hn = histcounts(FPCorr(NonMatchIdx), histBins) ./ length(NonMatchIdx);
                     % Save
-                    FPSum.(FPNameCurr).Distr{midx}(:,:,sess1,sess2) = [hw', hm', hn'];
+                    FPSum.(FPNameCurr).Distr{midx}(:,:,sess1Idx,sess2Idx) = [hw', hm', hn'];
 
                     % Compute ROCs and AUCs
                     [ROC1, AUC1] = getAUC(FPCorr,MatchIdx,NonMatchIdx,AUCPrecision);
                     [ROC2, AUC2] = getAUC(FPCorr,WithinIdx,MatchIdx,AUCPrecision);
                     [ROC3, AUC3] = getAUC(FPCorr,WithinIdx,NonMatchIdx,AUCPrecision);
                     % Save
-                    FPSum.(FPNameCurr).AUC{midx}(:,sess1,sess2) = [AUC1, AUC2, AUC3];
-                    FPSum.(FPNameCurr).ROC{midx}(:,:,sess1,sess2) = [ROC1,ROC2,ROC3];
+                    FPSum.(FPNameCurr).AUC{midx}(:,sess1Idx,sess2Idx) = [AUC1, AUC2, AUC3];
+                    FPSum.(FPNameCurr).ROC{midx}(:,:,sess1Idx,sess2Idx) = [ROC1,ROC2,ROC3];
                 end
             end
         end
@@ -188,9 +193,15 @@ for fpIdx = 1:numel(FPNames)
     title(sprintf('Fingerprint %s', FPNameCurr))
 end
 
-%% 
+%%
 
 
+
+figure
+for fpIdx = 1:numel(FPNames)
+    FPNameCurr = FPNames{fpIdx};
+
+end
 Vector = minVal+stepsz/2:stepsz:maxVal-stepsz/2;
 
 %% Plots -- all mice
