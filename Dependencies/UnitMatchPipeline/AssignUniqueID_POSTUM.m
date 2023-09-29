@@ -69,9 +69,12 @@ for recid = 1:length(RecOpt)
         end
         SubPairs = Pairs(GoodRecSesID(Pairs(:,1)) == recid & GoodRecSesID(Pairs(:,2)) == recid2,:); %Select days
 
-        % Average of two cross-validations and sort by that
-        MatchProbability = arrayfun(@(X) MatchTable.MatchProb(ismember(MatchTable.UID1,SubPairs(X,1))&ismember(MatchTable.UID2,SubPairs(X,2))),1:size(SubPairs,1));
-        MatchProbabilityFlip = arrayfun(@(X) MatchTable.MatchProb(ismember(MatchTable.UID1,SubPairs(X,2))&ismember(MatchTable.UID2,SubPairs(X,1))),1:size(SubPairs,1));
+         % Average of two cross-validations and sort by that
+        [val,tblidx] = ismember(SubPairs,[MatchTable.UID1 MatchTable.UID2],'rows');
+        MatchProbability = MatchTable.MatchProb(tblidx);
+
+        [val,tblidx] = ismember(SubPairs,[MatchTable.UID2 MatchTable.UID1],'rows');
+        MatchProbabilityFlip = MatchTable.MatchProb(tblidx);      
         MatchProbability = nanmean(cat(1,MatchProbability,MatchProbabilityFlip),1); 
         SubPairs(MatchProbability<0.5,:) = []; % don't bother with these
         MatchProbability(MatchProbability<0.5) = []; % don't bother with these
