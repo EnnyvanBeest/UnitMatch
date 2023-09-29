@@ -7,19 +7,18 @@ if TakeRank
     stepsz = 1;
     minVal = -20;
     maxVal = 1;
+    FPNames = {'RankScore','ACGRankScore','FRRankScore','NImgRankScore'};
 else
     fprintf("Taking the correlation values!\n")
     stepsz = 0.1;
     minVal = -1;
     maxVal = 1;
+    FPNames = {'FingerprintCor','ACGCorr','FRDiff','NatImCorr'};
 end
 histBins = minVal:stepsz:maxVal;
 UseKSLabels = PrepareClusInfoparams.RunPyKSChronicStitched;
 AUCPrecision = 0:0.01:1;
 minMatches = 10;
-
-% FPNames = {'FingerprintCor','ACGCorr','FRDiff','NatImCorr'};
-FPNames = {'RankScore','ACGRankScore','FRRankScore','NImgRankScore'};
 
 %% Loop over mice to get all Distributions / ROCs / AUCs
 
@@ -95,6 +94,7 @@ for midx = 1:length(UMFolders)
                 FPNameCurr = FPNames{fpIdx};
 
                 if ~any(ismember(MatchTable_pair.Properties.VariableNames, FPNameCurr))
+                    disp([UMFolders{midx} ' has no ' FPNameCurr ' in table...'])
                     continue
                 end
 
@@ -160,9 +160,9 @@ end
 %% Plots -- example mouse
 
 mouseColor = winter(length(UMFolders));
-
+% Best example mouse
+midx = find(cellfun(@(X) nansum(X(:)),numMatchedUnits) == max(cellfun(@(X)  nansum(X(:)),numMatchedUnits)),1,'first')
 % Number of matched units (matrix)
-midx = length(UMFolders);
 figure;
 subplot(121)
 imagesc(numMatchedUnits{midx})

@@ -36,621 +36,628 @@ AUCACGCurves = [];
 AUCNImCurves = [];
 AUCRFCurves = [];
 
+minMatches = 10; % if less than 10, skip
+
 AUCCols = [0 0.7 0; 1 0 0; 0 0 0.7]; %WIthin %Match %non-match
 aucprecision = [0:0.05:1];
 clear UMTrackingPerformancePerMouse
 for midx = 1:length(MiceOpt)
     fprintf('Reference %s...\n', MiceOpt{midx})
 
-    tmpfile = dir(fullfile(SaveDir, MiceOpt{midx}, 'UnitMatch', 'UnitMatch.mat'));
+    tmpfile = dir(fullfile(SaveDir, MiceOpt{midx}, '*','*', 'UnitMatch', 'UnitMatch.mat'));
     if isempty(tmpfile)
         continue
     end
+    for tmpid = 1:length(tmpfile)
 
-    fprintf('Loading the data...\n')
-    tic
-    load(fullfile(tmpfile.folder, tmpfile.name), 'MatchTable', 'UMparam', 'UniqueIDConversion');
-    toc
+        fprintf('Loading the data...\n')
+        tic
+        load(fullfile(tmpfile(tmpid).folder, tmpfile(tmpid).name), 'MatchTable', 'UMparam', 'UniqueIDConversion');
+        toc
 
-    % Load AUCS
-    if exist(fullfile(SaveDir, MiceOpt{midx}, 'UnitMatch', 'AUC.mat'))
-        AUC = load(fullfile(SaveDir, MiceOpt{midx}, 'UnitMatch', 'AUC.mat'))';
-        if midx == 1 || ~exist('AUCParams','var')
-            AUCParams = AUC.AUCStruct.ParamNames;
-            AUCVals = nan(length(AUCParams), length(MiceOpt));
-        end
-        AUCVals(:, midx) = AUC.AUCStruct.AUC;
-    end
-
-    % Extract groups
-    if ~UseKSLabels
-        WithinIdx = find((MatchTable.UID1 == MatchTable.UID2) & (MatchTable.RecSes1 == MatchTable.RecSes2)); %Within session, same unit (cross-validation)
-        MatchIdx = find((MatchTable.UID1 == MatchTable.UID2) & (MatchTable.RecSes1 ~= MatchTable.RecSes2)); %Across session, same unit (cross-validation)
-        NonMatchIdx = find((MatchTable.UID1 ~= MatchTable.UID2)); % Not the same unit
-    else
-        WithinIdx = find((MatchTable.ID1 == MatchTable.ID2) & (MatchTable.RecSes1 == MatchTable.RecSes2)); %Within session, same unit (cross-validation)
-        MatchIdx = find((MatchTable.ID1 == MatchTable.ID2) & (MatchTable.RecSes1 ~= MatchTable.RecSes2)); %Across session, same unit (cross-validation)
-        NonMatchIdx = find((MatchTable.ID1 ~= MatchTable.ID2)); % Not the same unit
-    end
-    % Extract cluster information
-    if UMparam.GoodUnitsOnly
-        GoodId = logical(UniqueIDConversion.GoodID);
-    else
-        GoodId = true(1, length(UniqueIDConversion.GoodID));
-    end
-    UniqueID = UniqueIDConversion.UniqueID(GoodId);
-    OriID = UniqueIDConversion.OriginalClusID(GoodId);
-    OriIDAll = UniqueIDConversion.OriginalClusID;
-    recses = UniqueIDConversion.recsesAll(GoodId);
-    recsesall = UniqueIDConversion.recsesAll;
-    nRecs = length(unique(recsesall));
-    AllKSDir = UMparam.KSDir; %original KS Dir
-    AllRawDir = UMparam.AllRawPaths; %
-    if isstruct(AllRawDir)
-        AllRawDir = arrayfun(@(X) fullfile(X.folder,X.name),AllRawDir,'Uni',0);
-    end
-    nclus = length(UniqueID);
-    ChannelPos = UMparam.channelpos;
-
-    %% How many units vs number of units were tracked?
-    fprintf('Evaluating tracked units...\n')
-    CrossCorrMatching = nan(0,4); % number of units matched with cross-correlation, % number of units matched of those % Number of units match with UM, % number of units mof those matched with Cross Corr
-    TrackingPerformance = nan(5, 0); % MatchesExpected, Difference between recording day, % Tracked units %maximum possibility % Difference in number of units
-    TrackingPerformanceKS = nan(5, 0); % MatchesExpected, Difference between recording day, % Tracked units %maximum possibility
-    AllDeltaDays = nan(1,nRecs);
-    ProbeSN = cell(1,nRecs); % To make sure the same probe was used, read the Serial number from the params file an store.
-    for did1 = 1:nRecs
-
-        % Read ProbeID
-        if isempty(ProbeSN{did1})
-            if any(strfind(AllRawDir{did1},'zinu')) && ~any(strfind(AllRawDir{did1},'\\zinu.cortexlab.net\'))
-                AllRawDir{did1} = strrep(AllRawDir{did1},AllRawDir{did1}(1:strfind(AllRawDir{did1},'zinu')+3),'\\zinu.cortexlab.net\subjects');
+        % Load AUCS
+        if exist(fullfile(tmpfile(tmpid).folder, 'AUC.mat'))
+            AUC = load(fullfile(tmpfile(tmpid).folder, 'AUC.mat'))';
+            if (midx == 1 && tmpid==1)|| ~exist('AUCParams','var')
+                AUCParams = AUC.AUCStruct.ParamNames;
+                AUCVals = nan(length(AUCParams), 0);
             end
-            rawdir = dir(fullfile(AllRawDir{did1}));
-            meta = ReadMeta2(fullfile(rawdir.folder,'*.ap.meta'));
-            try
-                ProbeSN{did1} = meta.imDatPrb_sn;
-            catch ME
-                disp(ME)
-                keyboard
-            end
+            AUCVals = cat(2,AUCVals,AUC.AUCStruct.AUC');
         end
 
-
-        % For difference in days
-        tmpday1 = strsplit(fullfile(AllRawDir{did1}),'\');% relies on yyyy-mm-dd format
-        tmpday1 = tmpday1(cellfun(@(X) any(strfind(X,'-')),tmpday1));
-        try
-            tmpday1 = datetime(tmpday1{1},'InputFormat','yyyy-MM-dd');
-        catch
-            tmpday1 = datetime(tmpday1{1},'InputFormat','dd-MM-yyyy');
-        end
-
-        if did1==1
-            firstday = tmpday1;
-        end
-        AllDeltaDays(did1) = double(days(duration(tmpday1-firstday)));
-
-        if length(ChannelPos)>1
-            ChansD1 = ChannelPos{did1};
+        % Extract groups
+        if ~UseKSLabels
+            WithinIdx = find((MatchTable.UID1 == MatchTable.UID2) & (MatchTable.RecSes1 == MatchTable.RecSes2)); %Within session, same unit (cross-validation)
+            MatchIdx = find((MatchTable.UID1 == MatchTable.UID2) & (MatchTable.RecSes1 ~= MatchTable.RecSes2)); %Across session, same unit (cross-validation)
+            NonMatchIdx = find((MatchTable.UID1 ~= MatchTable.UID2)); % Not the same unit
         else
-            ChansD1 = ChannelPos{1};
+            WithinIdx = find((MatchTable.ID1 == MatchTable.ID2) & (MatchTable.RecSes1 == MatchTable.RecSes2)); %Within session, same unit (cross-validation)
+            MatchIdx = find((MatchTable.ID1 == MatchTable.ID2) & (MatchTable.RecSes1 ~= MatchTable.RecSes2)); %Across session, same unit (cross-validation)
+            NonMatchIdx = find((MatchTable.ID1 ~= MatchTable.ID2)); % Not the same unit
         end
+        if numel(MatchIdx)<minMatches
+            continue
+        end
+        % Extract cluster information
+        if UMparam.GoodUnitsOnly
+            GoodId = logical(UniqueIDConversion.GoodID);
+        else
+            GoodId = true(1, length(UniqueIDConversion.GoodID));
+        end
+        UniqueID = UniqueIDConversion.UniqueID(GoodId);
+        OriID = UniqueIDConversion.OriginalClusID(GoodId);
+        OriIDAll = UniqueIDConversion.OriginalClusID;
+        recses = UniqueIDConversion.recsesAll(GoodId);
+        recsesall = UniqueIDConversion.recsesAll;
+        nRecs = length(unique(recsesall));
+        AllKSDir = UMparam.KSDir; %original KS Dir
+        AllRawDir = UMparam.AllRawPaths; %
+        if isstruct(AllRawDir)
+            AllRawDir = arrayfun(@(X) fullfile(X.folder,X.name),AllRawDir,'Uni',0);
+        end
+        nclus = length(UniqueID);
+        ChannelPos = UMparam.channelpos;
 
-        for did2 = 1:nRecs
-            if did2 <= did1
-                continue
-            end
+        %% How many units vs number of units were tracked?
+        fprintf('Evaluating tracked units...\n')
+        CrossCorrMatching = nan(0,4); % number of units matched with cross-correlation, % number of units matched of those % Number of units match with UM, % number of units mof those matched with Cross Corr
+        TrackingPerformance = nan(5, 0); % MatchesExpected, Difference between recording day, % Tracked units %maximum possibility % Difference in number of units
+        TrackingPerformanceKS = nan(5, 0); % MatchesExpected, Difference between recording day, % Tracked units %maximum possibility
+        AllDeltaDays = nan(1,nRecs);
+        ProbeSN = cell(1,nRecs); % To make sure the same probe was used, read the Serial number from the params file an store.
+        for did1 = 1:nRecs
 
             % Read ProbeID
-            if isempty(ProbeSN{did2})
-                if any(strfind(AllRawDir{did2},'zinu')) && ~any(strfind(AllRawDir{did2},'\\zinu.cortexlab.net\'))
-
-                    AllRawDir{did2} = strrep(AllRawDir{did2},AllRawDir{did2}(1:strfind(AllRawDir{did2},'zinu')+3),'\\zinu.cortexlab.net\subjects');
+            if isempty(ProbeSN{did1})
+                if any(strfind(AllRawDir{did1},'zinu')) && ~any(strfind(AllRawDir{did1},'\\zinu.cortexlab.net\'))
+                    AllRawDir{did1} = strrep(AllRawDir{did1},AllRawDir{did1}(1:strfind(AllRawDir{did1},'zinu')+3),'\\zinu.cortexlab.net\subjects');
                 end
-                rawdir = dir(fullfile(AllRawDir{did2}));
+                rawdir = dir(fullfile(AllRawDir{did1}));
                 meta = ReadMeta2(fullfile(rawdir.folder,'*.ap.meta'));
                 try
-                    ProbeSN{did2} = meta.imDatPrb_sn;
+                    ProbeSN{did1} = meta.imDatPrb_sn;
                 catch ME
                     disp(ME)
                     keyboard
                 end
             end
-            tmpday2 = strsplit(fullfile(AllRawDir{did2}),'\');% relies on yyyy-mm-dd format
-            tmpday2 = tmpday2(cellfun(@(X) any(strfind(X,'-')),tmpday2));
+
+
+            % For difference in days
+            tmpday1 = strsplit(fullfile(AllRawDir{did1}),'\');% relies on yyyy-mm-dd format
+            tmpday1 = tmpday1(cellfun(@(X) any(strfind(X,'-')),tmpday1));
             try
-                tmpday2 = datetime(tmpday2{1},'InputFormat','yyyy-MM-dd');
+                tmpday1 = datetime(tmpday1{1},'InputFormat','yyyy-MM-dd');
             catch
-                tmpday2 = datetime(tmpday2{1},'InputFormat','dd-MM-yyyy');
+                tmpday1 = datetime(tmpday1{1},'InputFormat','dd-MM-yyyy');
             end
 
-            % Delta Days
-            DDay = days(duration(tmpday2-tmpday1));
+            if did1==1
+                firstday = tmpday1;
+            end
+            AllDeltaDays(did1) = double(days(duration(tmpday1-firstday)));
 
             if length(ChannelPos)>1
-                ChansD2 = ChannelPos{did2};
+                ChansD1 = ChannelPos{did1};
             else
-                ChansD2 = ChannelPos{1};
+                ChansD1 = ChannelPos{1};
             end
 
-            if strcmp(RecordingType{midx},'Chronic') & ProbeSN{did1} == ProbeSN{did2}% How much did the IMRO overlay??
-                MatchesExpected = sum(ChansD1(:) == ChansD2(:))./numel(ChansD1);
+            for did2 = 1:nRecs
+                if did2 <= did1
+                    continue
+                end
+
+                % Read ProbeID
+                if isempty(ProbeSN{did2})
+                    if any(strfind(AllRawDir{did2},'zinu')) && ~any(strfind(AllRawDir{did2},'\\zinu.cortexlab.net\'))
+
+                        AllRawDir{did2} = strrep(AllRawDir{did2},AllRawDir{did2}(1:strfind(AllRawDir{did2},'zinu')+3),'\\zinu.cortexlab.net\subjects');
+                    end
+                    rawdir = dir(fullfile(AllRawDir{did2}));
+                    meta = ReadMeta2(fullfile(rawdir.folder,'*.ap.meta'));
+                    try
+                        ProbeSN{did2} = meta.imDatPrb_sn;
+                    catch ME
+                        disp(ME)
+                        keyboard
+                    end
+                end
+                tmpday2 = strsplit(fullfile(AllRawDir{did2}),'\');% relies on yyyy-mm-dd format
+                tmpday2 = tmpday2(cellfun(@(X) any(strfind(X,'-')),tmpday2));
+                try
+                    tmpday2 = datetime(tmpday2{1},'InputFormat','yyyy-MM-dd');
+                catch
+                    tmpday2 = datetime(tmpday2{1},'InputFormat','dd-MM-yyyy');
+                end
+
+                % Delta Days
+                DDay = days(duration(tmpday2-tmpday1));
+
+                if length(ChannelPos)>1
+                    ChansD2 = ChannelPos{did2};
+                else
+                    ChansD2 = ChannelPos{1};
+                end
+
+                if strcmp(RecordingType{midx},'Chronic') & ProbeSN{did1} == ProbeSN{did2}% How much did the IMRO overlay??
+                    MatchesExpected = sum(ChansD1(:) == ChansD2(:))./numel(ChansD1);
+                else
+                    MatchesExpected = 0;
+                end
+
+
+                % Units found to match based on
+                %cross-correlation activity
+                rowidx = find(MatchTable.RecSes1 == did1 & MatchTable.RecSes2 == did2);
+                % find all pairs with a significant fingerprint cross-correlation
+                SigR = find(MatchTable.SigFingerprintR(rowidx) == 1);
+                NXCorr = length(SigR);
+                NXCorrUM = sum(MatchTable.MatchProb(rowidx(SigR))>0.5);
+
+                % OTher way around
+                SigUM = find(MatchTable.MatchProb(rowidx) > 0.5);
+                NUM = length(SigUM);
+                NUMXCorr = sum(MatchTable.SigFingerprintR(rowidx(SigUM))==1);
+
+                CrossCorrMatching = cat(1, CrossCorrMatching, [NXCorr, NXCorrUM, NUM, NUMXCorr]);
+
+                thesedaysidx = find(ismember(recses, [did1, did2]));
+                % can possibly only track these many units:
+                nMax = min([sum(recses(thesedaysidx) == did1), sum(recses(thesedaysidx) == did2)]);
+                diffN = sum(recses(thesedaysidx) == did2)-sum(recses(thesedaysidx) == did1);
+                if nMax < 25
+                    continue
+                end
+                if sum(recses(thesedaysidx) == did1)>sum(recses(thesedaysidx) == did2)
+                    nMatches = sum(ismember(UniqueID(recses==did2),UniqueID(recses==did1)));
+                else
+                    nMatches = sum(ismember(UniqueID(recses==did1),UniqueID(recses==did2)));
+                end
+                if nMatches>nMax
+                    keyboard
+                end
+                TrackingPerformance = cat(2, TrackingPerformance, [MatchesExpected, double(DDay), nMatches, nMax, diffN]');
+                if MatchesExpected == 1 && (nMatches/nMax)<0.15 && double(DDay)<2
+                    warning(['No matches unexpectedly for ' MiceOpt{midx}])
+                end
+                if MatchesExpected == 0 && (nMatches/nMax)>0.15
+                    warning(['Some matches unexpectedly for ' MiceOpt{midx}])
+                end
+
+                if sum(recses(thesedaysidx) == did1)>sum(recses(thesedaysidx) == did2)
+                    nMatches = sum(ismember(OriID(recses==did2),OriID(recses==did1)));
+                else
+                    nMatches = sum(ismember(OriID(recses==did1),OriID(recses==did2)));
+                end
+                if UseKSLabels
+                    TrackingPerformanceKS = cat(2, TrackingPerformanceKS, [MatchesExpected, double(DDay), nMatches, nMax, diffN]');
+                end
+            end
+        end
+
+        UMTrackingPerformancePerMouse{midx,tmpid} = TrackingPerformance;
+        if UseKSLabels
+            KSTrackingPerformancePerMouse{midx,tmpid} = TrackingPerformanceKS;
+        end
+
+        %% UniqueID X tracking
+        [UniqueIDOpt,idx1,idx2] = unique(UniqueID); %UID options
+        DayOpt = unique(AllDeltaDays);
+        dayses = AllDeltaDays(recses); % Get in days after first recording
+        RecSesPerUID = arrayfun(@(X) (ismember(DayOpt,dayses(idx2==X))),1:numel(UniqueIDOpt),'Uni',0); % Extract which recording sessions a unite appears in
+        RecSesPerUID = double(cat(1,RecSesPerUID{:}));
+        for nrec = 1:size(RecSesPerUID,2)
+            RecSesPerUID(RecSesPerUID(:,nrec)>0,nrec) = RecSesPerUID(RecSesPerUID(:,nrec)>0,nrec)+(size(RecSesPerUID,2)-nrec)+1;
+        end
+        if tmpid==1
+            MatrixFig = figure('name',[MiceOpt{midx} ' TrackingAcrossDaysMatrix']);
+        else
+            figure(MatrixFig)
+        end
+        %     [sortval,idx1,sortidx] = unique(RecSesPerUID,'rows');
+        [sortval,sortidx] = sort(sum(RecSesPerUID,2),'descend');
+        subplot(ceil(sqrt(length(tmpfile))),round(sqrt(length(tmpfile))),tmpid)
+        h = imagesc(1:length(DayOpt),[],RecSesPerUID(sortidx,:));
+        set(gca,'XTick',1:length(DayOpt),'XTickLabel',DayOpt)
+        colormap(flipud(gray))
+        title(tmpfile(tmpid).folder)
+        xlabel('Days since first recording')
+        ylabel('Tracked Units')
+        makepretty
+        RecSesPerUIDAllMice{midx,tmpid} = RecSesPerUID; % Save for later use
+
+        %% Extra Positives/negatives
+        MatchProb = reshape(MatchTable.MatchProb, nclus, nclus);
+        %Extra Positive
+        EPosAndNeg(1, midx, tmpid) = sum(MatchProb(NonMatchIdx) > UMparam.ProbabilityThreshold) ./ length(NonMatchIdx);
+
+        %Extra Negative
+        EPosAndNeg(2, midx, tmpid) = sum(MatchProb(WithinIdx) < UMparam.ProbabilityThreshold) ./ length(WithinIdx);
+
+        if UseKSLabels
+            EPosAndNeg(3, midx, tmpid) = sum(MatchProb(MatchIdx) < UMparam.ProbabilityThreshold) ./ length(MatchIdx);
+        end
+
+        %% Fingerprint correlation
+        fprintf('Plotting fingerprints...\n')
+        if any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) && MatchesExpected == 1
+            figure(FSCoreFig)
+            if TakeRank
+                FingerprintCor = -reshape(MatchTable.RankScore, nclus, nclus);
             else
-                MatchesExpected = 0;
+                FingerprintCor = reshape(MatchTable.FingerprintCor, nclus, nclus);
             end
 
+            subplot(4, 3, 1)
+            hold on
 
-            % Units found to match based on
-            %cross-correlation activity
-            rowidx = find(MatchTable.RecSes1 == did1 & MatchTable.RecSes2 == did2);
-            % find all pairs with a significant fingerprint cross-correlation
-            SigR = find(MatchTable.SigFingerprintR(rowidx) == 1);
-            NXCorr = length(SigR);
-            NXCorrUM = sum(MatchTable.MatchProb(rowidx(SigR))>0.5);
+            hw = histcounts(FingerprintCor(WithinIdx), bins) ./ length(WithinIdx);
+            hm = histcounts(FingerprintCor(MatchIdx), bins) ./ length(MatchIdx);
+            hn = histcounts(FingerprintCor(NonMatchIdx), bins) ./ length(NonMatchIdx);
+            FingerPrintRAcrossMice(:, :, midx,tmpid) = cat(1, hw, hm, hn)';
+            plot(Vector, hw, 'color', AUCCols(1,:))
+            plot(Vector, hm, 'color', AUCCols(2,:))
+            plot(Vector, hn, 'color', AUCCols(3,:))
+            xlabel('Cross-correlation Fingerprint')
+            ylabel('Proportion|Group')
+            %     legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
+            axis square
+            makepretty
 
-            % OTher way around
-            SigUM = find(MatchTable.MatchProb(rowidx) > 0.5);
-            NUM = length(SigUM);
-            NUMXCorr = sum(MatchTable.SigFingerprintR(rowidx(SigUM))==1);
-
-            CrossCorrMatching = cat(1, CrossCorrMatching, [NXCorr, NXCorrUM, NUM, NUMXCorr]);
-
-            thesedaysidx = find(ismember(recses, [did1, did2]));
-            % can possibly only track these many units:
-            nMax = min([sum(recses(thesedaysidx) == did1), sum(recses(thesedaysidx) == did2)]);
-            diffN = sum(recses(thesedaysidx) == did2)-sum(recses(thesedaysidx) == did1);
-            if nMax < 25
-                continue
-            end
-            if sum(recses(thesedaysidx) == did1)>sum(recses(thesedaysidx) == did2)
-                nMatches = sum(ismember(UniqueID(recses==did2),UniqueID(recses==did1)));
+            AllFPCor = cat(3,AllFPCor,[hw;hm;hn]);
+            subplot(4, 3, 2)
+            hold on
+            clear h
+            if length(MatchIdx) > 10
+                labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
+                scores = [FingerprintCor(MatchIdx)', FingerprintCor(NonMatchIdx)'];
+                [X, Y, ~, AUC1] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+                h(1) = plot(X, Y, 'color', nanmean(AUCCols([2,3],:),1));
+                % find closest precision value for every X
+                [~,idx1] = min(abs(aucprecision-X),[],1);
+                Y1 = Y(idx1);
+                hold all
+                labels = [zeros(1, numel(MatchIdx)), ones(1, numel(WithinIdx))];
+                scores = [FingerprintCor(MatchIdx)', FingerprintCor(WithinIdx)'];
+                [X, Y, ~, AUC2] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+                h(2) = plot(X, Y, 'color',nanmean(AUCCols([1,2],:),1));
+                % find closest precision value for every X
+                [~,idx1] = min(abs(aucprecision-X),[],1);
+                Y2 = Y(idx1);
+                labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
+                scores = [FingerprintCor(WithinIdx)', FingerprintCor(NonMatchIdx)'];
+                [X, Y, ~, AUC3] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+                h(3) = plot(X, Y, 'color', nanmean(AUCCols([1,3],:),1));
+                % find closest precision value for every X
+                [~,idx1] = min(abs(aucprecision-X),[],1);
+                Y3 = Y(idx1);
+                axis square
             else
-                nMatches = sum(ismember(UniqueID(recses==did1),UniqueID(recses==did2)));
+                AUC1 = nan;
+                AUC2 = nan;
+                AUC3 = nan;
+                Y1 = nan(numel(aucprecision),1);
+                Y2 = nan(numel(aucprecision),1);
+                Y3 = nan(numel(aucprecision),1);
             end
-            if nMatches>nMax
-                keyboard
-            end
-            TrackingPerformance = cat(2, TrackingPerformance, [MatchesExpected, double(DDay), nMatches, nMax, diffN]');
-            if MatchesExpected == 1 && (nMatches/nMax)<0.15 && double(DDay)<2
-                warning(['No matches unexpectedly for ' MiceOpt{midx}])
-            end
-            if MatchesExpected == 0 && (nMatches/nMax)>0.15
-                warning(['Some matches unexpectedly for ' MiceOpt{midx}])
-            end
+            FingerprintAUC(:, midx,tmpid) = [AUC1, AUC2, AUC3];
+            AUCFPCurves = cat(3,AUCFPCurves,[Y1,Y2,Y3]);
 
-            if sum(recses(thesedaysidx) == did1)>sum(recses(thesedaysidx) == did2)
-                nMatches = sum(ismember(OriID(recses==did2),OriID(recses==did1)));
+
+            plot([0, 1], [0, 1], 'k--')
+            xlabel('False positive rate')
+            ylabel('True positive rate')
+
+
+
+
+            %     if length(MatchIdx) > 10
+            %         legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
+            %     else
+            %         legend([h(3)], 'Within vs No Match', 'Location', 'best')
+            %     end
+            title('Cross-Correlation Fingerprint')
+            makepretty
+            drawnow %Something to look at while ACG calculations are ongoing
+        end
+        %% Autocorrelogram
+        if any(ismember(MatchTable.Properties.VariableNames, 'ACGCorr')) && MatchesExpected == 1
+            if TakeRank
+                ACGCor = -reshape(MatchTable.ACGRankScore, nclus, nclus);
             else
-                nMatches = sum(ismember(OriID(recses==did1),OriID(recses==did2)));
+                ACGCor = reshape(MatchTable.ACGCorr, nclus, nclus);
             end
-            if UseKSLabels
-                TrackingPerformanceKS = cat(2, TrackingPerformanceKS, [MatchesExpected, double(DDay), nMatches, nMax, diffN]');
+
+            subplot(4, 3, 4)
+            hold on
+
+            hw = histcounts(ACGCor(WithinIdx), bins) ./ length(WithinIdx);
+            hm = histcounts(ACGCor(MatchIdx), bins) ./ length(MatchIdx);
+            hn = histcounts(ACGCor(NonMatchIdx), bins) ./ length(NonMatchIdx);
+            ACGRAcrossMice(:, :, midx,tmpid) = cat(1, hw, hm, hn)';
+            plot(Vector, hw, 'color', AUCCols(1,:))
+            plot(Vector, hm, 'color', AUCCols(2,:))
+            plot(Vector, hn, 'color', AUCCols(3,:))
+            xlabel('Autocorrelogram')
+            ylabel('Proportion|Group')
+            axis square
+            makepretty
+
+            AllCGCor = cat(3,AllCGCor,[hw;hm;hn]);
+
+
+            subplot(4, 3, 5)
+            hold on
+            clear h
+            if ~isempty(MatchIdx)
+                labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
+                scores = [ACGCor(MatchIdx)', ACGCor(NonMatchIdx)'];
+                [X, Y, ~, AUC1] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+                h(1) = plot(X, Y, 'color', nanmean(AUCCols([2,3],:),1));
+                % find closest precision value for every X
+                [~,idx1] = min(abs(aucprecision-X),[],1);
+                Y1 = Y(idx1);
+                hold all
+                labels = [zeros(1, numel(MatchIdx)), ones(1, numel(WithinIdx))];
+                scores = [ACGCor(MatchIdx)', ACGCor(WithinIdx)'];
+                [X, Y, ~, AUC2] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+                h(2) = plot(X, Y, 'color', nanmean(AUCCols([1,2],:),1));
+                % find closest precision value for every X
+                [~,idx1] = min(abs(aucprecision-X),[],1);
+                Y2 = Y(idx1);
+                labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
+                scores = [ACGCor(WithinIdx)', ACGCor(NonMatchIdx)'];
+                [X, Y, ~, AUC3] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+                h(3) = plot(X, Y, 'color', nanmean(AUCCols([1,3],:),1));
+                % find closest precision value for every X
+                [~,idx1] = min(abs(aucprecision-X),[],1);
+                Y3 = Y(idx1);
+                axis square
+            else
+                AUC1 = nan;
+                AUC2 = nan;
+                AUC3 = nan;
+                Y1 = nan(numel(aucprecision),1);
+                Y2 = nan(numel(aucprecision),1);
+                Y3 = nan(numel(aucprecision),1);
             end
+            ACGAUC(:, midx,tmpid) = [AUC1, AUC2, AUC3];
+            AUCACGCurves = cat(3,AUCACGCurves,[Y1,Y2,Y3]);
+
+            plot([0, 1], [0, 1], 'k--')
+            xlabel('False positive rate')
+            ylabel('True positive rate')
+            title('Auto-correlogram')
+            makepretty
+            drawnow %Something to look at while ACG calculations are ongoing
+
+
+
         end
-    end
+        %% Natural Images correlation
+        if any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) && MatchesExpected == 1
+            figure(FSCoreFig)
+            if TakeRank
+                NatImCorr = -reshape(MatchTable.NImgRankScore, nclus, nclus);
+            else
+                NatImCorr = reshape(MatchTable.NatImCorr, nclus, nclus);
+            end
 
-    UMTrackingPerformancePerMouse{midx} = TrackingPerformance;
-    if UseKSLabels
-        KSTrackingPerformancePerMouse{midx} = TrackingPerformanceKS;
-    end
 
-    %% UniqueID X tracking
-    [UniqueIDOpt,idx1,idx2] = unique(UniqueID); %UID options
-    DayOpt = unique(AllDeltaDays);
-    dayses = AllDeltaDays(recses); % Get in days after first recording
-    RecSesPerUID = arrayfun(@(X) (ismember(DayOpt,dayses(idx2==X))),1:numel(UniqueIDOpt),'Uni',0); % Extract which recording sessions a unite appears in
-    RecSesPerUID = double(cat(1,RecSesPerUID{:}));
-    for nrec = 1:size(RecSesPerUID,2)
-        RecSesPerUID(RecSesPerUID(:,nrec)>0,nrec) = RecSesPerUID(RecSesPerUID(:,nrec)>0,nrec)+(size(RecSesPerUID,2)-nrec)+1;
-    end
-    if midx == 1
-        MatrixFig = figure('name','TrackingAcrossDaysMatrix');
-    else
-        figure(MatrixFig)
-    end
-%     [sortval,idx1,sortidx] = unique(RecSesPerUID,'rows');
-    [sortval,sortidx] = sort(sum(RecSesPerUID,2),'descend');
-    subplot(ceil(sqrt(length(MiceOpt))),round(sqrt(length(MiceOpt))),midx)
-    h = imagesc(1:length(DayOpt),[],RecSesPerUID(sortidx,:));
-    set(gca,'XTick',1:length(DayOpt),'XTickLabel',DayOpt)
-    colormap(flipud(gray))
-    title(MiceOpt{midx})
-    xlabel('Days since first recording')
-    ylabel('Tracked Units')
-    makepretty
-    RecSesPerUIDAllMice{midx} = RecSesPerUID; % Save for later use
+            subplot(4, 3, 7)
+            hold on
 
-    %% Extra Positives/negatives
-    MatchProb = reshape(MatchTable.MatchProb, nclus, nclus);
-    %Extra Positive
-    EPosAndNeg(1, midx) = sum(MatchProb(NonMatchIdx) > UMparam.ProbabilityThreshold) ./ length(NonMatchIdx);
-
-    %Extra Negative
-    EPosAndNeg(2, midx) = sum(MatchProb(WithinIdx) < UMparam.ProbabilityThreshold) ./ length(WithinIdx);
-
-    if UseKSLabels
-        EPosAndNeg(3, midx) = sum(MatchProb(MatchIdx) < UMparam.ProbabilityThreshold) ./ length(MatchIdx);
-    end
-
-    %% Fingerprint correlation
-    fprintf('Plotting fingerprints...\n')
-    if any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) && MatchesExpected == 1
-        figure(FSCoreFig)
-        if TakeRank
-            FingerprintCor = -reshape(MatchTable.RankScore, nclus, nclus);
-        else
-            FingerprintCor = reshape(MatchTable.FingerprintCor, nclus, nclus);
-        end
-
-        subplot(4, 3, 1)
-        hold on
-
-        hw = histcounts(FingerprintCor(WithinIdx), bins) ./ length(WithinIdx);
-        hm = histcounts(FingerprintCor(MatchIdx), bins) ./ length(MatchIdx);
-        hn = histcounts(FingerprintCor(NonMatchIdx), bins) ./ length(NonMatchIdx);
-        FingerPrintRAcrossMice(:, :, midx) = cat(1, hw, hm, hn)';
-        plot(Vector, hw, 'color', AUCCols(1,:))
-        plot(Vector, hm, 'color', AUCCols(2,:))
-        plot(Vector, hn, 'color', AUCCols(3,:))
-        xlabel('Cross-correlation Fingerprint')
-        ylabel('Proportion|Group')
-        %     legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
-        axis square
-        makepretty
-
-        AllFPCor = cat(3,AllFPCor,[hw;hm;hn]);
-        subplot(4, 3, 2)
-        hold on
-        clear h
-        if length(MatchIdx) > 10
-            labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
-            scores = [FingerprintCor(MatchIdx)', FingerprintCor(NonMatchIdx)'];
-            [X, Y, ~, AUC1] = perfcurve(labels, scores, 1,'XVals',aucprecision);
-            h(1) = plot(X, Y, 'color', nanmean(AUCCols([2,3],:),1));
-            % find closest precision value for every X
-            [~,idx1] = min(abs(aucprecision-X),[],1);
-            Y1 = Y(idx1);
-            hold all
-            labels = [zeros(1, numel(MatchIdx)), ones(1, numel(WithinIdx))];
-            scores = [FingerprintCor(MatchIdx)', FingerprintCor(WithinIdx)'];
-            [X, Y, ~, AUC2] = perfcurve(labels, scores, 1,'XVals',aucprecision);
-            h(2) = plot(X, Y, 'color',nanmean(AUCCols([1,2],:),1));
-            % find closest precision value for every X
-            [~,idx1] = min(abs(aucprecision-X),[],1);
-            Y2 = Y(idx1);
-            labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
-            scores = [FingerprintCor(WithinIdx)', FingerprintCor(NonMatchIdx)'];
-            [X, Y, ~, AUC3] = perfcurve(labels, scores, 1,'XVals',aucprecision);
-            h(3) = plot(X, Y, 'color', nanmean(AUCCols([1,3],:),1));
-            % find closest precision value for every X
-            [~,idx1] = min(abs(aucprecision-X),[],1);
-            Y3 = Y(idx1);
+            hw = histcounts(NatImCorr(WithinIdx), bins) ./ length(WithinIdx);
+            hm = histcounts(NatImCorr(MatchIdx), bins) ./ length(MatchIdx);
+            hn = histcounts(NatImCorr(NonMatchIdx), bins) ./ length(NonMatchIdx);
+            NatImgAcrossMice(:, :, midx,tmpid) = cat(1, hw, hm, hn)';
+            plot(Vector, hw, 'color', AUCCols(1,:))
+            plot(Vector, hm, 'color', AUCCols(2,:))
+            plot(Vector, hn, 'color', AUCCols(3,:))
+            xlabel('Natural Images Fingerprint')
+            ylabel('Proportion|Group')
+            %     legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
             axis square
-        else
-            AUC1 = nan;
-            AUC2 = nan;
-            AUC3 = nan;
-            Y1 = nan(numel(aucprecision),1);
-            Y2 = nan(numel(aucprecision),1);
-            Y3 = nan(numel(aucprecision),1);
+            makepretty
+
+            AllNMCor = cat(3,AllNMCor,[hw;hm;hn]);
+
+            subplot(4, 3, 8)
+            hold on
+            clear h
+            if ~isempty(MatchIdx) && ~all(isnan(NatImCorr(MatchIdx)))
+                labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
+                scores = [NatImCorr(MatchIdx)', NatImCorr(NonMatchIdx)'];
+                [X, Y, ~, AUC1] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+                h(1) = plot(X, Y, 'color', nanmean(AUCCols([2,3],:),1));
+                % find closest precision value for every X
+                [~,idx1] = min(abs(aucprecision-X),[],1);
+                Y1 = Y(idx1);
+                hold all
+                labels = [zeros(1, numel(MatchIdx)), ones(1, numel(WithinIdx))];
+                scores = [NatImCorr(MatchIdx)', NatImCorr(WithinIdx)'];
+                [X, Y, ~, AUC2] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+                h(2) = plot(X, Y, 'color',nanmean(AUCCols([1,2],:),1));
+                % find closest precision value for every X
+                [~,idx1] = min(abs(aucprecision-X),[],1);
+                Y2 = Y(idx1);
+                labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
+                scores = [NatImCorr(WithinIdx)', NatImCorr(NonMatchIdx)'];
+                [X, Y, ~, AUC3] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+                h(3) = plot(X, Y, 'color', nanmean(AUCCols([1,3],:),1));
+                % find closest precision value for every X
+                [~,idx1] = min(abs(aucprecision-X),[],1);
+                Y3 = Y(idx1);
+                axis square
+            else
+                AUC1 = nan;
+                AUC2 = nan;
+                AUC3 = nan;
+                Y1 = nan(numel(aucprecision),1);
+                Y2 = nan(numel(aucprecision),1);
+                Y3 = nan(numel(aucprecision),1);
+            end
+            NatImgAUC(:, midx,tmpid) = [AUC1, AUC2, AUC3];
+            AUCNImCurves = cat(3,AUCNImCurves,[Y1,Y2,Y3]);
+
+            plot([0, 1], [0, 1], 'k--')
+            xlabel('False positive rate')
+            ylabel('True positive rate')
+            %     if length(MatchIdx) > 10
+            %         legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
+            %     else
+            %         legend([h(3)], 'Within vs No Match', 'Location', 'best')
+            %     end
+            title('Natural Images Fingerprint')
+            makepretty
+            drawnow %Something to look at while ACG calculations are ongoing
+
+
         end
-        FingerprintAUC(:, midx) = [AUC1, AUC2, AUC3];
-        AUCFPCurves = cat(3,AUCFPCurves,[Y1,Y2,Y3]);
+        %% Receptive Field (?)
+        if any(ismember(MatchTable.Properties.VariableNames, 'RFDist')) && MatchesExpected == 1
 
+            RFDist = reshape(MatchTable.RFDist, nclus, nclus);
+            subplot(4, 3, 10)
+            hold on
 
-        plot([0, 1], [0, 1], 'k--')
-        xlabel('False positive rate')
-        ylabel('True positive rate')
-
-
-
-
-        %     if length(MatchIdx) > 10
-        %         legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
-        %     else
-        %         legend([h(3)], 'Within vs No Match', 'Location', 'best')
-        %     end
-        title('Cross-Correlation Fingerprint')
-        makepretty
-        drawnow %Something to look at while ACG calculations are ongoing
-    end
-    %% Autocorrelogram
-    if any(ismember(MatchTable.Properties.VariableNames, 'ACGCorr')) && MatchesExpected == 1
-        if TakeRank
-            ACGCor = -reshape(MatchTable.ACGRankScore, nclus, nclus);
-        else
-            ACGCor = reshape(MatchTable.ACGCorr, nclus, nclus);
-        end
-
-        subplot(4, 3, 4)
-        hold on
-
-        hw = histcounts(ACGCor(WithinIdx), bins) ./ length(WithinIdx);
-        hm = histcounts(ACGCor(MatchIdx), bins) ./ length(MatchIdx);
-        hn = histcounts(ACGCor(NonMatchIdx), bins) ./ length(NonMatchIdx);
-        ACGRAcrossMice(:, :, midx) = cat(1, hw, hm, hn)';
-        plot(Vector, hw, 'color', AUCCols(1,:))
-        plot(Vector, hm, 'color', AUCCols(2,:))
-        plot(Vector, hn, 'color', AUCCols(3,:))
-        xlabel('Autocorrelogram')
-        ylabel('Proportion|Group')
-        axis square
-        makepretty
-
-        AllCGCor = cat(3,AllCGCor,[hw;hm;hn]);
-
-
-        subplot(4, 3, 5)
-        hold on
-        clear h
-        if ~isempty(MatchIdx)
-            labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
-            scores = [ACGCor(MatchIdx)', ACGCor(NonMatchIdx)'];
-            [X, Y, ~, AUC1] = perfcurve(labels, scores, 1,'XVals',aucprecision);
-            h(1) = plot(X, Y, 'color', nanmean(AUCCols([2,3],:),1));
-            % find closest precision value for every X
-            [~,idx1] = min(abs(aucprecision-X),[],1);
-            Y1 = Y(idx1);
-            hold all
-            labels = [zeros(1, numel(MatchIdx)), ones(1, numel(WithinIdx))];
-            scores = [ACGCor(MatchIdx)', ACGCor(WithinIdx)'];
-            [X, Y, ~, AUC2] = perfcurve(labels, scores, 1,'XVals',aucprecision);
-            h(2) = plot(X, Y, 'color', nanmean(AUCCols([1,2],:),1));
-            % find closest precision value for every X
-            [~,idx1] = min(abs(aucprecision-X),[],1);
-            Y2 = Y(idx1);
-            labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
-            scores = [ACGCor(WithinIdx)', ACGCor(NonMatchIdx)'];
-            [X, Y, ~, AUC3] = perfcurve(labels, scores, 1,'XVals',aucprecision);
-            h(3) = plot(X, Y, 'color', nanmean(AUCCols([1,3],:),1));
-            % find closest precision value for every X
-            [~,idx1] = min(abs(aucprecision-X),[],1);
-            Y3 = Y(idx1);
+            bins = linspace(0, 50, length(Vector)+1);
+            stepsz = unique(diff(bins));
+            hw = histcounts(RFDist(WithinIdx), bins) ./ length(WithinIdx);
+            hm = histcounts(RFDist(MatchIdx), bins) ./ length(MatchIdx);
+            hn = histcounts(RFDist(NonMatchIdx), bins) ./ length(NonMatchIdx);
+            RFDistAcrossMice(:, :, midx,tmpid) = cat(1, hw, hm, hn)';
+            plot(bins(1)+stepsz/2:stepsz:bins(end)-stepsz/2, hw, 'color', AUCCols(1,:))
+            plot(bins(1)+stepsz/2:stepsz:bins(end)-stepsz/2, hm, 'color', AUCCols(2,:))
+            plot(bins(1)+stepsz/2:stepsz:bins(end)-stepsz/2, hn, 'color', AUCCols(3,:))
+            xlabel('Receptive Field Distance')
+            ylabel('Proportion|Group')
             axis square
-        else
-            AUC1 = nan;
-            AUC2 = nan;
-            AUC3 = nan;
-            Y1 = nan(numel(aucprecision),1);
-            Y2 = nan(numel(aucprecision),1);
-            Y3 = nan(numel(aucprecision),1);
-        end
-        ACGAUC(:, midx) = [AUC1, AUC2, AUC3];
-        AUCACGCurves = cat(3,AUCACGCurves,[Y1,Y2,Y3]);
-
-        plot([0, 1], [0, 1], 'k--')
-        xlabel('False positive rate')
-        ylabel('True positive rate')
-        title('Auto-correlogram')
-        makepretty
-        drawnow %Something to look at while ACG calculations are ongoing
+            makepretty
+            AllRFCor = cat(3,AllRFCor,[hw;hm;hn]);
 
 
+            subplot(4, 3, 11)
+            hold on
+            clear h
+            if ~isempty(MatchIdx)
+                labels = [zeros(1, numel(MatchIdx)), ones(1, numel(NonMatchIdx))];
+                scores = [RFDist(MatchIdx)', RFDist(NonMatchIdx)'];
+                [X, Y, ~, AUC1] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+                h(1) = plot(X, Y, 'color', nanmean(AUCCols([2,3],:),1));
+                % find closest precision value for every X
+                [~,idx1] = min(abs(aucprecision-X),[],1);
+                Y1 = Y(idx1);
+                hold all
+                labels = [zeros(1, numel(MatchIdx)), ones(1, numel(WithinIdx))];
+                scores = [RFDist(MatchIdx)', RFDist(WithinIdx)'];
+                [X, Y, ~, AUC2] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+                h(2) = plot(X, Y, 'color', nanmean(AUCCols([1,2],:),1));
+                % find closest precision value for every X
+                [~,idx1] = min(abs(aucprecision-X),[],1);
+                Y2 = Y(idx1);
+                labels = [zeros(1, numel(WithinIdx)), ones(1, numel(NonMatchIdx))];
+                scores = [RFDist(WithinIdx)', RFDist(NonMatchIdx)'];
+                [X, Y, ~, AUC3] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+                h(3) = plot(X, Y, 'color', nanmean(AUCCols([1,3],:),1));
+                % find closest precision value for every X
+                [~,idx1] = min(abs(aucprecision-X),[],1);
+                Y3 = Y(idx1);
+                axis square
+            else
+                AUC1 = nan;
+                AUC2 = nan;
+                AUC3 = nan;
+                Y1 = nan(numel(aucprecision),1);
+                Y2 = nan(numel(aucprecision),1);
+                Y3 = nan(numel(aucprecision),1);
+            end
+            RFAUC(:, midx,tmpid) = [AUC1, AUC2, AUC3];
+            AUCRFCurves = cat(3,AUCRFCurves,[Y1,Y2,Y3]);
 
-    end
-    %% Natural Images correlation
-    if any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) && MatchesExpected == 1
-        figure(FSCoreFig)
-        if TakeRank
-            NatImCorr = -reshape(MatchTable.NImgRankScore, nclus, nclus);
-        else
-            NatImCorr = reshape(MatchTable.NatImCorr, nclus, nclus);
-        end
+            plot([0, 1], [0, 1], 'k--')
+            xlabel('False positive rate')
+            ylabel('True positive rate')
+            title('RF Distance')
+            makepretty
+            drawnow %Something to look at while ACG calculations are ongoing
 
 
-        subplot(4, 3, 7)
-        hold on
+        elseif any(ismember(MatchTable.Properties.VariableNames, 'FRDiff')) && MatchesExpected == 1
+            if TakeRank
+                RFDist = -reshape(MatchTable.FRRankScore, nclus, nclus);
+            else
+                RFDist = reshape(MatchTable.FRDiff, nclus, nclus);
+                RFDist = -(RFDist-nanmin(RFDist(:)))./(nanmax(RFDist(:))-nanmin(RFDist(:))); %normalize between 0 and 1 to resemble correlation
+            end
+            subplot(4, 3, 10)
+            hold on
 
-        hw = histcounts(NatImCorr(WithinIdx), bins) ./ length(WithinIdx);
-        hm = histcounts(NatImCorr(MatchIdx), bins) ./ length(MatchIdx);
-        hn = histcounts(NatImCorr(NonMatchIdx), bins) ./ length(NonMatchIdx);
-        NatImgAcrossMice(:, :, midx) = cat(1, hw, hm, hn)';
-        plot(Vector, hw, 'color', AUCCols(1,:))
-        plot(Vector, hm, 'color', AUCCols(2,:))
-        plot(Vector, hn, 'color', AUCCols(3,:))
-        xlabel('Natural Images Fingerprint')
-        ylabel('Proportion|Group')
-        %     legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
-        axis square
-        makepretty
-
-        AllNMCor = cat(3,AllNMCor,[hw;hm;hn]);
-
-        subplot(4, 3, 8)
-        hold on
-        clear h
-        if ~isempty(MatchIdx) && ~all(isnan(NatImCorr(MatchIdx)))
-            labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
-            scores = [NatImCorr(MatchIdx)', NatImCorr(NonMatchIdx)'];
-            [X, Y, ~, AUC1] = perfcurve(labels, scores, 1,'XVals',aucprecision);
-            h(1) = plot(X, Y, 'color', nanmean(AUCCols([2,3],:),1));
-            % find closest precision value for every X
-            [~,idx1] = min(abs(aucprecision-X),[],1);
-            Y1 = Y(idx1);
-            hold all
-            labels = [zeros(1, numel(MatchIdx)), ones(1, numel(WithinIdx))];
-            scores = [NatImCorr(MatchIdx)', NatImCorr(WithinIdx)'];
-            [X, Y, ~, AUC2] = perfcurve(labels, scores, 1,'XVals',aucprecision);
-            h(2) = plot(X, Y, 'color',nanmean(AUCCols([1,2],:),1));
-            % find closest precision value for every X
-            [~,idx1] = min(abs(aucprecision-X),[],1);
-            Y2 = Y(idx1);
-            labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
-            scores = [NatImCorr(WithinIdx)', NatImCorr(NonMatchIdx)'];
-            [X, Y, ~, AUC3] = perfcurve(labels, scores, 1,'XVals',aucprecision);
-            h(3) = plot(X, Y, 'color', nanmean(AUCCols([1,3],:),1));
-            % find closest precision value for every X
-            [~,idx1] = min(abs(aucprecision-X),[],1);
-            Y3 = Y(idx1);
+            hw = histcounts(RFDist(WithinIdx), bins) ./ length(WithinIdx);
+            hm = histcounts(RFDist(MatchIdx), bins) ./ length(MatchIdx);
+            hn = histcounts(RFDist(NonMatchIdx), bins) ./ length(NonMatchIdx);
+            RFDistAcrossMice(:, :, midx,tmpid) = cat(1, hw, hm, hn)';
+            plot(bins(1)+stepsz/2:stepsz:bins(end)-stepsz/2, hw, 'color', AUCCols(1,:))
+            plot(bins(1)+stepsz/2:stepsz:bins(end)-stepsz/2, hm, 'color', AUCCols(2,:))
+            plot(bins(1)+stepsz/2:stepsz:bins(end)-stepsz/2, hn, 'color', AUCCols(3,:))
+            xlabel('Firing Rate Distance')
+            ylabel('Proportion|Group')
             axis square
-        else
-            AUC1 = nan;
-            AUC2 = nan;
-            AUC3 = nan;
-            Y1 = nan(numel(aucprecision),1);
-            Y2 = nan(numel(aucprecision),1);
-            Y3 = nan(numel(aucprecision),1);
+            makepretty
+            AllRFCor = cat(3,AllRFCor,[hw;hm;hn]);
+
+
+            subplot(4, 3, 11)
+            hold on
+            clear h
+            if ~isempty(MatchIdx)
+                labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
+                scores = [RFDist(MatchIdx)', RFDist(NonMatchIdx)'];
+                [X, Y, ~, AUC1] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+                h(1) = plot(X, Y, 'color', nanmean(AUCCols([2,3],:),1));
+                % find closest precision value for every X
+                [~,idx1] = min(abs(aucprecision-X),[],1);
+                Y1 = Y(idx1);
+                hold all
+                labels = [ones(1, numel(MatchIdx)), zeros(1, numel(WithinIdx))];
+                scores = [RFDist(MatchIdx)', RFDist(WithinIdx)'];
+                [X, Y, ~, AUC2] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+                h(2) = plot(X, Y, 'color', nanmean(AUCCols([1,2],:),1));
+                % find closest precision value for every X
+                [~,idx1] = min(abs(aucprecision-X),[],1);
+                Y2 = Y(idx1);
+                labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
+                scores = [RFDist(WithinIdx)', RFDist(NonMatchIdx)'];
+                [X, Y, ~, AUC3] = perfcurve(labels, scores, 1,'XVals',aucprecision);
+                h(3) = plot(X, Y, 'color', nanmean(AUCCols([1,3],:),1));
+                % find closest precision value for every X
+                [~,idx1] = min(abs(aucprecision-X),[],1);
+                Y3 = Y(idx1);
+                axis square
+            else
+                AUC1 = nan;
+                AUC2 = nan;
+                AUC3 = nan;
+                Y1 = nan(numel(aucprecision),1);
+                Y2 = nan(numel(aucprecision),1);
+                Y3 = nan(numel(aucprecision),1);
+            end
+            RFAUC(:, midx,tmpid) = [AUC1, AUC2, AUC3];
+            AUCRFCurves = cat(3,AUCRFCurves,[Y1,Y2,Y3]);
+
+            plot([0, 1], [0, 1], 'k--')
+            xlabel('False positive rate')
+            ylabel('True positive rate')
+            title('Firing rate Difference')
+            makepretty
+            drawnow %Something to look at while ACG calculations are ongoing
+
+
         end
-        NatImgAUC(:, midx) = [AUC1, AUC2, AUC3];
-        AUCNImCurves = cat(3,AUCNImCurves,[Y1,Y2,Y3]);
 
-        plot([0, 1], [0, 1], 'k--')
-        xlabel('False positive rate')
-        ylabel('True positive rate')
-        %     if length(MatchIdx) > 10
-        %         legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
-        %     else
-        %         legend([h(3)], 'Within vs No Match', 'Location', 'best')
-        %     end
-        title('Natural Images Fingerprint')
-        makepretty
-        drawnow %Something to look at while ACG calculations are ongoing
-
-
+        fprintf('Done!\n')
     end
-    %% Receptive Field (?)
-    if any(ismember(MatchTable.Properties.VariableNames, 'RFDist')) && MatchesExpected == 1
-       
-        RFDist = reshape(MatchTable.RFDist, nclus, nclus);
-        subplot(4, 3, 10)
-        hold on
-
-        bins = linspace(0, 50, length(Vector)+1);
-        stepsz = unique(diff(bins));
-        hw = histcounts(RFDist(WithinIdx), bins) ./ length(WithinIdx);
-        hm = histcounts(RFDist(MatchIdx), bins) ./ length(MatchIdx);
-        hn = histcounts(RFDist(NonMatchIdx), bins) ./ length(NonMatchIdx);
-        RFDistAcrossMice(:, :, midx) = cat(1, hw, hm, hn)';
-        plot(bins(1)+stepsz/2:stepsz:bins(end)-stepsz/2, hw, 'color', AUCCols(1,:))
-        plot(bins(1)+stepsz/2:stepsz:bins(end)-stepsz/2, hm, 'color', AUCCols(2,:))
-        plot(bins(1)+stepsz/2:stepsz:bins(end)-stepsz/2, hn, 'color', AUCCols(3,:))
-        xlabel('Receptive Field Distance')
-        ylabel('Proportion|Group')
-        axis square
-        makepretty
-        AllRFCor = cat(3,AllRFCor,[hw;hm;hn]);
-
-
-        subplot(4, 3, 11)
-        hold on
-        clear h
-        if ~isempty(MatchIdx)
-            labels = [zeros(1, numel(MatchIdx)), ones(1, numel(NonMatchIdx))];
-            scores = [RFDist(MatchIdx)', RFDist(NonMatchIdx)'];
-            [X, Y, ~, AUC1] = perfcurve(labels, scores, 1,'XVals',aucprecision);
-            h(1) = plot(X, Y, 'color', nanmean(AUCCols([2,3],:),1));
-            % find closest precision value for every X
-            [~,idx1] = min(abs(aucprecision-X),[],1);
-            Y1 = Y(idx1);
-            hold all
-            labels = [zeros(1, numel(MatchIdx)), ones(1, numel(WithinIdx))];
-            scores = [RFDist(MatchIdx)', RFDist(WithinIdx)'];
-            [X, Y, ~, AUC2] = perfcurve(labels, scores, 1,'XVals',aucprecision);
-            h(2) = plot(X, Y, 'color', nanmean(AUCCols([1,2],:),1));
-            % find closest precision value for every X
-            [~,idx1] = min(abs(aucprecision-X),[],1);
-            Y2 = Y(idx1);
-            labels = [zeros(1, numel(WithinIdx)), ones(1, numel(NonMatchIdx))];
-            scores = [RFDist(WithinIdx)', RFDist(NonMatchIdx)'];
-            [X, Y, ~, AUC3] = perfcurve(labels, scores, 1,'XVals',aucprecision);
-            h(3) = plot(X, Y, 'color', nanmean(AUCCols([1,3],:),1));
-            % find closest precision value for every X
-            [~,idx1] = min(abs(aucprecision-X),[],1);
-            Y3 = Y(idx1);
-            axis square
-        else
-            AUC1 = nan;
-            AUC2 = nan;
-            AUC3 = nan;
-            Y1 = nan(numel(aucprecision),1);
-            Y2 = nan(numel(aucprecision),1);
-            Y3 = nan(numel(aucprecision),1);
-        end
-        RFAUC(:, midx) = [AUC1, AUC2, AUC3];
-        AUCRFCurves = cat(3,AUCRFCurves,[Y1,Y2,Y3]);
-
-        plot([0, 1], [0, 1], 'k--')
-        xlabel('False positive rate')
-        ylabel('True positive rate')
-        title('RF Distance')
-        makepretty
-        drawnow %Something to look at while ACG calculations are ongoing
-
-
-    elseif any(ismember(MatchTable.Properties.VariableNames, 'FRDiff')) && MatchesExpected == 1
-        if TakeRank
-            RFDist = -reshape(MatchTable.FRRankScore, nclus, nclus);
-        else
-            RFDist = reshape(MatchTable.FRDiff, nclus, nclus);
-            RFDist = -(RFDist-nanmin(RFDist(:)))./(nanmax(RFDist(:))-nanmin(RFDist(:))); %normalize between 0 and 1 to resemble correlation
-        end
-        subplot(4, 3, 10)
-        hold on
-
-        hw = histcounts(RFDist(WithinIdx), bins) ./ length(WithinIdx);
-        hm = histcounts(RFDist(MatchIdx), bins) ./ length(MatchIdx);
-        hn = histcounts(RFDist(NonMatchIdx), bins) ./ length(NonMatchIdx);
-        RFDistAcrossMice(:, :, midx) = cat(1, hw, hm, hn)';
-        plot(bins(1)+stepsz/2:stepsz:bins(end)-stepsz/2, hw, 'color', AUCCols(1,:))
-        plot(bins(1)+stepsz/2:stepsz:bins(end)-stepsz/2, hm, 'color', AUCCols(2,:))
-        plot(bins(1)+stepsz/2:stepsz:bins(end)-stepsz/2, hn, 'color', AUCCols(3,:))
-        xlabel('Firing Rate Distance')
-        ylabel('Proportion|Group')
-        axis square
-        makepretty
-        AllRFCor = cat(3,AllRFCor,[hw;hm;hn]);
-
-
-        subplot(4, 3, 11)
-        hold on
-        clear h
-        if ~isempty(MatchIdx)
-            labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
-            scores = [RFDist(MatchIdx)', RFDist(NonMatchIdx)'];
-            [X, Y, ~, AUC1] = perfcurve(labels, scores, 1,'XVals',aucprecision);
-            h(1) = plot(X, Y, 'color', nanmean(AUCCols([2,3],:),1));
-            % find closest precision value for every X
-            [~,idx1] = min(abs(aucprecision-X),[],1);
-            Y1 = Y(idx1);
-            hold all
-            labels = [ones(1, numel(MatchIdx)), zeros(1, numel(WithinIdx))];
-            scores = [RFDist(MatchIdx)', RFDist(WithinIdx)'];
-            [X, Y, ~, AUC2] = perfcurve(labels, scores, 1,'XVals',aucprecision);
-            h(2) = plot(X, Y, 'color', nanmean(AUCCols([1,2],:),1));
-            % find closest precision value for every X
-            [~,idx1] = min(abs(aucprecision-X),[],1);
-            Y2 = Y(idx1);
-            labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
-            scores = [RFDist(WithinIdx)', RFDist(NonMatchIdx)'];
-            [X, Y, ~, AUC3] = perfcurve(labels, scores, 1,'XVals',aucprecision);
-            h(3) = plot(X, Y, 'color', nanmean(AUCCols([1,3],:),1));
-            % find closest precision value for every X
-            [~,idx1] = min(abs(aucprecision-X),[],1);
-            Y3 = Y(idx1);
-            axis square
-        else
-            AUC1 = nan;
-            AUC2 = nan;
-            AUC3 = nan;
-            Y1 = nan(numel(aucprecision),1);
-            Y2 = nan(numel(aucprecision),1);
-            Y3 = nan(numel(aucprecision),1);
-        end
-        RFAUC(:, midx) = [AUC1, AUC2, AUC3];
-        AUCRFCurves = cat(3,AUCRFCurves,[Y1,Y2,Y3]);
-
-        plot([0, 1], [0, 1], 'k--')
-        xlabel('False positive rate')
-        ylabel('True positive rate')
-        title('Firing rate Difference')
-        makepretty
-        drawnow %Something to look at while ACG calculations are ongoing
-
-
-    end
-
-    fprintf('Done!\n')
 end
 
 %% AUC
