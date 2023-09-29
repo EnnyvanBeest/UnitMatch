@@ -1,4 +1,4 @@
-% function summaryPlots(UMFiles, TakeRank, groupVector)
+function summaryPlots(UMFiles, TakeRank, groupVector)
 
 %% Define parameters
 
@@ -40,7 +40,7 @@ deltaDays = cell(1, length(UMFiles));
 numMatchedUnits = cell(1, length(UMFiles));
 for midx = 1:length(UMFiles)
     %% Load data
-    
+
     fprintf('Reference %s...\n', UMFiles{midx})
 
     tmpfile = dir(UMFiles{midx});
@@ -62,7 +62,7 @@ for midx = 1:length(UMFiles)
         FPSum.(FPNameCurr).AUC{midx} = nan(3, numel(sessIDs)-1, numel(sessIDs));
         FPSum.(FPNameCurr).ROC{midx} = nan(numel(ROCBins), 3, numel(sessIDs)-1, numel(sessIDs));
     end
-                
+
     %%% HACK -- FIGURE OUT A HOMOGENEIZED VAR TYPE
     if ~iscell(UMparam.AllRawPaths)
         for ii = 1:numel(UMparam.AllRawPaths)
@@ -78,12 +78,12 @@ for midx = 1:length(UMFiles)
     deltaDays{midx} = nan(numel(sessIDs)-1,numel(sessIDs));
     numMatchedUnits{midx} = nan(numel(sessIDs)-1,numel(sessIDs));
     for sess1Idx = 1:numel(sessIDs)-1
-    
+
         sess1 = sessIDs(sess1Idx);
         day1 = regexp(UMparam.AllRawPaths{sess1}.folder,'\d*-\d*-\d*','match'); day1 = datenum(day1{1});
-        
+
         for sess2Idx = sess1Idx+1:numel(sessIDs)
-        
+
             sess2 = sessIDs(sess2Idx);
             day2 = regexp(UMparam.AllRawPaths{sess2}.folder,'\d*-\d*-\d*','match'); day2 = datenum(day2{1});
             deltaDays{midx}(sess1Idx,sess2Idx) = abs(day2 - day1);
@@ -120,11 +120,11 @@ for midx = 1:length(UMFiles)
                     Unit1ID = double(MatchTable_pair.ID1) + 10e9*MatchTable_pair.RecSes1; % identifier for each pair
                     uUnit1ID = unique(Unit1ID); % list of units
                     reliability = MatchTable_pair((MatchTable_pair.ID1 == MatchTable_pair.ID2) & (MatchTable_pair.RecSes1 == MatchTable_pair.RecSes2),:).NatImCorr; % test-retest reliability of each unit
-                    
+
                     validPairs = ismember(Unit1ID, uUnit1ID(reliability > 0.2));
-                else 
+                else
                     validPairs = ones(size(MatchTable_pair,1),1);
-                end 
+                end
 
                 % Extract groups: "within", "match", "non-match"
                 if ~UseKSLabels
@@ -147,7 +147,7 @@ for midx = 1:length(UMFiles)
                     %% Compute fingerprint correlations and AUCs
 
                     FPCorr = MatchTable_pair.(FPNameCurr);
-                
+
                     % Compute distributions
                     hw = histcounts(FPCorr(WithinIdx), histBins{fpIdx}) ./ length(WithinIdx);
                     hm = histcounts(FPCorr(MatchIdx), histBins{fpIdx}) ./ length(MatchIdx);
@@ -172,7 +172,6 @@ end
 
 % Best example mouse
 % midx = find(cellfun(@(X) nansum(X(:)),numMatchedUnits) == max(cellfun(@(X)  nansum(X(:)),numMatchedUnits)),1,'first');
-
 
 % Number of matched units (matrix)
 for midx = 1:numel(UMFiles)
