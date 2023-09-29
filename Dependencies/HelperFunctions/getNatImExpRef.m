@@ -42,8 +42,13 @@ function exp2keep = getNatImExpRef(binFile)
                 % Check that that recording was aligned
                 for probeNum = 1:numel(alignment)
                     dAlign = dir(fullfile(alignment.ephys(probeNum).ephysPath,'*cbin'));
-                    if strcmp(dAlign.name,binFile.name) %%% SHOULD BE ENOUGH TO IDENTIFY RECORDING?
-                        exp2keep = cat(1,exp2keep,{expFolder});
+                    if ~isempty(dAlign)
+                        if strcmp(dAlign.name,binFile.name) %%% SHOULD BE ENOUGH TO IDENTIFY RECORDING?
+                            exp2keep = cat(1,exp2keep,{expFolder});
+                        end
+                    else
+                        % can happen when there was an alignment error
+                        fprintf('Alignment issue in the pinkrigs. Skip.\n',ee)
                     end
                 end
 
