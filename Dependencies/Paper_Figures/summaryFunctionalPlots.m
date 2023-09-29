@@ -50,7 +50,7 @@ function summaryFunctionalPlots(UMFiles, TakeRank, groupVector, UseKSLabels)
     
     %% Loop over mice to get all Distributions / ROCs / AUCs
     
-    clear FPSum
+    FPSum = struct();
     deltaDays = cell(1, length(UMFiles));
     numMatchedUnits = cell(1, length(UMFiles));
     InitialDrift = cell(1,length(UMFiles));
@@ -82,7 +82,7 @@ function summaryFunctionalPlots(UMFiles, TakeRank, groupVector, UseKSLabels)
             FPSum.(FPNameCurr).ROC{midx} = nan(numel(ROCBins), 3, numel(sessIDs)-1, numel(sessIDs));
         end
     
-        %%% HACK -- FIGURE OUT A HOMOGENEIZED VAR TYPE
+        %%% HACK -- Can remove later
         if ~iscell(UMparam.AllRawPaths)
             for ii = 1:numel(UMparam.AllRawPaths)
                 tmp{ii} = UMparam.AllRawPaths(ii);
@@ -207,7 +207,7 @@ function summaryFunctionalPlots(UMFiles, TakeRank, groupVector, UseKSLabels)
     % Number of matched units (matrix)
     for midx = 1:numel(UMFiles)
         figure('Position', [80 700 1700 170],'Name', fileparts(fileparts(UMFiles{midx})));
-        s(1) = subplot(1,numel(FPNames)+2,1);
+        s = subplot(1,numel(FPNames)+2,1);
         imagesc(numMatchedUnits{midx})
         xticks(1:size(deltaDays{midx},2))
         xticklabels(days)
@@ -223,14 +223,14 @@ function summaryFunctionalPlots(UMFiles, TakeRank, groupVector, UseKSLabels)
     
         for fpIdx = 1:numel(FPNames)
             FPNameCurr = FPNames{fpIdx};
-            s(fpIdx+2) = subplot(1,numel(FPNames)+2,fpIdx+2);
+            s = subplot(1,numel(FPNames)+2,fpIdx+2);
             imagesc(squeeze(FPSum.(FPNameCurr).AUC{midx}(1,:,:)))
             xticks(1:size(deltaDays{midx},2))
             xticklabels(days)
             yticks(1:size(deltaDays{midx},1))
             yticklabels(days(1:end-1))
             axis equal tight
-            colormap(s(fpIdx+2), "RedBlue")
+            colormap(s, "RedBlue")
             clim([0 1])
             title(sprintf('Fingerprint %s', FPNameCurr))
         end
