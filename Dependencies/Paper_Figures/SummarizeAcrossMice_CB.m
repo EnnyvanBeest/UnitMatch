@@ -30,14 +30,21 @@ UseKSLabels = PrepareClusInfoparams.RunPyKSChronicStitched;
 ROCBins = 0:0.01:1;
 minMatches = 20;
 
+if ~exist('groupVector')
+    groupVector = 1:length(UMFiles);
+end
 groups = unique(groupVector);
+
 groupColor = gray(length(groups)+1);
 
 %% Loop over mice to get all Distributions / ROCs / AUCs
 
 clear FPSum
-deltaDays = cell(1, length(UMFiles));
-numMatchedUnits = cell(1, length(UMFiles));
+deltaDays = cell(1, length(UMFolders));
+numMatchedUnits = cell(1, length(UMFolders));
+InitialDrift = cell(1,length(UMFolders));
+FixedDrift =  cell(1,length(UMFolders));
+MaxAvailableUnits = cell(1, length(UMFolders));
 for midx = 1:length(UMFiles)
     %% Load data
     
@@ -53,6 +60,7 @@ for midx = 1:length(UMFiles)
     load(fullfile(tmpfile.folder, tmpfile.name), 'MatchTable', 'UMparam', 'UniqueIDConversion');
     toc
 
+        
     sessIDs = unique(MatchTable.RecSes1);
 
     % Initialize
@@ -77,6 +85,8 @@ for midx = 1:length(UMFiles)
     days = cell2mat(days) - days{1};
     deltaDays{midx} = nan(numel(sessIDs)-1,numel(sessIDs));
     numMatchedUnits{midx} = nan(numel(sessIDs)-1,numel(sessIDs));
+    InitialDrift{midx} = nan(numel(sessIDs)-1,numel(sessIDs));
+    FixedDrift{midx} = nan(numel(sessIDs)-1,numel(sessIDs));
     for sess1Idx = 1:numel(sessIDs)-1
     
         sess1 = sessIDs(sess1Idx);
@@ -100,6 +110,13 @@ for midx = 1:length(UMFiles)
             else
                 numMatchedUnits{midx}(sess1Idx,sess2Idx) = sum((MatchTable_pair.ID1 == MatchTable_pair.ID2) & ...
                     (MatchTable_pair.RecSes1 ~= MatchTable_pair.RecSes2))/2;
+            end
+            MaxAvailableUnits{midx}(sess1Idx,sess2Idx) = min([length(unique(MatchTable_pair.ID1(MatchTable_pair.RecSes1 == sess1))) length(unique(MatchTable_pair.ID1(MatchTable_pair.RecSes1 == sess2)))]);%
+            %% Extract drift if present
+
+            if isfield(UMparam,'drift')
+                InitialDrift{midx}(sess1Idx,sess2Idx) =  vecnorm(UMparam.drift(sess2Idx-1,:,1),2); % Drift in recording 1 is 1 vs 2, etc.
+                FixedDrift{midx}(sess1Idx,sess2Idx) =  vecnorm(UMparam.drift(sess2Idx-1,:,2),2); % Drift in recording 1 is 1 vs 2, etc.
             end
 
             %% Looping through fingerprints
@@ -207,7 +224,6 @@ for midx = 1:numel(UMFiles)
 end
 
 %% Figure -- all mice
-
 % Build matrices across mice -- average in groups according to groupVector
 distMatrix = cell(1,numel(FPNames));
 ROCMatrix = cell(1,numel(FPNames));
@@ -354,3 +370,51 @@ for aucIdx = 1:3
         hline(0.5)
     end
 end
+
+
+%% Dependence of number matched units on drift
+figure('name','NrUnits versus drift')
+for midx = 1:length(UMFolders)
+    subplot(1,2,1)
+    scatter(InitialDrift{midx},numMatchedUnits{midx}./MaxAvailableUnits{midx},20,mouseColor(midx,:),'filled')
+    hold on
+    xlabel('Drift (Eucl Distance)')
+    ylabel('Number of matches')
+    xlim([0 UMparam.NeighbourDist])
+    title('Initial Drift')
+
+    subplot(1,2,2)
+    scatter(FixedDrift{midx},numMatchedUnits{midx}./ MaxAvailableUnits{midx},20,mouseColor(midx,:),'filled')
+    hold on
+    xlabel('Drift (Eucl Distance)')
+    ylabel('Proportion of matches')
+    xlim([0 UMparam.NeighbourDist])
+
+end
+InitialDrift(cellfun(@isempty,InitialDrift)) = [];
+InitialDrift = cellfun(@(X) X(:),InitialDrift,'uni',0);
+InitialDrift(InitialDrift>UMparam.maxdist) = nan;
+MaxAvailableUnits(cellfun(@isempty,MaxAvailableUnits)) = [];
+MaxAvailableUnits = cellfun(@(X) X(:),MaxAvailableUnits,'uni',0);
+numMatchedUnits(cellfun(@isempty,numMatchedUnits)) = [];
+numMatchedUnits = cellfun(@(X) X(:),numMatchedUnits,'uni',0);
+InitialDrift = cat(1,InitialDrift{:});
+MaxAvailableUnits = cat(1,MaxAvailableUnits{:});
+numMatchedUnits = cat(1,numMatchedUnits{:});
+FixedDrift(cellfun(@isempty,FixedDrift)) = [];
+FixedDrift = cellfun(@(X) X(:),FixedDrift,'uni',0);
+FixedDrift = cat(1,FixedDrift{:});
+
+
+FixedDrift(FixedDrift>UMparam.maxdist) = nan;
+InitialDrift(InitialDrift>UMparam.maxdist) = nan;
+
+
+PercNeurons = numMatchedUnits./MaxAvailableUnits;
+[r,p] = corr(InitialDrift(~isnan(InitialDrift)),PercNeurons(~isnan(InitialDrift)));
+subplot(1,2,1)
+title(['Initial Drift, r=' num2str(round(r*100)/100) ', p=' num2str(round(p*100)/100)])
+
+subplot(1,2,2)
+[r,p] = corr(FixedDrift(~isnan(FixedDrift)),PercNeurons(~isnan(FixedDrift)));
+title(['Corrected Drift, r=' num2str(round(r*100)/100) ', p=' num2str(round(p*100)/100)])
