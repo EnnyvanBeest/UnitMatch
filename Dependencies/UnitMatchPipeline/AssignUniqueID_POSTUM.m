@@ -69,19 +69,20 @@ for recid = 1:length(RecOpt)
 
         if ~isempty(SubPairs)
             % Average of two cross-validations and sort by that
-            [val,tblidx] = ismember(SubPairs,[MatchTable.UID1 MatchTable.UID2],'rows');
+            [~,tblidx] = ismember(SubPairs,[MatchTable.UID1 MatchTable.UID2],'rows');
             MatchProbability = MatchTable.MatchProb(tblidx);
 
-            [val,tblidx] = ismember(SubPairs,[MatchTable.UID2 MatchTable.UID1],'rows');
+            [~,tblidx] = ismember(SubPairs,[MatchTable.UID2 MatchTable.UID1],'rows');
             MatchProbabilityFlip = MatchTable.MatchProb(tblidx);
-            MatchProbability = nanmean(cat(1,MatchProbability,MatchProbabilityFlip),1);
+            MatchProbability = nanmean(cat(2,MatchProbability,MatchProbabilityFlip),2);
             SubPairs(MatchProbability<0.5,:) = []; % don't bother with these
             MatchProbability(MatchProbability<0.5) = []; % don't bother with these
 
 
-            [MatchProbability,sortidx] = sort(MatchProbability,'descend');
+            [~,sortidx] = sort(MatchProbability,'descend');
             SubPairs = SubPairs(sortidx,:); %Pairs, but now sorted by match probability
 
+            nMatches = 0;
             for id = 1:size(SubPairs,1)
                 % Matchprobability should be high enough
                 tblidx1 = find(ismember(MatchTable.UID1,SubPairs(id,1))&ismember(MatchTable.UID2,SubPairs(id,2)));
@@ -104,9 +105,11 @@ for recid = 1:length(RecOpt)
                 if ~all(MatchTable.MatchProb(tblidx)>UMparam.ProbabilityThreshold)
                     continue
                 end
-
+                nMatches = nMatches+1;
                 UniqueID(SubPairs(id,2)) = UniqueID(SubPairs(id,1)); %Survived, assign
             end
+            disp(['Recording ' num2str(recid) ' vs ' num2str(recid2) ': ' num2str(nMatches)])
+
         end
     end
 end
