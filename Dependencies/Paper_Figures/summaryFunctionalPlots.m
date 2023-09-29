@@ -280,7 +280,7 @@ function summaryFunctionalPlots(UMFiles, TakeRank, groupVector, UseKSLabels)
         end
         title(sprintf('%s', FPNameCurr))
         if TakeRank; xlabel('Rank'); else; xlabel('Correlation'); end
-        if TakeRank; xticks([1 10 maxVal]); xticklabels({'1','10',sprintf('>%d',maxVal-1)}); end
+        if TakeRank; xticks([1 10 maxVal(fpIdx)]); xticklabels({'1','10',sprintf('>%d',maxVal(fpIdx)-1)}); end
         ylabel('Proportion')
         offsetAxes
         makepretty
