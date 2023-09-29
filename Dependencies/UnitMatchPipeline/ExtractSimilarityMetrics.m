@@ -38,6 +38,7 @@ drift = nan;
 % Do in batches
 batchsz = 1000;
 nbatch = ceil(nclus./batchsz);
+SaveDrifts = nan(ndays,3,0);
 
 
 % Save AUCs to help find best parameters
@@ -826,7 +827,7 @@ while flag<2
     %% three ways to define candidate scores
     % Total score larger than threshold
     CandidatePairs = TotalScore>ThrsOpt;%
-
+    TheseDrifts = nan(ndays,3);
     %% Calculate median drift on this population (between days)
     if ndays>1
         for did = 1:ndays-1
@@ -839,7 +840,7 @@ while flag<2
             end
             drift = nanmedian(nanmean(ProjectedLocation(:,BestPairs(idx,1),:),3)-nanmean(ProjectedLocation(:,BestPairs(idx,2),:),3),2);
             disp(['Median drift recording ' num2str(did) ' calculated: X=' num2str(drift(1)) ', Y=' num2str(drift(2)) ', Z=' num2str(drift(3))])
-
+            TheseDrifts(did,:) = drift;
             if ~flag
 
                 ProjectedLocation(1,GoodRecSesID==did+1,:)=ProjectedLocation(1,GoodRecSesID==did+1,:)+drift(1);
@@ -858,13 +859,13 @@ while flag<2
         break
     end
     flag = flag+1;
-
+    SaveDrifts = cat(3,SaveDrifts,TheseDrifts);
 end
-
+%% Store in param
+param.drift = SaveDrifts;
 %% Assign to workspace
 assignin('caller','TotalScore',TotalScore)
 assignin('caller','Predictors',Predictors)
-assignin('caller','drift',drift)
 assignin('caller','ProjectedLocationPerTP',ProjectedLocationPerTP)
 assignin('caller','ProjectedLocation',ProjectedLocation)
 assignin('caller','EuclDist',EuclDist)

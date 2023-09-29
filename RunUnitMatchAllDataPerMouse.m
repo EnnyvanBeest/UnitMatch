@@ -8,7 +8,7 @@ DateOpt = cellfun(@(X) X([X.isdir]),DateOpt,'UniformOutput',0);
 DateOpt = cellfun(@(X) {X.name},DateOpt,'UniformOutput',0);
 
 LogError = {}; % Keep track of which runs didn't work
-for midx = 4:length(MiceOpt)
+for midx = 1:length(MiceOpt)
     %% Loading data from kilosort/phy easily
     if ~isempty(KilosortDir)
         myKsDir = fullfile(KilosortDir,MiceOpt{midx});
