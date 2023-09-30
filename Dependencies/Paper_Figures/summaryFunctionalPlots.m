@@ -46,6 +46,7 @@ function summaryFunctionalPlots(UMFiles, TakeRank, groupVector, UseKSLabels)
     end
     ROCBins = 0:0.01:1;
     minMatches = 20;
+    durLim = 15*60;
 
     
     %% Loop over mice to get all Distributions / ROCs / AUCs
@@ -70,7 +71,6 @@ function summaryFunctionalPlots(UMFiles, TakeRank, groupVector, UseKSLabels)
         tic
         load(fullfile(tmpfile.folder, tmpfile.name), 'MatchTable', 'UMparam');
         toc
-    
     
         sessIDs = unique(MatchTable.RecSes1);
     
@@ -104,12 +104,22 @@ function summaryFunctionalPlots(UMFiles, TakeRank, groupVector, UseKSLabels)
     
             sess1 = sessIDs(sess1Idx);
             day1 = regexp(UMparam.AllRawPaths{sess1}.folder,'\d*-\d*-\d*','match'); day1 = datenum(day1{1});
-    
+            meta = ReadMeta2(UMparam.AllRawPaths{sess1}.folder);
+            durSess1 = str2double(meta.fileTimeSecs);
+            if durSess1 < durLim 
+                continue
+            end
+
             for sess2Idx = sess1Idx+1:numel(sessIDs)
     
                 sess2 = sessIDs(sess2Idx);
                 day2 = regexp(UMparam.AllRawPaths{sess2}.folder,'\d*-\d*-\d*','match'); day2 = datenum(day2{1});
                 deltaDays{midx}(sess1Idx,sess2Idx) = abs(day2 - day1);
+                meta = ReadMeta2(UMparam.AllRawPaths{sess2}.folder);
+                durSess2 = str2double(meta.fileTimeSecs);
+                if durSess2 < durLim
+                    continue
+                end
     
                 %% Cut table to specific days
     
@@ -169,6 +179,9 @@ function summaryFunctionalPlots(UMFiles, TakeRank, groupVector, UseKSLabels)
     
                     %% Check that passed the criteria
     
+                    % Check recordings duration
+                   
+
                     % Condition to go ahead
                     goAhead = numel(MatchIdx)/2 >= minMatches && ... % minimum number of matches
                         ~all(isnan(MatchTable_pair.(FPNameCurr)(MatchIdx))); % not all nans
@@ -287,7 +300,7 @@ function summaryFunctionalPlots(UMFiles, TakeRank, groupVector, UseKSLabels)
     
         % Plot ROC
         subplot(4,numel(FPNames),1*numel(FPNames)+fpIdx); hold all
-        for hid = 1:3
+        for hid = 3:1
             h = shadedErrorBar(ROCBins, nanmean(ROCMatrix{fpIdx}(:,hid,:),3), ...
                 nanstd(ROCMatrix{fpIdx}(:,hid,:),[],3)./sqrt(sum(~isnan(ROCMatrix{fpIdx}(:,hid,:)),3)));
             h.mainLine.Color = ROCCols(hid,:);
