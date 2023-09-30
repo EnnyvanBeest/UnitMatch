@@ -20,6 +20,21 @@ Pairs(diff(Pairs,[],2)==0,:)=[]; %Remove own matches
 Pairs = sort(Pairs,2,'ascend'); % Only use each unique pair once
 Pairs = unique(Pairs,'stable','rows');
 
+%% Cut down on the pairs
+% Average of two cross-validations and sort by that
+[~,tblidx] = ismember(Pairs,[MatchTable.UID1 MatchTable.UID2],'rows');
+MatchProbabilityOri = MatchTable.MatchProb(tblidx);
+
+[~,tblidx] = ismember(Pairs,[MatchTable.UID2 MatchTable.UID1],'rows');
+MatchProbabilityFlip = MatchTable.MatchProb(tblidx);
+Pairs(MatchProbabilityOri<0.5|MatchProbabilityFlip<0.5,:) = []; % don't bother with these
+MatchProbability = nanmean(cat(2,MatchProbabilityOri,MatchProbabilityFlip),2);
+
+MatchProbability(MatchProbabilityOri<0.5|MatchProbabilityFlip<0.5) = []; % don't bother with these
+
+[~,sortidx] = sort(MatchProbability,'descend');
+Pairs = Pairs(sortidx,:); %Pairs, but now sorted by match probability
+
 %% ISI violations (for over splits matching)
 if param.removeoversplits
     CurrentSPPath = [];
@@ -51,55 +66,46 @@ if param.removeoversplits
 end
 
 %% Serial assigning of Unique ID (Day by day)
-disp('Assigning correct Unique ID values now')
+RecCombinations = nan(2,0);
 for recid = 1:length(RecOpt)
     for recid2 = recid:length(RecOpt)
-        SubPairs = Pairs(GoodRecSesID(Pairs(:,1)) == recid & GoodRecSesID(Pairs(:,2)) == recid2,:); %Select days
-        if ~isempty(SubPairs)
-
-            % Average of two cross-validations and sort by that
-            [~,tblidx] = ismember(SubPairs,[MatchTable.UID1 MatchTable.UID2],'rows');
-            MatchProbability = MatchTable.MatchProb(tblidx);
-
-            [~,tblidx] = ismember(SubPairs,[MatchTable.UID2 MatchTable.UID1],'rows');
-            MatchProbabilityFlip = MatchTable.MatchProb(tblidx);
-            MatchProbability = nanmean(cat(2,MatchProbability,MatchProbabilityFlip),2);
-            SubPairs(MatchProbability<0.5,:) = []; % don't bother with these
-            MatchProbability(MatchProbability<0.5) = []; % don't bother with these
-
-
-            [~,sortidx] = sort(MatchProbability,'descend');
-            SubPairs = SubPairs(sortidx,:); %Pairs, but now sorted by match probability
-
-            nMatches = 0;
-            for id = 1:size(SubPairs,1)
-%                 % Matchprobability should be high enough
-%                 tblidx1 = find(ismember(MatchTable.UID1,SubPairs(id,1))&ismember(MatchTable.UID2,SubPairs(id,2)));
-%                 if ~(MatchTable.MatchProb(tblidx1) > param.ProbabilityThreshold) %Requirement 1, match probability should be high enough
-%                     continue
-%                 end
-%                 % Find the cross-validated version of this pair, this should also have
-%                 % high enough probability
-%                 tblidx2 = find(ismember(MatchTable.UID1,SubPairs(id,2))&ismember(MatchTable.UID2,SubPairs(id,1)));
-%                 if ~(MatchTable.MatchProb(tblidx2) > param.ProbabilityThreshold) %Requirement 1, match probability should be high enough
-%                     continue
-%                 end
-                % check: It should also match with all the other pairs that were
-                % already assigned!
-                % All units currently identified as this UniqueID
-                TheseOriUids = OriUniqueID(ismember(UniqueID,UniqueID(SubPairs(id,1))));
-                TheseOriUids(~ismember(GoodRecSesID(TheseOriUids),[recid recid2])) = [];
-                % All of these need to match with the new one, if added
-                tblidx = find(((ismember(MatchTable.UID1,TheseOriUids)&ismember(MatchTable.UID2,SubPairs(id,2))) | (ismember(MatchTable.UID2,TheseOriUids)&ismember(MatchTable.UID1,SubPairs(id,2)))) & ~(MatchTable.UID1==MatchTable.UID2)); % !
-                if all(MatchTable.MatchProb(tblidx)>param.ProbabilityThreshold)
-                    nMatches = nMatches+1;
-                    UniqueID(SubPairs(id,2)) = UniqueID(SubPairs(id,1)); %Survived, assign
-                end
-            end
-            disp(['Recording ' num2str(recid) ' vs ' num2str(recid2) ': ' num2str(nMatches)])
-        end
+        RecCombinations = cat(2,RecCombinations,[recid recid2]');
     end
 end
+disp('Assigning correct Unique ID values now')
+RMPair = [];
+parfor recid = 1:size(RecCombinations,2)
+    Idx = find(GoodRecSesID(Pairs(:,1)) == RecCombinations(1,recid) & GoodRecSesID(Pairs(:,2)) == RecCombinations(2,recid));
+    SubPairs = Pairs(Idx,:); %Select pairs in this day combinations
+    Utmp = UniqueID;
+    if ~isempty(SubPairs)
+        nMatches = 0;
+        for id = 1:size(SubPairs,1)
+            %  check: It should also match with all the other pairs that were
+            % already assigned!
+            % All units currently identified as this UniqueID
+            TheseOriUids = OriUniqueID(ismember(Utmp,Utmp(SubPairs(id,:))));
+            TheseOriUids(~ismember(GoodRecSesID(TheseOriUids),RecCombinations(:,recid))) = [];
+            % All of these need to match with the new one, if added
+            tblidx = find(((ismember(MatchTable.UID1,TheseOriUids)&ismember(MatchTable.UID2,SubPairs(id,2))) | (ismember(MatchTable.UID2,TheseOriUids)&ismember(MatchTable.UID1,SubPairs(id,2)))) & ~(MatchTable.UID1==MatchTable.UID2)); % !
+            if ~all(MatchTable.MatchProb(tblidx)>UMparam.ProbabilityThreshold)
+                RMPair = [RMPair Idx(id)];
+            else
+                Utmp(SubPairs(id,2)) = Utmp(SubPairs(id,1));
+                nMatches = nMatches + 1;
+            end
+        end
+        disp(['Recording ' num2str(RecCombinations(1,recid)) ' vs ' num2str( RecCombinations(2,recid)) ': ' num2str(nMatches)])
+    end   
+end
+%% Final assignment
+disp('Final assignment')
+Pairs(RMPair,:) = []; % Surviving Pairs
+Pairs = sortrows(Pairs);
+for uid = 1:size(Pairs,1)
+    UniqueID(Pairs(uid,:)) = min(UniqueID(Pairs(uid,:))); % Serial assignment;
+end
+
 %% Replace in table
 [PairID3,PairID4]=meshgrid(UniqueID(Good_Idx));
 MatchTable.UID1 = PairID3(:);
