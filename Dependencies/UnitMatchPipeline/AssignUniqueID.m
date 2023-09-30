@@ -88,7 +88,7 @@ parfor recid = 1:size(RecCombinations,2)
             TheseOriUids(~ismember(GoodRecSesID(TheseOriUids),RecCombinations(:,recid))) = [];
             % All of these need to match with the new one, if added
             tblidx = find(((ismember(MatchTable.UID1,TheseOriUids)&ismember(MatchTable.UID2,SubPairs(id,2))) | (ismember(MatchTable.UID2,TheseOriUids)&ismember(MatchTable.UID1,SubPairs(id,2)))) & ~(MatchTable.UID1==MatchTable.UID2)); % !
-            if ~all(MatchTable.MatchProb(tblidx)>UMparam.ProbabilityThreshold)
+            if ~all(MatchTable.MatchProb(tblidx)>param.ProbabilityThreshold)
                 RMPair = [RMPair Idx(id)];
             else
                 Utmp(SubPairs(id,2)) = Utmp(SubPairs(id,1));
