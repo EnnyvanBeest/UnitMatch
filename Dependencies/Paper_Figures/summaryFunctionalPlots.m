@@ -300,7 +300,7 @@ function summaryFunctionalPlots(UMFiles, TakeRank, groupVector, UseKSLabels)
     
         % Plot ROC
         subplot(4,numel(FPNames),1*numel(FPNames)+fpIdx); hold all
-        for hid = 3:1
+        for hid = 3:-1:1
             h = shadedErrorBar(ROCBins, nanmean(ROCMatrix{fpIdx}(:,hid,:),3), ...
                 nanstd(ROCMatrix{fpIdx}(:,hid,:),[],3)./sqrt(sum(~isnan(ROCMatrix{fpIdx}(:,hid,:)),3)));
             h.mainLine.Color = ROCCols(hid,:);
