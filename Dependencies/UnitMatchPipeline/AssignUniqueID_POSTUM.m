@@ -77,16 +77,10 @@ if UMparam.removeoversplits
 end
 
 %% Serial assigning of Unique ID (Day by day)
-RecCombinations = nan(2,0);
-for recid = 1:length(RecOpt)
-    for recid2 = recid:length(RecOpt)
-        RecCombinations = cat(2,RecCombinations,[recid recid2]');
-    end
-end
 disp('Assigning correct Unique ID values now')
 RMPair = [];
-parfor recid = 1:size(RecCombinations,2)
-    Idx = find(GoodRecSesID(Pairs(:,1)) == RecCombinations(1,recid) & GoodRecSesID(Pairs(:,2)) == RecCombinations(2,recid));
+for recid = 1:length(RecOpt)
+    Idx = find(GoodRecSesID(Pairs(:,1)) == recid & GoodRecSesID(Pairs(:,2)) >= recid);
     SubPairs = Pairs(Idx,:); %Select pairs in this day combinations
     Utmp = UniqueID;
     if ~isempty(SubPairs)
@@ -96,7 +90,6 @@ parfor recid = 1:size(RecCombinations,2)
             % already assigned!
             % All units currently identified as this UniqueID
             TheseOriUids = OriUniqueID(ismember(Utmp,Utmp(SubPairs(id,:))));
-            TheseOriUids(~ismember(GoodRecSesID(TheseOriUids),RecCombinations(:,recid))) = [];
             % All of these need to match with the new one, if added
             tblidx = find(((ismember(MatchTable.UID1,TheseOriUids)&ismember(MatchTable.UID2,SubPairs(id,2))) | (ismember(MatchTable.UID2,TheseOriUids)&ismember(MatchTable.UID1,SubPairs(id,2)))) & ~(MatchTable.UID1==MatchTable.UID2)); % !
             if ~all(MatchTable.MatchProb(tblidx)>UMparam.ProbabilityThreshold)
@@ -106,8 +99,8 @@ parfor recid = 1:size(RecCombinations,2)
                 nMatches = nMatches + 1;
             end
         end
-        disp(['Recording ' num2str(RecCombinations(1,recid)) ' vs ' num2str( RecCombinations(2,recid)) ': ' num2str(nMatches)])
-    end   
+        disp(['Recording ' num2str(recid)  ': ' num2str(nMatches)])
+    end
 end
 %% Final assignment
 disp('Final assignment')
