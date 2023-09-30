@@ -101,7 +101,7 @@ for midx = 1:length(MiceOpt)
     ORIParams = PrepareClusInfoparams; % RESET
 
     %% Run UnitMatch
-    for runid = 1:nRuns
+    for runid = 20:nRuns
         try
             PrepareClusInfoparams = ORIParams; % RESET
             idx = find(RunSet==runid);
@@ -130,8 +130,6 @@ for midx = 1:length(MiceOpt)
 
                 %% Evaluate (within unit ID cross-validation)
                 EvaluatingUnitMatch(UMparam.SaveDir);
-
-            
 
                 %% Figures
                 if UMparam.MakePlotsOfPairs

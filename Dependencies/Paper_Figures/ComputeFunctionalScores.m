@@ -1,13 +1,13 @@
 function ComputeFunctionalScores(SaveDir, saveFig)
 
 if nargin < 2
-    saveFig = 1;
+    saveFig = 0;
 end
 
 load(fullfile(SaveDir, 'UnitMatch.mat'), 'MatchTable', 'UMparam', 'UniqueIDConversion');
 UMparam.binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
 
-if all(ismember({'FingerprintCor','ACGCorr','FRDiff','NatImCorr'},MatchTable.Properties.VariableNames)) 
+if all(ismember({'FingerprintCor','ACGCorr','FRDiff','NatImCorr'},MatchTable.Properties.VariableNames))
     disp('Already computed functional scores')
     return
 end
@@ -193,54 +193,53 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) % If it
     MatchTable.SigFingerprintR = SigMask(:);
 
     %% Compare to functional scores
+    if saveFig %Otherwise this takes way tooo long
+        figure;
 
-    figure;
+        subplot(1, 3, 1)
+        imagesc(RankScoreAll(SortingOrder, SortingOrder) == 1 & SigMask(SortingOrder, SortingOrder) == 1)
+        hold on
+        arrayfun(@(X) line([SessionSwitch(X), SessionSwitch(X)], get(gca, 'ylim'), 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
+        arrayfun(@(X) line(get(gca, 'xlim'), [SessionSwitch(X), SessionSwitch(X)], 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
+        colormap(flipud(gray))
+        title('Rankscore == 1*')
+        makepretty
 
-    subplot(1, 3, 1)
-    imagesc(RankScoreAll(SortingOrder, SortingOrder) == 1 & SigMask(SortingOrder, SortingOrder) == 1)
-    hold on
-    arrayfun(@(X) line([SessionSwitch(X), SessionSwitch(X)], get(gca, 'ylim'), 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
-    arrayfun(@(X) line(get(gca, 'xlim'), [SessionSwitch(X), SessionSwitch(X)], 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
-    colormap(flipud(gray))
-    title('Rankscore == 1*')
-    makepretty
+        subplot(1, 3, 2)
+        imagesc(MatchProbability(SortingOrder, SortingOrder) > UMparam.ProbabilityThreshold)
+        hold on
+        arrayfun(@(X) line([SessionSwitch(X), SessionSwitch(X)], get(gca, 'ylim'), 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
+        arrayfun(@(X) line(get(gca, 'xlim'), [SessionSwitch(X), SessionSwitch(X)], 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
+        colormap(flipud(gray))
+        title(['Match Probability>', num2str(UMparam.ProbabilityThreshold)])
+        makepretty
 
-    subplot(1, 3, 2)
-    imagesc(MatchProbability(SortingOrder, SortingOrder) > UMparam.ProbabilityThreshold)
-    hold on
-    arrayfun(@(X) line([SessionSwitch(X), SessionSwitch(X)], get(gca, 'ylim'), 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
-    arrayfun(@(X) line(get(gca, 'xlim'), [SessionSwitch(X), SessionSwitch(X)], 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
-    colormap(flipud(gray))
-    title(['Match Probability>', num2str(UMparam.ProbabilityThreshold)])
-    makepretty
+        subplot(1, 3, 3)
+        imagesc(MatchProbability(SortingOrder, SortingOrder) >= UMparam.ProbabilityThreshold | (MatchProbability(SortingOrder, SortingOrder) > 0.05 & RankScoreAll(SortingOrder, SortingOrder) == 1 & SigMask(SortingOrder, SortingOrder) == 1));
+        % imagesc(MatchProbability>=0.99 | (MatchProbability>=0.05 & RankScoreAll==1 & SigMask==1))
+        hold on
+        arrayfun(@(X) line([SessionSwitch(X), SessionSwitch(X)], get(gca, 'ylim'), 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
+        arrayfun(@(X) line(get(gca, 'xlim'), [SessionSwitch(X), SessionSwitch(X)], 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
+        colormap(flipud(gray))
+        title('Matching probability + rank')
+        makepretty
+        if saveFig
+            saveas(gcf, fullfile(SaveDir, 'RankScoreVSProbability.fig'))
+            saveas(gcf, fullfile(SaveDir, 'RankScoreVSProbability.bmp'))
+        end
 
-    subplot(1, 3, 3)
-    imagesc(MatchProbability(SortingOrder, SortingOrder) >= UMparam.ProbabilityThreshold | (MatchProbability(SortingOrder, SortingOrder) > 0.05 & RankScoreAll(SortingOrder, SortingOrder) == 1 & SigMask(SortingOrder, SortingOrder) == 1));
-    % imagesc(MatchProbability>=0.99 | (MatchProbability>=0.05 & RankScoreAll==1 & SigMask==1))
-    hold on
-    arrayfun(@(X) line([SessionSwitch(X), SessionSwitch(X)], get(gca, 'ylim'), 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
-    arrayfun(@(X) line(get(gca, 'xlim'), [SessionSwitch(X), SessionSwitch(X)], 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
-    colormap(flipud(gray))
-    title('Matching probability + rank')
-    makepretty
-    if saveFig
-        saveas(gcf, fullfile(SaveDir, 'RankScoreVSProbability.fig'))
-        saveas(gcf, fullfile(SaveDir, 'RankScoreVSProbability.bmp'))
-    end
-
-    tmpf = triu(FingerprintR);
-    tmpm = triu(MatchProbability);
-    tmpr = triu(RankScoreAll);
-    tmpr = tmpr(tmpf ~= 0);
-    tmpm = tmpm(tmpf ~= 0);
-    tmpf = tmpf(tmpf ~= 0);
-    figure;
-    scatter(tmpm, tmpf, 14, tmpr, 'filled')
-    colormap(cat(1, [0, 0, 0], winter))
-    xlabel('Match Probability')
-    ylabel('Cross-correlation fingerprint')
-    makepretty
-    if saveFig
+        tmpf = triu(FingerprintR);
+        tmpm = triu(MatchProbability);
+        tmpr = triu(RankScoreAll);
+        tmpr = tmpr(tmpf ~= 0);
+        tmpm = tmpm(tmpf ~= 0);
+        tmpf = tmpf(tmpf ~= 0);
+        figure;
+        scatter(tmpm, tmpf, 14, tmpr, 'filled')
+        colormap(cat(1, [0, 0, 0], winter))
+        xlabel('Match Probability')
+        ylabel('Cross-correlation fingerprint')
+        makepretty
         saveas(gcf, fullfile(SaveDir, 'RankScoreVSProbabilityScatter.fig'))
         saveas(gcf, fullfile(SaveDir, 'RankScoreVSProbabilityScatter.bmp'))
     end
@@ -449,260 +448,55 @@ for id = 1:ntimes
     end
 
     %% Cross-correlation ROC?
-    figure('name', ['Functional score separatability ', addname])
-
-    subplot(4, 3, 1)
-    imagesc(reshape(MatchTable.FingerprintCor, nclus, nclus))
-    hold on
-    colormap(flipud(gray))
-    makepretty
-    xlabel('Unit_i')
-    ylabel('Unit_j')
-    hold on
-    arrayfun(@(X) line([SessionSwitch(X), SessionSwitch(X)], get(gca, 'ylim'), 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
-    arrayfun(@(X) line(get(gca, 'xlim'), [SessionSwitch(X), SessionSwitch(X)], 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
-    title('Cross-correlation Fingerprint')
-    axis square
-    freezeColors
-
     FingerprintCor = reshape(MatchTable.FingerprintCor, nclus, nclus);
-    % Subtr = repmat(diag(FingerprintCor),1,size(FingerprintCor,1));
-    % FingerprintCor = FingerprintCor - Subtr; % Subtract diagonalcorrelations
 
-    subplot(4, 3, 2)
-    bins = min(FingerprintCor(:)):0.1:max(FingerprintCor(:));
-    Vector = [bins(1) + 0.1 / 2:0.1:bins(end) - 0.1 / 2];
-    hw = histcounts(FingerprintCor(WithinIdx), bins) ./ length(WithinIdx);
-    hm = histcounts(FingerprintCor(MatchIdx), bins) ./ length(MatchIdx);
-    hn = histcounts(FingerprintCor(NonMatchIdx), bins) ./ length(NonMatchIdx);
-    plot(Vector, hw, 'color', [0.5, 0.5, 0.5])
-    hold on
-    plot(Vector, hm, 'color', [0, 0.5, 0])
-    plot(Vector, hn, 'color', [0, 0, 0])
-    xlabel('Cross-correlation Fingerprint')
-    ylabel('Proportion|Group')
-    legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
-    axis square
-    makepretty
+    if saveFig
+        figure('name', ['Functional score separatability ', addname])
 
-    subplot(4, 3, 3)
-    if any(MatchIdx)
-        labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
-        scores = [FingerprintCor(MatchIdx)', FingerprintCor(NonMatchIdx)'];
-        [X, Y, ~, AUC1] = perfcurve(labels, scores, 1);
-        h(1) = plot(X, Y, 'color', [0, 0.25, 0]);
-        hold all
-        labels = [zeros(1, numel(MatchIdx)), ones(1, numel(WithinIdx))];
-        scores = [FingerprintCor(MatchIdx)', FingerprintCor(WithinIdx)'];
-        [X, Y, ~, AUC2] = perfcurve(labels, scores, 1);
-        h(2) = plot(X, Y, 'color', [0, 0.5, 0]);
-    end
+        subplot(4, 3, 1)
+        imagesc(FingerprintCor)
+        hold on
+        colormap(flipud(gray))
+        makepretty
+        xlabel('Unit_i')
+        ylabel('Unit_j')
+        hold on
+        arrayfun(@(X) line([SessionSwitch(X), SessionSwitch(X)], get(gca, 'ylim'), 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
+        arrayfun(@(X) line(get(gca, 'xlim'), [SessionSwitch(X), SessionSwitch(X)], 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
+        title('Cross-correlation Fingerprint')
+        axis square
+        freezeColors
 
-    labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
-    scores = [FingerprintCor(WithinIdx)', FingerprintCor(NonMatchIdx)'];
-    [X, Y, ~, AUC3] = perfcurve(labels, scores, 1);
-    h(3) = plot(X, Y, 'color', [0.25, 0.25, 0.25]);
-    axis square
-
-    plot([0, 1], [0, 1], 'k--')
-    xlabel('False positive rate')
-    ylabel('True positive rate')
-    legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
-    title(sprintf('Cross-Correlation Fingerprint AUC: %.3f, %.3f, %.3f', AUC1, AUC2, AUC3))
-    makepretty
-    drawnow %Something to look at while ACG calculations are ongoing
-
-
-    %% Plot ACG
-    subplot(4, 3, 4)
-    imagesc(reshape(MatchTable.ACGCorr, nclus, nclus))
-    hold on
-    colormap(flipud(gray))
-    makepretty
-    xlabel('Unit_i')
-    ylabel('Unit_j')
-    hold on
-    arrayfun(@(X) line([SessionSwitch(X), SessionSwitch(X)], get(gca, 'ylim'), 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
-    arrayfun(@(X) line(get(gca, 'xlim'), [SessionSwitch(X), SessionSwitch(X)], 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
-    title('Autocorrelogram Correlation')
-    axis square
-
-    freezeColors
-
-    subplot(4, 3, 5)
-    ACGCor = reshape(MatchTable.ACGCorr, nclus, nclus);
-    % Subtr = repmat(diag(ACGCor),1,size(ACGCor,1));
-    % ACGCor = ACGCor - Subtr; % Subtract diagonalcorrelations
-    bins = min(ACGCor(:)):0.1:max(ACGCor(:));
-    Vector = [bins(1) + 0.1 / 2:0.1:bins(end) - 0.1 / 2];
-    hw = histcounts(ACGCor(WithinIdx), bins) ./ length(WithinIdx);
-    hm = histcounts(ACGCor(MatchIdx), bins) ./ length(MatchIdx);
-    hn = histcounts(ACGCor(NonMatchIdx), bins) ./ length(NonMatchIdx);
-    plot(Vector, hw, 'color', [0.5, 0.5, 0.5])
-    hold on
-    plot(Vector, hm, 'color', [0, 0.5, 0])
-    plot(Vector, hn, 'color', [0, 0, 0])
-    xlabel('Autocorrelogram Correlation')
-    ylabel('Proportion|Group')
-%     legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
-    axis square
-
-    makepretty
-
-    subplot(4, 3, 6)
-    if any(MatchIdx)
-        labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
-        scores = [ACGCor(MatchIdx)', ACGCor(NonMatchIdx)'];
-        [X, Y, ~, AUC1] = perfcurve(labels, scores, 1);
-        h(1) = plot(X, Y, 'color', [0, 0.25, 0]);
-        hold all
-        labels = [zeros(1, numel(MatchIdx)), ones(1, numel(WithinIdx))];
-        scores = [ACGCor(MatchIdx)', ACGCor(WithinIdx)'];
-        [X, Y, ~, AUC2] = perfcurve(labels, scores, 1);
-        h(2) = plot(X, Y, 'color', [0, 0.5, 0]);
-    end
-    labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
-    scores = [ACGCor(WithinIdx)', ACGCor(NonMatchIdx)'];
-    [X, Y, ~, AUC3] = perfcurve(labels, scores, 1);
-    h(3) = plot(X, Y, 'color', [0.25, 0.25, 0.25]);
-
-    plot([0, 1], [0, 1], 'k--')
-    xlabel('False positive rate')
-    ylabel('True positive rate')
-%     legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
-    title(sprintf('Autocorrelogram AUC: %.3f, %.3f, %.3f', AUC1, AUC2, AUC3))
-    makepretty
-    axis square
-
-    freezeColors
-
-    %% Plot FR
-    subplot(4, 3, 7)
-    imagesc(reshape(MatchTable.FRDiff, nclus, nclus))
-    hold on
-    colormap(gray)
-    makepretty
-    xlabel('Unit_i')
-    ylabel('Unit_j')
-    hold on
-    arrayfun(@(X) line([SessionSwitch(X), SessionSwitch(X)], get(gca, 'ylim'), 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
-    arrayfun(@(X) line(get(gca, 'xlim'), [SessionSwitch(X), SessionSwitch(X)], 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
-    title('Firing rate differences')
-    axis square
-
-    FRDiff = reshape(MatchTable.FRDiff, nclus, nclus);
-    Subtr = repmat(diag(FRDiff), 1, size(FRDiff, 1));
-    FRDiff = FRDiff - Subtr; % Subtract diagonalcorrelations
-
-    subplot(4, 3, 8)
-    bins = min(FRDiff(:)):0.1:5;
-    Vector = [bins(1) + 0.1 / 2:0.1:bins(end) - 0.1 / 2];
-    hw = histcounts(FRDiff(WithinIdx), bins) ./ length(WithinIdx);
-    hm = histcounts(FRDiff(MatchIdx), bins) ./ length(MatchIdx);
-    hn = histcounts(FRDiff(NonMatchIdx), bins) ./ length(NonMatchIdx);
-    plot(Vector, hw, 'color', [0.5, 0.5, 0.5])
-    hold on
-    plot(Vector, hm, 'color', [0, 0.5, 0])
-    plot(Vector, hn, 'color', [0, 0, 0])
-    xlabel('Firing rate differences')
-    ylabel('Proportion|Group')
-%     legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
-    makepretty
-    axis square
-
-    subplot(4, 3, 9)
-    if any(MatchIdx(:))
-        labels = [zeros(1, numel(MatchIdx)), ones(1, numel(NonMatchIdx))];
-        scores = [FRDiff(MatchIdx)', FRDiff(NonMatchIdx)'];
-        [X, Y, ~, AUC1] = perfcurve(labels, scores, 1);
-        h(1) = plot(X, Y, 'color', [0, 0.25, 0]);
-    end
-    hold all
-    labels = [zeros(1, numel(MatchIdx)), ones(1, numel(WithinIdx))];
-    scores = [FRDiff(MatchIdx)', FRDiff(WithinIdx)'];
-    [X, Y, ~, AUC2] = perfcurve(labels, scores, 1);
-    h(2) = plot(X, Y, 'color', [0, 0.5, 0]);
-    labels = [zeros(1, numel(WithinIdx)), ones(1, numel(NonMatchIdx))];
-    scores = [FRDiff(WithinIdx)', FRDiff(NonMatchIdx)'];
-    [X, Y, ~, AUC3] = perfcurve(labels, scores, 1);
-    h(3) = plot(X, Y, 'color', [0.25, 0.25, 0.25]);
-    axis square
-
-    plot([0, 1], [0, 1], 'k--')
-    xlabel('False positive rate')
-    ylabel('True positive rate')
-%     legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
-    title(sprintf('Firing rate differences AUC: %.3f, %.3f, %.3f', AUC1, AUC2, AUC3))
-    makepretty
-
-    %% Plot Natural images
-
-    NatImCorr = reshape(MatchTable.NatImCorr, nclus, nclus);
-
-    subplot(4, 3, 10)
-    imagesc(NatImCorr)
-    hold on
-    colormap(flipud(gray))
-    makepretty
-    xlabel('Unit_i')
-    ylabel('Unit_j')
-    hold on
-    arrayfun(@(X) line([SessionSwitch(X), SessionSwitch(X)], get(gca, 'ylim'), 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
-    arrayfun(@(X) line(get(gca, 'xlim'), [SessionSwitch(X), SessionSwitch(X)], 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
-    title('NatIm Fingerprint')
-    axis square
-    freezeColors
-
-
-    if ~all(isnan(NatImCorr(MatchIdx)))
-        subplot(4, 3, 11)
-        bins = min(NatImCorr(:)):0.1:max(NatImCorr(:));
+        subplot(4, 3, 2)
+        bins = min(FingerprintCor(:)):0.1:max(FingerprintCor(:));
         Vector = [bins(1) + 0.1 / 2:0.1:bins(end) - 0.1 / 2];
-        hw = histcounts(NatImCorr(WithinIdx), bins) ./ length(WithinIdx);
-        hm = histcounts(NatImCorr(MatchIdx), bins) ./ length(MatchIdx);
-        hn = histcounts(NatImCorr(NonMatchIdx), bins) ./ length(NonMatchIdx);
+        hw = histcounts(FingerprintCor(WithinIdx), bins) ./ length(WithinIdx);
+        hm = histcounts(FingerprintCor(MatchIdx), bins) ./ length(MatchIdx);
+        hn = histcounts(FingerprintCor(NonMatchIdx), bins) ./ length(NonMatchIdx);
         plot(Vector, hw, 'color', [0.5, 0.5, 0.5])
         hold on
         plot(Vector, hm, 'color', [0, 0.5, 0])
         plot(Vector, hn, 'color', [0, 0, 0])
-        xlabel('NatIm Fingerprint')
+        xlabel('Cross-correlation Fingerprint')
         ylabel('Proportion|Group')
-%         legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
+        legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
         axis square
         makepretty
-    
-        subplot(4, 3, 11)
-        bins = min(NatImCorr(:)):0.1:max(NatImCorr(:));
-        Vector = [bins(1) + 0.1 / 2:0.1:bins(end) - 0.1 / 2];
-        hw = histcounts(NatImCorr(WithinIdx), bins) ./ length(WithinIdx);
-        hm = histcounts(NatImCorr(MatchIdx), bins) ./ length(MatchIdx);
-        hn = histcounts(NatImCorr(NonMatchIdx), bins) ./ length(NonMatchIdx);
-        plot(Vector, hw, 'color', [0.5, 0.5, 0.5])
-        hold on
-        plot(Vector, hm, 'color', [0, 0.5, 0])
-        plot(Vector, hn, 'color', [0, 0, 0])
-        xlabel('NatIm Fingerprint')
-        ylabel('Proportion|Group')
-%         legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
-        axis square
-        makepretty
-        subplot(4, 3, 12)
-        if any(MatchIdx) & ~all(isnan(NatImCorr(MatchIdx)))
+        subplot(4, 3, 3)
+        if any(MatchIdx)
             labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
-            scores = [NatImCorr(MatchIdx)', NatImCorr(NonMatchIdx)'];
-                
+            scores = [FingerprintCor(MatchIdx)', FingerprintCor(NonMatchIdx)'];
             [X, Y, ~, AUC1] = perfcurve(labels, scores, 1);
             h(1) = plot(X, Y, 'color', [0, 0.25, 0]);
             hold all
             labels = [zeros(1, numel(MatchIdx)), ones(1, numel(WithinIdx))];
-
-            scores = [NatImCorr(MatchIdx)', NatImCorr(WithinIdx)'];
+            scores = [FingerprintCor(MatchIdx)', FingerprintCor(WithinIdx)'];
             [X, Y, ~, AUC2] = perfcurve(labels, scores, 1);
             h(2) = plot(X, Y, 'color', [0, 0.5, 0]);
         end
 
         labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
-        scores = [NatImCorr(WithinIdx)', NatImCorr(NonMatchIdx)'];
+        scores = [FingerprintCor(WithinIdx)', FingerprintCor(NonMatchIdx)'];
         [X, Y, ~, AUC3] = perfcurve(labels, scores, 1);
         h(3) = plot(X, Y, 'color', [0.25, 0.25, 0.25]);
         axis square
@@ -710,10 +504,219 @@ for id = 1:ntimes
         plot([0, 1], [0, 1], 'k--')
         xlabel('False positive rate')
         ylabel('True positive rate')
-%         legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
-        title(sprintf('NatIm Fingerprint AUC: %.3f, %.3f, %.3f', AUC1, AUC2, AUC3))
+        legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
+        title(sprintf('Cross-Correlation Fingerprint AUC: %.3f, %.3f, %.3f', AUC1, AUC2, AUC3))
         makepretty
         drawnow %Something to look at while ACG calculations are ongoing
+    end
+
+
+    %% Plot ACG
+    ACGCor = reshape(MatchTable.ACGCorr, nclus, nclus);
+    if saveFig
+        subplot(4, 3, 4)
+        imagesc(ACGCor)
+        hold on
+        colormap(flipud(gray))
+        makepretty
+        xlabel('Unit_i')
+        ylabel('Unit_j')
+        hold on
+        arrayfun(@(X) line([SessionSwitch(X), SessionSwitch(X)], get(gca, 'ylim'), 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
+        arrayfun(@(X) line(get(gca, 'xlim'), [SessionSwitch(X), SessionSwitch(X)], 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
+        title('Autocorrelogram Correlation')
+        axis square
+
+        freezeColors
+
+        subplot(4, 3, 5)
+        % Subtr = repmat(diag(ACGCor),1,size(ACGCor,1));
+        % ACGCor = ACGCor - Subtr; % Subtract diagonalcorrelations
+        bins = min(ACGCor(:)):0.1:max(ACGCor(:));
+        Vector = [bins(1) + 0.1 / 2:0.1:bins(end) - 0.1 / 2];
+        hw = histcounts(ACGCor(WithinIdx), bins) ./ length(WithinIdx);
+        hm = histcounts(ACGCor(MatchIdx), bins) ./ length(MatchIdx);
+        hn = histcounts(ACGCor(NonMatchIdx), bins) ./ length(NonMatchIdx);
+        plot(Vector, hw, 'color', [0.5, 0.5, 0.5])
+        hold on
+        plot(Vector, hm, 'color', [0, 0.5, 0])
+        plot(Vector, hn, 'color', [0, 0, 0])
+        xlabel('Autocorrelogram Correlation')
+        ylabel('Proportion|Group')
+        %     legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
+        axis square
+
+        makepretty
+
+        subplot(4, 3, 6)
+        if any(MatchIdx)
+            labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
+            scores = [ACGCor(MatchIdx)', ACGCor(NonMatchIdx)'];
+            [X, Y, ~, AUC1] = perfcurve(labels, scores, 1);
+            h(1) = plot(X, Y, 'color', [0, 0.25, 0]);
+            hold all
+            labels = [zeros(1, numel(MatchIdx)), ones(1, numel(WithinIdx))];
+            scores = [ACGCor(MatchIdx)', ACGCor(WithinIdx)'];
+            [X, Y, ~, AUC2] = perfcurve(labels, scores, 1);
+            h(2) = plot(X, Y, 'color', [0, 0.5, 0]);
+        end
+        labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
+        scores = [ACGCor(WithinIdx)', ACGCor(NonMatchIdx)'];
+        [X, Y, ~, AUC3] = perfcurve(labels, scores, 1);
+        h(3) = plot(X, Y, 'color', [0.25, 0.25, 0.25]);
+
+        plot([0, 1], [0, 1], 'k--')
+        xlabel('False positive rate')
+        ylabel('True positive rate')
+        %     legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
+        title(sprintf('Autocorrelogram AUC: %.3f, %.3f, %.3f', AUC1, AUC2, AUC3))
+        makepretty
+        axis square
+
+        freezeColors
+    end
+    %% Plot FR
+    FRDiff = reshape(MatchTable.FRDiff, nclus, nclus);
+    Subtr = repmat(diag(FRDiff), 1, size(FRDiff, 1));
+    FRDiff = FRDiff - Subtr; % Subtract diagonalcorrelations
+    if saveFig
+        subplot(4, 3, 7)
+        imagesc(FRDiff)
+        hold on
+        colormap(gray)
+        makepretty
+        xlabel('Unit_i')
+        ylabel('Unit_j')
+        hold on
+        arrayfun(@(X) line([SessionSwitch(X), SessionSwitch(X)], get(gca, 'ylim'), 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
+        arrayfun(@(X) line(get(gca, 'xlim'), [SessionSwitch(X), SessionSwitch(X)], 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
+        title('Firing rate differences')
+        axis square
+
+
+
+        subplot(4, 3, 8)
+        bins = min(FRDiff(:)):0.1:5;
+        Vector = [bins(1) + 0.1 / 2:0.1:bins(end) - 0.1 / 2];
+        hw = histcounts(FRDiff(WithinIdx), bins) ./ length(WithinIdx);
+        hm = histcounts(FRDiff(MatchIdx), bins) ./ length(MatchIdx);
+        hn = histcounts(FRDiff(NonMatchIdx), bins) ./ length(NonMatchIdx);
+        plot(Vector, hw, 'color', [0.5, 0.5, 0.5])
+        hold on
+        plot(Vector, hm, 'color', [0, 0.5, 0])
+        plot(Vector, hn, 'color', [0, 0, 0])
+        xlabel('Firing rate differences')
+        ylabel('Proportion|Group')
+        %     legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
+        makepretty
+        axis square
+
+        subplot(4, 3, 9)
+        if any(MatchIdx(:))
+            labels = [zeros(1, numel(MatchIdx)), ones(1, numel(NonMatchIdx))];
+            scores = [FRDiff(MatchIdx)', FRDiff(NonMatchIdx)'];
+            [X, Y, ~, AUC1] = perfcurve(labels, scores, 1);
+            h(1) = plot(X, Y, 'color', [0, 0.25, 0]);
+        end
+        hold all
+        labels = [zeros(1, numel(MatchIdx)), ones(1, numel(WithinIdx))];
+        scores = [FRDiff(MatchIdx)', FRDiff(WithinIdx)'];
+        [X, Y, ~, AUC2] = perfcurve(labels, scores, 1);
+        h(2) = plot(X, Y, 'color', [0, 0.5, 0]);
+        labels = [zeros(1, numel(WithinIdx)), ones(1, numel(NonMatchIdx))];
+        scores = [FRDiff(WithinIdx)', FRDiff(NonMatchIdx)'];
+        [X, Y, ~, AUC3] = perfcurve(labels, scores, 1);
+        h(3) = plot(X, Y, 'color', [0.25, 0.25, 0.25]);
+        axis square
+
+        plot([0, 1], [0, 1], 'k--')
+        xlabel('False positive rate')
+        ylabel('True positive rate')
+        %     legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
+        title(sprintf('Firing rate differences AUC: %.3f, %.3f, %.3f', AUC1, AUC2, AUC3))
+        makepretty
+    end
+
+    %% Plot Natural images
+
+    NatImCorr = reshape(MatchTable.NatImCorr, nclus, nclus);
+    if saveFig
+        subplot(4, 3, 10)
+        imagesc(NatImCorr)
+        hold on
+        colormap(flipud(gray))
+        makepretty
+        xlabel('Unit_i')
+        ylabel('Unit_j')
+        hold on
+        arrayfun(@(X) line([SessionSwitch(X), SessionSwitch(X)], get(gca, 'ylim'), 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
+        arrayfun(@(X) line(get(gca, 'xlim'), [SessionSwitch(X), SessionSwitch(X)], 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
+        title('NatIm Fingerprint')
+        axis square
+        freezeColors
+
+
+        if ~all(isnan(NatImCorr(MatchIdx)))
+            subplot(4, 3, 11)
+            bins = min(NatImCorr(:)):0.1:max(NatImCorr(:));
+            Vector = [bins(1) + 0.1 / 2:0.1:bins(end) - 0.1 / 2];
+            hw = histcounts(NatImCorr(WithinIdx), bins) ./ length(WithinIdx);
+            hm = histcounts(NatImCorr(MatchIdx), bins) ./ length(MatchIdx);
+            hn = histcounts(NatImCorr(NonMatchIdx), bins) ./ length(NonMatchIdx);
+            plot(Vector, hw, 'color', [0.5, 0.5, 0.5])
+            hold on
+            plot(Vector, hm, 'color', [0, 0.5, 0])
+            plot(Vector, hn, 'color', [0, 0, 0])
+            xlabel('NatIm Fingerprint')
+            ylabel('Proportion|Group')
+            %         legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
+            axis square
+            makepretty
+
+            subplot(4, 3, 11)
+            bins = min(NatImCorr(:)):0.1:max(NatImCorr(:));
+            Vector = [bins(1) + 0.1 / 2:0.1:bins(end) - 0.1 / 2];
+            hw = histcounts(NatImCorr(WithinIdx), bins) ./ length(WithinIdx);
+            hm = histcounts(NatImCorr(MatchIdx), bins) ./ length(MatchIdx);
+            hn = histcounts(NatImCorr(NonMatchIdx), bins) ./ length(NonMatchIdx);
+            plot(Vector, hw, 'color', [0.5, 0.5, 0.5])
+            hold on
+            plot(Vector, hm, 'color', [0, 0.5, 0])
+            plot(Vector, hn, 'color', [0, 0, 0])
+            xlabel('NatIm Fingerprint')
+            ylabel('Proportion|Group')
+            %         legend('i=j; within recording', 'matches', 'non-matches', 'Location', 'best')
+            axis square
+            makepretty
+            subplot(4, 3, 12)
+            if any(MatchIdx) & ~all(isnan(NatImCorr(MatchIdx)))
+                labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
+                scores = [NatImCorr(MatchIdx)', NatImCorr(NonMatchIdx)'];
+
+                [X, Y, ~, AUC1] = perfcurve(labels, scores, 1);
+                h(1) = plot(X, Y, 'color', [0, 0.25, 0]);
+                hold all
+                labels = [zeros(1, numel(MatchIdx)), ones(1, numel(WithinIdx))];
+
+                scores = [NatImCorr(MatchIdx)', NatImCorr(WithinIdx)'];
+                [X, Y, ~, AUC2] = perfcurve(labels, scores, 1);
+                h(2) = plot(X, Y, 'color', [0, 0.5, 0]);
+            end
+
+            labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
+            scores = [NatImCorr(WithinIdx)', NatImCorr(NonMatchIdx)'];
+            [X, Y, ~, AUC3] = perfcurve(labels, scores, 1);
+            h(3) = plot(X, Y, 'color', [0.25, 0.25, 0.25]);
+            axis square
+
+            plot([0, 1], [0, 1], 'k--')
+            xlabel('False positive rate')
+            ylabel('True positive rate')
+            %         legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
+            title(sprintf('NatIm Fingerprint AUC: %.3f, %.3f, %.3f', AUC1, AUC2, AUC3))
+            makepretty
+            drawnow %Something to look at while ACG calculations are ongoing
+        end
     end
 
     %% save
