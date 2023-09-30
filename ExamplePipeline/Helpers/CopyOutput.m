@@ -13,10 +13,12 @@ for midx = 1:length(MiceOpt)
         continue
     end
     for id = 1:length(tmpfile)
-        if datetime(tmpfile(id).date) >FromDate
+        if datetime(tmpfile(id).date) > FromDate
+            AssignUniqueID_POSTUM(fullfile(tmpfile(id).folder,tmpfile(id).name));
+
             FolderParts = strsplit(tmpfile(id).folder,filesep);
             idx = find(ismember(FolderParts,MiceOpt{midx}));
-            if ~exist(fullfile(CopyDir,FolderParts{idx},FolderParts{idx+1},FolderParts{idx+2}))
+            if 1%~exist(fullfile(CopyDir,FolderParts{idx},FolderParts{idx+1},FolderParts{idx+2}))
                 copyfile(fullfile(SaveDir,FolderParts{idx},FolderParts{idx+1},FolderParts{idx+2},'UnitMatch','*'),fullfile(CopyDir,FolderParts{idx},FolderParts{idx+1},FolderParts{idx+2}))
             end
         end
