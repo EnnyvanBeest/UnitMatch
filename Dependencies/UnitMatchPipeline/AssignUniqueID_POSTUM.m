@@ -76,31 +76,34 @@ if UMparam.removeoversplits
     Pairs(ISIViolationsScore>0.05,:)=[];
 end
 
-%% Serial assigning of Unique ID (Day by day)
+%% Serial assigning of Unique ID 
 disp('Assigning correct Unique ID values now')
 RMPair = [];
-for recid = 1:length(RecOpt)
-    Idx = find(GoodRecSesID(Pairs(:,1)) == recid & GoodRecSesID(Pairs(:,2)) >= recid);
-    SubPairs = Pairs(Idx,:); %Select pairs in this day combinations
-    Utmp = UniqueID;
-    if ~isempty(SubPairs)
-        nMatches = 0;
-        for id = 1:size(SubPairs,1)
-            %  check: It should also match with all the other pairs that were
-            % already assigned!
-            % All units currently identified as this UniqueID
-            TheseOriUids = OriUniqueID(ismember(Utmp,Utmp(SubPairs(id,:))));
-            % All of these need to match with the new one, if added
-            tblidx = find(((ismember(MatchTable.UID1,TheseOriUids)&ismember(MatchTable.UID2,SubPairs(id,2))) | (ismember(MatchTable.UID2,TheseOriUids)&ismember(MatchTable.UID1,SubPairs(id,2)))) & ~(MatchTable.UID1==MatchTable.UID2)); % !
-            if ~all(MatchTable.MatchProb(tblidx)>UMparam.ProbabilityThreshold)
-                RMPair = [RMPair Idx(id)];
-            else
-                Utmp(SubPairs(id,2)) = Utmp(SubPairs(id,1));
-                nMatches = nMatches + 1;
-            end
+Utmp = UniqueID;
+if ~isempty(Pairs)
+    nMatches = 0;
+    for id = 1:size(Pairs,1)
+        %  check: It should also match with all the other pairs that were
+        % already assigned!
+        % All units currently identified as this UniqueID
+        TheseOriUids = OriUniqueID(ismember(Utmp,Utmp(Pairs(id,:))));
+        % Far away days can be ignored
+        TheseRecs = GoodRecSesID(Pairs(id,:));
+        OtherRecs = GoodRecSesID(ismember(Utmp,Utmp(Pairs(id,:))));
+
+        TheseOriUids(~ismember(OtherRecs,TheseRecs))=[]; % Remove away days
+        
+        % All of these need to match with the new one, if added
+        tblidx = find(((ismember(MatchTable.UID1,TheseOriUids)&ismember(MatchTable.UID2,Pairs(id,2))) | (ismember(MatchTable.UID2,TheseOriUids)&ismember(MatchTable.UID1,Pairs(id,2)))) & ~(MatchTable.UID1==MatchTable.UID2)); % !
+
+        if ~all(MatchTable.MatchProb(tblidx)>UMparam.ProbabilityThreshold)
+            RMPair = [RMPair id];
+        else
+            Utmp(Pairs(id,2)) = Utmp(Pairs(id,1));
+            nMatches = nMatches + 1;
         end
-        disp(['Recording ' num2str(recid)  ': ' num2str(nMatches)])
     end
+    disp([num2str(nMatches) ' matches/' num2str(length(UniqueID))])
 end
 %% Final assignment
 disp('Final assignment')

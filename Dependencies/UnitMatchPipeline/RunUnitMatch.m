@@ -146,12 +146,10 @@ if Params.UnitMatch
         end
 
         %% Run UnitMatch
-        GlobalUnitMatchClock = tic;
         [UniqueIDConversion, MatchTable, WaveformInfo, UMparam] = UnitMatch(clusinfo, UMparam);
-        UMrunTime = toc(GlobalUnitMatchClock);
-        save(fullfile(UMparam.SaveDir, 'UnitMatch.mat'), 'UniqueIDConversion', 'MatchTable', 'WaveformInfo', 'UMparam', 'UMrunTime','-v7.3')
-        DataSizeParam = CalculateDuration(UMparam.SaveDir,ephys_dirs);
-        disp(['UnitMatch took ', num2str(round(UMrunTime/60*10)/10), ' minute(s) to run'])
+        tmpfile = dir(fullfile(UMparam.SaveDir,'UnitMatch.mat'));
+        AssignUniqueID_POSTUM(fullfile(tmpfile.folder,tmpfile.name));
+%         DataSizeParam = CalculateDuration(UMparam.SaveDir,ephys_dirs);
 
     end
 elseif Params.DecompressionFlag % You might want to at least save out averaged waveforms for every session to get back to later, if they were saved out by bomcell

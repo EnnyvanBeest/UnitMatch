@@ -31,6 +31,7 @@ function  [UniqueIDConversion, MatchTable, WaveformInfo, param] = UnitMatch(clus
 % Célian Bimbard (2022-2023)
 
 %% Parameters - tested on these values, but feel free to try others
+GlobalUnitMatchClock = tic;        
 Scores2Include = param.Scores2Include % Good to show for failure prevention
 TakeChannelRadius = 150; %in micron around max channel;
 maxdist = 100; % Maximum distance at which units are considered as potential matches %best tested so far 100
@@ -159,9 +160,6 @@ OriUniqueID = UniqueID; %need for plotting
 [PairID3,PairID4]=meshgrid(OriUniqueID(Good_Idx));
 
 MatchTable = table(PairID1(:),PairID2(:),recses1(:),recses2(:),PairID3(:),PairID4(:),MatchProbability(:),TotalScore(:),EuclDist(:),'VariableNames',{'ID1','ID2','RecSes1','RecSes2','UID1','UID2','MatchProb','TotalScore','EucledianDistance'});
-if param.AssignUniqueID
-    [UniqueID, MatchTable] = AssignUniqueID(MatchTable,clusinfo,Path4UnitNPY,param);
-end
 % Add Scores2Include to MatchTable
 for sid = 1:length(Scores2Include)
     eval(['MatchTable.' Scores2Include{sid} ' = Tbl.' Scores2Include{sid} '(:);'])
@@ -179,6 +177,12 @@ UniqueIDConversion.OriginalClusID = OriginalClusterIDs;
 UniqueIDConversion.recsesAll = recsesAll;
 UniqueIDConversion.GoodID = clusinfo.Good_ID;
 UniqueIDConversion.Path4UnitNPY = Path4UnitNPY;
+
+%% Save
+UMparam = param;
+UMrunTime = toc(GlobalUnitMatchClock);
+
+save(fullfile(UMparam.SaveDir, 'UnitMatch.mat'), 'UniqueIDConversion', 'MatchTable', 'WaveformInfo', 'UMparam','UMrunTime','-v7.3')
 
 %% From here on we're just evaluating the model:
 %% If this was stitched pykilosort, we know what pykilosort thought about the matches
