@@ -91,7 +91,7 @@ if ~isempty(Pairs)
         TheseRecs = GoodRecSesID(Pairs(id,:));
         OtherRecs = GoodRecSesID(ismember(Utmp,Utmp(Pairs(id,:))));
 
-        TheseOriUids(~ismember(OtherRecs,TheseRecs))=[]; % Remove away days
+        TheseOriUids(~ismember(OtherRecs,[TheseRecs-1; TheseRecs; TheseRecs+1;]))=[]; % Remove far days
         
         % All of these need to match with the new one, if added
         tblidx = find(((ismember(MatchTable.UID1,TheseOriUids)&ismember(MatchTable.UID2,Pairs(id,2))) | (ismember(MatchTable.UID2,TheseOriUids)&ismember(MatchTable.UID1,Pairs(id,2)))) & ~(MatchTable.UID1==MatchTable.UID2)); % !
