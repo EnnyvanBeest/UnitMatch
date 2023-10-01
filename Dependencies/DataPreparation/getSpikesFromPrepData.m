@@ -12,6 +12,7 @@ function spAll = getSpikesFromPrepData(AllKSDir)
         spAll{did}.st = sp.st;
         spAll{did}.spikeTemplates = sp.spikeTemplates;
         spAll{did}.spikeAmps = sp.spikeAmps;
+        spAll{did}.spikeDepths = sp.spikeDepths;
         % Replace recsesid with subsesid
         if Params.RunPyKSChronicStitched
             spAll{did}.RecSes = sp.RecSes;
