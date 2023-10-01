@@ -1,6 +1,7 @@
 %% Load and format data
 
 UMFile = {'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\2ConsecutiveDays\Non_Stitched\AL032\AllProbes\AllIMRO\UnitMatch\UnitMatch.mat'};
+% summaryFunctionalPlots(UMFile, 1, 1)
 load(UMFile{1})
 
 % Extract cluster information
@@ -30,7 +31,21 @@ SessionSwitch = [cell2mat(SessionSwitch); nclus + 1];
 
 sp = getSpikesFromPrepData(AllKSDir);
 
+% Get depth for each pair (used for sorting)
+cluList1 = unique(MatchTable(MatchTable.RecSes1 == sess1 & MatchTable.RecSes2 == sess2, :).ID1);
+cluDepthSess1 = nan(1,numel(cluList1));
+for cluIdx = 1:numel(cluList1)
+   cluDepthSess1(cluIdx) = nanmean(sp.spikeDepths(sp.RecSes == sess1 & sp.spikeTemplates == cluList1(cluIdx)));
+end
+cluList2 = unique(MatchTable(MatchTable.RecSes1 == sess1 & MatchTable.RecSes2 == sess2, :).ID2);
+cluDepthSess2 = nan(1,numel(cluList2));
+for cluIdx = 1:numel(cluList2)
+   cluDepthSess2(cluIdx) = nanmean(sp.spikeDepths(sp.RecSes == sess2 & sp.spikeTemplates == cluList2(cluIdx)));
+end
+
 %% Get natim resp
+
+%%% could be made a function, reused in main UM?
 
 % Param for processing
 proc.window = [-0.3 1.5 ... % around onset
@@ -90,6 +105,8 @@ bins = [binsOn binsOff];
 
 %% Get binned FR for xcorr
 
+%%% UGLY -- SHOULD BE MADE CLEANER (+ a function, reused in main UM?)
+
 % Get binned FR
 sr = cell(1,nRec);
 for rid = 1:nRec
@@ -111,6 +128,7 @@ Pairs = sortrows(Pairs);
 Pairs = unique(Pairs, 'rows');
 dayopt = [1 2];
 Unit2Take = OriID;
+refPopIdx = cell(1,nRec);
 for did = 1:2
     % We need a group of units that is likely to be a pair across at least two days
     if did==1
@@ -140,7 +158,7 @@ for did = 1:2
     % Extract the part of the correlation matrix with these
     % pairs
     sortIdx = cell2mat(arrayfun(@(x) find(Unit2Take(Unit2TakeIdxAll) == x), Unit2Take(Unit2TakeIdx), 'uni', 0));
-    sr{did} = sr{did}(sortIdx,:);
+    refPopIdx{did} = sortIdx;
 end
 
 %% Plot  
@@ -150,20 +168,23 @@ sess1 = 1;
 sess2 = 2;
 MatchTable_pair = MatchTable(MatchTable.UID1 == MatchTable.UID2 & MatchTable.RecSes1 == sess1 & MatchTable.RecSes2 == sess2, :);
 MatchTable_bestPairs = MatchTable_pair(MatchTable_pair.ACGRankScore < 2 & MatchTable_pair.RankScore < 2 & MatchTable_pair.NImgRankScore < 2,:);
-pair2plt = 7;
+% pair2plt = 7;
+pair2plt = 1;
 clu1 = MatchTable_bestPairs(pair2plt,:).ID1;
 clu2 = MatchTable_bestPairs(pair2plt,:).ID2;
+
+% Sorting neurons by depths for matrices
+[~,sortIdx1] = sort(cluDepthSess1,'descend');
+[~,sortIdx2] = sort(cluDepthSess2,'descend');
+sortCluIdx = [sortIdx1 numel(sortIdx1)+sortIdx2];
 
 % Plot figure
 figure('Position', [400 270 800 500]);
 
 % FR
-subplot(3,4,1)
-% Nothing?
-
 subplot(3,4,9) % matrix
 FRDiffMat = reshape(MatchTable.FRDiff, nclus, nclus);
-imagesc(FRDiffMat)
+imagesc(FRDiffMat(sortCluIdx,sortCluIdx))
 hold on
 colormap(flipud(gray))
 clim([0 30])
@@ -172,7 +193,6 @@ ylabel('Unit_j')
 hold on
 arrayfun(@(X) line([SessionSwitch(X), SessionSwitch(X)], get(gca, 'ylim'), 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
 arrayfun(@(X) line(get(gca, 'xlim'), [SessionSwitch(X), SessionSwitch(X)], 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
-title('NatIm Fingerprint')
 axis square
 freezeColors
 makepretty
@@ -182,11 +202,12 @@ p(1) = subplot(3,4,2); % day 1
 idx1 = sp.spikeTemplates == clu1 & sp.RecSes == sess1;
 [CCGClu1, tClu1] = CCGBz([double(sp.st(idx1)); double(sp.st(idx1))], [ones(size(sp.st(idx1), 1), 1); ...
     ones(size(sp.st(idx1), 1), 1) * 2], 'binSize', UMparam.ACGbinSize, 'duration', UMparam.ACGduration, 'norm', 'rate'); %function
-plot(tClu1, CCGClu1(:,1),'k');
-xticks([-UMparam.ACGduration/2 0 UMparam.ACGduration/2])
+plot(tClu1(tClu1>0), CCGClu1(tClu1>0,1),'k');
+xticks([0 UMparam.ACGduration/2])
 yticks([0 20])
-xlabel('time (s)')
+xlabel('Time (s)')
 ylabel('Firing rate (sp/s)')
+set(gca,'XScale','log')
 makepretty
 offsetAxes
 
@@ -194,18 +215,19 @@ p(2) = subplot(3,4,6); % day 2
 idx2 = sp.spikeTemplates == clu2 & sp.RecSes == sess2;
 [CCGClu2, tClu2] = CCGBz([double(sp.st(idx2)); double(sp.st(idx2))], [ones(size(sp.st(idx2), 1), 1); ...
     ones(size(sp.st(idx2), 1), 1) * 2], 'binSize', UMparam.ACGbinSize, 'duration', UMparam.ACGduration, 'norm', 'rate'); %function
-plot(tClu2, CCGClu2(:,1),'r');
-xticks([-UMparam.ACGduration/2 0 UMparam.ACGduration/2])
+plot(tClu2(tClu2>0), CCGClu2(tClu2>0,1),'r');
+xticks([0 UMparam.ACGduration/2])
 yticks([0 20])
-xlabel('time (s)')
+xlabel('Time (s)')
 ylabel('Firing rate (sp/s)')
+set(gca,'XScale','log')
 linkaxes(p,'xy')
 makepretty
 offsetAxes
 
 subplot(3,4,10) % matrix
 ACGCorrMat = reshape(MatchTable.ACGCorr, nclus, nclus);
-imagesc(ACGCorrMat)
+imagesc(ACGCorrMat(sortCluIdx,sortCluIdx))
 hold on
 colormap('RedBlue')
 clim([-1 1])
@@ -219,16 +241,51 @@ freezeColors
 makepretty
 
 % XCorr
-subplot(3,4,3) % day 1
+subplot(3,4,3); % day 
+hold all
+clu1Idx = find(cluList1 == clu1);
+corrVec1 = corr(sr{sess1}(clu1Idx,:)', sr{sess1}(refPopIdx{sess1},:)');
+[c, neurOrd] = sort(corrVec1,'descend');
+neurOrd(c > 0.99999) = [];
+pltPeriod = 1:10e3;
+pltPeriodTime = pltPeriod*UMparam.binsz;
+mat2plt = cat(1,sr{sess1}(clu1Idx,pltPeriod),zeros(3,numel(pltPeriod)),sr{sess1}(refPopIdx{sess1}(neurOrd),pltPeriod));
+imagesc( 1:size(mat2plt,1), pltPeriodTime, mat2plt')
+set(gca,'YDir','reverse')
+xticks([1 5 size(mat2plt,1)])
+xticklabels({'unit', '1', num2str(numel(refPopIdx{sess1}))})
+colormap(flipud(gray))
+clim([0 2])
+plot(5+(1:numel(neurOrd)), pltPeriodTime(end)+(pltPeriodTime(end)-pltPeriodTime(1))*(max(corrVec1(neurOrd))-corrVec1(neurOrd))/max(corrVec1(neurOrd)),'k')
+axis tight
+xlabel('Ref. unit')
+ylabel('Time (s)')
+freezeColors
+makepretty
 
 subplot(3,4,7) % day 2
+hold all
+clu2Idx = find(cluList2 == clu2);
+corrVec2 = corr(sr{sess2}(clu2Idx,:)', sr{sess2}(refPopIdx{sess2},:)');
+mat2plt = cat(1,sr{sess2}(clu2Idx,pltPeriod),zeros(3,numel(pltPeriod)),sr{sess2}(refPopIdx{sess2}(neurOrd),pltPeriod));
+imagesc( 1:size(mat2plt,1), pltPeriodTime, mat2plt')
+set(gca,'YDir','reverse')
+colormap(flipud(gray))
+clim([0 2])
+plot(5+(1:numel(neurOrd)), pltPeriodTime(end)+(pltPeriodTime(end)-pltPeriodTime(1))*(max(corrVec2(neurOrd))-corrVec2(neurOrd))/max(corrVec2(neurOrd)),'r')
+axis tight
+xlabel('Ref. unit')
+ylabel('Time (s)')
+freezeColors
+makepretty
 
 subplot(3,4,11) % matrix
 xcorrCorrMat = reshape(MatchTable.FingerprintCor, nclus, nclus);
-imagesc(xcorrCorrMat)
+xcorrCorrMat(xcorrCorrMat<.8) = .8;
+imagesc(xcorrCorrMat(sortCluIdx,sortCluIdx))
 hold on
 colormap('RedBlue')
-clim([-1 1])
+clim([.6 1])
 xlabel('Unit_i')
 ylabel('Unit_j')
 hold on
@@ -240,33 +297,46 @@ makepretty
 
 % NatImCorr 
 subplot(3,4,4) % day 1
-resp1 = nanmean(spikeData{recSesUni == sess1}(:,:,clusterIDs{recSesUni == sess1} == clu1,:),4);
-[~,natimOrd] = sort(nanmean(resp1(:,bins > 0 & bins < 0.4),2),'descend');
-imagesc(bins, 1:size(resp1,1), resp1(natimOrd,:));
 hold all
-vline(0)
-vline(1.0)
+respBin = bins > 0 & bins < 0.4;
+resp1 = nanmean(spikeData{recSesUni == sess1}(:,:,clusterIDs{recSesUni == sess1} == clu1,:),4);
+[~,natimOrd] = sort(nanmean(resp1(:,respBin),2),'descend');
+imagesc(1:size(resp1,1), bins, resp1(natimOrd,:)');
+set(gca,'YDir','reverse')
+hline(0)
+hline(1.0)
 colormap(flipud(gray))
 clim([0 40])
-yticks([1 112])
+xticks([1 112])
+ylabel('Images')
+ylabel('Time (s)')
+tmp = nanmean(resp1(natimOrd,respBin),2);
+plot(bins(end)+(bins(end)-bins(1))*(max(tmp)-tmp)/max(tmp),'k')
+axis tight
 freezeColors
 makepretty
 
 subplot(3,4,8) % day 2
-resp2 = nanmean(spikeData{recSesUni == sess2}(:,:,clusterIDs{recSesUni == sess2} == clu2,:),4);
-imagesc(bins, 1:size(resp2,1), resp2(natimOrd,:));
 hold all
-vline(0)
-vline(1.0)
+resp2 = nanmean(spikeData{recSesUni == sess2}(:,:,clusterIDs{recSesUni == sess2} == clu2,:),4);
+imagesc(1:size(resp2,1), bins, resp2(natimOrd,:)');
+set(gca,'YDir','reverse')
+hline(0)
+hline(1.0)
 colormap(flipud(gray))
 clim([0 40])
-yticks([1 112])
+xticks([1 112])
+ylabel('Images')
+ylabel('Time (s)')
+tmp = nanmean(resp2(natimOrd,respBin),2);
+plot(bins(end)+(bins(end)-bins(1))*(max(tmp)-tmp)/max(tmp),'r')
+axis tight
 freezeColors
 makepretty
 
 subplot(3,4,12) % matrix
 natImCorrMat = reshape(MatchTable.NatImCorr, nclus, nclus);
-imagesc(natImCorrMat)
+imagesc(natImCorrMat(sortCluIdx,sortCluIdx))
 hold on
 colormap('RedBlue')
 clim([-1 1])
