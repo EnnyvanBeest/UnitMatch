@@ -135,6 +135,7 @@ function summaryFunctionalPlots(UMFiles, TakeRank, groupVector, UseKSLabels)
                         (MatchTable_pair.RecSes1 ~= MatchTable_pair.RecSes2))/2;
                 end
                 MaxAvailableUnits{midx}(sess1Idx,sess2Idx) = min([length(unique(MatchTable_pair.ID1(MatchTable_pair.RecSes1 == sess1))) length(unique(MatchTable_pair.ID1(MatchTable_pair.RecSes1 == sess2)))]);%
+                
                 %% Extract drift if present
     
                 if isfield(UMparam,'drift')
