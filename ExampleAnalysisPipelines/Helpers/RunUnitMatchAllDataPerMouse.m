@@ -45,7 +45,7 @@ for midx = 1:length(MiceOpt)
     end
 
     if strcmp(RecordingType{midx},'Chronic')
-        if ~PrepareClusInfoparams.RunPyKSChronicStitched %MatchUnitsAcrossDays
+        if ~PipelineParams.RunPyKSChronicStitched %MatchUnitsAcrossDays
             disp('Unit matching in Matlab')
             subsesopt(cell2mat(cellfun(@(X) any(strfind(X,'Chronic')),subsesopt,'UniformOutput',0))) = []; %Use separate days and match units via matlab script
         else
@@ -67,28 +67,28 @@ for midx = 1:length(MiceOpt)
     end
 
     %% Prepare cluster information
-    PrepareClusInfoparams = PrepareClusInfo(AllKiloSortPaths,PrepareClusInfoparams);
-    PrepareClusInfoparams.RecType = RecordingType{midx};%
+    PipelineParams = PrepareClusInfo(AllKiloSortPaths,PipelineParams);
+    PipelineParams.RecType = RecordingType{midx};%
 
     % Remove empty ones
-    EmptyFolders = find(cellfun(@isempty,PrepareClusInfoparams.AllChannelPos));
+    EmptyFolders = find(cellfun(@isempty,PipelineParams.AllChannelPos));
     AllKiloSortPaths(EmptyFolders) = [];
-    PrepareClusInfoparams.AllChannelPos(EmptyFolders) = [];
-    PrepareClusInfoparams.AllProbeSN(EmptyFolders) = [];
-    PrepareClusInfoparams.RawDataPaths(EmptyFolders) = [];
+    PipelineParams.AllChannelPos(EmptyFolders) = [];
+    PipelineParams.AllProbeSN(EmptyFolders) = [];
+    PipelineParams.RawDataPaths(EmptyFolders) = [];
 
     %% Might want to run UM for separate IMRO tables & Probes (although UM can handle running all at the same time and takes position into account)
-    if ~PrepareClusInfoparams.separateIMRO
+    if ~PipelineParams.separateIMRO
         RunSet = ones(1,length(AllKiloSortPaths)); %Run everything at the same time
         nRuns = 1;
     else
         % Extract different IMRO tables
-        channelpositionMatrix = cat(3,PrepareClusInfoparams.AllChannelPos{:});
+        channelpositionMatrix = cat(3,PipelineParams.AllChannelPos{:});
         [UCHanOpt,~,idIMRO] = unique(reshape(channelpositionMatrix,size(channelpositionMatrix,1)*size(channelpositionMatrix,2),[])','rows','stable');
         UCHanOpt = reshape(UCHanOpt',size(channelpositionMatrix,1),size(channelpositionMatrix,2),[]);
 
         % Extract unique probes used
-        [ProbeOpt,~,idProbe]  = unique([PrepareClusInfoparams.AllProbeSN{:}]);
+        [ProbeOpt,~,idProbe]  = unique([PipelineParams.AllProbeSN{:}]);
         PosComb = combvec(1:length(ProbeOpt),1:size(UCHanOpt,3)); % Possible combinations Probe X IMRO
         % Assign a number to each KS path related to PosComb
         RunSet = nan(1,length(AllKiloSortPaths));
@@ -98,31 +98,33 @@ for midx = 1:length(MiceOpt)
         nRuns = length(PosComb);
     end
 
-    ORIParams = PrepareClusInfoparams; % RESET
+    ORIParams = PipelineParams; % RESET
 
     %% Run UnitMatch
     for runid = 1:nRuns
         try
-            PrepareClusInfoparams = ORIParams; % RESET
+            PipelineParams = ORIParams; % RESET
             idx = find(RunSet==runid);
             if isempty(idx)
                 continue
             end
-            if ~PrepareClusInfoparams.separateIMRO
-                PrepareClusInfoparams.SaveDir = fullfile(SaveDir,MiceOpt{midx},'AllProbes','AllIMRO');
+            if ~PipelineParams.separateIMRO
+                PipelineParams.SaveDir = fullfile(SaveDir,MiceOpt{midx},'AllProbes','AllIMRO');
+                PipelineParams.KSDir = AllKiloSortPaths;
             else
-                PrepareClusInfoparams.SaveDir = fullfile(SaveDir,MiceOpt{midx},['Probe' num2str(PosComb(1,runid)-1)],['IMRO_' num2str(PosComb(2,runid))]);
-                PrepareClusInfoparams.AllChannelPos = PrepareClusInfoparams.AllChannelPos(idx);
-                PrepareClusInfoparams.AllProbeSN = PrepareClusInfoparams.AllProbeSN(idx);
-                PrepareClusInfoparams.RawDataPaths = PrepareClusInfoparams.RawDataPaths(idx);
+                PipelineParams.SaveDir = fullfile(SaveDir,MiceOpt{midx},['Probe' num2str(PosComb(1,runid)-1)],['IMRO_' num2str(PosComb(2,runid))]);
+                PipelineParams.AllChannelPos = PipelineParams.AllChannelPos(idx);
+                PipelineParams.AllProbeSN = PipelineParams.AllProbeSN(idx);
+                PipelineParams.RawDataPaths = PipelineParams.RawDataPaths(idx);
+                PipelineParams.KSDir = AllKiloSortPaths(idx);
             end
 
-            UnitMatchExist = dir(fullfile(PrepareClusInfoparams.SaveDir,'**','UnitMatch.mat'));
+            UnitMatchExist = dir(fullfile(PipelineParams.SaveDir,'**','UnitMatch.mat'));
 
-            if isempty(UnitMatchExist) || PrepareClusInfoparams.RedoUnitMatch
+            if isempty(UnitMatchExist) || PipelineParams.RedoUnitMatch
 
                 %% Evaluate (within unit ID cross-v alidation)
-                UMparam = RunUnitMatch(AllKiloSortPaths(idx),PrepareClusInfoparams);
+                UMparam = RunUnitMatch(PipelineParams);
 
                 if isfield(UMparam,'Error')
                     continue
@@ -149,10 +151,10 @@ for midx = 1:length(MiceOpt)
                 end
 
             else
-                UMparam = PrepareClusInfoparams;
+                UMparam = PipelineParams;
             end
             %% Function analysis
-            UMparam.SaveDir = fullfile(PrepareClusInfoparams.SaveDir,'UnitMatch');
+            UMparam.SaveDir = fullfile(PipelineParams.SaveDir,'UnitMatch');
             ComputeFunctionalScores(UMparam.SaveDir)
             %%
             disp(['Preprocessed data for ' MiceOpt{midx} ' run  ' num2str(runid) '/' num2str(nRuns)])

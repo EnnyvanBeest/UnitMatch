@@ -11,7 +11,7 @@ for midx = 1:length(MiceOpt)
     myKsDir = fullfile(KilosortDir,MiceOpt{midx});
     subksdirs = dir(fullfile(myKsDir,'Probe*')); %This changed because now I suddenly had 2 probes per recording
 
-    if strcmp(RecordingType{midx},'Chronic') && PrepareClusInfoparams.RunPyKSChronicStitched % These are my chronic mice and we want pyks to do the matching, one dataset per mouse
+    if strcmp(RecordingType{midx},'Chronic') && PipelineParams.RunPyKSChronicStitched % These are my chronic mice and we want pyks to do the matching, one dataset per mouse
         countid=1;
         % For every date a different dataset
         Dates4Mouse = DateOpt{midx};

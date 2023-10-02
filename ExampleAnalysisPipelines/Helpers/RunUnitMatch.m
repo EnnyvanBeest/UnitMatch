@@ -1,9 +1,8 @@
-function [UMparam, UniqueIDConversion, MatchTable, WaveformInfo] = RunUnitMatch(AllKiloSortPaths, Params, ephys_dirs)
+function [UMparam, UniqueIDConversion, MatchTable, WaveformInfo] = RunUnitMatch(Params)
 
-if nargin<3
-    ephys_dirs = [];
-end
+
 %% Here we're going to actually load in all the sessions requested - only clusinfo to save memory for unitmatch
+AllKiloSortPaths = Params.KSDir;
 clusinfo = cell(1, length(AllKiloSortPaths));
 addthis = 0;
 for subsesid = 1:length(AllKiloSortPaths)
@@ -148,8 +147,9 @@ if Params.UnitMatch
         %% Run UnitMatch
         [UniqueIDConversion, MatchTable, WaveformInfo, UMparam] = UnitMatch(clusinfo, UMparam);
         tmpfile = dir(fullfile(UMparam.SaveDir,'UnitMatch.mat'));
-        AssignUniqueID_POSTUM(fullfile(tmpfile.folder,tmpfile.name));
-%         DataSizeParam = CalculateDuration(UMparam.SaveDir,ephys_dirs);
+        if UMparam.AssignUniqueID
+            AssignUniqueID(fullfile(tmpfile.folder,tmpfile.name));
+        end
 
     end
 elseif Params.DecompressionFlag % You might want to at least save out averaged waveforms for every session to get back to later, if they were saved out by bomcell

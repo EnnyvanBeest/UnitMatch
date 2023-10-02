@@ -1,8 +1,16 @@
 function  [UniqueIDConversion, MatchTable, WaveformInfo, param] = UnitMatch(clusinfo,param)
 %% Match units on neurophysiological evidence
 % Input:
-% - clusinfo (this is phy output, see also prepareinfo/spikes toolbox)
+% - clusinfo (this is a struct that contains per unit the following information):
+% * cluster_id (e.g. kilosort output clus_id)
+% * Good_ID: ones for units that should be included in the analysis
+% * RecSesID: Recording Session ID
+% * Coordinates: Typically 3D coordinates per unit
+% * Depth: depth on probe
+% * Shank: Which shank 
+% * Probe: Which probe
 % - param: parameters for ephys extraction
+% See UMDefaultParam.m for details
 
 % Output:
 % - UniqueIDConversion (Units that are found to be a match are given the same
@@ -11,8 +19,6 @@ function  [UniqueIDConversion, MatchTable, WaveformInfo, param] = UnitMatch(clus
 % (Fingerprint correlation) of all possible unit pairs
 % - WaveformInfo: most important waveform information that is useful to
 % keep
-% - AllSessionCorrelations: Cross correlations between sessions, useful for
-% functional confirmation of matches
 % - param (additional parameters used in UnitMatch)
 
 % Matching occurs on:
@@ -21,10 +27,6 @@ function  [UniqueIDConversion, MatchTable, WaveformInfo, param] = UnitMatch(clus
 % per time point
 % - Amplitude differences
 % - Spatial decay (decrease in signal over space)
-
-% fine tuning the initial training set for matching:
-% - cross-correlation finger prints --> units that are the same are likely
-% to correlate in a similar way with other units
 
 % Contributions:
 % Enny van Beest (2022-2023)
@@ -53,14 +55,9 @@ if ~iscell(Allchannelpos)
 end
 RunPyKSChronicStitched = param.RunPyKSChronicStitched;
 SaveDir = param.SaveDir;
-% AllDecompPaths = param.AllDecompPaths;
-% AllRawPaths = param.AllRawPaths;
 param.nChannels = length(Allchannelpos{1})+1; %First assume there's a sync channel as well.
-% sampleamount = param.sampleamount; %500; % Nr. waveforms to include
 spikeWidth = param.spikeWidth; %83; % in sample space (time)
-% UseBombCelRawWav = param.UseBombCelRawWav; % If Bombcell was also applied on this dataset, it's faster to read in the raw waveforms extracted by Bombcell
 NewPeakLoc = floor(spikeWidth./2); % This is where all peaks will be aligned to!
-% waveidx = NewPeakLoc-7:NewPeakLoc+16; % Force this analysis window
 waveidx = NewPeakLoc-7:NewPeakLoc+15; % Force this analysis window So far
 % best option
 param.TakeChannelRadius = TakeChannelRadius;

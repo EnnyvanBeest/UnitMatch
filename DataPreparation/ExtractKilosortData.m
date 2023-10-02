@@ -1,4 +1,4 @@
-function Params = PrepareClusInfo(KiloSortPaths, Params, RawDataPathsInput)
+function Params = ExtractKilosortData(KiloSortPaths, Params, RawDataPathsInput)
 % Prepares cluster information for subsequent analysis
 
 %% Inputs:
@@ -37,7 +37,7 @@ try
     if nargin < 2
         disp('No params given. Use default - although this is not advised...')
         Params.loadPCs = 0;
-        Params.RunPyKSChronicStitched = 1;
+        Params.RunPyKSChronicStitched = 0;
         Params.DecompressLocal = 1; %if 1, uncompress data first if it's currently compressed
         Params.CleanUpTemporary = 0; % Clean up temporary data
         Params.RedoQM = 0; %if 1, redo quality metrics if it already exists
@@ -47,7 +47,7 @@ try
         Params.RedoUnitMatch = 0; % Redo unitmatch
         Params.tmpdatafolder = KiloSortPaths(1); %
         Params.binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
-        Params.saveSp = 0;
+        Params.saveSp = 1;
         Params.extractSync = 0;
         Params.deNoise = 1;
         Params.nSavedChans = 385;

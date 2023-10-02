@@ -1,4 +1,4 @@
-function [UniqueID, MatchTable] = AssignUniqueID_POSTUM(SaveDir)
+function [UniqueID, MatchTable] = AssignUniqueID(SaveDir)
 
 load(SaveDir)
 if exist('TmpFile', 'var')
@@ -78,40 +78,33 @@ end
 
 %% Serial assigning of Unique ID 
 disp('Assigning correct Unique ID values now')
-RMPair = [];
-Utmp = UniqueID;
 if ~isempty(Pairs)
     nMatches = 0;
     for id = 1:size(Pairs,1)
         %  check: It should also match with all the other pairs that were
         % already assigned!
         % All units currently identified as this UniqueID
-        TheseOriUids = OriUniqueID(ismember(Utmp,Utmp(Pairs(id,:))));
+        TheseOriUids = OriUniqueID(ismember(UniqueID,UniqueID(Pairs(id,:))));
         % Far away days can be ignored
-        TheseRecs = GoodRecSesID(Pairs(id,:));
-        OtherRecs = GoodRecSesID(ismember(Utmp,Utmp(Pairs(id,:))));
+%         TheseRecs = GoodRecSesID(Pairs(id,:));
+%         OtherRecs = GoodRecSesID(ismember(UniqueID,UniqueID(Pairs(id,:))));
 
-        TheseOriUids(~ismember(OtherRecs,[TheseRecs-1; TheseRecs; TheseRecs+1;]))=[]; % Remove far days
+%         TheseOriUids(~ismember(OtherRecs,[TheseRecs-1; TheseRecs; TheseRecs+1;]))=[]; % Remove far days
         
         % All of these need to match with the new one, if added
         tblidx = find(((ismember(MatchTable.UID1,TheseOriUids)&ismember(MatchTable.UID2,Pairs(id,2))) | (ismember(MatchTable.UID2,TheseOriUids)&ismember(MatchTable.UID1,Pairs(id,2)))) & ~(MatchTable.UID1==MatchTable.UID2)); % !
 
-        if ~all(MatchTable.MatchProb(tblidx)>UMparam.ProbabilityThreshold)
-            RMPair = [RMPair id];
-        else
-            Utmp(Pairs(id,2)) = Utmp(Pairs(id,1));
+        if all(MatchTable.MatchProb(tblidx)>UMparam.ProbabilityThreshold)
+            % All UIDs with this UID should now become the new UID
+            % Find all that have either of these two UIDs
+            Idx = find(ismember(UniqueID,UniqueID(Pairs(id,:))));
+            UniqueID(Idx) = min(UniqueID(Idx));
             nMatches = nMatches + 1;
         end
     end
     disp([num2str(nMatches) ' matches/' num2str(length(UniqueID))])
 end
-%% Final assignment
-disp('Final assignment')
-Pairs(RMPair,:) = []; % Surviving Pairs
-Pairs = sortrows(Pairs);
-for uid = 1:size(Pairs,1)
-    UniqueID(Pairs(uid,:)) = min(UniqueID(Pairs(uid,:))); % Serial assignment;
-end
+
 %% Replace in table
 [PairID3,PairID4] = meshgrid(UniqueID(Good_Idx));
 MatchTable.UID1 = PairID3(:);

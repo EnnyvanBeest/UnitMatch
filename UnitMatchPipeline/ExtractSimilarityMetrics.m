@@ -737,7 +737,7 @@ while flag<2
     end
     priorMatch = 1-(param.nExpectedMatches./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days) % Times 2 for symmetry
 
-    %% CUmulative density function
+    %% Cumulative density function
     if flag  && drawthis
         subplot(2,2,4)
         [h,stats] = cdfplot(TotalScore(IncludeThesePairs));
@@ -865,6 +865,11 @@ while flag<2
                 ProjectedLocationPerTP(1,GoodRecSesID==did+1,:,:) = ProjectedLocationPerTP(1,GoodRecSesID==did+1,:,:) + drift(1);
                 ProjectedLocationPerTP(2,GoodRecSesID==did+1,:,:) = ProjectedLocationPerTP(2,GoodRecSesID==did+1,:,:) + drift(2);
                 ProjectedLocationPerTP(3,GoodRecSesID==did+1,:,:) = ProjectedLocationPerTP(3,GoodRecSesID==did+1,:,:) + drift(3);
+
+                ProjectedLocationPerTPAllFlips(1,GoodRecSesID==did+1,:,:,:) = ProjectedLocationPerTPAllFlips(1,GoodRecSesID==did+1,:,:,:) + drift(1);
+                ProjectedLocationPerTPAllFlips(2,GoodRecSesID==did+1,:,:,:) = ProjectedLocationPerTPAllFlips(2,GoodRecSesID==did+1,:,:,:) + drift(2);
+                ProjectedLocationPerTPAllFlips(3,GoodRecSesID==did+1,:,:,:) = ProjectedLocationPerTPAllFlips(3,GoodRecSesID==did+1,:,:,:) + drift(3);
+
                 close all
 
             end

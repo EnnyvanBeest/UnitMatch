@@ -4,6 +4,9 @@ if nargin < 2
 end
 Redo = 0;
 if nargin < 3 || isempty(loadMATsToSave)
+    loadMATsToSave = 1;
+end
+if ~loadMATsToSave
     TmpFile = matfile(fullfile(SaveDir, 'UnitMatch.mat')); % Access saved file
 else
     load(fullfile(SaveDir, 'UnitMatch.mat'));

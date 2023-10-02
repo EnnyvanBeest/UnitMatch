@@ -1,3 +1,5 @@
+%% Example pipeline going from raw Neuropixels data recorded with SpikeGLX to curated (with Bombcell) units identified with UnitMatch
+
 %% User Input
 %% Path information
 DataDir =  {'H:\MatchingUnits\RawData'}; %{'H:\MatchingUnits\RawDataMonthApart'};%;%Raw data folders, typically servers were e.g. *.cbin files are stored
@@ -14,42 +16,42 @@ RecordingType = repmat({'Chronic'},1,length(MiceOpt)); % And whether recordings 
 RecordingType(ismember(MiceOpt,{''}))={'Acute'}; %EB014', % Or maybe acute?
 
 %% Parameters on how to prepare units/data for analysis
-PrepareClusInfoparams.RunPyKSChronicStitched = 0; % Default 0. if 1, run PyKS chronic recordings stitched when same IMRO table was used
-PrepareClusInfoparams.CopyToTmpFirst = 1; % If 1, copy data to local first, don't run from server (= advised!)
-PrepareClusInfoparams.DecompressLocal = 1; % If 1, uncompress data first if it's currently compressed (= necessary for unitmatch and faster for QualityMetrics)
+PipelineParams.RunPyKSChronicStitched = 0; % Default 0. if 1, run PyKS chronic recordings stitched when same IMRO table was used
+PipelineParams.CopyToTmpFirst = 1; % If 1, copy data to local first, don't run from server (= advised!)
+PipelineParams.DecompressLocal = 1; % If 1, uncompress data first if it's currently compressed (= necessary for unitmatch and faster for QualityMetrics)
 
 % Storing preprocessed data?
-PrepareClusInfoparams.ReLoadAlways = 0; % If 1, SP & Clusinfo are always loaded from KS output
-PrepareClusInfoparams.saveSp = 1; % Save SP struct for easy loading of preprocessed data
-PrepareClusInfoparams.binsz = 0.01; %Bin size for PSTHs in seconds
+PipelineParams.ReLoadAlways = 0; % If 1, SP & Clusinfo are always loaded from KS output
+PipelineParams.saveSp = 1; % Save SP struct for easy loading of preprocessed data
+PipelineParams.binsz = 0.01; %Bin size for PSTHs in seconds
 
 % Quality Metrics
-PrepareClusInfoparams.RunQualityMetrics = 1; % If 1, Run the quality metrics (Bombcell @JulieFabre)
-PrepareClusInfoparams.RedoQM = 0; %if 1, redo quality metrics if it already exists
-PrepareClusInfoparams.InspectQualityMetrics = 0; % If 1, Inspect the quality matrix/data set using the GUI (manual inspection)
-PrepareClusInfoparams.loadPCs = 0; % Only necessary when computiong isoluation metrics/drift in QM. You save a lot of time keeping this at 0
+PipelineParams.RunQualityMetrics = 1; % If 1, Run the quality metrics (Bombcell @JulieFabre)
+PipelineParams.RedoQM = 0; %if 1, redo quality metrics if it already exists
+PipelineParams.InspectQualityMetrics = 0; % If 1, Inspect the quality matrix/data set using the GUI (manual inspection)
+PipelineParams.loadPCs = 0; % Only necessary when computiong isoluation metrics/drift in QM. You save a lot of time keeping this at 0
 
 % UnitMatch
-PrepareClusInfoparams.UnitMatch = 1; % If 1, find identical units across sessions or oversplits in a fast and flexible way
-PrepareClusInfoparams.RedoUnitMatch = 1; % if 1, Redo unitmatch
-PrepareClusInfoparams.separateIMRO = 0; % Run for every IMRO separately (for memory reasons or when having multiple probes this might be a good idea)
-PrepareClusInfoparams.UseHistology = 0; % Use real coordinates (3D space of tracked probes if available)
+PipelineParams.UnitMatch = 1; % If 1, find identical units across sessions or oversplits in a fast and flexible way
+PipelineParams.RedoUnitMatch = 1; % if 1, Redo unitmatch
+PipelineParams.separateIMRO = 0; % Run for every IMRO separately (for memory reasons or when having multiple probes this might be a good idea)
+PipelineParams.UseHistology = 0; % Use real coordinates (3D space of tracked probes if available)
 
 % UnitMatch Parameters:
 % All parameters to choose from: {'AmplitudeSim','spatialdecaySim','WavformMSE','WVCorr','CentroidDist','CentroidVar','CentroidDistRecentered','TrajAngleSim','TrajDistSim','spatialdecayfitSim'};
 % WavformSim is average of WVCorr and WavformMSE
 % CentroidOverlord is average of CentroidDistRecentered and CentroidVar
 % LocTrajectorySim is average of TrajAngleSim and TrajDistSim
-PrepareClusInfoparams.Scores2Include = {'CentroidDist','WavformSim','CentroidOverlord','spatialdecaySim','AmplitudeSim','LocTrajectorySim'}; %{'AmplitudeSim','spatialdecayfitSim','WavformSim','CentroidDist','CentroidVar','TrajAngleSim'}; % 
-PrepareClusInfoparams.ApplyExistingBayesModel = 0; %If 1, use probability distributions made available by us - 
-PrepareClusInfoparams.AssignUniqueID = 1; % Assign UniqueID 
-PrepareClusInfoparams.GoodUnitsOnly = 1; % Include only good untis in the UnitMatch analysis - faster and more sensical
-PrepareClusInfoparams.MakePlotsOfPairs = 0; % Plots pairs for inspection (UnitMatch)
-PrepareClusInfoparams.GUI = 1; % Flick through and do manual curation of matching - only works if MakePlotsofPairs = 1
+PipelineParams.Scores2Include = {'CentroidDist','WavformSim','CentroidOverlord','spatialdecaySim','AmplitudeSim','LocTrajectorySim'}; %{'AmplitudeSim','spatialdecayfitSim','WavformSim','CentroidDist','CentroidVar','TrajAngleSim'}; % 
+PipelineParams.ApplyExistingBayesModel = 0; %If 1, use probability distributions made available by us - 
+PipelineParams.AssignUniqueID = 1; % Assign UniqueID 
+PipelineParams.GoodUnitsOnly = 1; % Include only good untis in the UnitMatch analysis - faster and more sensical
+PipelineParams.MakePlotsOfPairs = 0; % Plots pairs for inspection (UnitMatch)
+PipelineParams.GUI = 1; % Flick through and do manual curation of matching - only works if MakePlotsofPairs = 1
 
 %% Automatic from here
-PrepareClusInfoparams.SaveDir = SaveDir; % Save results here
-PrepareClusInfoparams.tmpdatafolder = tmpdatafolder; % use this as a local directory (should be large enough to handle all sessions you want to combine)
+PipelineParams.SaveDir = SaveDir; % Save results here
+PipelineParams.tmpdatafolder = tmpdatafolder; % use this as a local directory (should be large enough to handle all sessions you want to combine)
 
 %% All dependencies you want to add (you may need to download these, all available via github)
 addpath(genpath(cd))
@@ -99,6 +101,8 @@ if ~exist('UMFiles') || isempty(UMFiles) % When using the example pipeline this 
         end
         for id = 1:length(tmpfile)
             if datetime(tmpfile(id).date) >FromDate 
+               AssignUniqueID_POSTUM(fullfile(tmpfile(id).folder,tmpfile(id).name));
+
                 %             FolderParts = strsplit(tmpfile(id).folder,filesep);
                 %             idx = find(ismember(FolderParts,MiceOpt{midx}));
                 UMFiles = cat(2,UMFiles,fullfile(tmpfile(id).folder,tmpfile(id).name));

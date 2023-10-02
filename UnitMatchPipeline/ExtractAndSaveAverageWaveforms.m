@@ -4,16 +4,11 @@ function Path4UnitNPY = ExtractAndSaveAverageWaveforms(clusinfo,param)
 %% Read in from param
 RedoExtraction = param.RedoExtraction; % Raw waveform and parameter extraction
 AllDecompPaths = param.AllDecompPaths;
-AllRawPaths = param.AllRawPaths;
 sampleamount = param.sampleamount; %500; % Nr. waveforms to include
 spikeWidth = param.spikeWidth; %83; % in sample space (time)
 halfWidth = floor(spikeWidth/2);
-UseBombCelRawWav = param.UseBombCelRawWav; % If Bombcell was also applied on this dataset, it's faster to read in the raw waveforms extracted by Bombcell
-SaveDir = param.SaveDir;
-flag = 0; % For debugging
 %% Extract all cluster info
 AllClusterIDs = clusinfo.cluster_id;
-UniqueID = 1:length(AllClusterIDs); % Initial assumption: All clusters are unique
 if param.GoodUnitsOnly
     Good_Idx = find(clusinfo.Good_ID); %Only care about good units at this point
 else
@@ -23,7 +18,6 @@ end
 GoodRecSesID = clusinfo.RecSesID(Good_Idx);
 
 % Define day stucture
-recsesAll = clusinfo.RecSesID;
 nclus = length(Good_Idx);
 
 %% Actual extraction
