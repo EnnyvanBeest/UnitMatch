@@ -80,6 +80,7 @@ AllKiloSortPaths = cell(1, length(KiloSortPaths));
 AllChannelPos = cell(1, length(KiloSortPaths));
 AllProbeSN = cell(1, length(KiloSortPaths));
 RawDataPaths = cell(1, length(KiloSortPaths));
+
 countid = 1;
 % figure;
 cols = jet(length(KiloSortPaths));
