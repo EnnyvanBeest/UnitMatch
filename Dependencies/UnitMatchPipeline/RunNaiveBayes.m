@@ -165,52 +165,6 @@ while flag<2 && runid<param.maxrun
     end
     drawnow
 
-    if runid<param.maxrun % Otherwise a waste of time!
-        label = reshape(label,size(Predictors,1),size(Predictors,2));
-        [r, c] = find(triu(label)==1); %Find matches
-
-        Pairs = cat(2,r,c);
-        Pairs = sortrows(Pairs);
-        Pairs = unique(Pairs,'rows');
-        %     Pairs(Pairs(:,1)==Pairs(:,2),:)=[];
-        MatchProbability = reshape(posterior(:,2),size(Predictors,1),size(Predictors,2));
-        %     figure; imagesc(label)
-
-        % Functional score for optimization: compute Fingerprint for the matched units - based on Célian Bimbard's noise-correlation finger print method but applied to across session correlations
-        % Not every recording day will have the same units. Therefore we will
-        % correlate each unit's activity with average activity across different
-        % depths
-        disp('Recalculate activity correlations')
-
-        % Use a bunch of units with high total scores as reference population
-        [PairScore,sortid] = sort(cell2mat(arrayfun(@(X) MatchProbability(Pairs(X,1),Pairs(X,2)),1:size(Pairs,1),'Uni',0)),'descend');
-        Pairs = Pairs(sortid,:);
-        [FingerprintR,RankScoreAll,SigMask,AllSessionCorrelations] = CrossCorrelationFingerPrint(sessionCorrelationsAll,Pairs,Unit2Take,recsesGood);
-        %         CrossCorrelationFingerPrint_BU
-
-        tmpf = triu(FingerprintR,1);
-        tmpm = triu(MatchProbability,1);
-        tmpm = tmpm(tmpf~=0);
-        tmpf = tmpf(tmpf~=0);
-        tmpr = triu(RankScoreAll,1);
-        tmpr = tmpr(tmpr~=0);
-
-        figure;
-        scatter(tmpm,tmpf,14,tmpr,'filled')
-        colormap(cat(1,[0 0 0],winter))
-        xlabel('Match Probability')
-        ylabel('Cross-correlation fingerprint')
-        makepretty
-        drawnow
-
-        % New Pairs for new round
-        CandidatePairs = label==1 & RankScoreAll==1& SigMask==1;
-        CandidatePairs(tril(true(size(CandidatePairs)),-1))=0;
-        [uid,uid2] = find(CandidatePairs);
-        Pairs = cat(2,uid,uid2);
-        Pairs = sortrows(Pairs);
-        Pairs=unique(Pairs,'rows');
-    end
     disp(['Getting the Naive Bayes model took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])
 end
 
