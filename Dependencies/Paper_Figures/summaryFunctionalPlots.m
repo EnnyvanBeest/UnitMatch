@@ -288,9 +288,11 @@ function summaryFunctionalPlots(UMFiles, TakeRank, groupVector, UseKSLabels)
             h = shadedErrorBar(histBinsCenter{fpIdx}, nanmean(distMatrix{fpIdx}(:,hid,:),3), ...
                 nanstd(distMatrix{fpIdx}(:,hid,:),[],3)./sqrt(sum(~isnan(distMatrix{fpIdx}(:,hid,:)),3)));
             h.mainLine.Color = distrCols(hid,:);
-            h.patch.FaceColor = distrCols(hid,:);
-            h.edge(1).Color = 'none';
-            h.edge(2).Color = 'none';
+            if ~isempty(h.patch)
+                h.patch.FaceColor = distrCols(hid,:);
+                h.edge(1).Color = 'none';
+                h.edge(2).Color = 'none';
+            end
         end
         title(sprintf('%s', FPNameCurr))
         if TakeRank; xlabel('Rank'); else; xlabel('Correlation'); end
@@ -305,9 +307,11 @@ function summaryFunctionalPlots(UMFiles, TakeRank, groupVector, UseKSLabels)
             h = shadedErrorBar(ROCBins, nanmean(ROCMatrix{fpIdx}(:,hid,:),3), ...
                 nanstd(ROCMatrix{fpIdx}(:,hid,:),[],3)./sqrt(sum(~isnan(ROCMatrix{fpIdx}(:,hid,:)),3)));
             h.mainLine.Color = ROCCols(hid,:);
-            h.patch.FaceColor = ROCCols(hid,:);
-            h.edge(1).Color = 'none';
-            h.edge(2).Color = 'none';
+            if ~isempty(h.patch)
+                h.patch.FaceColor = ROCCols(hid,:);
+                h.edge(1).Color = 'none';
+                h.edge(2).Color = 'none';
+            end
         end
         plot([0 1], [0 1], 'k--')
         xlim([0 1])
