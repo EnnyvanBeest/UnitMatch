@@ -1,7 +1,6 @@
 function spAll = getSpikesFromPrepData(AllKSDir)
 
     % Load SP
-    disp('Loading spike information...')
     nKSFiles = length(AllKSDir);
     spAll = cell(1, nKSFiles);
     for did = 1:nKSFiles

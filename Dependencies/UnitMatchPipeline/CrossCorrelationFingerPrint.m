@@ -1,4 +1,4 @@
-function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelationsFingerprints] = CrossCorrelationFingerPrint(sessionCorrelationsAll,Pairs,Unit2Take,recsesGood,plt)
+function [FingerprintRAll,SigMask,AllSessionCorrelationsFingerprints] = CrossCorrelationFingerPrint(sessionCorrelationsAll,Pairs,Unit2Take,recsesGood,plt)
     %% This function will compute the cross-correlation fingerprint.
 
     if nargin<5
@@ -14,7 +14,6 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelationsFingerprint
     FingerprintR_plt = cell(ndays,ndays);
     FingerprintRAll = nan(nclus,nclus);
     SigMask = zeros(nclus,nclus);
-    RankScoreAll = nan(nclus,nclus);
 
     %% Get average cross-correlation matrix
     SessionCorrelations_perDay = cell(1,ndays);
@@ -104,14 +103,6 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelationsFingerprint
             % Find SigMask
 %             SigMask(clusIdxD1All,clusIdxD2All) = FingerprintR >= quantile(FingerprintR,0.99,1) & FingerprintR >= quantile(FingerprintR,0.99,2);
             SigMask(clusIdxD1All,clusIdxD2All) = FingerprintR >= nanmedian(FingerprintR,1) + 2*nanstd(FingerprintR,[],1) & FingerprintR >= nanmedian(FingerprintR,2) + 2*nanstd(FingerprintR,[],2);
-
-            % Find rank
-            FingerprintR(isnan(FingerprintR)) = nanmin(FingerprintR(:)); % should not participate to the rank
-            [~,idx] = sort(FingerprintR,2,'descend');
-            for c = 1:numel(clusIdxD1All)
-                RankScoreAll(clusIdxD1All(c),clusIdxD2All(idx(c,:))) = 1:numel(clusIdxD2All);
-            end
-
         end
     end
 
@@ -180,29 +171,31 @@ function [FingerprintRAll,RankScoreAll,SigMask,AllSessionCorrelationsFingerprint
                 makepretty
             end
         end
-
-        %% Plot the rank
-
-        figure('name','RankScore')
-        subplot(1,2,1)
-        imagesc(RankScoreAll==1)
-        hold on
-        arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
-        arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
-        colormap(flipud(gray))
-        xlabel('All units across both days')
-        ylabel('All units across both days')
-        title('RankScore = 1')
-        makepretty
-        subplot(1,2,2)
-        imagesc(SigMask)
-        hold on
-        arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
-        arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
-        colormap(flipud(gray))
-        xlabel('All units across both days')
-        ylabel('All units across both days')
-        title('correlations>99th percentile of distribution')
-        makepretty
     end
 end
+
+%% Back-up
+% 
+% %% Plot the rank
+% 
+% figure('name','RankScore')
+% subplot(1,2,1)
+% imagesc(RankScoreAll==1)
+% hold on
+% arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+% arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+% colormap(flipud(gray))
+% xlabel('All units across both days')
+% ylabel('All units across both days')
+% title('RankScore = 1')
+% makepretty
+% subplot(1,2,2)
+% imagesc(SigMask)
+% hold on
+% arrayfun(@(X) line([SessionSwitch(X) SessionSwitch(X)],get(gca,'ylim'),'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+% arrayfun(@(X) line(get(gca,'xlim'),[SessionSwitch(X) SessionSwitch(X)],'color',[1 0 0]),2:length(SessionSwitch),'Uni',0)
+% colormap(flipud(gray))
+% xlabel('All units across both days')
+% ylabel('All units across both days')
+% title('correlations>99th percentile of distribution')
+% makepretty

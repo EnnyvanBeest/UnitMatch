@@ -100,8 +100,8 @@ for ss = 1:nRec
 end
 
 binsOn = (proc.window(1)+proc.binSize/2):proc.binSize:proc.window(2);
-binsOff =  (proc.window(3)+proc.binSize/2):proc.binSize:proc.window(4);
-bins = [binsOn binsOff];
+binsOff =  []; % SHOULD BE []
+bins = binsOn;
 
 %% Get binned FR for xcorr
 

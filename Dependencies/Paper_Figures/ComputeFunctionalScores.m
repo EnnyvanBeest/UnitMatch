@@ -7,10 +7,10 @@ end
 load(fullfile(SaveDir, 'UnitMatch.mat'), 'MatchTable', 'UMparam', 'UniqueIDConversion');
 UMparam.binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
 
-if all(ismember({'FingerprintCor','ACGCorr','FRDiff','NatImCorr'},MatchTable.Properties.VariableNames))
-    disp('Already computed functional scores')
-    return
-end
+% if all(ismember({'FingerprintCor','ACGCorr','FRDiff','NatImCorr'},MatchTable.Properties.VariableNames))
+%     disp('Already computed functional scores')
+%     return
+% end
 
 % Extract cluster information
 if UMparam.GoodUnitsOnly
@@ -33,47 +33,7 @@ end
 
 % Load SP
 disp('Loading spike information...')
-nKSFiles = length(AllKSDir);
-sp = cell(1, nKSFiles);
-for did = 1:nKSFiles
-    tmp = matfile(fullfile(AllKSDir{did}, 'PreparedData.mat'));
-    sptmp = tmp.sp;
-    clear tmp
-
-    % Only keep parameters used
-    sp{did}.st = sptmp.st;
-    sp{did}.spikeTemplates = sptmp.spikeTemplates;
-    sp{did}.spikeAmps = sptmp.spikeAmps;
-    % Replace recsesid with subsesid
-    if UMparam.RunPyKSChronicStitched
-        sp{did}.RecSes = sptmp.RecSes;
-    else
-        sp{did}.RecSes = repmat(did, size(sp{did}.st));
-    end
-end
-clear sptmp
-
-
-% Add all spikedata in one spikes struct - can be used for further analysis
-sp = [sp{:}];
-spnew = struct;
-fields = fieldnames(sp(1));
-for fieldid = 1:length(fields)
-    try
-        eval(['spnew.', fields{fieldid}, '= cat(1,sp(:).', fields{fieldid}, ');'])
-    catch ME
-        if strcmp(ME.message, 'Out of memory.')
-            eval(['spnew.', fields{fieldid}, ' = sp(1).', fields{fieldid}, ';'])
-            for tmpid = 2:length(sp)
-                eval(['spnew.', fields{fieldid}, ' = cat(1,spnew.', fields{fieldid}, ', sp(tmpid).', fields{fieldid}, ');'])
-            end
-        else
-            eval(['spnew.', fields{fieldid}, '= cat(2,sp(:).', fields{fieldid}, ');'])
-        end
-    end
-end
-sp = spnew;
-clear spnew
+sp = getSpikesFromPrepData(AllKSDir);
 
 nRec = length(unique(UniqueIDConversion.recsesAll(logical(UniqueIDConversion.GoodID))));
 RecOpt = unique(UniqueIDConversion.recsesAll(logical(UniqueIDConversion.GoodID)));
@@ -95,22 +55,6 @@ end
 
 if ~any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) % If it already exists in table, skip this entire thing
 
-
-    % for paper a figure:
-    %     figure
-    %     MatchProbability = reshape(MatchTable.MatchProb, nclus, nclus);
-    %     [r, c] = find(MatchProbability > UMparam.ProbabilityThreshold); %Find matches
-    %     Pairs = cat(2, r, c);
-    %     Pairs = sortrows(Pairs);
-    %     Pairs = unique(Pairs, 'rows');
-    %
-    %     pairidx = recses(Pairs(:,1)) == 1 & recsesGood(Pairs(:,2))==2;
-    %     PairsTmp = Pairs(pairidx,:);
-    %     % Only use every 'unit' once --> take the highest scoring matches
-    %     [~,id1,~]=unique(PairsTmp(:,1),'stable');
-    %     PairsTmp = PairsTmp(id1,:);
-    %     [~,id1,~]=unique(PairsTmp(:,2),'stable');
-    %     PairsTmp = PairsTmp(id1,:);
     %% Compute cross-correlation matrices for individual recordings
     disp('Computing cross-correlation fingerprint')
     SessionCorrelations = cell(1, nRec);
@@ -124,15 +68,6 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) % If it
         for uid = 1:numel(Good_Idx)
             sr(uid, :) = histcounts(sp.st(sp.spikeTemplates == OriIDAll(Good_Idx(uid)) & sp.RecSes == recsesall(Good_Idx(uid))), edges);
         end
-
-        %         Unit2TakeIdx = PairsTmp(1:60,rid); % Only take each unit once
-
-        %         subplot(1,nRec,rid)
-        %         imagesc(sr(Unit2TakeIdx-SessionSwitch(rid)+1,1:10000),[0 1]); hold on
-        %         colormap(flipud(gray))
-        %         xlabel('time')
-        %         ylabel('Reference units')
-        %         makepretty
 
         % Define folds (two halves)
         idx_fold1 = 1:floor(size(sr, 2)./2);
@@ -185,19 +120,22 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) % If it
     Pairs = cat(2, r, c);
     Pairs = sortrows(Pairs);
     Pairs = unique(Pairs, 'rows');
-    [FingerprintR, RankScoreAll, SigMask, AllSessionCorrelations] = CrossCorrelationFingerPrint(sessionCorrelationsAll, Pairs, OriID, recses, drawdrosscorr);
+    [FingerprintR, SigMask, AllSessionCorrelations] = CrossCorrelationFingerPrint(sessionCorrelationsAll, Pairs, OriID, recses, drawdrosscorr);
+
+    % get rank
+    XCorrRankScore = getRank(FingerprintR,SessionSwitch);
 
     % Save in table
     MatchTable.FingerprintCor = FingerprintR(:);
-    MatchTable.RankScore = RankScoreAll(:);
+    MatchTable.RankScore = XCorrRankScore(:);
     MatchTable.SigFingerprintR = SigMask(:);
 
     %% Compare to functional scores
-    if saveFig %Otherwise this takes way tooo long
+    if saveFig % Otherwise this takes way tooo long
         figure;
 
         subplot(1, 3, 1)
-        imagesc(RankScoreAll(SortingOrder, SortingOrder) == 1 & SigMask(SortingOrder, SortingOrder) == 1)
+        imagesc(XCorrRankScore(SortingOrder, SortingOrder) == 1 & SigMask(SortingOrder, SortingOrder) == 1)
         hold on
         arrayfun(@(X) line([SessionSwitch(X), SessionSwitch(X)], get(gca, 'ylim'), 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
         arrayfun(@(X) line(get(gca, 'xlim'), [SessionSwitch(X), SessionSwitch(X)], 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
@@ -215,7 +153,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) % If it
         makepretty
 
         subplot(1, 3, 3)
-        imagesc(MatchProbability(SortingOrder, SortingOrder) >= UMparam.ProbabilityThreshold | (MatchProbability(SortingOrder, SortingOrder) > 0.05 & RankScoreAll(SortingOrder, SortingOrder) == 1 & SigMask(SortingOrder, SortingOrder) == 1));
+        imagesc(MatchProbability(SortingOrder, SortingOrder) >= UMparam.ProbabilityThreshold | (MatchProbability(SortingOrder, SortingOrder) > 0.05 & XCorrRankScore(SortingOrder, SortingOrder) == 1 & SigMask(SortingOrder, SortingOrder) == 1));
         % imagesc(MatchProbability>=0.99 | (MatchProbability>=0.05 & RankScoreAll==1 & SigMask==1))
         hold on
         arrayfun(@(X) line([SessionSwitch(X), SessionSwitch(X)], get(gca, 'ylim'), 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
@@ -230,7 +168,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) % If it
 
         tmpf = triu(FingerprintR);
         tmpm = triu(MatchProbability);
-        tmpr = triu(RankScoreAll);
+        tmpr = triu(XCorrRankScore);
         tmpr = tmpr(tmpf ~= 0);
         tmpm = tmpm(tmpf ~= 0);
         tmpf = tmpf(tmpf ~= 0);
@@ -281,19 +219,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'ACGCorr')) % If it alread
     ACGCorr = corr(squeeze(ACGMat(:, 1, :)), squeeze(ACGMat(:, 2, :)));
     MatchTable.ACGCorr = ACGCorr(:);
 
-    ACGCorr(isnan(ACGCorr)) = nanmin(ACGCorr(:)); % should not participate to the rank
-    % Find rank
-    for did1 = 1:nRec
-        for did2 = 1:nRec
-            % Get the indices
-            clusIdxD1All = SessionSwitch(did1):SessionSwitch(did1+1)-1;
-            clusIdxD2All = SessionSwitch(did2):SessionSwitch(did2+1)-1;
-            [~,idx] = sort(ACGCorr(clusIdxD1All,clusIdxD2All),2,'descend');
-            for c = 1:numel(clusIdxD1All)
-                ACGRankScore(clusIdxD1All(c),clusIdxD2All(idx(c,:))) = 1:numel(clusIdxD2All);
-            end
-        end
-    end
+    ACGRankScore = getRank(ACGCorr,SessionSwitch);
     MatchTable.ACGRankScore = ACGRankScore(:);
 end
 
@@ -304,21 +230,8 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'FRDiff'))
     FRDiff = abs(squeeze(FR(:, 2, :)-permute(FR(:, 1, :), [3, 2, 1])));
     MatchTable.FRDiff = FRDiff(:);
 
-    FRDiff(isnan(FRDiff)) = nanmax(FRDiff(:)); % should not participate to the rank
-    % Find rank
-    for did1 = 1:nRec
-        for did2 = 1:nRec
-            % Get the indices
-            clusIdxD1All = SessionSwitch(did1):SessionSwitch(did1+1)-1;
-            clusIdxD2All = SessionSwitch(did2):SessionSwitch(did2+1)-1;
-            [~,idx] = sort(FRDiff(clusIdxD1All,clusIdxD2All),2,'ascend');
-            for c = 1:numel(clusIdxD1All)
-                FRRankScore(clusIdxD1All(c),clusIdxD2All(idx(c,:))) = 1:numel(clusIdxD2All);
-            end
-        end
-    end
+    FRRankScore = getRank(-FRDiff,SessionSwitch);
     MatchTable.FRRankScore = FRRankScore(:);
-
 end
 
 %% Get natural images fingerprints correlations
@@ -327,14 +240,18 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) || all(isnan
     % Param for processing
     proc.window = [-0.3 0.5 ... % around onset
         0.0 0.5]; % around offset
-    proc.binSize = 0.002; % in ms
+    proc.binSize = 0.005; % in ms
     proc.smoothSize = 5; % PSTH smoothing filter
     gw = gausswin(proc.smoothSize,3);
     proc.smWin = gw./sum(gw);
 
+    binsOn = (proc.window(1)+proc.binSize/2):proc.binSize:proc.window(2);
+    binsOff =  proc.window(2)+((proc.binSize/2):proc.binSize:(proc.window(4)-proc.window(3)));
+    bins = [binsOn binsOff];
+
     nRec = length(RecOpt); % not always the same!! numel(UMparam.AllRawPaths);
     nClu = nan(1,nRec); for ss = 1:nRec; nClu(ss) = numel(unique(MatchTable.ID1(MatchTable.RecSes1 == RecOpt(ss)))); end
-    spikeData_cv = cell(1,2*nRec);
+    spikeData_cv = cell(2,nRec);
     for ss = 1:nRec
         % Get the original binFile (also for stitched?)
         if iscell(UMparam.AllRawPaths{RecOpt(ss)})
@@ -368,18 +285,19 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) || all(isnan
 
             % Split in two halves and subselect units
             cluIdx = ismember(clusterIDs,unique(MatchTable.ID1(MatchTable.RecSes1 == RecOpt(ss))));
-            currIdx = (ss-1)*2;
-            spikeData_cv{currIdx+1} = spikeData(:,:,cluIdx,1:2:end); % odd
-            spikeData_cv{currIdx+2} = spikeData(:,:,cluIdx,2:2:end); % even
+            spikeData_cv{1,ss} = spikeData(:,:,cluIdx,1:2:end); % odd
+            spikeData_cv{2,ss} = spikeData(:,:,cluIdx,2:2:end); % even
         end
     end
 
+    % ---
+    % First fingerprint with CCA
+    
     % Perform CCA across recordings
-    [corrMat, ~] = computeNatImCorr(spikeData_cv);
+    [corrMat, ~] = computeNatImCorr(spikeData_cv(:)); % default 75
+    % [corrMat, ~] = computeNatImCorr(spikeData_cv(:), 1:ceil(sqrt(size(spikeData_cv{1},1)*size(spikeData_cv{1},2))/2));
 
     % Reshape the matrix to a single one with correct clusters
-    %%% SIMILAR TO WHAT ENNY IS DOING (e.g., 1x2 and 2x1, but not 1x1 and 2x2);
-    %%% NOT OPTIMAL SINCE NOT USING ALL THE POSSIBLE PAIRS
     corrWCCA_big = nan(sum(nClu),sum(nClu));
     corrWCCA_1x2 = corrMat(1:2:end, 2:2:end);
     for ss1 = 1:nRec
@@ -389,31 +307,57 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) || all(isnan
             end
         end
     end
-    corrWCCA_big = .5*corrWCCA_big+.5*corrWCCA_big'; % not sure that's needed?
-
+    corrWCCA_big = tanh(.5*atanh(corrWCCA_big) + .5*atanh(corrWCCA_big')); % not sure that's needed?
     MatchTable.NatImCorr = corrWCCA_big(:);
 
+    % Get rank
+    NImgRankScore = getRank(corrWCCA_big, SessionSwitch);
+    MatchTable.NImgRankScore = NImgRankScore(:);
 
-    % RANK
-    corrWCCA_big_noNaN = corrWCCA_big;
-    corrWCCA_big_noNaN(isnan(corrWCCA_big)) = nanmin(corrWCCA_big(:)); % should not participate to the rank
-    % Find rank
-    NImgRankScore = nan(size(corrWCCA_big));
-    for did1 = 1:nRec
-        for did2 = 1:nRec
-            % Get the indices
-            clusIdxD1All = SessionSwitch(did1):SessionSwitch(did1+1)-1;
-            clusIdxD2All = SessionSwitch(did2):SessionSwitch(did2+1)-1;
-            if ~all(isnan(mat2vec(corrWCCA_big(clusIdxD1All,clusIdxD2All))))
-                [~,idx] = sort(corrWCCA_big_noNaN(clusIdxD1All,clusIdxD2All),2,'descend');
-                for c = 1:numel(clusIdxD1All)
-                    NImgRankScore(clusIdxD1All(c),clusIdxD2All(idx(c,:))) = 1:numel(clusIdxD2All);
-                end
-            end
+    % ---
+    % Second fingerprint with mean response to NI + temporal responses
+    corrMeanResp_big = nan(sum(nClu),sum(nClu));
+    corrTimecourse_big = nan(sum(nClu),sum(nClu));
+    for ss1 = 1:nRec
+        meanResp1 = zscore(squeeze(nanmean(spikeData_cv{1,ss1}(:,bins<proc.window(2)+0.2 & bins>0,:,:),[2 4])));
+        timecourse1 = zscore(squeeze(nanmean(spikeData_cv{1,ss1}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),[1 4])));
+        for ss2 = 1:nRec
+            meanResp2 = zscore(squeeze(nanmean(spikeData_cv{2,ss2}(:,bins<proc.window(2)+0.2 & bins>0,:,:),[2 4])));
+            timecourse2 = zscore(squeeze(nanmean(spikeData_cv{2,ss2}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),[1 4])));
+            corrMeanResp_big(sum(nClu(1:ss1-1))+1:sum(nClu(1:ss1)), sum(nClu(1:ss2-1))+1:sum(nClu(1:ss2))) = corr(meanResp1,meanResp2);
+            corrTimecourse_big(sum(nClu(1:ss1-1))+1:sum(nClu(1:ss1)), sum(nClu(1:ss2-1))+1:sum(nClu(1:ss2))) = corr(timecourse1, timecourse2);
         end
     end
-    NImgRankScore(isnan(corrWCCA_big)) = nan;
-    MatchTable.NImgRankScore = NImgRankScore(:);
+    corrResp_big = tanh(.5*atanh(corrMeanResp_big) + .5*atanh(corrTimecourse_big));
+
+    corrResp_big = tanh(.5*atanh(corrResp_big) + .5*atanh(corrResp_big')); % not sure that's needed?
+    MatchTable.NatImRespCorr = corrResp_big(:);
+
+    % Get rank
+    NatImRespRankScore = getRank(corrResp_big, SessionSwitch);
+    MatchTable.NatImRespRankScore = NatImRespRankScore(:);
+
+    % ---
+    % Third fingerprint with scaled response
+    corrScaledResp_big = nan(sum(nClu),sum(nClu));
+    for ss1 = 1:nRec
+        mat1 = nanmean(spikeData_cv{1,ss1}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),4);
+        timecourse1 = zscore(nanmean(spikeData_cv{1,ss1}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),[1 4]));
+        scaledResp1 = squeeze(sum(mat1.*timecourse1,2));
+        for ss2 = 1:nRec
+            mat2 = nanmean(spikeData_cv{2,ss2}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),4);
+            timecourse2 = zscore(nanmean(spikeData_cv{2,ss2}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),[1 4]));
+            scaledResp2 = squeeze(sum(mat2.*timecourse2,2));
+            corrScaledResp_big(sum(nClu(1:ss1-1))+1:sum(nClu(1:ss1)), sum(nClu(1:ss2-1))+1:sum(nClu(1:ss2))) = corr(scaledResp1,scaledResp2);
+        end
+    end
+    corrScaledResp_big = tanh(.5*atanh(corrScaledResp_big) + .5*atanh(corrTimecourse_big));
+    corrScaledResp_big = tanh(.5*atanh(corrScaledResp_big) + .5*atanh(corrScaledResp_big')); % not sure that's needed? 
+    MatchTable.NatImRespCorr = corrResp_big(:);
+
+    % Get rank
+    NatImScaledRespRankScore = getRank(corrScaledResp_big, SessionSwitch);
+    MatchTable.NatImScaledRespRankScore = NatImScaledRespRankScore(:);
 
 end
 %% Write to table
