@@ -11,7 +11,7 @@ LnStls = {'-','--'}
 PercAboveThrs = nan(length(MiceOpt),length(QMetricOfInterest),2);
 for midx = 1:length(MiceOpt)
     % compare
-    tmpdir = dir(fullfile(SaveDir,MiceOpt{midx},'UnitMatch','UnitMatch.mat'));
+    tmpdir = dir(fullfile(SaveDir,MiceOpt{midx},'*','*','UnitMatch','UnitMatch.mat'));
     tmpMatchTbl = matfile(fullfile(tmpdir.folder,tmpdir.name));
     MatchTable = tmpMatchTbl.MatchTable;
     nclus = sqrt(height(MatchTable));
@@ -443,10 +443,11 @@ for midx = 1:length(MiceOpt)
      end
      subplot(ceil(sqrt(length(MiceOpt))),round(sqrt(length(MiceOpt))),midx)
      Idx = (AvgMan'>CurationThrs | PyKS'==1 | MatchProb>0.5);
-     ManThrs = sum(MatchProb>0.5);
 
-      h = venn( [sum(PyKS(Idx)'==1 & MatchProb(Idx)<=0.5 & AvgMan(Idx)'<=CurationThrs)./ManThrs sum(PyKS(Idx)'==1 & MatchProb(Idx)>0.5 & AvgMan(Idx)'<=CurationThrs)./ManThrs sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'<=CurationThrs)./ManThrs sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'>CurationThrs)./ManThrs ...
-        sum(PyKS(Idx)'==0 & MatchProb(Idx)<=0.5 & AvgMan(Idx)'>CurationThrs)./ManThrs sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'>CurationThrs)./ManThrs sum(PyKS(Idx)'==1 & AvgMan(Idx)'>CurationThrs&MatchProb(Idx)>0.5)./ManThrs] )
+%      h = venn([sum(PyKS(Idx)'==1 & MatchProb(Idx)<=0.5) sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5) sum(PyKS(Idx)'==1 & MatchProb(Idx)>0.5)]) 
+
+      h = venn([sum(PyKS(Idx)'==1 & MatchProb(Idx)<=0.5 & AvgMan(Idx)'<=CurationThrs) sum(PyKS(Idx)'==1 & MatchProb(Idx)>0.5 & AvgMan(Idx)'<=CurationThrs) sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'<=CurationThrs) sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'>CurationThrs) ...
+        sum(PyKS(Idx)'==0 & MatchProb(Idx)<=0.5 & AvgMan(Idx)'>CurationThrs) sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'>CurationThrs) sum(PyKS(Idx)'==1 & AvgMan(Idx)'>CurationThrs&MatchProb(Idx)>0.5)] );
       axis square
       axis off
       makepretty
@@ -455,10 +456,16 @@ for midx = 1:length(MiceOpt)
 %         sum(PyKS(Idx)'==0 & MatchProb(Idx)<=0.5 & AvgMan(Idx)'>CurationThrs)./ManThrs sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'>CurationThrs)./ManThrs sum(PyKS(Idx)'==1 & AvgMan(Idx)'>CurationThrs&MatchProb(Idx)>0.5)./ManThrs],0.01);
      title(MiceOpt{midx})
 
+     % Tracking numbers compared to 'ground truth' manual curation
+     if midx == 1
+         nTrackedGT = nan(2,length(MiceOpt));
+     end
+     ManThrs = sum(AvgMan'>CurationThrs);
+     nTrackedGT(:,midx) = [sum(MatchProb(Idx)>0.5)./ManThrs; sum(PyKS(Idx)>0.5)./ManThrs]; 
 
      %% Tracking performance?
      %      Maximum possible
-     tmpscores = AllScoringMethods(~WithinSameSession,:);
+     tmpscores = AllScoringMethods(~WithinSameSession&Idx',:);
 
      if midx == 1
          TrackPerf = nan(length(AllScorerNames),length(MiceOpt));
@@ -470,7 +477,7 @@ for midx = 1:length(MiceOpt)
      if midx == 1
          nTracked = nan(size(tmpscores,2),length(MiceOpt));
      end
-     nTracked(:,midx) = sum(tmpscores>0.5,1)./length(tmpscores);
+     nTracked(:,midx) = sum(tmpscores>0.5,1)./size(tmpscores,1);
 
      %% Quality metrics:
 %      figure(QMetricDistrFig)
@@ -527,6 +534,21 @@ ylabel('Tracked Units (%)')
 makepretty
 saveas(gcf,fullfile(SaveDir,'TrackingPerformance_Curated.fig'))
 saveas(gcf,fullfile(SaveDir,'TrackingPerformance_Curated.bmp'))
+
+%      nTrackedGT(:,midx) = [sum(MatchProb(Idx)>0.5)./ManThrs; sum(PyKS(Idx)>0.5)./ManThrs]; 
+figure('name','TrackingScatter1')
+cols = lines(length(MiceOpt));
+clear h
+h = bar(nTrackedGT.*100);
+hold on
+line([0.5 2.5],[100 100],'color',[0 0 0])
+set(gca,'XTickLabel',{'UnitMatch','Kilosort'})
+ylabel('Curated pairs matched (%)')
+makepretty
+offsetAxes
+
+
+
 
 figure('name','TrackingScatter')
 cols = lines(length(MiceOpt));

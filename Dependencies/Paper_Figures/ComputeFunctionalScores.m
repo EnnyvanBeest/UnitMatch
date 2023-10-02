@@ -324,6 +324,7 @@ end
 %% Get natural images fingerprints correlations
 
 if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) || all(isnan(MatchTable.NatImCorr))% If it already exists in table, skip this entire thing
+    try
     % Param for processing
     proc.window = [-0.3 0.5 ... % around onset
         0.0 0.5]; % around offset
@@ -414,7 +415,10 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) || all(isnan
     end
     NImgRankScore(isnan(corrWCCA_big)) = nan;
     MatchTable.NImgRankScore = NImgRankScore(:);
-
+    catch ME
+        disp(ME)
+        keyboard
+    end
 end
 %% Write to table
 

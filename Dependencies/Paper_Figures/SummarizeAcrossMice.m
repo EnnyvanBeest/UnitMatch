@@ -92,8 +92,8 @@ for midx = 1:length(MiceOpt)
         nRecs = length(unique(recsesall));
         AllKSDir = UMparam.KSDir; %original KS Dir
         AllRawDir = UMparam.AllRawPaths; %
-        if isstruct(AllRawDir)
-            AllRawDir = arrayfun(@(X) fullfile(X.folder,X.name),AllRawDir,'Uni',0);
+        if isstruct(AllRawDir{1})
+            AllRawDir = cellfun(@(X) fullfile(X.folder,X.name),AllRawDir,'Uni',0);
         end
         nclus = length(UniqueID);
         ChannelPos = UMparam.channelpos;
