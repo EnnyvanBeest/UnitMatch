@@ -1,7 +1,11 @@
-function ComputeFunctionalScores(SaveDir, saveFig)
+function ComputeFunctionalScores(SaveDir, saveFig, recompute)
 
-if nargin < 2
+if nargin < 2 || isempty(saveFig)
     saveFig = 0;
+end
+
+if nargin < 3 || isempty(recompute)
+    recompute = 0;
 end
 
 load(fullfile(SaveDir, 'UnitMatch.mat'), 'MatchTable', 'UMparam', 'UniqueIDConversion');
@@ -53,7 +57,7 @@ end
 
 %% Get cross-correlation fingerprints correlations
 
-if ~any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) % If it already exists in table, skip this entire thing
+if ~any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) || recompute% If it already exists in table, skip this entire thing
 
     %% Compute cross-correlation matrices for individual recordings
     disp('Computing cross-correlation fingerprint')
@@ -185,7 +189,7 @@ end
 
 %% Get ACG fingerprints correlations
 
-if ~any(ismember(MatchTable.Properties.VariableNames, 'ACGCorr')) % If it already exists in table, skip this entire thing
+if ~any(ismember(MatchTable.Properties.VariableNames, 'ACGCorr')) || recompute % If it already exists in table, skip this entire thing
 
     %% Compute ACG and correlate them between units
     % This is very time consuming
@@ -225,7 +229,7 @@ end
 
 %% Get FR difference
 
-if ~any(ismember(MatchTable.Properties.VariableNames, 'FRDiff'))
+if ~any(ismember(MatchTable.Properties.VariableNames, 'FRDiff')) || recompute
     FR = repmat(permute(FR, [2, 1]), [1, 1, nclus]);
     FRDiff = abs(squeeze(FR(:, 2, :)-permute(FR(:, 1, :), [3, 2, 1])));
     MatchTable.FRDiff = FRDiff(:);
@@ -236,8 +240,7 @@ end
 
 %% Get natural images fingerprints correlations
 
-if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) || all(isnan(MatchTable.NatImCorr))% If it already exists in table, skip this entire thing
-    try
+if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) || all(isnan(MatchTable.NatImCorr)) || recompute % If it already exists in table, skip this entire thing
     % Param for processing
     proc.window = [-0.3 0.5 ... % around onset
         0.0 0.5]; % around offset
