@@ -67,7 +67,7 @@ for midx = 1:length(MiceOpt)
     end
 
     %% Prepare cluster information
-    PipelineParams = PrepareClusInfo(AllKiloSortPaths,PipelineParams);
+    PipelineParams = ExtractKilosortData(AllKiloSortPaths,PipelineParams);
     PipelineParams.RecType = RecordingType{midx};%
 
     % Remove empty ones
