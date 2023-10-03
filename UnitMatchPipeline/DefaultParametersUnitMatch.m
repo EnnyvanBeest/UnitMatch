@@ -1,4 +1,4 @@
-function UMparam = DefaultParametersUnitMatch(SaveDir,KSDir,channelpos,RawDataPaths)
+function UMparam = DefaultParametersUnitMatch(UMparam)
 
 %% Parameters for extracting raw waveforms
 UMparam.sampleamount = 1000; % n raw waveforms to extract
@@ -25,9 +25,6 @@ UMparam.ACGbinSize = 1E-03; %
 UMparam.ACGduration = 1; % in seconds
 UMparam.binsize = 0.01; % in seconds
 
-%% Path information
-UMparam.SaveDir = SaveDir;
-UMparam.KSDir = KSDir; % Cell array with path in every cell to KS output
-UMparam.channelpos = channelpos;
-UMparam.AllDecompPaths = RawDataPaths; % Assuming these are .bin files. You can use the general pipeline if you need to compress data
-UMparam.RawDataPaths = RawDataPaths;  % Could be .cbin or .bin files
+%% if not given, assume decompPath (decompressed path) is same as raw
+UMparam.AllDecompPaths = UMparam.RawDataPaths;
+return

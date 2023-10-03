@@ -49,10 +49,7 @@ param.NeighbourDist = 50; % In micron
 global stepsize
 stepsize = 0.01;
 %% Read in from param
-Allchannelpos = param.channelpos;
-if ~iscell(Allchannelpos)
-    Allchannelpos = {Allchannelpos};
-end
+Allchannelpos = param.AllChannelPos;
 RunPyKSChronicStitched = param.RunPyKSChronicStitched;
 SaveDir = param.SaveDir;
 param.nChannels = length(Allchannelpos{1})+1; %First assume there's a sync channel as well.

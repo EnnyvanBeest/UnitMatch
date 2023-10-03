@@ -4,7 +4,7 @@ opts = optimset('Display','off');
 %% Extract relevant information
 nclus = length(Path4UnitNPY);
 spikeWidth = param.spikeWidth;
-Allchannelpos = param.channelpos;
+Allchannelpos = param.AllChannelPos;
 RecSes = clusinfo.RecSesID;
 
 if isfield(clusinfo,'Coordinates') && param.UseHistology% Allow for real coordinates

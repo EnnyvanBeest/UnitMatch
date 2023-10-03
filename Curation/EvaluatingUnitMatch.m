@@ -1,17 +1,17 @@
-function EvaluatingUnitMatch(DirToEvaluate)
+function EvaluatingUnitMatch(SaveDir)
 
 %% Evaluating UnitMatch
 % DirToEvaluate = 'H:\MatchingUnits\Output\AL032\UnitMatch';
 stepsize = 0.01;
 % Load UnitMatch Output
-Output2Evaluate = dir(fullfile(DirToEvaluate, 'UnitMatch.mat'));
+Output2Evaluate = dir(fullfile(SaveDir, 'UnitMatch.mat'));
 Output2Evaluate = matfile(fullfile(Output2Evaluate.folder, Output2Evaluate.name));
 UMparam = Output2Evaluate.UMparam;
 
 ShowScores = 0;
 for id = 1 %:2 % Loop: first use model that was used, then see if standard model would work better
     if id == 1
-        Model2Evaluate = dir(fullfile(DirToEvaluate, 'UnitMatchModel.mat'));
+        Model2Evaluate = dir(fullfile(SaveDir, 'UnitMatchModel.mat'));
         disp('Evaluating the model as it was ran by user')
         extraname = 'Used Model';
     else
@@ -213,8 +213,8 @@ else
 end
 
 %% AUC
-if exist(fullfile(DirToEvaluate, 'AUC.mat'))
-    load(fullfile(DirToEvaluate, 'AUC.mat'));
+if exist(fullfile(SaveDir, 'AUC.mat'))
+    load(fullfile(SaveDir, 'AUC.mat'));
     AUC = AUCStruct.AUC;
     ParamNames = AUCStruct.ParamNames(~isnan(AUC));
     AUC = AUC(~isnan(AUC));

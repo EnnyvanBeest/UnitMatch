@@ -1,6 +1,6 @@
 function QualityMetricsROCs(SaveDir)
 
-TmpFile = matfile(fullfile(SaveDir, 'UnitMatch.mat')); % Access saved file
+TmpFile = load(fullfile(SaveDir, 'UnitMatch.mat')); % Access saved file
 UMparam = TmpFile.UMparam; % Extract parameters
 UMparam.binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
 
@@ -34,12 +34,13 @@ for recid = 1:nRec
 
     ThisIdx = find(GoodId(recsesall == recid)); % Only take good units of this round
     qMclusterID = qMetric.clusterID - 1; %0-index
-    ThisIdx = ismember(qMclusterID, OriIDAll(ThisIdx)); % Find the same cluster IDs
-
+    tmpORI = OriIDAll(recsesall == recid);
+    [~,UMidx] = ismember(qMclusterID, tmpORI(ThisIdx)); % Find the same cluster IDs
     if recid == 1
-        qMetricAllGoodUnits = qMetric(ThisIdx, :); % Add sessions together, only take good units
+        qMetricAllGoodUnits(UMidx(UMidx~=0),:) = qMetric(ThisIdx, :); % Add sessions together, only take good units
     else
-        qMetricAllGoodUnits = cat(1, qMetricAllGoodUnits, qMetric(ThisIdx, :));
+        qtmp(UMidx(UMidx~=0),:) = qMetric(ThisIdx, :);
+        qMetricAllGoodUnits = cat(1, qMetricAllGoodUnits, qtmp);
     end
 end
 
@@ -53,6 +54,9 @@ UnitsWithoutAMatch = 1:nclus;
 UnitsWithoutAMatch(ismember(UnitsWithoutAMatch, UnitsWithAMatch)) = [];
 
 %% For every qParams, make an ROC
+AUCqParams = struct;
+AUCqParams.qParamNames = qMetricAllGoodUnits.Properties.VariableNames;
+AUCqParams.AUCMvNM = nan(1,length(AUCqParams.qParamNames));
 figure('name', 'ROCs with Quality Metrics')
 for qmid = 1:size(qMetricAllGoodUnits, 2)
     subplot(ceil(sqrt(size(qMetricAllGoodUnits, 2))), round(sqrt(size(qMetricAllGoodUnits, 2))), qmid)
@@ -70,10 +74,12 @@ for qmid = 1:size(qMetricAllGoodUnits, 2)
     axis square
     drawnow %Something to look at while ACG calculations are ongoing
 
+    AUCqParams.AUCMvNM(qmid) = AUC3;
 end
 
 
-% save
+%% save
+save(fullfile(SaveDir,'qMetricAUCs'),'AUCqParams')
 set(gcf, 'units', 'normalized', 'outerposition', [0, 0, 1, 1])
 saveas(gcf, fullfile(SaveDir, 'QMetricsROCs.fig'))
 saveas(gcf, fullfile(SaveDir, 'QMetricsROCs.png'))

@@ -1,6 +1,6 @@
 function [UniqueID, MatchTable] = AssignUniqueID(SaveDir)
-
-load(SaveDir)
+tmpfile = dir(fullfile(SaveDir,'UnitMatch.mat'));
+load(fullfile(tmpfile.folder,tmpfile.name))
 if exist('TmpFile', 'var')
     UniqueIDConversion = TmpFile.UniqueIDConversion;
     MatchTable = TmpFile.MatchTable;
@@ -115,6 +115,6 @@ UniqueIDConversion.UniqueID = UniqueID;
 
 % Overwrite
 disp('Saving table')
-save(SaveDir,'MatchTable','UniqueIDConversion','-append')
+save(fullfile(tmpfile.folder,tmpfile.name),'MatchTable','UniqueIDConversion','-append')
 
 return

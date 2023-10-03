@@ -22,24 +22,24 @@ for midx = 1:length(MiceOpt)
 
         myKsDir = fullfile(KilosortDir,MiceOpt{midx});
         % Check for multiple subfolders?
-        subsesopt = dir(fullfile(myKsDir,'**','channel_positions.npy'));
-        subsesopt=arrayfun(@(X) subsesopt(X).folder,1:length(subsesopt),'Uni',0);
+        AllKiloSortPaths = dir(fullfile(myKsDir,'**','channel_positions.npy'));
+        AllKiloSortPaths=arrayfun(@(X) AllKiloSortPaths(X).folder,1:length(AllKiloSortPaths),'Uni',0);
         % Remove anything that contains the name 'noise'
-        subsesopt(cellfun(@(X) contains(X,'NOISE'),subsesopt)) = [];
+        AllKiloSortPaths(cellfun(@(X) contains(X,'NOISE'),AllKiloSortPaths)) = [];
     else
         myKsDir = fullfile(DataDir{DataDir2Use(midx)},MiceOpt{midx});
-        subsesopt = [];
+        AllKiloSortPaths = [];
         for did = 1:length(DateOpt{midx})
             disp(['Finding all pyKS directories in ' myKsDir ', ' DateOpt{midx}{did}])
             tmpfiles = dir(fullfile(myKsDir,DateOpt{midx}{did},'**','pyKS'));
             tmpfiles(cellfun(@(X) ismember(X,{'.','..'}),{tmpfiles(:).name})) = [];
             % Conver to string
             tmpfiles = arrayfun(@(X) fullfile(tmpfiles(X).folder,tmpfiles(X).name),1:length(tmpfiles),'uni',0);
-            subsesopt = [subsesopt, tmpfiles];
+            AllKiloSortPaths = [AllKiloSortPaths, tmpfiles];
         end
     end
 
-    if isempty(subsesopt)
+    if isempty(AllKiloSortPaths)
         display(['No data found for ' MiceOpt{midx} ', continue...'])
         continue
     end
@@ -47,21 +47,19 @@ for midx = 1:length(MiceOpt)
     if strcmp(RecordingType{midx},'Chronic')
         if ~PipelineParams.RunPyKSChronicStitched %MatchUnitsAcrossDays
             disp('Unit matching in Matlab')
-            subsesopt(cell2mat(cellfun(@(X) any(strfind(X,'Chronic')),subsesopt,'UniformOutput',0))) = []; %Use separate days and match units via matlab script
+            AllKiloSortPaths(cell2mat(cellfun(@(X) any(strfind(X,'Chronic')),AllKiloSortPaths,'UniformOutput',0))) = []; %Use separate days and match units via matlab script
         else
             disp('Using chronic pyks option')
-            subsesopt = subsesopt(cell2mat(cellfun(@(X) any(strfind(X,'Chronic')),subsesopt,'UniformOutput',0))); %Use chronic output from pyks
+            AllKiloSortPaths = AllKiloSortPaths(cell2mat(cellfun(@(X) any(strfind(X,'Chronic')),AllKiloSortPaths,'UniformOutput',0))); %Use chronic output from pyks
         end
     end
-
-    AllKiloSortPaths = subsesopt;
 
     %% Create saving directory
     clear params
     if ~exist(fullfile(SaveDir,MiceOpt{midx}))
         mkdir(fullfile(SaveDir,MiceOpt{midx}))
     end
-    if isempty(subsesopt)
+    if isempty(AllKiloSortPaths)
         disp(['No data found for ' MiceOpt{midx}])
         continue
     end
@@ -123,11 +121,29 @@ for midx = 1:length(MiceOpt)
 
             if isempty(UnitMatchExist) || PipelineParams.RedoUnitMatch
 
-                %% Evaluate (within unit ID cross-v alidation)
-                UMparam = RunUnitMatch(PipelineParams);
+                %% Get clusinfo
+                clusinfo = getClusinfo(PipelineParams.KSDir);
 
-                if isfield(UMparam,'Error')
-                    continue
+                %% Prepare personal save/directory and decompressed data paths
+                PipelineParams.SaveDir = fullfile(PipelineParams.SaveDir ,'UnitMatch');
+                if isstruct(PipelineParams.RawDataPaths{1})
+                    if length(PipelineParams.RawDataPaths)==1
+                        PipelineParams.AllDecompPaths = arrayfun(@(X) fullfile(PipelineParams.tmpdatafolder, strrep(X.name, 'cbin', 'bin')), PipelineParams.RawDataPaths{1}, 'Uni', 0);;
+                    else
+                        PipelineParams.AllDecompPaths = cellfun(@(X) fullfile(PipelineParams.tmpdatafolder, strrep(X.name, 'cbin', 'bin')), PipelineParams.RawDataPaths, 'Uni', 0);
+                    end
+                else
+                    allDecompPaths_dirs = arrayfun(@(X) dir(Params.RawDataPaths{X}), 1:length(Params.RawDataPaths), 'Uni', 0);
+                    PipelineParams.AllDecompPaths = arrayfun(@(X) fullfile(Params.tmpdatafolder, strrep(allDecompPaths_dirs{X}.name, 'cbin', 'bin')), 1:length(allDecompPaths_dirs), 'Uni', 0);
+                end
+
+                %% Load other (Default) parameters
+                UMparam = DefaultParametersUnitMatch(PipelineParams);
+
+                %% Actual UnitMatch & Unique UnitID assignment
+                [UniqueIDConversion, MatchTable, WaveformInfo, UMparam] = UnitMatch(clusinfo, UMparam);
+                if UMparam.AssignUniqueID
+                    AssignUniqueID(UMparam.SaveDir);
                 end
 
                 %% Evaluate (within unit ID cross-validation)
@@ -150,13 +166,13 @@ for midx = 1:length(MiceOpt)
                     disp(['Couldn''t do Quality metrics for ' MiceOpt{midx}])
                 end
 
+                %% Function analysis
+                ComputeFunctionalScores(UMparam.SaveDir)
+
             else
                 UMparam = PipelineParams;
             end
-            %% Function analysis
-            UMparam.SaveDir = fullfile(PipelineParams.SaveDir,'UnitMatch');
-            ComputeFunctionalScores(UMparam.SaveDir)
-            %%
+                %%
             disp(['Preprocessed data for ' MiceOpt{midx} ' run  ' num2str(runid) '/' num2str(nRuns)])
         catch ME
             disp([MiceOpt{midx} ' run  ' num2str(runid) '/' num2str(nRuns) ' crashed... continue with others'])

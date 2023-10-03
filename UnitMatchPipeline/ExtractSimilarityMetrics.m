@@ -4,7 +4,7 @@ function param = ExtractSimilarityMetrics(Scores2Include,AllWVBParameters,clusin
 %% Extract fields and parameters
 ExtractFields({AllWVBParameters})
 waveidx = param.waveidx;
-Allchannelpos = param.channelpos;
+Allchannelpos = param.AllChannelPos;
 AllchannelCoord = param.Coordinates;
 SaveDir = param.SaveDir;
 maxdist = param.maxdist;

@@ -10,13 +10,15 @@
 % recording for that cluster.
 
 %% User input: 
-SaveDir = '\\path\to\save\UnitMatch'; % Recommended to use end this path with \Probe0\IMRO_1\ if more probes/IMRO tables were used or \AllProbes\AllIMRO\ otherwise
-KiloSortPaths = {'\\path\to\firstrecording','\\path\to\secondrecording','\\path\to\nthrecording'};  % This is a cell array with a path, in the path there should be a subfolder called 'RawWaveforms'. 
+UMparam.SaveDir = '\\path\to\save\UnitMatch'; % Recommended to use end this path with \Probe0\IMRO_1\ if more probes/IMRO tables were used or \AllProbes\AllIMRO\ otherwise
+UMparam.KSDir = {'\\path\to\firstrecording','\\path\to\secondrecording','\\path\to\nthrecording'};  % This is a cell array with a path, in the path there should be a subfolder called 'RawWaveforms'. 
+% N.B. if you want to use the functional score evaluation of UnitMatch, 'KSDir' should also contain typical 'Kilosort output', (e.g. spike times etc.)
 
-% The following user input can also be automatically extracted using [[]]]
-% If you want to use the functional score evaluation of UnitMatch this should also contain typical 'Kilosort output', (e.g. spike times etc.)
-RawDataPaths = {'\\path\to\firstrecording','\\path\to\secondrecording','\\path\to\nthrecording'};  % This is a cell array with info on where to find the decompressed recording (.bin files) --> Necessary when you want UnitMatch to do waveform extraction
-channelpos = {[RecordingSites_Recording1],[RecordingSites_Recording2]}; % These are coordinates of every recording channel on the probe (e.g. nRecordingChannels x 2)
+
+%% N.B. the following user input can also be automatically extracted and prepared/cleaned up using UMparam = ExtractKilosortData(KiloSortPaths, UMparam) for Kilosorted data of SpikeGLX recorded data (see next section);
+UMparam.RawDataPaths = {'\\path\to\firstrecording','\\path\to\secondrecording','\\path\to\nthrecording'};  % This is a cell array with info on where to find the decompressed recording (.cbin files) --> Necessary when you want UnitMatch to do waveform extraction
+UMparam.AllDecompPaths = {'\\path\to\firstrecording','\\path\to\secondrecording','\\path\to\nthrecording'};  % This is a cell array with info on where to find the decompressed recording (.bin files) --> Necessary when you want UnitMatch to do waveform extraction
+UMparam.AllChannelPos = {[RecordingSites_Recording1],[RecordingSites_Recording2]}; % These are coordinates of every recording channel on the probe (e.g. nRecordingChannels x 2)
 clusinfo = struct; % Note, this can be kilosort input, 
 % - clusinfo (this is a struct that contains per unit the following information):
 % * cluster_id (e.g. kilosort output clus_id)
@@ -26,19 +28,20 @@ clusinfo = struct; % Note, this can be kilosort input,
 % * Depth: depth on probe
 % * Shank: Which shank 
 % * Probe: Which probe
+% N.B. clusinfo can also be automatically extracted using clusinfo =
+% getClusinfo
 
-% Params = ExtractKilosortData(KiloSortPaths, Params, RawDataPaths) 
-RawDataPaths = Params.RawDataPaths; % This is a cell array with info on where to find the raw recording (.bin files) --> Necessary when you want UnitMatch to do waveform extraction
-channelpos = Params.AllChannelPos; % These are coordinates of every recording channel on the probe (e.g. nRecordingChannels x 2)
+%% Optional (for Kilosort + SpikeGLX users)
+UMparam = ExtractKilosortData(KiloSortPaths, UMparam); % Extract KS data and do some noise removal, optionally decompresses cbin to bin data and uses BOMBCELL quality metric to define good single units
+clusinfo = getClusinfo(PipelineParams.KSDir); % prepare clusinfo struct
 
 %% Load default parameters
-UMparam = DefaultParametersUnitMatch(SaveDir,KiloSortPaths,RawDataPaths,channelpos);
+UMparam = DefaultParametersUnitMatch(UMparam);
 
 %% UnitMatch algorithm:
 [UniqueIDConversion, MatchTable, WaveformInfo, UMparam] = UnitMatch(clusinfo, UMparam);
-tmpfile = dir(fullfile(UMparam.SaveDir,'UnitMatch.mat'));
 if UMparam.AssignUniqueID
-    AssignUniqueID(fullfile(tmpfile.folder,tmpfile.name));
+    AssignUniqueID(UMparam.SaveDir);
 end
 
 %% Automatic evaluation:
