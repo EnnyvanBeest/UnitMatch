@@ -11,7 +11,7 @@ end
 load(fullfile(SaveDir, 'UnitMatch.mat'), 'MatchTable', 'UMparam', 'UniqueIDConversion');
 UMparam.binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
 
-if all(ismember({'FingerprintCor','ACGCorr','FRDiff','natImCorr'},MatchTable.Properties.VariableNames)) && ~recompute
+if all(ismember({'refPopCorr','ACGCorr','FRDiff','natImCorr'},MatchTable.Properties.VariableNames)) && ~recompute
     disp('Already computed functional scores')
     return
 end
@@ -57,7 +57,7 @@ end
 
 %% Get cross-correlation fingerprints correlations
 
-if ~any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) || recompute% If it already exists in table, skip this entire thing
+if ~any(ismember(MatchTable.Properties.VariableNames, 'refPopCorr')) || recompute% If it already exists in table, skip this entire thing
 
     %% Compute cross-correlation matrices for individual recordings
     disp('Computing cross-correlation fingerprint')
@@ -144,7 +144,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) || reco
         arrayfun(@(X) line([SessionSwitch(X), SessionSwitch(X)], get(gca, 'ylim'), 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
         arrayfun(@(X) line(get(gca, 'xlim'), [SessionSwitch(X), SessionSwitch(X)], 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
         colormap(flipud(gray))
-        title('Rankscore == 1*')
+        title('rank == 1*')
         makepretty
 
         subplot(1, 3, 2)
@@ -158,7 +158,6 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) || reco
 
         subplot(1, 3, 3)
         imagesc(MatchProbability(SortingOrder, SortingOrder) >= UMparam.ProbabilityThreshold | (MatchProbability(SortingOrder, SortingOrder) > 0.05 & refPopRank(SortingOrder, SortingOrder) == 1 & refPopSig(SortingOrder, SortingOrder) == 1));
-        % imagesc(MatchProbability>=0.99 | (MatchProbability>=0.05 & RankScoreAll==1 & refPopSig==1))
         hold on
         arrayfun(@(X) line([SessionSwitch(X), SessionSwitch(X)], get(gca, 'ylim'), 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
         arrayfun(@(X) line(get(gca, 'xlim'), [SessionSwitch(X), SessionSwitch(X)], 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
@@ -166,8 +165,8 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) || reco
         title('Matching probability + rank')
         makepretty
         if saveFig
-            saveas(gcf, fullfile(SaveDir, 'RankScoreVSProbability.fig'))
-            saveas(gcf, fullfile(SaveDir, 'RankScoreVSProbability.bmp'))
+            saveas(gcf, fullfile(SaveDir, 'RankVSProbability.fig'))
+            saveas(gcf, fullfile(SaveDir, 'RankVSProbability.bmp'))
         end
 
         tmpf = triu(refPopCorr);
@@ -182,8 +181,8 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) || reco
         xlabel('Match Probability')
         ylabel('Cross-correlation fingerprint')
         makepretty
-        saveas(gcf, fullfile(SaveDir, 'RankScoreVSProbabilityScatter.fig'))
-        saveas(gcf, fullfile(SaveDir, 'RankScoreVSProbabilityScatter.bmp'))
+        saveas(gcf, fullfile(SaveDir, 'RankVSProbabilityScatter.fig'))
+        saveas(gcf, fullfile(SaveDir, 'RankVSProbabilityScatter.bmp'))
     end
 end
 
@@ -221,10 +220,12 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'ACGCorr')) || recompute %
 
     %% Correlation between ACG
     ACGCorr = corr(squeeze(ACGMat(:, 1, :)), squeeze(ACGMat(:, 2, :)));
-    MatchTable.ACGCorr = ACGCorr(:);
 
     [ACGRank, ACGSig] = getRank(ACGCorr,SessionSwitch);
-    MatchTable.ACGRankScore = ACGRank(:);
+
+    % Save in table
+    MatchTable.ACGCorr = ACGCorr(:);
+    MatchTable.ACGRank = ACGRank(:);
     MatchTable.ACGSig = ACGSig(:);
 end
 
@@ -233,9 +234,11 @@ end
 if ~any(ismember(MatchTable.Properties.VariableNames, 'FRDiff')) || recompute
     FR = repmat(permute(FR, [2, 1]), [1, 1, nclus]);
     FRDiff = abs(squeeze(FR(:, 2, :)-permute(FR(:, 1, :), [3, 2, 1])));
-    MatchTable.FRDiff = FRDiff(:);
 
     [FRRank, FRSig] = getRank(-FRDiff,SessionSwitch);
+
+    % Save in table
+    MatchTable.FRDiff = FRDiff(:);
     MatchTable.FRRank = FRRank(:);
     MatchTable.FRSig = FRSig(:);
 end
@@ -314,11 +317,13 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'natImCorr')) || all(isnan
         end
     end
     corrWCCA_big = tanh(.5*atanh(corrWCCA_big) + .5*atanh(corrWCCA_big')); % not sure that's needed?
-    MatchTable.natImCorr = corrWCCA_big(:);
 
     % Get rank
     [natImRank, natImSig] = getRank(corrWCCA_big, SessionSwitch);
-    MatchTable.NImgRankScore = natImRank(:);
+    
+    % Save in table
+    MatchTable.natImCorr = corrWCCA_big(:);
+    MatchTable.natImRank = natImRank(:);
     MatchTable.natImSig = natImSig(:);
 
     % ---
@@ -338,12 +343,14 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'natImCorr')) || all(isnan
     corrResp_big = tanh(.5*atanh(corrMeanResp_big) + .5*atanh(corrTimecourse_big));
 
     corrResp_big = tanh(.5*atanh(corrResp_big) + .5*atanh(corrResp_big')); % not sure that's needed?
-    MatchTable.natImRespCorr = corrResp_big(:);
 
     % Get rank
     [natImRespRank, natImRespSig] = getRank(corrResp_big, SessionSwitch);
-    MatchTable.natImRespRankScore = natImRespRank(:);
-    MatchTable.natImSig = natImRespSig(:);
+    
+    % Save in table
+    MatchTable.natImRespCorr = corrResp_big(:);
+    MatchTable.natImRespRank = natImRespRank(:);
+    MatchTable.natImRespSig = natImRespSig(:);
 
     % ---
     % Third fingerprint with scaled response
@@ -361,10 +368,12 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'natImCorr')) || all(isnan
     end
     corrScaledResp_big = tanh(.5*atanh(corrScaledResp_big) + .5*atanh(corrTimecourse_big));
     corrScaledResp_big = tanh(.5*atanh(corrScaledResp_big) + .5*atanh(corrScaledResp_big')); % not sure that's needed? 
-    MatchTable.natImRespCorr = corrResp_big(:);
 
     % Get rank
     [natImScaledRespRank, natImScaledRespSig] = getRank(corrScaledResp_big, SessionSwitch);
+    
+    % Save in table
+    MatchTable.natImRespCorr = corrResp_big(:);
     MatchTable.natImScaledRespRank = natImScaledRespRank(:);
     MatchTable.natImScaledRespSig = natImScaledRespSig(:);
 end
@@ -393,20 +402,20 @@ for id = 1:ntimes
         NonMatchIdx = find((MatchTable.ID1 ~= MatchTable.ID2)); % Not the same unit
         addname = 'KSlabels';
     end
-    MatchIdx(isnan(MatchTable.FingerprintCor(MatchIdx))) = [];
+    MatchIdx(isnan(MatchTable.refPopCorr(MatchIdx))) = [];
     if isempty(MatchIdx)
         disp('No Matches found... return')
         return
     end
 
     %% Cross-correlation ROC?
-    FingerprintCor = reshape(MatchTable.FingerprintCor, nclus, nclus);
+    refPopCorr = reshape(MatchTable.refPopCorr, nclus, nclus);
 
     if saveFig
         figure('name', ['Functional score separatability ', addname])
 
         subplot(4, 3, 1)
-        imagesc(FingerprintCor)
+        imagesc(refPopCorr)
         hold on
         colormap(flipud(gray))
         makepretty
@@ -420,11 +429,11 @@ for id = 1:ntimes
         freezeColors
 
         subplot(4, 3, 2)
-        bins = min(FingerprintCor(:)):0.1:max(FingerprintCor(:));
+        bins = min(refPopCorr(:)):0.1:max(refPopCorr(:));
         Vector = [bins(1) + 0.1 / 2:0.1:bins(end) - 0.1 / 2];
-        hw = histcounts(FingerprintCor(WithinIdx), bins) ./ length(WithinIdx);
-        hm = histcounts(FingerprintCor(MatchIdx), bins) ./ length(MatchIdx);
-        hn = histcounts(FingerprintCor(NonMatchIdx), bins) ./ length(NonMatchIdx);
+        hw = histcounts(refPopCorr(WithinIdx), bins) ./ length(WithinIdx);
+        hm = histcounts(refPopCorr(MatchIdx), bins) ./ length(MatchIdx);
+        hn = histcounts(refPopCorr(NonMatchIdx), bins) ./ length(NonMatchIdx);
         plot(Vector, hw, 'color', [0.5, 0.5, 0.5])
         hold on
         plot(Vector, hm, 'color', [0, 0.5, 0])
@@ -437,18 +446,18 @@ for id = 1:ntimes
         subplot(4, 3, 3)
         if any(MatchIdx)
             labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
-            scores = [FingerprintCor(MatchIdx)', FingerprintCor(NonMatchIdx)'];
+            scores = [refPopCorr(MatchIdx)', refPopCorr(NonMatchIdx)'];
             [X, Y, ~, AUC1] = perfcurve(labels, scores, 1);
             h(1) = plot(X, Y, 'color', [0, 0.25, 0]);
             hold all
             labels = [zeros(1, numel(MatchIdx)), ones(1, numel(WithinIdx))];
-            scores = [FingerprintCor(MatchIdx)', FingerprintCor(WithinIdx)'];
+            scores = [refPopCorr(MatchIdx)', refPopCorr(WithinIdx)'];
             [X, Y, ~, AUC2] = perfcurve(labels, scores, 1);
             h(2) = plot(X, Y, 'color', [0, 0.5, 0]);
         end
 
         labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
-        scores = [FingerprintCor(WithinIdx)', FingerprintCor(NonMatchIdx)'];
+        scores = [refPopCorr(WithinIdx)', refPopCorr(NonMatchIdx)'];
         [X, Y, ~, AUC3] = perfcurve(labels, scores, 1);
         h(3) = plot(X, Y, 'color', [0.25, 0.25, 0.25]);
         axis square
@@ -641,7 +650,7 @@ for id = 1:ntimes
             axis square
             makepretty
             subplot(4, 3, 12)
-            if any(MatchIdx) & ~all(isnan(natImCorr(MatchIdx)))
+            if any(MatchIdx) && ~all(isnan(natImCorr(MatchIdx)))
                 labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
                 scores = [natImCorr(MatchIdx)', natImCorr(NonMatchIdx)'];
 
@@ -676,11 +685,11 @@ for id = 1:ntimes
     if saveFig
         try
             saveas(gcf, fullfile(SaveDir, [addname, 'FunctionalScoreSeparability.fig']))
-        catch ME
+        catch 
         end
         try
             saveas(gcf, fullfile(SaveDir, [addname, 'FunctionalScoreSeparability.png']))
-        catch ME
+        catch 
         end
     end
 end
