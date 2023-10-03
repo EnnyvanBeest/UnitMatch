@@ -239,7 +239,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'FRDiff')) || recompute
 end
 
 %% Get natural images fingerprints correlations
-
+try
 if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) || all(isnan(MatchTable.NatImCorr)) || recompute % If it already exists in table, skip this entire thing
     % Param for processing
     proc.window = [-0.3 0.5 ... % around onset
@@ -362,6 +362,9 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) || all(isnan
     % Get rank
     NatImScaledRespRankScore = getRank(corrScaledResp_big, SessionSwitch);
     MatchTable.NatImScaledRespRankScore = NatImScaledRespRankScore(:);
+end
+catch ME
+    disp(ME)
 end
 %% Write to table
 

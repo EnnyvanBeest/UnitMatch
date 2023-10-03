@@ -88,7 +88,7 @@ RunUnitMatchAllDataPerMouse
 %% Across Mice Graphs
 % SummarizeAcrossMice
 
-FromDate = datetime("2023-09-30 09:00:00");
+FromDate = datetime("2023-10-02 13:00:00");
 UMFiles = cell(1,0); % Define your UMfolders here or use below:
 groupvec = nan(1,0);
 if ~exist('UMFiles') || isempty(UMFiles) % When using the example pipeline this may be useful:
@@ -101,7 +101,7 @@ if ~exist('UMFiles') || isempty(UMFiles) % When using the example pipeline this 
         end
         for id = 1:length(tmpfile)
             if datetime(tmpfile(id).date) >FromDate 
-               AssignUniqueID_POSTUM(fullfile(tmpfile(id).folder,tmpfile(id).name));
+%                AssignUniqueID(fullfile(tmpfile(id).folder,tmpfile(id).name));
 
                 %             FolderParts = strsplit(tmpfile(id).folder,filesep);
                 %             idx = find(ismember(FolderParts,MiceOpt{midx}));
