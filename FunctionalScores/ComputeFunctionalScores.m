@@ -78,12 +78,8 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'refPopCorr')) || recomput
         idx_fold2 = floor(size(sr, 2)./2) + 1:floor(size(sr, 2)./2) * 2;
 
         % Find cross-correlation in first and second half of session
-        try
-            SessionCorrelations{rid}.fold1 = corr(sr(:, idx_fold1)', sr(:, idx_fold1)')';
-            SessionCorrelations{rid}.fold2 = corr(sr(:, idx_fold2)', sr(:, idx_fold2)')';
-        catch
-            keyboard
-        end
+        SessionCorrelations{rid}.fold1 = corr(sr(:, idx_fold1)', sr(:, idx_fold1)')';
+        SessionCorrelations{rid}.fold2 = corr(sr(:, idx_fold2)', sr(:, idx_fold2)')';
 
         % Nan the diagonal
         SessionCorrelations{rid}.fold1(logical(eye(size(SessionCorrelations{rid}.fold1)))) = nan;
@@ -271,7 +267,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'natImCorr')) || all(isnan
 
         % Find the associated experiments
         if ispc
-            exp2keep = getnatImExpRef(binFileRef);
+            exp2keep = getNatImExpRef(binFileRef);
         else
             exp2keep = [];
             % Julie Fabre: on linux the servers are mounted differently, and the above
@@ -289,7 +285,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'natImCorr')) || all(isnan
             spikesAll.clusterIDs = unique(clu); % follow the same units across days
 
             % Get the natIm responses
-            spikeData = getnatImResp(spikesAll,exp2keep,binFileRef,proc);
+            spikeData = getNatImResp(spikesAll,exp2keep,binFileRef,proc);
             clusterIDs = spikesAll.clusterIDs;
 
             % Split in two halves and subselect units
@@ -303,8 +299,8 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'natImCorr')) || all(isnan
     % First fingerprint with CCA
     
     % Perform CCA across recordings
-    [corrMat, ~] = computenatImCorr(spikeData_cv(:)); % default 75
-    % [corrMat, ~] = computenatImCorr(spikeData_cv(:), 1:ceil(sqrt(size(spikeData_cv{1},1)*size(spikeData_cv{1},2))/2));
+    [corrMat, ~] = computeNatImCorr(spikeData_cv(:)); % default 75
+    % [corrMat, ~] = computeNatImCorr(spikeData_cv(:), 1:ceil(sqrt(size(spikeData_cv{1},1)*size(spikeData_cv{1},2))/2));
 
     % Reshape the matrix to a single one with correct clusters
     corrWCCA_big = nan(sum(nClu),sum(nClu));
@@ -331,13 +327,17 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'natImCorr')) || all(isnan
     corrMeanResp_big = nan(sum(nClu),sum(nClu));
     corrTimecourse_big = nan(sum(nClu),sum(nClu));
     for ss1 = 1:nRec
-        meanResp1 = zscore(squeeze(nanmean(spikeData_cv{1,ss1}(:,bins<proc.window(2)+0.2 & bins>0,:,:),[2 4])));
-        timecourse1 = zscore(squeeze(nanmean(spikeData_cv{1,ss1}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),[1 4])));
-        for ss2 = 1:nRec
-            meanResp2 = zscore(squeeze(nanmean(spikeData_cv{2,ss2}(:,bins<proc.window(2)+0.2 & bins>0,:,:),[2 4])));
-            timecourse2 = zscore(squeeze(nanmean(spikeData_cv{2,ss2}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),[1 4])));
-            corrMeanResp_big(sum(nClu(1:ss1-1))+1:sum(nClu(1:ss1)), sum(nClu(1:ss2-1))+1:sum(nClu(1:ss2))) = corr(meanResp1,meanResp2);
-            corrTimecourse_big(sum(nClu(1:ss1-1))+1:sum(nClu(1:ss1)), sum(nClu(1:ss2-1))+1:sum(nClu(1:ss2))) = corr(timecourse1, timecourse2);
+        if ~isempty(spikeData_cv{1,ss1})
+            meanResp1 = zscore(squeeze(nanmean(spikeData_cv{1,ss1}(:,bins<proc.window(2)+0.2 & bins>0,:,:),[2 4])));
+            timecourse1 = zscore(squeeze(nanmean(spikeData_cv{1,ss1}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),[1 4])));
+            for ss2 = 1:nRec
+                if ~isempty(spikeData_cv{2,ss2})
+                    meanResp2 = zscore(squeeze(nanmean(spikeData_cv{2,ss2}(:,bins<proc.window(2)+0.2 & bins>0,:,:),[2 4])));
+                    timecourse2 = zscore(squeeze(nanmean(spikeData_cv{2,ss2}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),[1 4])));
+                    corrMeanResp_big(sum(nClu(1:ss1-1))+1:sum(nClu(1:ss1)), sum(nClu(1:ss2-1))+1:sum(nClu(1:ss2))) = corr(meanResp1,meanResp2);
+                    corrTimecourse_big(sum(nClu(1:ss1-1))+1:sum(nClu(1:ss1)), sum(nClu(1:ss2-1))+1:sum(nClu(1:ss2))) = corr(timecourse1, timecourse2);
+                end
+            end
         end
     end
     corrResp_big = tanh(.5*atanh(corrMeanResp_big) + .5*atanh(corrTimecourse_big));
@@ -356,22 +356,26 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'natImCorr')) || all(isnan
     % Third fingerprint with scaled response
     corrScaledResp_big = nan(sum(nClu),sum(nClu));
     for ss1 = 1:nRec
-        mat1 = nanmean(spikeData_cv{1,ss1}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),4);
-        timecourse1 = zscore(nanmean(spikeData_cv{1,ss1}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),[1 4]));
-        scaledResp1 = squeeze(sum(mat1.*timecourse1,2));
-        for ss2 = 1:nRec
-            mat2 = nanmean(spikeData_cv{2,ss2}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),4);
-            timecourse2 = zscore(nanmean(spikeData_cv{2,ss2}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),[1 4]));
-            scaledResp2 = squeeze(sum(mat2.*timecourse2,2));
-            corrScaledResp_big(sum(nClu(1:ss1-1))+1:sum(nClu(1:ss1)), sum(nClu(1:ss2-1))+1:sum(nClu(1:ss2))) = corr(scaledResp1,scaledResp2);
+        if ~isempty(spikeData_cv{1,ss1})
+            mat1 = nanmean(spikeData_cv{1,ss1}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),4);
+            timecourse1 = zscore(nanmean(spikeData_cv{1,ss1}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),[1 4]));
+            scaledResp1 = squeeze(sum(mat1.*timecourse1,2));
+            for ss2 = 1:nRec
+                if ~isempty(spikeData_cv{2,ss2})
+                    mat2 = nanmean(spikeData_cv{2,ss2}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),4);
+                    timecourse2 = zscore(nanmean(spikeData_cv{2,ss2}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),[1 4]));
+                    scaledResp2 = squeeze(sum(mat2.*timecourse2,2));
+                    corrScaledResp_big(sum(nClu(1:ss1-1))+1:sum(nClu(1:ss1)), sum(nClu(1:ss2-1))+1:sum(nClu(1:ss2))) = corr(scaledResp1,scaledResp2);
+                end
+            end
         end
     end
     corrScaledResp_big = tanh(.5*atanh(corrScaledResp_big) + .5*atanh(corrTimecourse_big));
-    corrScaledResp_big = tanh(.5*atanh(corrScaledResp_big) + .5*atanh(corrScaledResp_big')); % not sure that's needed? 
+    corrScaledResp_big = tanh(.5*atanh(corrScaledResp_big) + .5*atanh(corrScaledResp_big')); % not sure that's needed?
 
     % Get rank
     [natImScaledRespRank, natImScaledRespSig] = getRank(corrScaledResp_big, SessionSwitch);
-    
+
     % Save in table
     MatchTable.natImRespCorr = corrResp_big(:);
     MatchTable.natImScaledRespRank = natImScaledRespRank(:);

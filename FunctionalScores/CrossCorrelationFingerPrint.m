@@ -99,10 +99,6 @@ function [FingerprintRAll,SigMask,AllSessionCorrelationsFingerprints] = CrossCor
 
             % Save Fingerprint correlations
             FingerprintRAll(clusIdxD1All,clusIdxD2All) = FingerprintR;
-
-            % Find SigMask
-%             SigMask(clusIdxD1All,clusIdxD2All) = FingerprintR >= quantile(FingerprintR,0.99,1) & FingerprintR >= quantile(FingerprintR,0.99,2);
-            SigMask(clusIdxD1All,clusIdxD2All) = FingerprintR >= nanmedian(FingerprintR,1) + 2*nanstd(FingerprintR,[],1) & FingerprintR >= nanmedian(FingerprintR,2) + 2*nanstd(FingerprintR,[],2);
         end
     end
 
