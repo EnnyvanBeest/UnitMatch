@@ -1,5 +1,28 @@
 function UMparam = DefaultParametersUnitMatch(UMparam)
 
+%% Check if path information is given
+if ~isfield(UMparam,'SaveDir')
+    disp('Warning, no SaveDir given. Assigning current directory')
+    UMparam.SaveDir = fullfile(cd,'UnitMatch');
+end
+if ~isfield(UMparam,'KSDir')
+    error('Warning, no directories provided with sorted data and/or raw waveforms')
+end
+
+if ~isfield(UMparam,'RawDataPaths')
+    warning('No RawDataPaths given... if raw waveforms are already extracted this may not be a problem')
+    UMparam.RawDataPaths = [];
+end
+% if not given, assume decompPath (decompressed path) is same as raw
+if ~isfield(UMparam,'AllDecompPaths')
+    warning('No Decompressed data paths given, assuming RawDataPaths point at .bin files')
+    UMparam.AllDecompPaths = UMparam.RawDataPaths;
+end
+
+if ~isfield(UMparam,'AllChannelPos')
+    error('ChannelPositions not given. TIP: Use UMparam = ExtractKilosortData(KiloSortPaths, UMparam) to automatically extract these')
+end
+
 %% Parameters for extracting raw waveforms
 UMparam.sampleamount = 1000; % n raw waveforms to extract
 UMparam.spikeWidth = 82; % width of spikes in samples (typically assuming 30KhZ sampling)
@@ -25,6 +48,4 @@ UMparam.ACGbinSize = 1E-03; %
 UMparam.ACGduration = 1; % in seconds
 UMparam.binsize = 0.01; % in seconds
 
-%% if not given, assume decompPath (decompressed path) is same as raw
-UMparam.AllDecompPaths = UMparam.RawDataPaths;
 return

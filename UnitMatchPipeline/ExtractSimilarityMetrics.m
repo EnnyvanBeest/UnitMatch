@@ -21,11 +21,6 @@ OriginalClusterIDs = clusinfo.cluster_id;
 
 recsesAll = clusinfo.RecSesID;
 recsesGood = recsesAll(Good_Idx);
-DepthOnProbe = clusinfo.depth;
-while length(DepthOnProbe) < length(recsesAll)
-    DepthOnProbe = [DepthOnProbe; DepthOnProbe]; %Stitched
-end
-DepthOnProbe = DepthOnProbe(Good_Idx);
 
 nclus = length(Good_Idx);
 ndays = length(unique(GoodRecSesID));
