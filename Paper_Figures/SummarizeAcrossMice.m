@@ -22,7 +22,7 @@ NatImgAcrossMice = nan(length(Vector), 3, length(MiceOpt)); % Vector / within,Ma
 NatImgAUC = nan(3, length(MiceOpt));
 
 EPosAndNeg = nan(3, length(MiceOpt));
-UseKSLabels = PrepareClusInfoparams.RunPyKSChronicStitched;
+UseKSLabels = PipelineParams.RunPyKSChronicStitched;
 RecSesPerUIDAllMice = cell(1,length(MiceOpt));
 
 % Prepare these
@@ -96,7 +96,7 @@ for midx = 1:length(MiceOpt)
             AllRawDir = cellfun(@(X) fullfile(X.folder,X.name),AllRawDir,'Uni',0);
         end
         nclus = length(UniqueID);
-        ChannelPos = UMparam.channelpos;
+        ChannelPos = UMparam.AllChannelPos;
 
         %% How many units vs number of units were tracked?
         fprintf('Evaluating tracked units...\n')
@@ -191,14 +191,14 @@ for midx = 1:length(MiceOpt)
                 %cross-correlation activity
                 rowidx = find(MatchTable.RecSes1 == did1 & MatchTable.RecSes2 == did2);
                 % find all pairs with a significant fingerprint cross-correlation
-                SigR = find(MatchTable.SigFingerprintR(rowidx) == 1);
+                SigR = find(MatchTable.refPopCorr(rowidx) == 1);
                 NXCorr = length(SigR);
                 NXCorrUM = sum(MatchTable.MatchProb(rowidx(SigR))>0.5);
 
                 % OTher way around
                 SigUM = find(MatchTable.MatchProb(rowidx) > 0.5);
                 NUM = length(SigUM);
-                NUMXCorr = sum(MatchTable.SigFingerprintR(rowidx(SigUM))==1);
+                NUMXCorr = sum(MatchTable.refPopCorr(rowidx(SigUM))==1);
 
                 CrossCorrMatching = cat(1, CrossCorrMatching, [NXCorr, NXCorrUM, NUM, NUMXCorr]);
 
@@ -281,12 +281,12 @@ for midx = 1:length(MiceOpt)
 
         %% Fingerprint correlation
         fprintf('Plotting fingerprints...\n')
-        if any(ismember(MatchTable.Properties.VariableNames, 'FingerprintCor')) && MatchesExpected == 1
+        if any(ismember(MatchTable.Properties.VariableNames, 'refPopCorr')) && MatchesExpected == 1
             figure(FSCoreFig)
             if TakeRank
-                FingerprintCor = -reshape(MatchTable.RankScore, nclus, nclus);
+                FingerprintCor = -reshape(MatchTable.refPopRank, nclus, nclus);
             else
-                FingerprintCor = reshape(MatchTable.FingerprintCor, nclus, nclus);
+                FingerprintCor = reshape(MatchTable.refPopCorr, nclus, nclus);
             end
 
             subplot(4, 3, 1)
@@ -364,7 +364,7 @@ for midx = 1:length(MiceOpt)
         %% Autocorrelogram
         if any(ismember(MatchTable.Properties.VariableNames, 'ACGCorr')) && MatchesExpected == 1
             if TakeRank
-                ACGCor = -reshape(MatchTable.ACGRankScore, nclus, nclus);
+                ACGCor = -reshape(MatchTable.ACGRank, nclus, nclus);
             else
                 ACGCor = reshape(MatchTable.ACGCorr, nclus, nclus);
             end
@@ -436,12 +436,12 @@ for midx = 1:length(MiceOpt)
 
         end
         %% Natural Images correlation
-        if any(ismember(MatchTable.Properties.VariableNames, 'NatImCorr')) && MatchesExpected == 1
+        if any(ismember(MatchTable.Properties.VariableNames, 'natImCorr')) && MatchesExpected == 1
             figure(FSCoreFig)
             if TakeRank
-                NatImCorr = -reshape(MatchTable.NImgRankScore, nclus, nclus);
+                NatImCorr = -reshape(MatchTable.natImRank, nclus, nclus);
             else
-                NatImCorr = reshape(MatchTable.NatImCorr, nclus, nclus);
+                NatImCorr = reshape(MatchTable.natImCorr, nclus, nclus);
             end
 
 
@@ -586,7 +586,7 @@ for midx = 1:length(MiceOpt)
 
         elseif any(ismember(MatchTable.Properties.VariableNames, 'FRDiff')) && MatchesExpected == 1
             if TakeRank
-                RFDist = -reshape(MatchTable.FRRankScore, nclus, nclus);
+                RFDist = -reshape(MatchTable.FRRank, nclus, nclus);
             else
                 RFDist = reshape(MatchTable.FRDiff, nclus, nclus);
                 RFDist = -(RFDist-nanmin(RFDist(:)))./(nanmax(RFDist(:))-nanmin(RFDist(:))); %normalize between 0 and 1 to resemble correlation

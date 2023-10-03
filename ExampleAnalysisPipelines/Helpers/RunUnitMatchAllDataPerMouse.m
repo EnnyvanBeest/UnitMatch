@@ -123,12 +123,14 @@ for midx = 1:length(MiceOpt)
 
                 %% Get clusinfo
                 clusinfo = getClusinfo(PipelineParams.KSDir);
-
+                if ~any(clusinfo.Good_ID)
+                    disp('No good units, continue')
+                end
                 %% Prepare personal save/directory and decompressed data paths
                 PipelineParams.SaveDir = fullfile(PipelineParams.SaveDir ,'UnitMatch');
                 if isstruct(PipelineParams.RawDataPaths{1})
                     if length(PipelineParams.RawDataPaths)==1
-                        PipelineParams.AllDecompPaths = arrayfun(@(X) fullfile(PipelineParams.tmpdatafolder, strrep(X.name, 'cbin', 'bin')), PipelineParams.RawDataPaths{1}, 'Uni', 0);;
+                        PipelineParams.AllDecompPaths = arrayfun(@(X) fullfile(PipelineParams.tmpdatafolder, strrep(X.name, 'cbin', 'bin')), PipelineParams.RawDataPaths{1}, 'Uni', 0);
                     else
                         PipelineParams.AllDecompPaths = cellfun(@(X) fullfile(PipelineParams.tmpdatafolder, strrep(X.name, 'cbin', 'bin')), PipelineParams.RawDataPaths, 'Uni', 0);
                     end
