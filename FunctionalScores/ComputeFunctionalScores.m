@@ -31,6 +31,12 @@ recsesall = UniqueIDConversion.recsesAll;
 AllKSDir = UMparam.KSDir; %original KS Dir
 nclus = length(UniqueID);
 
+%%% TO REMOVE
+if ~isfield(UMparam,'AllRawPaths') % For now no to disturb Célian
+    UMparam.AllRawPaths = UMparam.RawDataPaths;
+end
+
+
 if length(UMparam.AllRawPaths{1}) > 1 %Reshape for Stitched
     UMparam.AllRawPaths = arrayfun(@(X) UMparam.AllRawPaths{1}(X),1:length(UMparam.AllRawPaths{1}),'uni',0);
 end
