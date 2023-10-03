@@ -14,18 +14,18 @@ function summaryFunctionalPlots(UMFiles, TakeRank, groupVector, UseKSLabels)
     end
     if TakeRank
         fprintf("Taking the rank!\n")
-        FPNames = {'FRRankScore','ACGRankScore','RankScore','NImgRankScore'};
-        stepsz = [1 1 1 1];
-        minVal = [1 1 1 1];
-        maxVal = [21 21 21 21];
-        flipROC = [0 0 0 0];
+        FPNames = {'FRRankScore','ACGRankScore','RankScore','NImgRankScore','NatImRespRankScore','NatImScaledRespRankScore'};
+        stepsz = [1 1 1 1 1 1];
+        minVal = [1 1 1 1 1 1];
+        maxVal = [21 21 21 21 21 21];
+        flipROC = [0 0 0 0 0 0];
     else
         fprintf("Taking the correlation values!\n")
-        FPNames = {'FRDiff','ACGCorr','FingerprintCor','NatImCorr'};
-        stepsz = [0.1 0.1 0.1 0.1];
-        minVal = [0 -1 -1 -1];
-        maxVal = [15 1 1 1];
-        flipROC = [0 1 1 1];
+        FPNames = {'FRDiff','ACGCorr','FingerprintCor','NatImCorr','NatImRespCorr','NatImScaledRespCorr'};
+        stepsz = [0.1 0.1 0.1 0.1 0.1 0.1];
+        minVal = [0 -1 -1 -1 -1 -1];
+        maxVal = [15 1 1 1 1 1];
+        flipROC = [0 1 1 1 1 1];
     end
     
     if ~exist('groupVector','var')
@@ -46,7 +46,7 @@ function summaryFunctionalPlots(UMFiles, TakeRank, groupVector, UseKSLabels)
     end
     ROCBins = 0:0.01:1;
     minMatches = 20;
-    durLim = 15*60;
+    durLim = 10*60;
 
     
     %% Loop over mice to get all Distributions / ROCs / AUCs
