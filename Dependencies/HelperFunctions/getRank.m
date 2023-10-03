@@ -7,6 +7,7 @@ function [rank, sig] = getRank(M,SessionSwitch)
 
    
     rank = nan(size(M));
+    sig = nan(size(M));
     for did1 = 1:nRec
         for did2 = 1:nRec
             % Get the indices
@@ -20,12 +21,15 @@ function [rank, sig] = getRank(M,SessionSwitch)
                 end
 
                 % Find sig
-                sig(clusIdxD1All,clusIdxD2All) = M >= nanmedian(M,1) + 2*nanstd(M,[],1) & FingerprintR >= nanmedian(FingerprintR,2) + 2*nanstd(FingerprintR,[],2);
+                M_cut = M(clusIdxD1All,clusIdxD2All);
+                sig(clusIdxD1All,clusIdxD2All) = M_cut >= nanmedian(M_cut,1) + 2*nanstd(M_cut,[],1) & ...
+                    M_cut >= nanmedian(M_cut,2) + 2*nanstd(M_cut,[],2);
 
             end
         end
     end
     rank(isnan(M)) = nan;
+    sig(isnan(M)) = nan;
 
 
 
