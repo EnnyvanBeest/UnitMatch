@@ -8,7 +8,7 @@ if exist('TmpFile', 'var')
 end
 
 %% Subfunction in case you want to use this on a subset of the data/table
-[MatchTable, UniqueIDConversion] = AssignUniqueIDAlgorithm(MatchTable, UniqueIDConversion, UMparam)
+[MatchTable, UniqueIDConversion] = AssignUniqueIDAlgorithm(MatchTable, UniqueIDConversion, UMparam);
 
 %% Overwrite
 disp('Saving table')
