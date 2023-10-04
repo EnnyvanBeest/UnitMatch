@@ -1,9 +1,17 @@
-function DrawPairsUnitMatch(SaveDir, DrawBlind)
+function DrawPairsUnitMatch(SaveDir, DrawBlind, loadMATsToSave)
 if nargin < 2
     DrawBlind = 0;
 end
 Redo = 0;
-TmpFile = matfile(fullfile(SaveDir, 'UnitMatch.mat')); % Access saved file
+if nargin < 3 || isempty(loadMATsToSave)
+    loadMATsToSave = 1;
+end
+if ~loadMATsToSave
+    TmpFile = matfile(fullfile(SaveDir, 'UnitMatch.mat')); % Access saved file
+else
+    load(fullfile(SaveDir, 'UnitMatch.mat'));
+end
+
 UMparam = TmpFile.UMparam; % Extract parameters
 MatchTable = TmpFile.MatchTable; % Load Matchtable
 try
@@ -38,6 +46,14 @@ MatchProb = reshape(MatchTable.MatchProb, nclus, nclus);
 lowselfscores = find(diag(MatchProb) < UMparam.ProbabilityThreshold);
 for id = 1:length(lowselfscores) % Add these for plotting - inspection
     Pairs{end+1} = [lowselfscores(id), lowselfscores(id)];
+end
+
+RankSc = reshape(MatchTable.SigFingerprintR,nclus,nclus);
+Rank = reshape(MatchTable.RankScore,nclus,nclus);
+[HighRankLowProbr HighRankLowProbc] = find(RankSc==1 & Rank == 1 & MatchProb<0.5);
+PairsRank = [HighRankLowProbr,HighRankLowProbc];
+for id = 1:size(PairsRank,1)
+    Pairs{end+1} = PairsRank(id,:);
 end
 
 PyKSLabel = false(nclus, nclus);
