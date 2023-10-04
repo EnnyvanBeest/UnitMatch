@@ -7,7 +7,7 @@ if ~isfield(UMparam,'SaveDir')
     UMparam.SaveDir = fullfile(cd,'UnitMatch');
 end
 if ~isfield(UMparam,'KSDir')
-    error('Warning, no directories provided with sorted data and/or raw waveforms')
+    error('Error, no directories provided with sorted data and/or raw waveforms')
 end
 
 if ~isfield(UMparam,'RawDataPaths')

@@ -458,10 +458,12 @@ for midx = 1:length(MiceOpt)
 
      % Tracking numbers compared to 'ground truth' manual curation
      if midx == 1
-         nTrackedGT = nan(2,length(MiceOpt));
+         nTrackedGT = nan(2,2,length(MiceOpt));
      end
      ManThrs = sum(AvgMan'>CurationThrs);
-     nTrackedGT(:,midx) = [sum(MatchProb(Idx)>0.5)./ManThrs; sum(PyKS(Idx)>0.5)./ManThrs]; 
+     nTrackedGT(:,2,midx) = [sum(MatchProb(Idx)>0.5); sum(PyKS(Idx)>0.5)]; 
+     nTrackedGT(:,1,midx) = [sum(MatchProb(Idx) & AvgMan(Idx)'>CurationThrs); sum(PyKS(Idx)'>0.5 & AvgMan(Idx)'>CurationThrs)];
+
 
      %% Tracking performance?
      %      Maximum possible
@@ -535,20 +537,30 @@ makepretty
 saveas(gcf,fullfile(SaveDir,'TrackingPerformance_Curated.fig'))
 saveas(gcf,fullfile(SaveDir,'TrackingPerformance_Curated.bmp'))
 
-%      nTrackedGT(:,midx) = [sum(MatchProb(Idx)>0.5)./ManThrs; sum(PyKS(Idx)>0.5)./ManThrs]; 
+%   nTrackedGT(:,2,midx) = [sum(MatchProb(Idx)>0.5); sum(PyKS(Idx)>0.5)]; 
+%      nTrackedGT(:,1,midx) = [sum(MatchProb(Idx) & AvgMan(Idx)'>CurationThrs); sum(PyKS(Idx)'>0.5 & AvgMan(Idx)'>CurationThrs)];
+ nTrackedGT(:,2,midx) = nTrackedGT(:,2,midx) - 
 figure('name','TrackingScatter1')
 cols = lines(length(MiceOpt));
 clear h
-h = bar(nTrackedGT.*100);
+subplot(1,2,1)
+h = bar(squeeze(nTrackedGT(1,:,:))','stacked');
 hold on
-line([0.5 2.5],[100 100],'color',[0 0 0])
-set(gca,'XTickLabel',{'UnitMatch','Kilosort'})
-ylabel('Curated pairs matched (%)')
+set(gca,'XTickLabel',MiceOpt)
+ylabel('Curated pairs matched')
+title('UnitMatch')
 makepretty
 offsetAxes
 
-
-
+subplot(1,2,2)
+h = bar(squeeze(nTrackedGT(2,:,:))','stacked');
+hold on
+set(gca,'XTickLabel',MiceOpt)
+ylabel('Curated pairs matched')
+title('Kilosort')
+makepretty
+offsetAxes
+legend('Overlapping with curated set','Unique')
 
 figure('name','TrackingScatter')
 cols = lines(length(MiceOpt));
