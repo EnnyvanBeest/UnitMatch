@@ -45,6 +45,8 @@ if UMparam.AssignUniqueID
     AssignUniqueID(UMparam.SaveDir);
 end
 
+%%% N.B. From here it is all evaluation, you don't need this to use UnitMatch
+%%% results in your further analysis
 %% Automatic evaluation:
 EvaluatingUnitMatch(UMparam.SaveDir); % Within session cross-validation
 QualityMetricsROCs(UMparam.SaveDir); % Only works in combination with BOMBCELL

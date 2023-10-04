@@ -539,7 +539,7 @@ saveas(gcf,fullfile(SaveDir,'TrackingPerformance_Curated.bmp'))
 
 %   nTrackedGT(:,2,midx) = [sum(MatchProb(Idx)>0.5); sum(PyKS(Idx)>0.5)]; 
 %      nTrackedGT(:,1,midx) = [sum(MatchProb(Idx) & AvgMan(Idx)'>CurationThrs); sum(PyKS(Idx)'>0.5 & AvgMan(Idx)'>CurationThrs)];
- nTrackedGT(:,2,midx) = nTrackedGT(:,2,midx) - 
+ nTrackedGT(:,2,:) = nTrackedGT(:,2,:) -  nTrackedGT(:,1,:);  % Remove incl. for stacked bar
 figure('name','TrackingScatter1')
 cols = lines(length(MiceOpt));
 clear h
