@@ -1,5 +1,6 @@
 function UMparam = DefaultParametersUnitMatch(UMparam)
-
+% Checks if all required parameters are there, and will fill in default
+% parameters if not wherever possible
 %% Check if path information is given
 if ~isfield(UMparam,'SaveDir')
     disp('Warning, no SaveDir given. Assigning current directory')
@@ -24,28 +25,55 @@ if ~isfield(UMparam,'AllChannelPos')
 end
 
 %% Parameters for extracting raw waveforms
-UMparam.sampleamount = 1000; % n raw waveforms to extract
-UMparam.spikeWidth = 82; % width of spikes in samples (typically assuming 30KhZ sampling)
-UMparam.RedoExtraction = 0; % Redoing raw average spike extraction --> this is time consuming
+if ~isfield(UMparam,'sampleamount')
+    UMparam.sampleamount = 1000; % n raw waveforms to extract
+end
+if ~isfield(UMparam,'spikeWidth')
+    UMparam.spikeWidth = 82; % width of spikes in samples (typically assuming 30KhZ sampling)
+end
+if ~isfield(UMparam,'RedoExtraction')
+    UMparam.RedoExtraction = 0; % Redoing raw average spike extraction --> this is time consuming
+end
 
 %% Parameters used in standard UnitMatch
-UMparam.UseHistology = 0; % You can use actual Allen coordinates, if avaible and if using the example pipeline
-UMparam.ProbabilityThreshold = 0.5; % Threshold for assigning as a match
-UMparam.Scores2Include = {'CentroidDist','WavformSim','CentroidOverlord','spatialdecaySim','AmplitudeSim','LocTrajectorySim'};
-UMparam.ApplyExistingBayesModel = 0; % Just apply an already existing Bayes Model (not recommended)
-UMparam.GoodUnitsOnly = 1; % Recommended, to only use units that are good single units (e.g. use Bombcell)
-
+if ~isfield(UMparam,'UseHistology')
+    UMparam.UseHistology = 0; % You can use actual Allen coordinates, if avaible and if using the example pipeline
+end
+if ~isfield(UMparam,'ProbabilityThreshold')
+    UMparam.ProbabilityThreshold = 0.5; % Threshold for assigning as a match
+end
+if ~isfield(UMparam,'Scores2Include')
+    UMparam.Scores2Include = {'CentroidDist','WavformSim','CentroidOverlord','spatialdecaySim','AmplitudeSim','LocTrajectorySim'};
+end
+if ~isfield(UMparam,'ApplyExistingBayesModel')
+    UMparam.ApplyExistingBayesModel = 0; % Just apply an already existing Bayes Model (not recommended)
+end
+if ~isfield(UMparam,'GoodUnitsOnly')
+    UMparam.GoodUnitsOnly = 1; % Recommended, to only use units that are good single units (e.g. use Bombcell)
+end
 %% Post processing
+if ~isfield(UMparam,'AssignUniqueID')
 UMparam.AssignUniqueID = 1; % Use our method of Assigning Unique ID based on match probability (recommended)
-
+end
 %% Inspection
-UMparam.MakePlotsOfPairs = 0; % Plots and saves matches for you to inspect
-UMparam.GUI = 0; % Use our GUI to flip through and curate our matches
-UMparam.RunPyKSChronicStitched = 0; % whether stitched KS was used (concatenated recordings) (it will compare KS labels to UM labels)
-
+if ~isfield(UMparam,'MakePlotsOfPairs')
+    UMparam.MakePlotsOfPairs = 0; % Plots and saves matches for you to inspect
+end
+if ~isfield(UMparam,'GUI')
+    UMparam.GUI = 0; % Use our GUI to flip through and curate our matches
+end
+if ~isfield(UMparam,'RunPyKSChronicStitched')
+    UMparam.RunPyKSChronicStitched = 0; % whether stitched KS was used (concatenated recordings) (it will compare KS labels to UM labels)
+end
 %% Parameters only used for compute functional scores
-UMparam.ACGbinSize = 1E-03; % 
-UMparam.ACGduration = 1; % in seconds
-UMparam.binsize = 0.01; % in seconds
+if ~isfield(UMparam,'ACGbinSize')
+    UMparam.ACGbinSize = 1E-03; %
+end
+if ~isfield(UMparam,'ACGduration')
+    UMparam.ACGduration = 1; % in seconds
+end
+if ~isfield(UMparam,'binsize')
+    UMparam.binsize = 0.01; % in seconds
+end
 
 return

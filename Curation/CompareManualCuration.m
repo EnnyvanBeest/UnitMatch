@@ -16,8 +16,8 @@ for midx = 1:length(MiceOpt)
     MatchTable = tmpMatchTbl.MatchTable;
     nclus = sqrt(height(MatchTable));
     MatchProbability = reshape(MatchTable.MatchProb,nclus,nclus);
-    RankScore = reshape(MatchTable.RankScore,nclus,nclus);
-    RankThreshold = reshape(MatchTable.SigFingerprintR,nclus,nclus);
+    RankScore = reshape(MatchTable.refPopRank,nclus,nclus);
+    RankThreshold = reshape(MatchTable.refPopSig,nclus,nclus);
     UMparam = tmpMatchTbl.UMparam;
     UniqueIDConversion = tmpMatchTbl.UniqueIDConversion;
     if UMparam.GoodUnitsOnly
@@ -34,7 +34,7 @@ for midx = 1:length(MiceOpt)
     % Individual scores:
     Scores2Inclde = UMparam.Scores2Include;
     % Add functional scores
-    Scores2Inclde = {Scores2Inclde{:} 'ACGCorr','FRDiff','FingerprintCor'};
+    Scores2Inclde = {Scores2Inclde{:} 'ACGCorr','FRDiff','refPopCorr'};
     for scid = 1:length(Scores2Inclde)
         eval([Scores2Inclde{scid} ' = reshape(MatchTable.' Scores2Inclde{scid} ',nclus,nclus);'])
     end
@@ -42,9 +42,9 @@ for midx = 1:length(MiceOpt)
     for fid = 1:2
         % Now load manual curation
         if fid == 1
-            tmpmanual = dir(fullfile(SaveDir,MiceOpt{midx},'UnitMatch','BlindFigures_WOFunct','BlindTable.mat'));
+            tmpmanual = dir(fullfile(SaveDir,MiceOpt{midx},'*','*','UnitMatch','BlindFigures_WOFunct','BlindTable.mat'));
             tmpmanual = load(fullfile(tmpmanual.folder,tmpmanual.name));
-            manualscore = dir(fullfile(SaveDir,MiceOpt{midx},'UnitMatch','BlindFigures_WOFunct','manualCuration*.mat'));
+            manualscore = dir(fullfile(SaveDir,MiceOpt{midx},'*','*','UnitMatch','BlindFigures_WOFunct','manualCuration*.mat'));
             if isempty(manualscore)
                 continue
             end

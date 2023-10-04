@@ -96,6 +96,9 @@ for midx = 1:length(MiceOpt)
             AllRawDir = cellfun(@(X) fullfile(X.folder,X.name),AllRawDir,'Uni',0);
         end
         nclus = length(UniqueID);
+        if ~isfield(UMparam,'AllChannelPos')
+            UMparam.AllChannelPos = UMparam.channelpos;
+        end
         ChannelPos = UMparam.AllChannelPos;
 
         %% How many units vs number of units were tracked?
