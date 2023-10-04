@@ -87,8 +87,8 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
         for fpIdx = 1:numel(FPNames)
             FPNameCurr = FPNames{fpIdx};
             FPSum.(FPNameCurr).Distr{midx} = nan(numel(histBins{fpIdx})-1, 3, numel(sessIDs)-1, numel(sessIDs));
-            FPSum.(FPNameCurr).AUC{midx} = nan(3, numel(sessIDs)-1, numel(sessIDs));
-            FPSum.(FPNameCurr).ROC{midx} = nan(numel(ROCBins), 3, numel(sessIDs)-1, numel(sessIDs));
+            FPSum.(FPNameCurr).AUC{midx} = nan(2, numel(sessIDs)-1, numel(sessIDs));
+            FPSum.(FPNameCurr).ROC{midx} = nan(numel(ROCBins), 2, numel(sessIDs)-1, numel(sessIDs));
         end
     
         %%% HACK -- Can remove later
@@ -188,14 +188,15 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
                         % MatchIdx = find((MatchTable_2sess.UID1 == MatchTable_2sess.UID2) & (MatchTable_2sess.RecSes1 ~= MatchTable_2sess.RecSes2) & validPairs); %Across session, same unit (cross-validation)
                         % NonMatchIdx = find((MatchTable_2sess.UID1 ~= MatchTable_2sess.UID2) & validPairs); % Not the same unit
 
-                        %%% CHECK THAT THIS MAKES SENSE
-                        WithinIdx = find((MatchTable_2sess.ID1 == MatchTable_2sess.ID2) & (MatchTable_2sess.RecSes1 == MatchTable_2sess.RecSes2) & validPairs); %Within session, same unit (cross-validation)
-                        MatchIdx = find(matchedUnitsIdx & validPairs); % Across session, same unit (cross-validation)
-                        NonMatchIdx = find(~matchedUnitsIdx & (MatchTable_2sess.RecSes1 ~= MatchTable_2sess.RecSes2) & validPairs); % Across session, not the same unit
+                        withinMatchIdx = find((MatchTable_2sess.ID1 == MatchTable_2sess.ID2) & (MatchTable_2sess.RecSes1 == MatchTable_2sess.RecSes2) & validPairs); %Within session, same unit (cross-validation)
+                        withinNonMatchIdx = find((MatchTable_2sess.ID1 ~= MatchTable_2sess.ID2) & (MatchTable_2sess.RecSes1 == MatchTable_2sess.RecSes2) & validPairs); %Within session, different unit (cross-validation)
+                        acrossMatchIdx = find(matchedUnitsIdx & (MatchTable_2sess.RecSes1 ~= MatchTable_2sess.RecSes2) & validPairs); % Across session, same unit (cross-validation)
+                        acrossNonMatchIdx = find(~matchedUnitsIdx & (MatchTable_2sess.RecSes1 ~= MatchTable_2sess.RecSes2) & validPairs); % Across session, not the same unit
                     else
-                        WithinIdx = find((MatchTable_2sess.ID1 == MatchTable_2sess.ID2) & (MatchTable_2sess.RecSes1 == MatchTable_2sess.RecSes2) & validPairs); %Within session, same unit (cross-validation)
-                        MatchIdx = find((MatchTable_2sess.ID1 == MatchTable_2sess.ID2) & (MatchTable_2sess.RecSes1 ~= MatchTable_2sess.RecSes2) & validPairs); %Across session, same unit (cross-validation)
-                        NonMatchIdx = find((MatchTable_2sess.ID1 ~= MatchTable_2sess.ID2) & validPairs); % Not the same unit
+                        withinMatchIdx = find((MatchTable_2sess.ID1 == MatchTable_2sess.ID2) & (MatchTable_2sess.RecSes1 == MatchTable_2sess.RecSes2) & validPairs); %Within session, same unit (cross-validation)
+                        withinNonMatchIdx = find((MatchTable_2sess.ID1 ~= MatchTable_2sess.ID2) & (MatchTable_2sess.RecSes1 == MatchTable_2sess.RecSes2) & validPairs); %Within session, different unit (cross-validation)
+                        acrossMatchIdx = find((MatchTable_2sess.ID1 == MatchTable_2sess.ID2) & (MatchTable_2sess.RecSes1 ~= MatchTable_2sess.RecSes2) & validPairs); %Across session, same unit (cross-validation)
+                        acrossNonMatchIdx = find((MatchTable_2sess.ID1 ~= MatchTable_2sess.ID2) & (MatchTable_2sess.RecSes1 ~= MatchTable_2sess.RecSes2) & validPairs); % Not the same unit
                     end
     
                     %% Check that passed the criteria
@@ -204,8 +205,8 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
                    
 
                     % Condition to go ahead
-                    goAhead = numel(MatchIdx)/2 >= minMatches && ... % minimum number of matches
-                        ~all(isnan(MatchTable_2sess.(FPNameCurr)(MatchIdx))); % not all nans
+                    goAhead = numel(acrossMatchIdx)/2 >= minMatches && ... % minimum number of matches
+                        ~all(isnan(MatchTable_2sess.(FPNameCurr)(acrossMatchIdx))); % not all nans
     
                     if goAhead
                         %% Compute fingerprint correlations and AUCs
@@ -213,19 +214,18 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
                         FPCorr = MatchTable_2sess.(FPNameCurr);
     
                         % Compute distributions
-                        hw = histcounts(FPCorr(WithinIdx), histBins{fpIdx}) ./ length(WithinIdx);
-                        hm = histcounts(FPCorr(MatchIdx), histBins{fpIdx}) ./ length(MatchIdx);
-                        hn = histcounts(FPCorr(NonMatchIdx), histBins{fpIdx}) ./ length(NonMatchIdx);
+                        hw = histcounts(FPCorr(withinMatchIdx), histBins{fpIdx}) ./ length(withinMatchIdx);
+                        hm = histcounts(FPCorr(acrossMatchIdx), histBins{fpIdx}) ./ length(acrossMatchIdx);
+                        hn = histcounts(FPCorr(acrossNonMatchIdx), histBins{fpIdx}) ./ length(acrossNonMatchIdx);
                         % Save
                         FPSum.(FPNameCurr).Distr{midx}(:,:,sess1Idx,sess2Idx) = [hw', hm', hn'];
     
                         % Compute ROCs and AUCs
-                        [ROC1, AUC1] = getAUC(FPCorr,MatchIdx,NonMatchIdx,ROCBins,flipROC(fpIdx));
-                        [ROC2, AUC2] = getAUC(FPCorr,WithinIdx,MatchIdx,ROCBins,flipROC(fpIdx));
-                        [ROC3, AUC3] = getAUC(FPCorr,WithinIdx,NonMatchIdx,ROCBins,flipROC(fpIdx));
+                        [ROC1, AUC1] = getAUC(FPCorr,acrossMatchIdx,acrossNonMatchIdx,ROCBins,flipROC(fpIdx));
+                        [ROC2, AUC2] = getAUC(FPCorr,withinMatchIdx,withinNonMatchIdx,ROCBins,flipROC(fpIdx));
                         % Save
-                        FPSum.(FPNameCurr).ROC{midx}(:,:,sess1Idx,sess2Idx) = [ROC1,ROC2,ROC3];
-                        FPSum.(FPNameCurr).AUC{midx}(:,sess1Idx,sess2Idx) = [AUC1, AUC2, AUC3];
+                        FPSum.(FPNameCurr).ROC{midx}(:,:,sess1Idx,sess2Idx) = [ROC1,ROC2];
+                        FPSum.(FPNameCurr).AUC{midx}(:,sess1Idx,sess2Idx) = [AUC1, AUC2];
                     end
                 end
             end
@@ -278,8 +278,8 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
     for fpIdx = 1:numel(FPNames)
         FPNameCurr = FPNames{fpIdx};
         distMatrix{fpIdx} = nan(numel(histBinsCenter{fpIdx}), 3, length(groups));
-        ROCMatrix{fpIdx} = nan(numel(ROCBins), 3, length(groups));
-        AUCMatrix{fpIdx} = nan(3, length(groups));
+        ROCMatrix{fpIdx} = nan(numel(ROCBins), 2, length(groups));
+        AUCMatrix{fpIdx} = nan(2, length(groups));
         for gg = 1:length(groups)
             % Distributions
             tmp = cellfun(@(x) x(:,:,:), FPSum.(FPNameCurr).Distr(groupVector == gg), 'uni', 0);
@@ -297,7 +297,7 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
     
     % Plot
     distrCols = [0 0.7 0; 1 0 0; 0 0 0.7]; % Within / Match / Non-match
-    ROCCols = [1 0 0; 0.5 0.5 0.5; 0 0 0]; % Match vs Non-match / Within vs Match / Within vs Non-match
+    ROCCols = [1 0 0; 0 0.7 0]; % across Match vs. non-match / within Match vs. non-match
     figure('Position', [400 270 800 700]);
     for fpIdx = 1:numel(FPNames)
         FPNameCurr = FPNames{fpIdx};
@@ -323,7 +323,7 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
     
         % Plot ROC
         subplot(4,numel(FPNames),1*numel(FPNames)+fpIdx); hold all
-        for hid = 3:-1:1
+        for hid = 2:-1:1
             h = shadedErrorBar(ROCBins, nanmean(ROCMatrix{fpIdx}(:,hid,:),3), ...
                 nanstd(ROCMatrix{fpIdx}(:,hid,:),[],3)./sqrt(sum(~isnan(ROCMatrix{fpIdx}(:,hid,:)),3)));
             h.mainLine.Color = ROCCols(hid,:);
@@ -344,13 +344,13 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
     
         % Plot AUC
         subplot(4,numel(FPNames),2*numel(FPNames)+fpIdx); hold all
-        for hid = 1:3
+        for hid = 1:2
             scatter(hid + 0.1*randn(1,numel(groups)), AUCMatrix{fpIdx}(hid,:), 30, ROCCols(hid,:), 'filled')
         end
         ylim([0 1])
         hline(0.5, 'k--')
         xticks(1:3)
-        xticklabels({'M v NM', 'W v M', 'W v NM'})
+        xticklabels({'across', 'within'})
         xtickangle(45)
         ylabel('AUC')
         offsetAxes
@@ -384,7 +384,7 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
     
     % AUC as a function of delta days
     figure;
-    for aucIdx = 1:3
+    for aucIdx = 1:2
         for fpIdx = 1:numel(FPNames)
             FPNameCurr = FPNames{fpIdx};
             subplot(3,numel(FPNames),(aucIdx-1)*numel(FPNames)+fpIdx);
@@ -404,10 +404,10 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
     
     % Dependence of AUC on number of matched units
     figure;
-    for aucIdx = 1:3
+    for aucIdx = 1:2
         for fpIdx = 1:numel(FPNames)
             FPNameCurr = FPNames{fpIdx};
-            subplot(3,numel(FPNames),(aucIdx-1)*numel(FPNames)+fpIdx);
+            subplot(2,numel(FPNames),(aucIdx-1)*numel(FPNames)+fpIdx);
             hold all
             for midx = 1:length(UMFiles)
                 if ~isempty(FPSum.(FPNameCurr).AUC{midx})
