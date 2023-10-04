@@ -37,18 +37,23 @@ function exp2keep = getNatImExpRef(binFile)
 
                 % On a zelda rig
                 alignmentFile = dir(fullfile(expFolder,'*alignment.mat'));
+                if isempty(alignmentFile)
+                    continue
+                end
                 alignment = load(fullfile(alignmentFile.folder,alignmentFile.name));
 
                 % Check that that recording was aligned
                 for probeNum = 1:numel(alignment)
-                    dAlign = dir(fullfile(alignment.ephys(probeNum).ephysPath,'*cbin'));
-                    if ~isempty(dAlign)
-                        if strcmp(dAlign.name,binFile.name) %%% SHOULD BE ENOUGH TO IDENTIFY RECORDING?
-                            exp2keep = cat(1,exp2keep,{expFolder});
+                    if ~isa(alignment.ephys(probeNum),'double')
+                        dAlign = dir(fullfile(alignment.ephys(probeNum).ephysPath,'*cbin'));
+                        if ~isempty(dAlign)
+                            if strcmp(dAlign.name,binFile.name) %%% SHOULD BE ENOUGH TO IDENTIFY RECORDING?
+                                exp2keep = cat(1,exp2keep,{expFolder});
+                            end
+                        else
+                            % can happen when there was an alignment error
+                            fprintf('Alignment issue in the pinkrigs. Skip.\n',ee)
                         end
-                    else
-                        % can happen when there was an alignment error
-                        fprintf('Alignment issue in the pinkrigs. Skip.\n',ee)
                     end
                 end
 
@@ -99,7 +104,9 @@ function exp2keep = getNatImExpRef(binFile)
                                 alignmentFileEphys = dir(fullfile(alignmentFolder, sprintf('correct_timeline_%s_to_ephys_%s.npy',timeRef,regexprep(tag{1},'_g\d',''))));
                             end
                         end
-                        if isempty(alignmentFileEphys)
+                        % Can deal with that case only if contains natim in
+                        % its name.
+                        if isempty(alignmentFileEphys) && contains(lower(binFile.name),'natim')
                             % Check if several "natim" ephys... If yes,
                             % check that currently looking at the first. 
                             % If all good, consider that it's ok. 
@@ -107,7 +114,7 @@ function exp2keep = getNatImExpRef(binFile)
                             if ~isempty(alignmentFileEphys)
                                 fprintf('tricky situation -- there''s an undefined alignment file for this timeline...\n')
                                 if contains(lower(binFile.name),'natim2')
-                                    printf('File called natim2. Check if there''s a one?\n')
+                                    printf('File called natim2. Check if there''s another one?\n')
                                     if numel(unique({dEphys.folder}))==1
                                         cbinFilesForDate = dir(fullfile(dEphys(1).folder,'**','*.ap.cbin'));
                                     else

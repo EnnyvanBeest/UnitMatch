@@ -1,7 +1,7 @@
-function summaryFunctionalPlots(UMFiles, TakeRank, groupVector, UseKSLabels)
+function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
     %% Will plot summary plots: distribution, ROC and AUC. 
     % UMFiles: list cells contains path to UnitMatch.m files
-    % Takerank: will compute distributions/ROC/AUC on rank. 
+    % whichMetric: will compute distributions/ROC/AUC on either 'Corr', 'Rank', or 'Sig'. 
     % groupVector: same size as UMFiles, to group e.g. recordings from the
     % same mouse together.
     % UseKSLabels: use KS labels for matching
@@ -9,25 +9,10 @@ function summaryFunctionalPlots(UMFiles, TakeRank, groupVector, UseKSLabels)
     %% Define parameters
     
     % Initialize
-    if ~exist('TakeRank','var')
-        TakeRank = 0;
+    if ~exist('whichMetric','var') || isempty(whichMetric)
+        whichMetric = 'Corr';
     end
-    if TakeRank
-        fprintf("Taking the rank!\n")
-        FPNames = {'FRRankScore','ACGRankScore','RankScore','NImgRankScore','NatImRespRankScore','NatImScaledRespRankScore'};
-        stepsz = [1 1 1 1 1 1];
-        minVal = [1 1 1 1 1 1];
-        maxVal = [21 21 21 21 21 21];
-        flipROC = [0 0 0 0 0 0];
-    else
-        fprintf("Taking the correlation values!\n")
-        FPNames = {'FRDiff','ACGCorr','FingerprintCor','NatImCorr','NatImRespCorr','NatImScaledRespCorr'};
-        stepsz = [0.1 0.1 0.1 0.1 0.1 0.1];
-        minVal = [0 -1 -1 -1 -1 -1];
-        maxVal = [15 1 1 1 1 1];
-        flipROC = [0 1 1 1 1 1];
-    end
-    
+
     if ~exist('groupVector','var')
         groupVector = 1:length(UMFiles);
     end
@@ -36,6 +21,30 @@ function summaryFunctionalPlots(UMFiles, TakeRank, groupVector, UseKSLabels)
 
     if ~exist('UseKSLabels','var')
         UseKSLabels = 0;
+    end
+
+    switch whichMetric
+        case 'Corr'
+            fprintf("Taking the correlation values!\n")
+            FPNames = {'FRDiff','ACGCorr','refPopCorr','natImCorr','natImRespCorr','natImScaledRespCorr'};
+            stepsz = [0.1 0.1 0.1 0.1 0.1 0.1];
+            minVal = [0 -1 -1 -1 -1 -1];
+            maxVal = [15 1 1 1 1 1];
+            flipROC = [0 1 1 1 1 1];
+        case 'Rank'
+            fprintf("Taking the rank!\n")
+            FPNames = {'FRRank','ACGRank','refPopRank','natImRank','natImRespRank','natImScaledRespRank'};
+            stepsz = [1 1 1 1 1 1];
+            minVal = [1 1 1 1 1 1];
+            maxVal = [21 21 21 21 21 21];
+            flipROC = [0 0 0 0 0 0];
+        case 'Sig'
+            fprintf("Taking the rank!\n")
+            FPNames = {'FRSig','ACGSig','refPopSig','natImSig','natImRespSig','natImScaledRespSig'};
+            stepsz = [1 1 1 1 1 1];
+            minVal = [1 1 1 1 1 1];
+            maxVal = [21 21 21 21 21 21];
+            flipROC = [0 0 0 0 0 0];
     end
 
     histBins = cell(1,numel(FPNames));
@@ -56,7 +65,7 @@ function summaryFunctionalPlots(UMFiles, TakeRank, groupVector, UseKSLabels)
     numMatchedUnits = cell(1, length(UMFiles));
     InitialDrift = cell(1,length(UMFiles));
     FixedDrift =  cell(1,length(UMFiles));
-    MaxAvailableUnits = cell(1, length(UMFiles));
+    maxAvailableUnits = cell(1, length(UMFiles));
     for midx = 1:length(UMFiles)
         %% Load data
     
@@ -69,7 +78,7 @@ function summaryFunctionalPlots(UMFiles, TakeRank, groupVector, UseKSLabels)
     
         fprintf('Loading the data...\n')
         tic
-        load(fullfile(tmpfile.folder, tmpfile.name), 'MatchTable', 'UMparam');
+        load(fullfile(tmpfile.folder, tmpfile.name), 'MatchTable', 'UniqueIDConversion', 'UMparam');
         toc
     
         sessIDs = unique(MatchTable.RecSes1);
@@ -123,18 +132,24 @@ function summaryFunctionalPlots(UMFiles, TakeRank, groupVector, UseKSLabels)
     
                 %% Cut table to specific days
     
-                MatchTable_pair = MatchTable(ismember(MatchTable.RecSes1, [sess1 sess2]) & ismember(MatchTable.RecSes2, [sess1 sess2]), :);
+                MatchTable_2sess = MatchTable(ismember(MatchTable.RecSes1, [sess1 sess2]) & ismember(MatchTable.RecSes2, [sess1 sess2]), :);
     
                 %% Number of matches
     
                 if ~UseKSLabels
-                    numMatchedUnits{midx}(sess1Idx,sess2Idx) = sum((MatchTable_pair.UID1 == MatchTable_pair.UID2) & ...
-                        (MatchTable_pair.RecSes1 ~= MatchTable_pair.RecSes2))/2;
+                    %%% CHECK THAT THIS MAKES SENSE
+                    %%% CHOOSE BASED ON UID
+                    matchedUnitsIdx = (MatchTable_2sess.UID1 == MatchTable_2sess.UID2) & (MatchTable_2sess.RecSes1 ~= MatchTable_2sess.RecSes2); % using Unique ID
+                    %%% OR RECOMPUTE
+%                     [~,~,idx,~] = getPairsAcross2Sess(MatchTable_2sess, UMparam.ProbabilityThreshold);
+%                     matchedUnitsIdx = zeros(size(MatchTable_2sess,1),1);
+%                     matchedUnitsIdx(idx) = 1;
                 else
-                    numMatchedUnits{midx}(sess1Idx,sess2Idx) = sum((MatchTable_pair.ID1 == MatchTable_pair.ID2) & ...
-                        (MatchTable_pair.RecSes1 ~= MatchTable_pair.RecSes2))/2;
+                    matchedUnitsIdx = (MatchTable_2sess.ID1 == MatchTable_2sess.ID2) & (MatchTable_2sess.RecSes1 ~= MatchTable_2sess.RecSes2);
                 end
-                MaxAvailableUnits{midx}(sess1Idx,sess2Idx) = min([length(unique(MatchTable_pair.ID1(MatchTable_pair.RecSes1 == sess1))) length(unique(MatchTable_pair.ID1(MatchTable_pair.RecSes1 == sess2)))]);%
+                numMatchedUnits{midx}(sess1Idx,sess2Idx) = sum(matchedUnitsIdx)/2; % Divided by two because looking both ways -- can be non-integer
+                
+                maxAvailableUnits{midx}(sess1Idx,sess2Idx) = min([length(unique(MatchTable_2sess.ID1(MatchTable_2sess.RecSes1 == sess1))) length(unique(MatchTable_2sess.ID1(MatchTable_2sess.RecSes1 == sess2)))]);%
                 
                 %% Extract drift if present
     
@@ -147,8 +162,8 @@ function summaryFunctionalPlots(UMFiles, TakeRank, groupVector, UseKSLabels)
                 for fpIdx = 1:numel(FPNames)
                     FPNameCurr = FPNames{fpIdx};
     
-                    if ~any(ismember(MatchTable_pair.Properties.VariableNames, FPNameCurr))
-                        fprintf('%s has no %s in table...', UMFiles{midx}, FPNameCurr)
+                    if ~any(ismember(MatchTable_2sess.Properties.VariableNames, FPNameCurr))
+                        fprintf('%s has no %s in table...\n', UMFiles{midx}, FPNameCurr)
                         continue
                     end
     
@@ -158,24 +173,29 @@ function summaryFunctionalPlots(UMFiles, TakeRank, groupVector, UseKSLabels)
                     if contains(FPNameCurr,'NatI') || contains(FPNameCurr,'NImg') %%% clean
                         % Select pairs of which the first neuron has good
                         % test-retest reliability
-                        Unit1ID = double(MatchTable_pair.ID1) + 10e9*MatchTable_pair.RecSes1; % identifier for each pair
+                        Unit1ID = double(MatchTable_2sess.ID1) + 10e9*MatchTable_2sess.RecSes1; % identifier for each pair
                         uUnit1ID = unique(Unit1ID); % list of units
-                        reliability = MatchTable_pair((MatchTable_pair.ID1 == MatchTable_pair.ID2) & (MatchTable_pair.RecSes1 == MatchTable_pair.RecSes2),:).NatImCorr; % test-retest reliability of each unit
+                        reliability = MatchTable_2sess((MatchTable_2sess.ID1 == MatchTable_2sess.ID2) & (MatchTable_2sess.RecSes1 == MatchTable_2sess.RecSes2),:).NatImCorr; % test-retest reliability of each unit
     
                         validPairs = ismember(Unit1ID, uUnit1ID(reliability > 0.2));
                     else
-                        validPairs = ones(size(MatchTable_pair,1),1);
+                        validPairs = ones(size(MatchTable_2sess,1),1);
                     end
     
                     % Extract groups: "within", "match", "non-match"
                     if ~UseKSLabels
-                        WithinIdx = find((MatchTable_pair.UID1 == MatchTable_pair.UID2) & (MatchTable_pair.RecSes1 == MatchTable_pair.RecSes2) & validPairs); %Within session, same unit (cross-validation)
-                        MatchIdx = find((MatchTable_pair.UID1 == MatchTable_pair.UID2) & (MatchTable_pair.RecSes1 ~= MatchTable_pair.RecSes2) & validPairs); %Across session, same unit (cross-validation)
-                        NonMatchIdx = find((MatchTable_pair.UID1 ~= MatchTable_pair.UID2) & validPairs); % Not the same unit
+                        % WithinIdx = find((MatchTable_2sess.UID1 == MatchTable_2sess.UID2) & (MatchTable_2sess.RecSes1 == MatchTable_2sess.RecSes2) & validPairs); %Within session, same unit (cross-validation)
+                        % MatchIdx = find((MatchTable_2sess.UID1 == MatchTable_2sess.UID2) & (MatchTable_2sess.RecSes1 ~= MatchTable_2sess.RecSes2) & validPairs); %Across session, same unit (cross-validation)
+                        % NonMatchIdx = find((MatchTable_2sess.UID1 ~= MatchTable_2sess.UID2) & validPairs); % Not the same unit
+
+                        %%% CHECK THAT THIS MAKES SENSE
+                        WithinIdx = find((MatchTable_2sess.ID1 == MatchTable_2sess.ID2) & (MatchTable_2sess.RecSes1 == MatchTable_2sess.RecSes2) & validPairs); %Within session, same unit (cross-validation)
+                        MatchIdx = find(matchedUnitsIdx & validPairs); % Across session, same unit (cross-validation)
+                        NonMatchIdx = find(~matchedUnitsIdx & (MatchTable_2sess.RecSes1 ~= MatchTable_2sess.RecSes2) & validPairs); % Across session, not the same unit
                     else
-                        WithinIdx = find((MatchTable_pair.ID1 == MatchTable_pair.ID2) & (MatchTable_pair.RecSes1 == MatchTable_pair.RecSes2) & validPairs); %Within session, same unit (cross-validation)
-                        MatchIdx = find((MatchTable_pair.ID1 == MatchTable_pair.ID2) & (MatchTable_pair.RecSes1 ~= MatchTable_pair.RecSes2) & validPairs); %Across session, same unit (cross-validation)
-                        NonMatchIdx = find((MatchTable_pair.ID1 ~= MatchTable_pair.ID2) & validPairs); % Not the same unit
+                        WithinIdx = find((MatchTable_2sess.ID1 == MatchTable_2sess.ID2) & (MatchTable_2sess.RecSes1 == MatchTable_2sess.RecSes2) & validPairs); %Within session, same unit (cross-validation)
+                        MatchIdx = find((MatchTable_2sess.ID1 == MatchTable_2sess.ID2) & (MatchTable_2sess.RecSes1 ~= MatchTable_2sess.RecSes2) & validPairs); %Across session, same unit (cross-validation)
+                        NonMatchIdx = find((MatchTable_2sess.ID1 ~= MatchTable_2sess.ID2) & validPairs); % Not the same unit
                     end
     
                     %% Check that passed the criteria
@@ -185,12 +205,12 @@ function summaryFunctionalPlots(UMFiles, TakeRank, groupVector, UseKSLabels)
 
                     % Condition to go ahead
                     goAhead = numel(MatchIdx)/2 >= minMatches && ... % minimum number of matches
-                        ~all(isnan(MatchTable_pair.(FPNameCurr)(MatchIdx))); % not all nans
+                        ~all(isnan(MatchTable_2sess.(FPNameCurr)(MatchIdx))); % not all nans
     
                     if goAhead
                         %% Compute fingerprint correlations and AUCs
     
-                        FPCorr = MatchTable_pair.(FPNameCurr);
+                        FPCorr = MatchTable_2sess.(FPNameCurr);
     
                         % Compute distributions
                         hw = histcounts(FPCorr(WithinIdx), histBins{fpIdx}) ./ length(WithinIdx);
@@ -206,6 +226,10 @@ function summaryFunctionalPlots(UMFiles, TakeRank, groupVector, UseKSLabels)
                         % Save
                         FPSum.(FPNameCurr).ROC{midx}(:,:,sess1Idx,sess2Idx) = [ROC1,ROC2,ROC3];
                         FPSum.(FPNameCurr).AUC{midx}(:,sess1Idx,sess2Idx) = [AUC1, AUC2, AUC3];
+
+                        if AUC1 < 0.7
+                            keyboard
+                        end
                     end
                 end
             end
@@ -295,8 +319,8 @@ function summaryFunctionalPlots(UMFiles, TakeRank, groupVector, UseKSLabels)
             end
         end
         title(sprintf('%s', FPNameCurr))
-        if TakeRank; xlabel('Rank'); else; xlabel('Correlation'); end
-        if TakeRank; xticks([1 10 maxVal(fpIdx)]); xticklabels({'1','10',sprintf('>%d',maxVal(fpIdx)-1)}); end
+        xlabel(whichMetric)
+        if strcmp(whichMetric,'Rank'); xticks([1 10 maxVal(fpIdx)]); xticklabels({'1','10',sprintf('>%d',maxVal(fpIdx)-1)}); end
         ylabel('Proportion')
         offsetAxes
         makepretty
