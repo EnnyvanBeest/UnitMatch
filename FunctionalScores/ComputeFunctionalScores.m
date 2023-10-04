@@ -11,7 +11,7 @@ end
 load(fullfile(SaveDir, 'UnitMatch.mat'), 'MatchTable', 'UMparam', 'UniqueIDConversion');
 UMparam.binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
 
-if all(ismember({'refPopCorr','ACGCorr','FRDiff','natImCorr'},MatchTable.Properties.VariableNames)) && ~recompute
+if all(ismember({'refPopCorr','ACGCorr','FRDiff','natImRespCorr'},MatchTable.Properties.VariableNames)) && ~recompute
     disp('Already computed functional scores')
     return
 end
@@ -247,7 +247,7 @@ end
 
 %% Get natural images fingerprints correlations
 
-if ~any(ismember(MatchTable.Properties.VariableNames, 'natImCorr')) || all(isnan(MatchTable.natImCorr)) || recompute % If it already exists in table, skip this entire thing
+if ~any(ismember(MatchTable.Properties.VariableNames, 'natImRespCorr')) || all(isnan(MatchTable.natImRespCorr)) || recompute % If it already exists in table, skip this entire thing
     % Param for processing
     proc.window = [-0.3 0.5 ... % around onset
         0.0 0.5]; % around offset
@@ -610,10 +610,10 @@ for id = 1:ntimes
 
     %% Plot Natural images
 
-    natImCorr = reshape(MatchTable.natImCorr, nclus, nclus);
+    natImRespCorr = reshape(MatchTable.natImRespCorr, nclus, nclus);
     if saveFig
         subplot(4, 3, 10)
-        imagesc(natImCorr)
+        imagesc(natImRespCorr)
         hold on
         colormap(flipud(gray))
         makepretty
@@ -627,13 +627,13 @@ for id = 1:ntimes
         freezeColors
 
 
-        if ~all(isnan(natImCorr(MatchIdx)))
+        if ~all(isnan(natImRespCorr(MatchIdx)))
             subplot(4, 3, 11)
-            bins = min(natImCorr(:)):0.1:max(natImCorr(:));
+            bins = min(natImRespCorr(:)):0.1:max(natImRespCorr(:));
             Vector = [bins(1) + 0.1 / 2:0.1:bins(end) - 0.1 / 2];
-            hw = histcounts(natImCorr(WithinIdx), bins) ./ length(WithinIdx);
-            hm = histcounts(natImCorr(MatchIdx), bins) ./ length(MatchIdx);
-            hn = histcounts(natImCorr(NonMatchIdx), bins) ./ length(NonMatchIdx);
+            hw = histcounts(natImRespCorr(WithinIdx), bins) ./ length(WithinIdx);
+            hm = histcounts(natImRespCorr(MatchIdx), bins) ./ length(MatchIdx);
+            hn = histcounts(natImRespCorr(NonMatchIdx), bins) ./ length(NonMatchIdx);
             plot(Vector, hw, 'color', [0.5, 0.5, 0.5])
             hold on
             plot(Vector, hm, 'color', [0, 0.5, 0])
@@ -645,11 +645,11 @@ for id = 1:ntimes
             makepretty
 
             subplot(4, 3, 11)
-            bins = min(natImCorr(:)):0.1:max(natImCorr(:));
+            bins = min(natImRespCorr(:)):0.1:max(natImRespCorr(:));
             Vector = [bins(1) + 0.1 / 2:0.1:bins(end) - 0.1 / 2];
-            hw = histcounts(natImCorr(WithinIdx), bins) ./ length(WithinIdx);
-            hm = histcounts(natImCorr(MatchIdx), bins) ./ length(MatchIdx);
-            hn = histcounts(natImCorr(NonMatchIdx), bins) ./ length(NonMatchIdx);
+            hw = histcounts(natImRespCorr(WithinIdx), bins) ./ length(WithinIdx);
+            hm = histcounts(natImRespCorr(MatchIdx), bins) ./ length(MatchIdx);
+            hn = histcounts(natImRespCorr(NonMatchIdx), bins) ./ length(NonMatchIdx);
             plot(Vector, hw, 'color', [0.5, 0.5, 0.5])
             hold on
             plot(Vector, hm, 'color', [0, 0.5, 0])
@@ -660,22 +660,22 @@ for id = 1:ntimes
             axis square
             makepretty
             subplot(4, 3, 12)
-            if any(MatchIdx) && ~all(isnan(natImCorr(MatchIdx)))
+            if any(MatchIdx) && ~all(isnan(natImRespCorr(MatchIdx)))
                 labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
-                scores = [natImCorr(MatchIdx)', natImCorr(NonMatchIdx)'];
+                scores = [natImRespCorr(MatchIdx)', natImRespCorr(NonMatchIdx)'];
 
                 [X, Y, ~, AUC1] = perfcurve(labels, scores, 1);
                 h(1) = plot(X, Y, 'color', [0, 0.25, 0]);
                 hold all
                 labels = [zeros(1, numel(MatchIdx)), ones(1, numel(WithinIdx))];
 
-                scores = [natImCorr(MatchIdx)', natImCorr(WithinIdx)'];
+                scores = [natImRespCorr(MatchIdx)', natImRespCorr(WithinIdx)'];
                 [X, Y, ~, AUC2] = perfcurve(labels, scores, 1);
                 h(2) = plot(X, Y, 'color', [0, 0.5, 0]);
             end
 
             labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
-            scores = [natImCorr(WithinIdx)', natImCorr(NonMatchIdx)'];
+            scores = [natImRespCorr(WithinIdx)', natImRespCorr(NonMatchIdx)'];
             [X, Y, ~, AUC3] = perfcurve(labels, scores, 1);
             h(3) = plot(X, Y, 'color', [0.25, 0.25, 0.25]);
             axis square
