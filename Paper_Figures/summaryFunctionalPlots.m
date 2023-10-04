@@ -226,10 +226,6 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
                         % Save
                         FPSum.(FPNameCurr).ROC{midx}(:,:,sess1Idx,sess2Idx) = [ROC1,ROC2,ROC3];
                         FPSum.(FPNameCurr).AUC{midx}(:,sess1Idx,sess2Idx) = [AUC1, AUC2, AUC3];
-
-                        if AUC1 < 0.7
-                            keyboard
-                        end
                     end
                 end
             end
