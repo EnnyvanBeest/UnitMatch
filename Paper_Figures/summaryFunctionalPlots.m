@@ -10,7 +10,7 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
     
     % Initialize
     if ~exist('whichMetric','var') || isempty(whichMetric)
-        whichMetric = 'Corr';
+        whichMetric = 'Rank';
     end
 
     if ~exist('groupVector','var')
@@ -26,21 +26,21 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
     switch whichMetric
         case 'Corr'
             fprintf("Taking the correlation values!\n")
-            FPNames = {'FRDiff','ACGCorr','refPopCorr','natImCorr','natImRespCorr','natImScaledRespCorr'};
+            FPNames = {'FRDiff','ACGCorr','refPopCorr','natImRespCorr'};
             stepsz = [0.1 0.1 0.1 0.1 0.1 0.1];
             minVal = [0 -1 -1 -1 -1 -1];
             maxVal = [15 1 1 1 1 1];
             flipROC = [0 1 1 1 1 1];
         case 'Rank'
             fprintf("Taking the rank!\n")
-            FPNames = {'FRRank','ACGRank','refPopRank','natImRank','natImRespRank','natImScaledRespRank'};
+            FPNames = {'FRRank','ACGRank','refPopRank','natImRespRank'};
             stepsz = [1 1 1 1 1 1];
             minVal = [1 1 1 1 1 1];
             maxVal = [21 21 21 21 21 21];
             flipROC = [0 0 0 0 0 0];
         case 'Sig'
             fprintf("Taking the rank!\n")
-            FPNames = {'FRSig','ACGSig','refPopSig','natImSig','natImRespSig','natImScaledRespSig'};
+            FPNames = {'FRSig','ACGSig','refPopSig','natImRespSig'};
             stepsz = [1 1 1 1 1 1];
             minVal = [1 1 1 1 1 1];
             maxVal = [21 21 21 21 21 21];
@@ -78,7 +78,7 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
     
         fprintf('Loading the data...\n')
         tic
-        load(fullfile(tmpfile.folder, tmpfile.name), 'MatchTable', 'UniqueIDConversion', 'UMparam');
+        load(fullfile(tmpfile.folder, tmpfile.name), 'MatchTable', 'UMparam');
         toc
     
         sessIDs = unique(MatchTable.RecSes1);
@@ -234,10 +234,7 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
     end
     
     %% Figure -- example mouse
-    
-    % Best example mouse
-    % midx = find(cellfun(@(X) nansum(X(:)),numMatchedUnits) == max(cellfun(@(X)  nansum(X(:)),numMatchedUnits)),1,'first');
-    
+
     % Number of matched units (matrix)
     for midx = 1:numel(UMFiles)
         figure('Position', [80 700 1700 170],'Name', fileparts(fileparts(UMFiles{midx})));
