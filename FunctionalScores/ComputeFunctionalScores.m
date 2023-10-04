@@ -301,32 +301,32 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'natImCorr')) || all(isnan
         end
     end
 
-    % ---
-    % First fingerprint with CCA
-    
-    % Perform CCA across recordings
-    [corrMat, ~] = computeNatImCorr(spikeData_cv(:)); % default 75
-    % [corrMat, ~] = computeNatImCorr(spikeData_cv(:), 1:ceil(sqrt(size(spikeData_cv{1},1)*size(spikeData_cv{1},2))/2));
-
-    % Reshape the matrix to a single one with correct clusters
-    corrWCCA_big = nan(sum(nClu),sum(nClu));
-    corrWCCA_1x2 = corrMat(1:2:end, 2:2:end);
-    for ss1 = 1:nRec
-        for ss2 = 1:nRec
-            if ~all(isnan(corrWCCA_1x2{ss1,ss2}(:)))
-                corrWCCA_big(sum(nClu(1:ss1-1))+1:sum(nClu(1:ss1)), sum(nClu(1:ss2-1))+1:sum(nClu(1:ss2))) = corrWCCA_1x2{ss1,ss2};
-            end
-        end
-    end
-    corrWCCA_big = tanh(.5*atanh(corrWCCA_big) + .5*atanh(corrWCCA_big')); % not sure that's needed?
-
-    % Get rank
-    [natImRank, natImSig] = getRank(corrWCCA_big, SessionSwitch);
-    
-    % Save in table
-    MatchTable.natImCorr = corrWCCA_big(:);
-    MatchTable.natImRank = natImRank(:);
-    MatchTable.natImSig = natImSig(:);
+%     % ---
+%     % First fingerprint with CCA
+%     
+%     % Perform CCA across recordings
+%     [corrMat, ~] = computeNatImCorr(spikeData_cv(:)); % default 75
+%     % [corrMat, ~] = computeNatImCorr(spikeData_cv(:), 1:ceil(sqrt(size(spikeData_cv{1},1)*size(spikeData_cv{1},2))/2));
+% 
+%     % Reshape the matrix to a single one with correct clusters
+%     corrWCCA_big = nan(sum(nClu),sum(nClu));
+%     corrWCCA_1x2 = corrMat(1:2:end, 2:2:end);
+%     for ss1 = 1:nRec
+%         for ss2 = 1:nRec
+%             if ~all(isnan(corrWCCA_1x2{ss1,ss2}(:)))
+%                 corrWCCA_big(sum(nClu(1:ss1-1))+1:sum(nClu(1:ss1)), sum(nClu(1:ss2-1))+1:sum(nClu(1:ss2))) = corrWCCA_1x2{ss1,ss2};
+%             end
+%         end
+%     end
+%     corrWCCA_big = tanh(.5*atanh(corrWCCA_big) + .5*atanh(corrWCCA_big')); % not sure that's needed?
+% 
+%     % Get rank
+%     [natImRank, natImSig] = getRank(corrWCCA_big, SessionSwitch);
+%     
+%     % Save in table
+%     MatchTable.natImCorr = corrWCCA_big(:);
+%     MatchTable.natImRank = natImRank(:);
+%     MatchTable.natImSig = natImSig(:);
 
     % ---
     % Second fingerprint with mean response to NI + temporal responses
@@ -358,34 +358,34 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'natImCorr')) || all(isnan
     MatchTable.natImRespRank = natImRespRank(:);
     MatchTable.natImRespSig = natImRespSig(:);
 
-    % ---
-    % Third fingerprint with scaled response
-    corrScaledResp_big = nan(sum(nClu),sum(nClu));
-    for ss1 = 1:nRec
-        if ~isempty(spikeData_cv{1,ss1})
-            mat1 = nanmean(spikeData_cv{1,ss1}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),4);
-            timecourse1 = zscore(nanmean(spikeData_cv{1,ss1}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),[1 4]));
-            scaledResp1 = squeeze(sum(mat1.*timecourse1,2));
-            for ss2 = 1:nRec
-                if ~isempty(spikeData_cv{2,ss2})
-                    mat2 = nanmean(spikeData_cv{2,ss2}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),4);
-                    timecourse2 = zscore(nanmean(spikeData_cv{2,ss2}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),[1 4]));
-                    scaledResp2 = squeeze(sum(mat2.*timecourse2,2));
-                    corrScaledResp_big(sum(nClu(1:ss1-1))+1:sum(nClu(1:ss1)), sum(nClu(1:ss2-1))+1:sum(nClu(1:ss2))) = corr(scaledResp1,scaledResp2);
-                end
-            end
-        end
-    end
-    corrScaledResp_big = tanh(.5*atanh(corrScaledResp_big) + .5*atanh(corrTimecourse_big));
-    corrScaledResp_big = tanh(.5*atanh(corrScaledResp_big) + .5*atanh(corrScaledResp_big')); % not sure that's needed?
-
-    % Get rank
-    [natImScaledRespRank, natImScaledRespSig] = getRank(corrScaledResp_big, SessionSwitch);
-
-    % Save in table
-    MatchTable.natImRespCorr = corrResp_big(:);
-    MatchTable.natImScaledRespRank = natImScaledRespRank(:);
-    MatchTable.natImScaledRespSig = natImScaledRespSig(:);
+%     % ---
+%     % Third fingerprint with scaled response
+%     corrScaledResp_big = nan(sum(nClu),sum(nClu));
+%     for ss1 = 1:nRec
+%         if ~isempty(spikeData_cv{1,ss1})
+%             mat1 = nanmean(spikeData_cv{1,ss1}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),4);
+%             timecourse1 = zscore(nanmean(spikeData_cv{1,ss1}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),[1 4]));
+%             scaledResp1 = squeeze(sum(mat1.*timecourse1,2));
+%             for ss2 = 1:nRec
+%                 if ~isempty(spikeData_cv{2,ss2})
+%                     mat2 = nanmean(spikeData_cv{2,ss2}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),4);
+%                     timecourse2 = zscore(nanmean(spikeData_cv{2,ss2}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),[1 4]));
+%                     scaledResp2 = squeeze(sum(mat2.*timecourse2,2));
+%                     corrScaledResp_big(sum(nClu(1:ss1-1))+1:sum(nClu(1:ss1)), sum(nClu(1:ss2-1))+1:sum(nClu(1:ss2))) = corr(scaledResp1,scaledResp2);
+%                 end
+%             end
+%         end
+%     end
+%     corrScaledResp_big = tanh(.5*atanh(corrScaledResp_big) + .5*atanh(corrTimecourse_big));
+%     corrScaledResp_big = tanh(.5*atanh(corrScaledResp_big) + .5*atanh(corrScaledResp_big')); % not sure that's needed?
+% 
+%     % Get rank
+%     [natImScaledRespRank, natImScaledRespSig] = getRank(corrScaledResp_big, SessionSwitch);
+% 
+%     % Save in table
+%     MatchTable.natImScaledRespCorr = corrScaledResp_big(:);
+%     MatchTable.natImScaledRespRank = natImScaledRespRank(:);
+%     MatchTable.natImScaledRespSig = natImScaledRespSig(:);
 end
 %% Write to table
 
