@@ -24,6 +24,10 @@ for midx = 1:length(MiceOpt)
                 % now replace UMparam.SaveDIr
                 load(fullfile(CopyDir,FolderParts{idx},FolderParts{idx+1},FolderParts{idx+2},FolderParts{idx+3},'UnitMatch.mat'),'UMparam')
                 UMparam.SaveDir = fullfile(CopyDir,FolderParts{idx},FolderParts{idx+1},FolderParts{idx+2},FolderParts{idx+3});
+                if ~isfield(UMparam,'RawDataPaths')
+                    UMparam.RawDataPaths = UMparam.AllRawPaths;
+                    rmfield(UMparam,'AllRawPaths')
+                end
                 save(fullfile(CopyDir,FolderParts{idx},FolderParts{idx+1},FolderParts{idx+2},FolderParts{idx+3},'UnitMatch.mat'),'UMparam','-append')
             end
         end
