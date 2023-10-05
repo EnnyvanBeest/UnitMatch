@@ -1,7 +1,7 @@
 %% Load and format data
 
 UMFile = {'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\2ConsecutiveDays\Non_Stitched\AL032\AllProbes\AllIMRO\UnitMatch\UnitMatch.mat'};
-% summaryFunctionalPlots(UMFile, 1, 1)
+summaryFunctionalPlots(UMFile, 'Rank', 1)
 load(UMFile{1})
 
 % Extract cluster information
@@ -30,18 +30,6 @@ SessionSwitch = [cell2mat(SessionSwitch); nclus + 1];
 %% Get spikes
 
 sp = getSpikesFromPrepData(AllKSDir);
-
-% Get depth for each pair (used for sorting)
-cluList1 = unique(MatchTable(MatchTable.RecSes1 == sess1 & MatchTable.RecSes2 == sess2, :).ID1);
-cluDepthSess1 = nan(1,numel(cluList1));
-for cluIdx = 1:numel(cluList1)
-   cluDepthSess1(cluIdx) = nanmean(sp.spikeDepths(sp.RecSes == sess1 & sp.spikeTemplates == cluList1(cluIdx)));
-end
-cluList2 = unique(MatchTable(MatchTable.RecSes1 == sess1 & MatchTable.RecSes2 == sess2, :).ID2);
-cluDepthSess2 = nan(1,numel(cluList2));
-for cluIdx = 1:numel(cluList2)
-   cluDepthSess2(cluIdx) = nanmean(sp.spikeDepths(sp.RecSes == sess2 & sp.spikeTemplates == cluList2(cluIdx)));
-end
 
 %% Get natim resp
 
@@ -167,11 +155,23 @@ end
 sess1 = 1;
 sess2 = 2;
 MatchTable_pair = MatchTable(MatchTable.UID1 == MatchTable.UID2 & MatchTable.RecSes1 == sess1 & MatchTable.RecSes2 == sess2, :);
-MatchTable_bestPairs = MatchTable_pair(MatchTable_pair.ACGRankScore < 2 & MatchTable_pair.RankScore < 2 & MatchTable_pair.NImgRankScore < 2,:);
+MatchTable_bestPairs = MatchTable_pair(MatchTable_pair.ACGCorr > 0.8 & MatchTable_pair.refPopCorr > 0.9 & MatchTable_pair.natImRespCorr > 0.8,:);
 % pair2plt = 7;
 pair2plt = 1;
 clu1 = MatchTable_bestPairs(pair2plt,:).ID1;
 clu2 = MatchTable_bestPairs(pair2plt,:).ID2;
+
+% Get depth for each pair (used for sorting)
+cluList1 = unique(MatchTable(MatchTable.RecSes1 == sess1 & MatchTable.RecSes2 == sess2, :).ID1);
+cluDepthSess1 = nan(1,numel(cluList1));
+for cluIdx = 1:numel(cluList1)
+   cluDepthSess1(cluIdx) = nanmean(sp.spikeDepths(sp.RecSes == sess1 & sp.spikeTemplates == cluList1(cluIdx)));
+end
+cluList2 = unique(MatchTable(MatchTable.RecSes1 == sess1 & MatchTable.RecSes2 == sess2, :).ID2);
+cluDepthSess2 = nan(1,numel(cluList2));
+for cluIdx = 1:numel(cluList2)
+   cluDepthSess2(cluIdx) = nanmean(sp.spikeDepths(sp.RecSes == sess2 & sp.spikeTemplates == cluList2(cluIdx)));
+end
 
 % Sorting neurons by depths for matrices
 [~,sortIdx1] = sort(cluDepthSess1,'descend');
@@ -280,7 +280,7 @@ freezeColors
 makepretty
 
 subplot(3,4,11) % matrix
-xcorrCorrMat = reshape(MatchTable.FingerprintCor, nclus, nclus);
+xcorrCorrMat = reshape(MatchTable.refPopCorr, nclus, nclus);
 xcorrCorrMat(xcorrCorrMat<.8) = .8;
 imagesc(xcorrCorrMat(sortCluIdx,sortCluIdx))
 hold on
@@ -335,7 +335,7 @@ freezeColors
 makepretty
 
 subplot(3,4,12) % matrix
-natImCorrMat = reshape(MatchTable.NatImCorr, nclus, nclus);
+natImCorrMat = reshape(MatchTable.natImRespCorr, nclus, nclus);
 imagesc(natImCorrMat(sortCluIdx,sortCluIdx))
 hold on
 colormap('RedBlue')
