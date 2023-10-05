@@ -51,6 +51,9 @@ end
 if ~isfield(UMparam,'GoodUnitsOnly')
     UMparam.GoodUnitsOnly = 1; % Recommended, to only use units that are good single units (e.g. use Bombcell)
 end
+if ~isfield(UMparam,'minGoodUnits')
+    UMparam.minGoodUnits = 25; % Recommended
+end
 %% Post processing
 if ~isfield(UMparam,'AssignUniqueID')
 UMparam.AssignUniqueID = 1; % Use our method of Assigning Unique ID based on match probability (recommended)
