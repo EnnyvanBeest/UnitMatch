@@ -27,24 +27,24 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
         case 'Corr'
             fprintf("Taking the correlation values!\n")
             FPNames = {'FRDiff','ACGCorr','refPopCorr','natImRespCorr'};
-            stepsz = [0.1 0.1 0.1 0.1 0.1 0.1];
-            minVal = [0 -1 -1 -1 -1 -1];
-            maxVal = [15 1 1 1 1 1];
-            flipROC = [0 1 1 1 1 1];
+            stepsz = [0.1 0.1 0.1 0.1];
+            minVal = [0 -1 -1 -1];
+            maxVal = [15 1 1 1];
+            flipROC = [0 1 1 1];
         case 'Rank'
             fprintf("Taking the rank!\n")
             FPNames = {'FRRank','ACGRank','refPopRank','natImRespRank'};
-            stepsz = [1 1 1 1 1 1];
-            minVal = [1 1 1 1 1 1];
-            maxVal = [21 21 21 21 21 21];
-            flipROC = [0 0 0 0 0 0];
+            stepsz = [1 1 1 1];
+            minVal = [0.5 0.5 0.5 0.5];
+            maxVal = [20.5 20.5 20.5 20.5];
+            flipROC = [0 0 0 0];
         case 'Sig'
-            fprintf("Taking the rank!\n")
+            fprintf("Taking the sig!\n")
             FPNames = {'FRSig','ACGSig','refPopSig','natImRespSig'};
-            stepsz = [1 1 1 1 1 1];
-            minVal = [1 1 1 1 1 1];
-            maxVal = [21 21 21 21 21 21];
-            flipROC = [0 0 0 0 0 0];
+            stepsz = [0.1 0.1 0.1 0.1];
+            minVal = [0 0 0 0];
+            maxVal = [1 1 1 1];
+            flipROC = [0 0 0 0];
     end
 
     histBins = cell(1,numel(FPNames));
@@ -52,6 +52,10 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
     for fpIdx = 1:numel(FPNames)
         histBins{fpIdx} = minVal(fpIdx):stepsz(fpIdx):maxVal(fpIdx);
         histBinsCenter{fpIdx} = histBins{fpIdx}(1:end-1) + diff(histBins{fpIdx})/2;
+        if strcmp(whichMetric,'Rank')
+            histBins{fpIdx}(end+1) = inf;
+            histBinsCenter{fpIdx}(end+1) = histBinsCenter{fpIdx}(end)+1;
+        end
     end
     ROCBins = 0:0.01:1;
     minMatches = 20;
@@ -103,8 +107,8 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
     
         fprintf('Looping through days...\n')
         tic
-        days = cellfun(@(y) datenum(y), cellfun(@(x) regexp(x.folder,'\\\d*-\d*-\d*\\','match'), UMparam.AllRawPaths, 'uni', 0), 'uni', 0);
-        days = cell2mat(days) - days{1};
+        days{midx} = cellfun(@(y) datenum(y), cellfun(@(x) regexp(x.folder,'\\\d*-\d*-\d*\\','match'), UMparam.AllRawPaths, 'uni', 0), 'uni', 0);
+        days{midx} = cell2mat(days{midx}) - days{midx}{1};
         deltaDays{midx} = nan(numel(sessIDs)-1,numel(sessIDs));
         numMatchedUnits{midx} = nan(numel(sessIDs)-1,numel(sessIDs));
         InitialDrift{midx} = nan(numel(sessIDs)-1,numel(sessIDs));
@@ -112,7 +116,7 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
         for sess1Idx = 1:numel(sessIDs)-1
     
             sess1 = sessIDs(sess1Idx);
-            day1 = regexp(UMparam.AllRawPaths{sess1}.folder,'\d*-\d*-\d*','match'); day1 = datenum(day1{1});
+            day1 = days{midx}(sess1Idx);
             meta = ReadMeta2(UMparam.AllRawPaths{sess1}.folder);
             durSess1 = str2double(meta.fileTimeSecs);
             if durSess1 < durLim 
@@ -122,7 +126,7 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
             for sess2Idx = sess1Idx+1:numel(sessIDs)
     
                 sess2 = sessIDs(sess2Idx);
-                day2 = regexp(UMparam.AllRawPaths{sess2}.folder,'\d*-\d*-\d*','match'); day2 = datenum(day2{1});
+                day2 = days{midx}(sess2Idx);
                 deltaDays{midx}(sess1Idx,sess2Idx) = abs(day2 - day1);
                 meta = ReadMeta2(UMparam.AllRawPaths{sess2}.folder);
                 durSess2 = str2double(meta.fileTimeSecs);
@@ -241,14 +245,15 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
         s = subplot(1,numel(FPNames)+2,1);
         imagesc(numMatchedUnits{midx})
         xticks(1:size(deltaDays{midx},2))
-        xticklabels(days)
+        xticklabels(days{midx})
         yticks(1:size(deltaDays{midx},1))
-        yticklabels(days(1:end-1))
+        yticklabels(days{midx}(1:end-1))
         axis equal tight
         colorbar
         c = colormap("gray"); colormap(s(1), flipud(c));
-        subplot(1,numel(FPNames)+2,2)
-        scatter(deltaDays{midx}(:), mat2vec(numMatchedUnits{midx}),20,groupColor(groupVector(midx),:),'filled')
+        subplot(1,numel(FPNames)+2,2); hold all
+        scatter(deltaDays{midx}(:), mat2vec(numMatchedUnits{midx}),10,groupColor(groupVector(midx),:),'filled')
+        hline(minMatches)
         ylabel('Number of matches')
         xlabel('\Deltadays')
     
@@ -257,9 +262,9 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
             s = subplot(1,numel(FPNames)+2,fpIdx+2);
             imagesc(squeeze(FPSum.(FPNameCurr).AUC{midx}(1,:,:)))
             xticks(1:size(deltaDays{midx},2))
-            xticklabels(days)
+            xticklabels(days{midx})
             yticks(1:size(deltaDays{midx},1))
-            yticklabels(days(1:end-1))
+            yticklabels(days{midx}(1:end-1))
             axis equal tight
             colormap(s, "RedBlue")
             clim([0 1])
@@ -301,9 +306,10 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
     
         % Plot distribution
         subplot(4,numel(FPNames),0*numel(FPNames)+fpIdx); hold all
-        for hid = 1:3
-            h = shadedErrorBar(histBinsCenter{fpIdx}, nanmean(distMatrix{fpIdx}(:,hid,:),3), ...
-                nanstd(distMatrix{fpIdx}(:,hid,:),[],3)./sqrt(sum(~isnan(distMatrix{fpIdx}(:,hid,:)),3)));
+        for hid = [3 1 2]
+            distr2plt = cumsum(distMatrix{fpIdx}(:,hid,:));
+            h = shadedErrorBar(histBinsCenter{fpIdx}, nanmean(distr2plt,3), ...
+                nanstd(distr2plt,[],3)./sqrt(sum(~isnan(distr2plt),3)));
             h.mainLine.Color = distrCols(hid,:);
             if ~isempty(h.patch)
                 h.patch.FaceColor = distrCols(hid,:);
@@ -313,7 +319,7 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
         end
         title(sprintf('%s', FPNameCurr))
         xlabel(whichMetric)
-        if strcmp(whichMetric,'Rank'); xticks([1 10 maxVal(fpIdx)]); xticklabels({'1','10',sprintf('>%d',maxVal(fpIdx)-1)}); end
+        if strcmp(whichMetric,'Rank'); xticks([1 10 histBinsCenter{midx}(end)]); xticklabels({'1','10',sprintf('>%d',histBinsCenter{midx}(end-1))}); end
         ylabel('Proportion')
         offsetAxes
         makepretty
@@ -333,35 +339,60 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
         plot([0 1], [0 1], 'k--')
         xlim([0 1])
         ylim([0 1])
+        xticks([0 1])
+        yticks([0 1])
         axis equal tight
         xlabel('False positives')
         ylabel('Hits')
         offsetAxes
         makepretty
     
-        % Plot AUC
-        subplot(4,numel(FPNames),2*numel(FPNames)+fpIdx); hold all
-        for hid = 1:2
-            scatter(hid + 0.1*randn(1,numel(groups)), AUCMatrix{fpIdx}(hid,:), 30, ROCCols(hid,:), 'filled')
-        end
-        ylim([0 1])
-        hline(0.5, 'k--')
-        xticks(1:3)
-        xticklabels({'across', 'within'})
-        xtickangle(45)
-        ylabel('AUC')
-        offsetAxes
-        makepretty
-    
         % Plot stability of AUC with delta days
-        subplot(4,numel(FPNames),3*numel(FPNames)+fpIdx); hold all
+        subplot(4,numel(FPNames),2*numel(FPNames)+fpIdx); hold all
         for midx = 1:length(UMFiles)
+            xDays = deltaDays{midx}(:);
+            xDays(xDays == 0) = 10^(-0.1);
+            yVal = mat2vec(FPSum.(FPNameCurr).AUC{midx}(1,:,:));
+            nanIdx = isnan(yVal);
+            xDays(nanIdx) = [];
+            yVal(nanIdx) = [];
             if ~isempty(FPSum.(FPNameCurr).AUC{midx})
-                scatter(deltaDays{midx}(:), mat2vec(FPSum.(FPNameCurr).AUC{midx}(1,:,:)),20,groupColor(groupVector(midx),:),'filled')
+                scatter(log10(xDays),yVal,10,ROCCols(1,:),'filled','MarkerFaceAlpha',.2,'MarkerEdgeAlpha',.2)
+                X = [ones(numel(xDays),1), xDays];
+                b = (X\yVal);
+                plot(log10(1:max(xDays)), b(1) + b(2)*(1:max(xDays)), 'color',ROCCols(1,:),'LineWidth',1);
             end
+            scatter(-0.1,nanmean(mat2vec(FPSum.(FPNameCurr).AUC{midx}(2,:,:))),20,ROCCols(2,:),'filled')
         end
         xlabel('\Delta days')
         ylabel('AUC')
+        xticks([-0.1 log10([1 10 100])])
+        xticklabels({'within','1','10','100'})
+        ylim([0 1])
+        hline(0.5)
+        offsetAxes
+        makepretty
+
+        % Plot stability of AUC with delta days
+        subplot(4,numel(FPNames),3*numel(FPNames)+fpIdx); hold all
+        for midx = 1:length(UMFiles)
+            xDays = deltaDays{midx}(:);
+            xDays(xDays == 0) = 10^(-0.1);
+            yVal = mat2vec(FPSum.(FPNameCurr).AUC{midx}(1,:,:));
+            nanIdx = isnan(yVal);
+            xDays(nanIdx) = [];
+            yVal(nanIdx) = [];
+            if ~isempty(FPSum.(FPNameCurr).AUC{midx})
+                X = [ones(numel(xDays),1), xDays];
+                b = (X\yVal);
+                plot(log10(1:max(xDays)), b(1) + b(2)*(1:max(xDays)), 'color',ROCCols(1,:),'LineWidth',1);
+            end
+            scatter(-0.1,nanmean(mat2vec(FPSum.(FPNameCurr).AUC{midx}(2,:,:))),20,ROCCols(2,:),'filled')
+        end
+        xlabel('\Delta days')
+        ylabel('AUC')
+        xticks([-0.1 log10([1 10 100])])
+        xticklabels({'within','1','10','100'})
         ylim([0 1])
         hline(0.5)
         offsetAxes
@@ -374,7 +405,7 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
     figure;
     hold all
     for midx = 1:length(UMFiles)
-        scatter(deltaDays{midx}(:), mat2vec(numMatchedUnits{midx}),20,groupColor(groupVector(midx),:),'filled')
+        scatter(deltaDays{midx}(:), mat2vec(numMatchedUnits{midx}),10,groupColor(groupVector(midx),:),'filled')
     end
     ylabel('Number of matches')
     xlabel('\Deltadays')
@@ -388,7 +419,7 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
             hold all
             for midx = 1:length(UMFiles)
                 if ~isempty(FPSum.(FPNameCurr).AUC{midx})
-                    scatter(deltaDays{midx}(:), mat2vec(FPSum.(FPNameCurr).AUC{midx}(aucIdx,:,:)),20,groupColor(groupVector(midx),:),'filled')
+                    scatter(deltaDays{midx}(:), mat2vec(FPSum.(FPNameCurr).AUC{midx}(aucIdx,:,:)),10,groupColor(groupVector(midx),:),'filled')
                 end
             end
             xlabel('\Delta days')
@@ -408,7 +439,7 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
             hold all
             for midx = 1:length(UMFiles)
                 if ~isempty(FPSum.(FPNameCurr).AUC{midx})
-                    scatter(numMatchedUnits{midx}(:), mat2vec(FPSum.(FPNameCurr).AUC{midx}(aucIdx,:,:)),20,groupColor(groupVector(midx),:),'filled')
+                    scatter(numMatchedUnits{midx}(:), mat2vec(FPSum.(FPNameCurr).AUC{midx}(aucIdx,:,:)),10,groupColor(groupVector(midx),:),'filled')
                 end
             end
             xlabel('Number of matched neurons')
