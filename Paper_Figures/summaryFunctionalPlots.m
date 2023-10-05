@@ -95,19 +95,11 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
             FPSum.(FPNameCurr).ROC{midx} = nan(numel(ROCBins), 2, numel(sessIDs)-1, numel(sessIDs));
         end
     
-        %%% HACK -- Can remove later
-        if ~iscell(UMparam.AllRawPaths)
-            for ii = 1:numel(UMparam.AllRawPaths)
-                tmp{ii} = UMparam.AllRawPaths(ii);
-            end
-            UMparam.AllRawPaths = tmp;
-        end
-    
         %% Loop through pairs of sessions
     
         fprintf('Looping through days...\n')
         tic
-        days{midx} = cellfun(@(y) datenum(y), cellfun(@(x) regexp(x.folder,'\\\d*-\d*-\d*\\','match'), UMparam.AllRawPaths, 'uni', 0), 'uni', 0);
+        days{midx} = cellfun(@(y) datenum(y), cellfun(@(x) regexp(x.folder,'\\\d*-\d*-\d*\\','match'), UMparam.RawDataPaths, 'uni', 0), 'uni', 0);
         days{midx} = cell2mat(days{midx}) - days{midx}{1};
         deltaDays{midx} = nan(numel(sessIDs)-1,numel(sessIDs));
         numMatchedUnits{midx} = nan(numel(sessIDs)-1,numel(sessIDs));
@@ -117,7 +109,7 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
     
             sess1 = sessIDs(sess1Idx);
             day1 = days{midx}(sess1Idx);
-            meta = ReadMeta2(UMparam.AllRawPaths{sess1}.folder);
+            meta = ReadMeta2(UMparam.RawDataPaths{sess1}.folder);
             durSess1 = str2double(meta.fileTimeSecs);
             if durSess1 < durLim 
                 continue
@@ -128,7 +120,7 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
                 sess2 = sessIDs(sess2Idx);
                 day2 = days{midx}(sess2Idx);
                 deltaDays{midx}(sess1Idx,sess2Idx) = abs(day2 - day1);
-                meta = ReadMeta2(UMparam.AllRawPaths{sess2}.folder);
+                meta = ReadMeta2(UMparam.RawDataPaths{sess2}.folder);
                 durSess2 = str2double(meta.fileTimeSecs);
                 if durSess2 < durLim
                     continue
