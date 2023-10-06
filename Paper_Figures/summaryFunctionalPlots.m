@@ -26,21 +26,21 @@ function [FPSum, days, deltaDays, numMatchedUnits, maxAvailableUnits] = summaryF
     switch whichMetric
         case 'Corr'
             fprintf("Taking the correlation values!\n")
-            FPNames = {'FRDiff','ACGCorr','refPopCorr','natImRespCorr'};
+            FPNames = {'FRDiff','ACGCorr','natImRespCorr','refPopCorr'};
             stepsz = [0.1 0.1 0.1 0.1];
             minVal = [0 -1 -1 -1];
             maxVal = [15 1 1 1];
             flipROC = [0 1 1 1];
         case 'Rank'
             fprintf("Taking the rank!\n")
-            FPNames = {'FRRank','ACGRank','refPopRank','natImRespRank'};
+            FPNames = {'FRRank','ACGRank','natImRespRank','refPopRank'};
             stepsz = [1 1 1 1];
             minVal = [0.5 0.5 0.5 0.5];
             maxVal = [20.5 20.5 20.5 20.5];
             flipROC = [0 0 0 0];
         case 'Sig'
             fprintf("Taking the sig!\n")
-            FPNames = {'FRSig','ACGSig','refPopSig','natImRespSig'};
+            FPNames = {'FRSig','ACGSig','natImRespSig','refPopSig'};
             stepsz = [0.1 0.1 0.1 0.1];
             minVal = [0 0 0 0];
             maxVal = [1 1 1 1];
@@ -237,7 +237,7 @@ function [FPSum, days, deltaDays, numMatchedUnits, maxAvailableUnits] = summaryF
         scatter(deltaDays{midx}(:), mat2vec(numMatchedUnits{midx}),10,groupColor(groupVector(midx),:),'filled')
         hline(minMatches)
         ylabel('Number of matches')
-        xlabel('\Deltadays')
+        xlabel('Deltadays')
     
         for fpIdx = 1:numel(FPNames)
             FPNameCurr = FPNames{fpIdx};
@@ -282,7 +282,7 @@ function [FPSum, days, deltaDays, numMatchedUnits, maxAvailableUnits] = summaryF
     % Plot
     distrCols = [0 0.7 0; 1 0 0; 0 0 0.7]; % Within / Match / Non-match
     ROCCols = [1 0 0; 0 0.7 0]; % across Match vs. non-match / within Match vs. non-match
-    figure('Position', [400 270 800 700]);
+    figure('Position', [400 100 1000 800]);
     for fpIdx = 1:numel(FPNames)
         FPNameCurr = FPNames{fpIdx};
     
@@ -290,14 +290,15 @@ function [FPSum, days, deltaDays, numMatchedUnits, maxAvailableUnits] = summaryF
         subplot(4,numel(FPNames),0*numel(FPNames)+fpIdx); hold all
         for hid = [3 1 2]
             distr2plt = cumsum(distMatrix{fpIdx}(:,hid,:));
-            h = shadedErrorBar(histBinsCenter{fpIdx}, nanmean(distr2plt,3), ...
-                nanstd(distr2plt,[],3)./sqrt(sum(~isnan(distr2plt),3)));
-            h.mainLine.Color = distrCols(hid,:);
-            if ~isempty(h.patch)
-                h.patch.FaceColor = distrCols(hid,:);
-                h.edge(1).Color = 'none';
-                h.edge(2).Color = 'none';
-            end
+            plot(histBinsCenter{fpIdx}, nanmean(distr2plt,3), 'color', distrCols(hid,:))
+%             h = shadedErrorBar(histBinsCenter{fpIdx}, nanmean(distr2plt,3), ...
+%                 nanstd(distr2plt,[],3)./sqrt(sum(~isnan(distr2plt),3)));
+%             h.mainLine.Color = distrCols(hid,:);
+%             if ~isempty(h.patch)
+%                 h.patch.FaceColor = distrCols(hid,:);
+%                 h.edge(1).Color = 'none';
+%                 h.edge(2).Color = 'none';
+%             end
         end
         title(sprintf('%s', FPNameCurr))
         xlabel(whichMetric)
@@ -309,14 +310,15 @@ function [FPSum, days, deltaDays, numMatchedUnits, maxAvailableUnits] = summaryF
         % Plot ROC
         subplot(4,numel(FPNames),1*numel(FPNames)+fpIdx); hold all
         for hid = 2:-1:1
-            h = shadedErrorBar(ROCBins, nanmean(ROCMatrix{fpIdx}(:,hid,:),3), ...
-                nanstd(ROCMatrix{fpIdx}(:,hid,:),[],3)./sqrt(sum(~isnan(ROCMatrix{fpIdx}(:,hid,:)),3)));
-            h.mainLine.Color = ROCCols(hid,:);
-            if ~isempty(h.patch)
-                h.patch.FaceColor = ROCCols(hid,:);
-                h.edge(1).Color = 'none';
-                h.edge(2).Color = 'none';
-            end
+            plot(ROCBins, nanmean(ROCMatrix{fpIdx}(:,hid,:),3), 'color', ROCCols(hid,:))
+%             h = shadedErrorBar(ROCBins, nanmean(ROCMatrix{fpIdx}(:,hid,:),3), ...
+%                 nanstd(ROCMatrix{fpIdx}(:,hid,:),[],3)./sqrt(sum(~isnan(ROCMatrix{fpIdx}(:,hid,:)),3)));
+%             h.mainLine.Color = ROCCols(hid,:);
+%             if ~isempty(h.patch)
+%                 h.patch.FaceColor = ROCCols(hid,:);
+%                 h.edge(1).Color = 'none';
+%                 h.edge(2).Color = 'none';
+%             end
             AUCtext = num2str(sprintf('%0.0f\x00B1%0.0f', nanmean(AUCMatrix{fpIdx}(hid,:)*100,2), ...
                 nanstd(AUCMatrix{fpIdx}(hid,:)*100,[],2)./sqrt(sum(~isnan(AUCMatrix{fpIdx}(hid,:)),2))));
             text(0.6,hid*0.2,AUCtext,'Color',ROCCols(hid,:))
@@ -342,14 +344,14 @@ function [FPSum, days, deltaDays, numMatchedUnits, maxAvailableUnits] = summaryF
             xDays(nanIdx) = [];
             yVal(nanIdx) = [];
             if ~isempty(FPSum.(FPNameCurr).AUC{midx}) && numel(unique(xDays)) > 1
-                scatter(log10(xDays),yVal,10,ROCCols(1,:),'filled','MarkerFaceAlpha',.2,'MarkerEdgeAlpha',.2)
+                scatter(log10(xDays),yVal,10,ROCCols(1,:),'filled')
                 X = [ones(numel(xDays),1), xDays];
                 b = (X\yVal);
                 plot(log10(1:max(xDays)), b(1) + b(2)*(1:max(xDays)), 'color',ROCCols(1,:),'LineWidth',1);
                 scatter(-0.1,nanmean(mat2vec(FPSum.(FPNameCurr).AUC{midx}(2,:,:))),20,ROCCols(2,:),'filled')
             end
         end
-        xlabel('\Delta days')
+        xlabel('Delta days')
         ylabel('AUC')
         xticks([-0.1 log10([1 10 100])])
         xticklabels({'within','1','10','100'})
@@ -375,7 +377,7 @@ function [FPSum, days, deltaDays, numMatchedUnits, maxAvailableUnits] = summaryF
                 scatter(-0.1,nanmean(mat2vec(FPSum.(FPNameCurr).AUC{midx}(2,:,:))),20,ROCCols(2,:),'filled')
             end
         end
-        xlabel('\Delta days')
+        xlabel('Delta days')
         ylabel('AUC')
         xticks([-0.1 log10([1 10 100])])
         xticklabels({'within','1','10','100'})
@@ -384,7 +386,7 @@ function [FPSum, days, deltaDays, numMatchedUnits, maxAvailableUnits] = summaryF
         offsetAxes
         makepretty
     end
-    set(gcf, 'Renderer', 'Painters');
+    set(gcf,'Renderer','painters')
     
     %% Additional figures
     
@@ -395,7 +397,7 @@ function [FPSum, days, deltaDays, numMatchedUnits, maxAvailableUnits] = summaryF
         scatter(deltaDays{midx}(:), mat2vec(numMatchedUnits{midx}),10,groupColor(groupVector(midx),:),'filled')
     end
     ylabel('Number of matches')
-    xlabel('\Deltadays')
+    xlabel('Deltadays')
     
     % AUC as a function of delta days
     figure;
@@ -409,7 +411,7 @@ function [FPSum, days, deltaDays, numMatchedUnits, maxAvailableUnits] = summaryF
                     scatter(deltaDays{midx}(:), mat2vec(FPSum.(FPNameCurr).AUC{midx}(aucIdx,:,:)),10,groupColor(groupVector(midx),:),'filled')
                 end
             end
-            xlabel('\Delta days')
+            xlabel('Delta days')
             ylabel('AUC')
             title(sprintf('Fingerprint %s', FPNameCurr))
             ylim([0 1])
