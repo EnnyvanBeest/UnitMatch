@@ -1,4 +1,4 @@
-function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
+function [FPSum, days, deltaDays, numMatchedUnits, maxAvailableUnits] = summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
     %% Will plot summary plots: distribution, ROC and AUC. 
     % UMFiles: list cells contains path to UnitMatch.m files
     % whichMetric: will compute distributions/ROC/AUC on either 'Corr', 'Rank', or 'Sig'. 
@@ -65,10 +65,9 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
     %% Loop over mice to get all Distributions / ROCs / AUCs
     
     FPSum = struct();
+    days = cell(1, length(UMFiles));
     deltaDays = cell(1, length(UMFiles));
     numMatchedUnits = cell(1, length(UMFiles));
-    InitialDrift = cell(1,length(UMFiles));
-    FixedDrift =  cell(1,length(UMFiles));
     maxAvailableUnits = cell(1, length(UMFiles));
     for midx = 1:length(UMFiles)
         %% Load data
@@ -103,8 +102,6 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
         days{midx} = cell2mat(days{midx}) - days{midx}{1};
         deltaDays{midx} = nan(numel(sessIDs)-1,numel(sessIDs));
         numMatchedUnits{midx} = nan(numel(sessIDs)-1,numel(sessIDs));
-        InitialDrift{midx} = nan(numel(sessIDs)-1,numel(sessIDs));
-        FixedDrift{midx} = nan(numel(sessIDs)-1,numel(sessIDs));
         for sess1Idx = 1:numel(sessIDs)-1
     
             sess1 = sessIDs(sess1Idx);
@@ -146,14 +143,7 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
                 numMatchedUnits{midx}(sess1Idx,sess2Idx) = sum(matchedUnitsIdx)/2; % Divided by two because looking both ways -- can be non-integer
                 
                 maxAvailableUnits{midx}(sess1Idx,sess2Idx) = min([length(unique(MatchTable_2sess.ID1(MatchTable_2sess.RecSes1 == sess1))) length(unique(MatchTable_2sess.ID1(MatchTable_2sess.RecSes1 == sess2)))]);%
-                
-                %% Extract drift if present
-    
-                if isfield(UMparam,'drift')
-                    InitialDrift{midx}(sess1Idx,sess2Idx) =  vecnorm(UMparam.drift(sess2Idx-1,:,1),2); % Drift in recording 1 is 1 vs 2, etc.
-                    FixedDrift{midx}(sess1Idx,sess2Idx) =  vecnorm(UMparam.drift(sess2Idx-1,:,2),2); % Drift in recording 1 is 1 vs 2, etc.
-                end
-    
+
                 %% Looping through fingerprints
                 for fpIdx = 1:numel(FPNames)
                     FPNameCurr = FPNames{fpIdx};
@@ -212,7 +202,7 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
                         % Compute distributions
                         hw = histcounts(FPCorr(withinMatchIdx), histBins{fpIdx}) ./ length(withinMatchIdx);
                         hm = histcounts(FPCorr(acrossMatchIdx), histBins{fpIdx}) ./ length(acrossMatchIdx);
-                        hn = histcounts(FPCorr(acrossNonMatchIdx), histBins{fpIdx}) ./ length(acrossNonMatchIdx);
+                        hn = histcounts(FPCorr(withinNonMatchIdx), histBins{fpIdx}) ./ length(acrossNonMatchIdx);
                         % Save
                         FPSum.(FPNameCurr).Distr{midx}(:,:,sess1Idx,sess2Idx) = [hw', hm', hn'];
     
@@ -311,7 +301,7 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
         end
         title(sprintf('%s', FPNameCurr))
         xlabel(whichMetric)
-        if strcmp(whichMetric,'Rank'); xticks([1 10 histBinsCenter{midx}(end)]); xticklabels({'1','10',sprintf('>%d',histBinsCenter{midx}(end-1))}); end
+        if strcmp(whichMetric,'Rank'); xticks([1 10 histBinsCenter{fpIdx}(end)]); xticklabels({'1','10',sprintf('>%d',histBinsCenter{fpIdx}(end-1))}); end
         ylabel('Proportion')
         offsetAxes
         makepretty
@@ -327,6 +317,9 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
                 h.edge(1).Color = 'none';
                 h.edge(2).Color = 'none';
             end
+            AUCtext = num2str(sprintf('%0.0f\x00B1%0.0f', nanmean(AUCMatrix{fpIdx}(hid,:)*100,2), ...
+                nanstd(AUCMatrix{fpIdx}(hid,:)*100,[],2)./sqrt(sum(~isnan(AUCMatrix{fpIdx}(hid,:)),2))));
+            text(0.6,hid*0.2,AUCtext,'Color',ROCCols(hid,:))
         end
         plot([0 1], [0 1], 'k--')
         xlim([0 1])
@@ -348,13 +341,13 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
             nanIdx = isnan(yVal);
             xDays(nanIdx) = [];
             yVal(nanIdx) = [];
-            if ~isempty(FPSum.(FPNameCurr).AUC{midx})
+            if ~isempty(FPSum.(FPNameCurr).AUC{midx}) && numel(unique(xDays)) > 1
                 scatter(log10(xDays),yVal,10,ROCCols(1,:),'filled','MarkerFaceAlpha',.2,'MarkerEdgeAlpha',.2)
                 X = [ones(numel(xDays),1), xDays];
                 b = (X\yVal);
                 plot(log10(1:max(xDays)), b(1) + b(2)*(1:max(xDays)), 'color',ROCCols(1,:),'LineWidth',1);
+                scatter(-0.1,nanmean(mat2vec(FPSum.(FPNameCurr).AUC{midx}(2,:,:))),20,ROCCols(2,:),'filled')
             end
-            scatter(-0.1,nanmean(mat2vec(FPSum.(FPNameCurr).AUC{midx}(2,:,:))),20,ROCCols(2,:),'filled')
         end
         xlabel('\Delta days')
         ylabel('AUC')
@@ -374,12 +367,13 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
             nanIdx = isnan(yVal);
             xDays(nanIdx) = [];
             yVal(nanIdx) = [];
-            if ~isempty(FPSum.(FPNameCurr).AUC{midx})
+            if ~isempty(FPSum.(FPNameCurr).AUC{midx}) && numel(unique(xDays)) > 1
                 X = [ones(numel(xDays),1), xDays];
                 b = (X\yVal);
                 plot(log10(1:max(xDays)), b(1) + b(2)*(1:max(xDays)), 'color',ROCCols(1,:),'LineWidth',1);
+                bsave(midx,:) = b;
+                scatter(-0.1,nanmean(mat2vec(FPSum.(FPNameCurr).AUC{midx}(2,:,:))),20,ROCCols(2,:),'filled')
             end
-            scatter(-0.1,nanmean(mat2vec(FPSum.(FPNameCurr).AUC{midx}(2,:,:))),20,ROCCols(2,:),'filled')
         end
         xlabel('\Delta days')
         ylabel('AUC')
@@ -390,6 +384,7 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
         offsetAxes
         makepretty
     end
+    set(gcf, 'Renderer', 'Painters');
     
     %% Additional figures
     
@@ -441,53 +436,4 @@ function summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels)
             hline(0.5)
         end
     end
-    
-    
-    %% Dependence of number matched units on drift
-    
-%     figure('name','NrUnits versus drift')
-%     for midx = 1:length(UMFiles)
-%         subplot(1,2,1)
-%         scatter(InitialDrift{midx},numMatchedUnits{midx}./MaxAvailableUnits{midx},20,groupColor(groupVector(midx),:),'filled')
-%         hold on
-%         xlabel('Drift (Eucl Distance)')
-%         ylabel('Number of matches')
-%         xlim([0 UMparam.NeighbourDist])
-%         title('Initial Drift')
-%     
-%         subplot(1,2,2)
-%         scatter(FixedDrift{midx},numMatchedUnits{midx}./ MaxAvailableUnits{midx},20,groupColor(groupVector(midx),:),'filled')
-%         hold on
-%         xlabel('Drift (Eucl Distance)')
-%         ylabel('Proportion of matches')
-%         xlim([0 UMparam.NeighbourDist])
-%     
-%     end
-%     InitialDrift(cellfun(@isempty,InitialDrift)) = [];
-%     InitialDrift = cellfun(@(X) X(:),InitialDrift,'uni',0);
-%     InitialDrift(InitialDrift>UMparam.maxdist) = nan;
-%     MaxAvailableUnits(cellfun(@isempty,MaxAvailableUnits)) = [];
-%     MaxAvailableUnits = cellfun(@(X) X(:),MaxAvailableUnits,'uni',0);
-%     numMatchedUnits(cellfun(@isempty,numMatchedUnits)) = [];
-%     numMatchedUnits = cellfun(@(X) X(:),numMatchedUnits,'uni',0);
-%     InitialDrift = cat(1,InitialDrift{:});
-%     MaxAvailableUnits = cat(1,MaxAvailableUnits{:});
-%     numMatchedUnits = cat(1,numMatchedUnits{:});
-%     FixedDrift(cellfun(@isempty,FixedDrift)) = [];
-%     FixedDrift = cellfun(@(X) X(:),FixedDrift,'uni',0);
-%     FixedDrift = cat(1,FixedDrift{:});
-%     
-%     
-%     FixedDrift(FixedDrift>UMparam.maxdist) = nan;
-%     InitialDrift(InitialDrift>UMparam.maxdist) = nan;
-%     
-%     
-%     PercNeurons = numMatchedUnits./MaxAvailableUnits;
-%     [r,p] = corr(InitialDrift(~isnan(InitialDrift)),PercNeurons(~isnan(InitialDrift)));
-%     subplot(1,2,1)
-%     title(['Initial Drift, r=' num2str(round(r*100)/100) ', p=' num2str(round(p*100)/100)])
-%     
-%     subplot(1,2,2)
-%     [r,p] = corr(FixedDrift(~isnan(FixedDrift)),PercNeurons(~isnan(FixedDrift)));
-%     title(['Corrected Drift, r=' num2str(round(r*100)/100) ', p=' num2str(round(p*100)/100)])
 end
