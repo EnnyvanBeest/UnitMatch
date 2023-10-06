@@ -18,7 +18,11 @@ for midx = 1:length(MiceOpt)
 
             FolderParts = strsplit(tmpfile(id).folder,filesep);
             idx = find(ismember(FolderParts,MiceOpt{midx}));
-            if 1%~exist(fullfile(CopyDir,FolderParts{idx},FolderParts{idx+1},FolderParts{idx+2}))
+            curFile = dir(fullfile(CopyDir,FolderParts{idx},FolderParts{idx+1},FolderParts{idx+2}));
+            curFile(~[curFile.isdir]) = [];
+            curFile(ismember({curFile(:).name},{'.','..'})) = [];
+
+            if isempty(curFile) || curFile.date<FromDate
 %                 ,'UnitMatch' change UMParam.SaveDir
                 copyfile(fullfile(SaveDir,FolderParts{idx},FolderParts{idx+1},FolderParts{idx+2},'UnitMatch','*'),fullfile(CopyDir,FolderParts{idx},FolderParts{idx+1},FolderParts{idx+2},FolderParts{idx+3}))
                 % now replace UMparam.SaveDIr
@@ -30,6 +34,14 @@ for midx = 1:length(MiceOpt)
                 end
                 save(fullfile(CopyDir,FolderParts{idx},FolderParts{idx+1},FolderParts{idx+2},FolderParts{idx+3},'UnitMatch.mat'),'UMparam','-append')
             end
+% 
+%             % Files to remove?
+%             curFile = dir(fullfile(CopyDir,FolderParts{idx},FolderParts{idx+1},FolderParts{idx+2}));
+%             curFile([curFile.isdir]) = [];
+%             if ~isempty(curFile)
+%                 arrayfun(@(X) delete(fullfile(curFile(X).folder,curFile(X).name)),1:length(curFile),'Uni',0)
+%             end
+     
         end
     end
 end
