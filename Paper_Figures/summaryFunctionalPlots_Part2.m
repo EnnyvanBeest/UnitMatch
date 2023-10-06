@@ -160,13 +160,14 @@ function summaryFunctionalPlots_Part2(UMFiles, whichMetric, groupVector, UseKSLa
         end
 
         %% qParams
-%         if ~exist(fullfile(tmpfile.folder, 'qMetricAUCs.mat'))
+        if ~exist(fullfile(tmpfile.folder, 'qMetricAUCs.mat'))
             try
                 QualityMetricsROCs(UMparam.SaveDir)
+                close all
             catch ME
                 keyboard
             end
-%         end
+        end
         load(fullfile(tmpfile.folder, 'qMetricAUCs.mat'))
 
         if ~exist('qParamNames')
@@ -180,7 +181,30 @@ function summaryFunctionalPlots_Part2(UMFiles, whichMetric, groupVector, UseKSLa
         toc
     end
 
-    %% 
+    %% AUC distributions
+    figure('name','AUC Distr')
+    stepsz = 0.05;
+    binvec = [0:stepsz:1];
+plotvec = stepsz/2:stepsz:1-stepsz/2;
+    for qid = 1:length(qParamNames)
+        subplot(ceil(sqrt(length(qParamNames))),round(sqrt(length(qParamNames))),qid)
+        if nanmedian(AUCPerqParam(qid,:))<0.5
+            AUCPerqParam(qid,:) = 1-AUCPerqParam(qid,:);
+        end
+        nums = histcounts(AUCPerqParam(qid,:),binvec);
+        plot(plotvec,nums,'k-');
+        hold on
+        line([nanmedian(AUCPerqParam(qid,:)) nanmedian(AUCPerqParam(qid,:))],get(gca,'ylim'),'color',[1 0 0])
+        [h,p(qid)] = ttest(AUCPerqParam(qid,:),0.5);
+        
+        title([qParamNames{qid} ', p=' num2str(round(p(qid)*100)./100)])
+        xlim([0 1])
+        makepretty
+        offsetAxes
+    end
+
+
+
 
     %% Figure -- example mouse
 
