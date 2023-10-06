@@ -191,7 +191,6 @@ end
 %% Get ACG fingerprints correlations
 
 if ~any(ismember(MatchTable.Properties.VariableNames, 'ACGCorr')) || recompute % If it already exists in table, skip this entire thing
-
     %% Compute ACG and correlate them between units
     % This is very time consuming
     disp('Computing ACG, this will take some time...')
@@ -201,7 +200,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'ACGCorr')) || recompute %
     for clusid = 1:nclus %parfot QQ
         for cv = 1:2
             idx1 = find(sp.spikeTemplates == OriID(clusid) & sp.RecSes == recses(clusid));
-            if ~isempty(idx1) && length(idx1) > UMparam.sampleamount
+            if ~isempty(idx1)
                 if cv == 1
                     idx1 = idx1(1:floor(length(idx1)/2));
                 else
@@ -211,6 +210,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'ACGCorr')) || recompute %
                 % Compute Firing rate
                 nspkspersec = histcounts(sp.st(idx1), [min(sp.st(idx1)):1:max(sp.st(idx1))]);
                 FR(cv, clusid) = nanmean(nspkspersec);
+
 
                 % compute ACG
                 [ccg, t] = CCGBz([double(sp.st(idx1)); double(sp.st(idx1))], [ones(size(sp.st(idx1), 1), 1); ...
@@ -247,7 +247,7 @@ end
 
 %% Get natural images fingerprints correlations
 
-if ~any(ismember(MatchTable.Properties.VariableNames, 'natImRespCorr')) || all(isnan(MatchTable.natImRespCorr)) || recompute % If it already exists in table, skip this entire thing
+if ~any(ismember(MatchTable.Properties.VariableNames, 'natImRespCorr')) || recompute % If it already exists in table, skip this entire thing
     % Param for processing
     proc.window = [-0.3 0.5 ... % around onset
         0.0 0.5]; % around offset
@@ -301,32 +301,6 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'natImRespCorr')) || all(i
         end
     end
 
-%     % ---
-%     % First fingerprint with CCA
-%     
-%     % Perform CCA across recordings
-%     [corrMat, ~] = computeNatImCorr(spikeData_cv(:)); % default 75
-%     % [corrMat, ~] = computeNatImCorr(spikeData_cv(:), 1:ceil(sqrt(size(spikeData_cv{1},1)*size(spikeData_cv{1},2))/2));
-% 
-%     % Reshape the matrix to a single one with correct clusters
-%     corrWCCA_big = nan(sum(nClu),sum(nClu));
-%     corrWCCA_1x2 = corrMat(1:2:end, 2:2:end);
-%     for ss1 = 1:nRec
-%         for ss2 = 1:nRec
-%             if ~all(isnan(corrWCCA_1x2{ss1,ss2}(:)))
-%                 corrWCCA_big(sum(nClu(1:ss1-1))+1:sum(nClu(1:ss1)), sum(nClu(1:ss2-1))+1:sum(nClu(1:ss2))) = corrWCCA_1x2{ss1,ss2};
-%             end
-%         end
-%     end
-%     corrWCCA_big = tanh(.5*atanh(corrWCCA_big) + .5*atanh(corrWCCA_big')); % not sure that's needed?
-% 
-%     % Get rank
-%     [natImRank, natImSig] = getRank(corrWCCA_big, SessionSwitch);
-%     
-%     % Save in table
-%     MatchTable.natImCorr = corrWCCA_big(:);
-%     MatchTable.natImRank = natImRank(:);
-%     MatchTable.natImSig = natImSig(:);
 
     % ---
     % Second fingerprint with mean response to NI + temporal responses
@@ -358,6 +332,33 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'natImRespCorr')) || all(i
     MatchTable.natImRespRank = natImRespRank(:);
     MatchTable.natImRespSig = natImRespSig(:);
 
+%     % ---
+%     % Second fingerprint with CCA
+%     
+%     % Perform CCA across recordings
+%     [corrMat, ~] = computeNatImCorr(spikeData_cv(:)); % default 75
+%     % [corrMat, ~] = computeNatImCorr(spikeData_cv(:), 1:ceil(sqrt(size(spikeData_cv{1},1)*size(spikeData_cv{1},2))/2));
+% 
+%     % Reshape the matrix to a single one with correct clusters
+%     corrWCCA_big = nan(sum(nClu),sum(nClu));
+%     corrWCCA_1x2 = corrMat(1:2:end, 2:2:end);
+%     for ss1 = 1:nRec
+%         for ss2 = 1:nRec
+%             if ~all(isnan(corrWCCA_1x2{ss1,ss2}(:)))
+%                 corrWCCA_big(sum(nClu(1:ss1-1))+1:sum(nClu(1:ss1)), sum(nClu(1:ss2-1))+1:sum(nClu(1:ss2))) = corrWCCA_1x2{ss1,ss2};
+%             end
+%         end
+%     end
+%     corrWCCA_big = tanh(.5*atanh(corrWCCA_big) + .5*atanh(corrWCCA_big')); % not sure that's needed?
+% 
+%     % Get rank
+%     [natImRank, natImSig] = getRank(corrWCCA_big, SessionSwitch);
+%     
+%     % Save in table
+%     MatchTable.natImCorr = corrWCCA_big(:);
+%     MatchTable.natImRank = natImRank(:);
+%     MatchTable.natImSig = natImSig(:);
+%
 %     % ---
 %     % Third fingerprint with scaled response
 %     corrScaledResp_big = nan(sum(nClu),sum(nClu));
