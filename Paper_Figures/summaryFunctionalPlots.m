@@ -283,13 +283,15 @@ function [FPSum, days, deltaDays, numMatchedUnits, maxAvailableUnits] = summaryF
     distrCols = [0 0.7 0; 1 0 0; 0 0 0.7]; % Within / Match / Non-match
     ROCCols = [1 0 0; 0 0.7 0]; % across Match vs. non-match / within Match vs. non-match
     figure('Position', [400 100 1000 800]);
+    clear bsave
     for fpIdx = 1:numel(FPNames)
         FPNameCurr = FPNames{fpIdx};
-    
+        
         % Plot distribution
         subplot(4,numel(FPNames),0*numel(FPNames)+fpIdx); hold all
         for hid = [3 1 2]
-            distr2plt = cumsum(distMatrix{fpIdx}(:,hid,:));
+%             distr2plt = cumsum(distMatrix{fpIdx}(:,hid,:));
+            distr2plt = distMatrix{fpIdx}(:,hid,:);
             plot(histBinsCenter{fpIdx}, nanmean(distr2plt,3), 'color', distrCols(hid,:))
 %             h = shadedErrorBar(histBinsCenter{fpIdx}, nanmean(distr2plt,3), ...
 %                 nanstd(distr2plt,[],3)./sqrt(sum(~isnan(distr2plt),3)));
@@ -361,6 +363,7 @@ function [FPSum, days, deltaDays, numMatchedUnits, maxAvailableUnits] = summaryF
         makepretty
 
         % Plot stability of AUC with delta days
+        bsave{fpIdx} = nan(length(UMFiles),2);
         subplot(4,numel(FPNames),3*numel(FPNames)+fpIdx); hold all
         for midx = 1:length(UMFiles)
             xDays = deltaDays{midx}(:);
@@ -373,7 +376,7 @@ function [FPSum, days, deltaDays, numMatchedUnits, maxAvailableUnits] = summaryF
                 X = [ones(numel(xDays),1), xDays];
                 b = (X\yVal);
                 plot(log10(1:max(xDays)), b(1) + b(2)*(1:max(xDays)), 'color',ROCCols(1,:),'LineWidth',1);
-                bsave(midx,:) = b;
+                bsave{fpIdx}(midx,:) = b;
                 scatter(-0.1,nanmean(mat2vec(FPSum.(FPNameCurr).AUC{midx}(2,:,:))),20,ROCCols(2,:),'filled')
             end
         end
@@ -390,6 +393,33 @@ function [FPSum, days, deltaDays, numMatchedUnits, maxAvailableUnits] = summaryF
     
     %% Additional figures
     
+    %
+    slope = nan(numel(FPNames),length(groups));
+    for fpIdx = 1:numel(FPNames)
+        for gg = 1:length(groups)
+            slope(fpIdx,gg) = nanmean(bsave{fpIdx}(groupVector == gg,2));
+        end
+    end
+
+    %
+    for fpIdx = 1:numel(FPNames)
+        n = sum(~isnan(AUCMatrix{fpIdx}(1,:)),2);
+        mu = nanmean(AUCMatrix{fpIdx}(1,:)*100,2);
+        se = nanstd(AUCMatrix{fpIdx}(1,:)*100,[],2)./sqrt(n);
+        fprintf('%s across: %0.0f\x00B1%0.0f (n = %d mice)\n', FPNames{fpIdx}, mu, se, n)
+
+        n = sum(~isnan(AUCMatrix{fpIdx}(2,:)),2);
+        mu = nanmean(AUCMatrix{fpIdx}(2,:)*100,2);
+        se = nanstd(AUCMatrix{fpIdx}(2,:)*100,[],2)./sqrt(n);
+        fprintf('%s within: %0.0f\x00B1%0.0f (n = %d mice)\n', FPNames{fpIdx}, mu, se, n)
+
+        n = sum(~isnan(slope(fpIdx,:)),2);
+        mu = nanmedian(slope(fpIdx,:),2);
+        se = mad(slope(fpIdx,:));
+        fprintf('%s slope: %0.5f\x00B1%0.5f (n = %d mice)\n', FPNames{fpIdx}, mu, se, n)
+    end
+
+
     % Plot number of matches as a function of delta days
     figure;
     hold all
