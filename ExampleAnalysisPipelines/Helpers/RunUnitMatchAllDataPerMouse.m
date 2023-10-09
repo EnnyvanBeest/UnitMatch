@@ -6,6 +6,7 @@ clear DateOpt
 DateOpt = arrayfun(@(X) dir(fullfile(DataDir{DataDir2Use(X)},MiceOpt{X},'*-*')),1:length(MiceOpt),'UniformOutput',0); % DataDir2Use = server
 DateOpt = cellfun(@(X) X([X.isdir]),DateOpt,'UniformOutput',0);
 DateOpt = cellfun(@(X) {X.name},DateOpt,'UniformOutput',0);
+FromDate = datetime("2023-10-03 09:00:00");
 
 LogError = {}; % Keep track of which runs didn't work
 for midx = 1:length(MiceOpt)
@@ -117,30 +118,31 @@ for midx = 1:length(MiceOpt)
                 PipelineParams.KSDir = AllKiloSortPaths(idx);
             end
 
-            UnitMatchExist = dir(fullfile(PipelineParams.SaveDir,'**','UnitMatch.mat'));
+            %% Prepare personal save/directory and decompressed data paths
+            PipelineParams.SaveDir = fullfile(PipelineParams.SaveDir ,'UnitMatch');
+            if isstruct(PipelineParams.RawDataPaths{1})
+                if length(PipelineParams.RawDataPaths)==1
+                    PipelineParams.AllDecompPaths = arrayfun(@(X) fullfile(PipelineParams.tmpdatafolder, strrep(X.name, 'cbin', 'bin')), PipelineParams.RawDataPaths{1}, 'Uni', 0);
+                else
+                    PipelineParams.AllDecompPaths = cellfun(@(X) fullfile(PipelineParams.tmpdatafolder, strrep(X.name, 'cbin', 'bin')), PipelineParams.RawDataPaths, 'Uni', 0);
+                end
+            else
+                allDecompPaths_dirs = arrayfun(@(X) dir(Params.RawDataPaths{X}), 1:length(Params.RawDataPaths), 'Uni', 0);
+                PipelineParams.AllDecompPaths = arrayfun(@(X) fullfile(Params.tmpdatafolder, strrep(allDecompPaths_dirs{X}.name, 'cbin', 'bin')), 1:length(allDecompPaths_dirs), 'Uni', 0);
+            end
 
-            if isempty(UnitMatchExist) || PipelineParams.RedoUnitMatch
+            %% Load other (Default) parameters
+            UMparam = DefaultParametersUnitMatch(PipelineParams);
+            UnitMatchExist = dir(fullfile(UMparam.SaveDir,'UnitMatch.mat'));
+
+            if isempty(UnitMatchExist) || PipelineParams.RedoUnitMatch || UnitMatchExist.date<FromDate
 
                 %% Get clusinfo
-                clusinfo = getClusinfo(PipelineParams.KSDir);
-                if ~any(clusinfo.Good_ID)
+                clusinfo = getClusinfo(UMparam.KSDir);
+                if ~any(clusinfo.Good_ID) || sum(clusinfo.Good_ID)<UMparam.minGoodUnits
                     disp('No good units, continue')
                 end
-                %% Prepare personal save/directory and decompressed data paths
-                PipelineParams.SaveDir = fullfile(PipelineParams.SaveDir ,'UnitMatch');
-                if isstruct(PipelineParams.RawDataPaths{1})
-                    if length(PipelineParams.RawDataPaths)==1
-                        PipelineParams.AllDecompPaths = arrayfun(@(X) fullfile(PipelineParams.tmpdatafolder, strrep(X.name, 'cbin', 'bin')), PipelineParams.RawDataPaths{1}, 'Uni', 0);
-                    else
-                        PipelineParams.AllDecompPaths = cellfun(@(X) fullfile(PipelineParams.tmpdatafolder, strrep(X.name, 'cbin', 'bin')), PipelineParams.RawDataPaths, 'Uni', 0);
-                    end
-                else
-                    allDecompPaths_dirs = arrayfun(@(X) dir(Params.RawDataPaths{X}), 1:length(Params.RawDataPaths), 'Uni', 0);
-                    PipelineParams.AllDecompPaths = arrayfun(@(X) fullfile(Params.tmpdatafolder, strrep(allDecompPaths_dirs{X}.name, 'cbin', 'bin')), 1:length(allDecompPaths_dirs), 'Uni', 0);
-                end
-
-                %% Load other (Default) parameters
-                UMparam = DefaultParametersUnitMatch(PipelineParams);
+           
 
                 %% Actual UnitMatch & Unique UnitID assignment
                 [UniqueIDConversion, MatchTable, WaveformInfo, UMparam] = UnitMatch(clusinfo, UMparam);
@@ -167,14 +169,11 @@ for midx = 1:length(MiceOpt)
                 catch ME
                     disp(['Couldn''t do Quality metrics for ' MiceOpt{midx}])
                 end
-
                 %% Function analysis
                 ComputeFunctionalScores(UMparam.SaveDir)
-
-            else
-                UMparam = PipelineParams;
             end
-                %%
+           
+            %%
             disp(['Preprocessed data for ' MiceOpt{midx} ' run  ' num2str(runid) '/' num2str(nRuns)])
         catch ME
             disp([MiceOpt{midx} ' run  ' num2str(runid) '/' num2str(nRuns) ' crashed... continue with others'])

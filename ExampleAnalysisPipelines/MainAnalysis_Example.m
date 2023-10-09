@@ -2,15 +2,15 @@
 
 %% User Input
 %% Path information
-DataDir =  {'H:\MatchingUnits\RawData'}; %{'H:\MatchingUnits\RawDataMonthApart'};%;%Raw data folders, typically servers were e.g. *.cbin files are stored
-SaveDir = 'H:\MatchingUnits\Output\Concatenated1Day'; % 'H:\MatchingUnits\Output\NotConcatenated';%'\\znas.cortexlab.net\Lab\Share\Celian\UnitMatch\MatchTables\NewSep27\MonthApart\Stitched'% %'H:\MatchingUnits\Output\MonthApartStitched'%%;% %'H:\MatchingUnits\Output\ManyRecordings'%Folder where to store the results
+DataDir = {'H:\MatchingUnits\RawDataMonthApart'};% {'H:\MatchingUnits\RawData'}; %;%Raw data folders, typically servers were e.g. *.cbin files are stored
+SaveDir = '\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\MonthApart\Stitched';%'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\2ConsecutiveDays\Stitched';%%'H:\MatchingUnits\Output\MonthApartStitched'%'H:\MatchingUnits\Output\Concatenated1Day'; % 'H:\MatchingUnits\Output\NotConcatenated';%'\\znas.cortexlab.net\Lab\Share\Celian\UnitMatch\MatchTables\NewSep27\MonthApart\Stitched'% %%;% %'H:\MatchingUnits\Output\ManyRecordings'%Folder where to store the results
 tmpdatafolder = 'H:\MatchingUnits\Tmp'; % temporary folder for temporary decompression of data 
-KilosortDir = 'H:\MatchingUnits\KilosortOutput'; %'\\znas.cortexlab.net\Lab\Share\Enny\UnitMatch\KilosortOutputMonthApart';%'\\znas.cortexlab.net\Lab\Share\Enny\UnitMatch\KSComparisonSubset';%' 'H:\MatchingUnits\KilosortOutputMonthApart';%'\\znas.cortexlab.net\Lab\Share\Celian\UnitMatch\KilosortOutputMonthApart';% Kilosort output folder
+KilosortDir = '\\znas.cortexlab.net\Lab\Share\Enny\UnitMatch\KilosortOutputMonthApart';%'\\znas.cortexlab.net\Lab\Share\Enny\UnitMatch\KSComparisonSubset';%'H:\MatchingUnits\KilosortOutputMonthApart';%''H:\MatchingUnits\KilosortOutput'; % \\znas.cortexlab.net\Lab\Share\Celian\UnitMatch\KilosortOutputMonthApart';% Kilosort output folder
 GithubDir = 'C:\Users\EnnyB\Documents\GitHub'; % Github directory
 PythonEXE = 'C:\Users\EnnyB\anaconda3\envs\pyks2\pythonw.exe' % Python version to run python code in:
 
 %% Information on experiments
-MiceOpt = {'AL032','AV008','CB016','EB019','JF067'}; %'AL032', Add all mice you want to analyze
+MiceOpt = {'AL032'};%,'AV008','CB016','EB019','JF067'}; %'AL032', Add all mice you want to analyze
 DataDir2Use = repmat(1,[1,length(MiceOpt)]); % In case you have multiple DataDir, index which directory is used for each mouse
 RecordingType = repmat({'Chronic'},1,length(MiceOpt)); % And whether recordings were Chronic (default)
 RecordingType(ismember(MiceOpt,{''}))={'Acute'}; %EB014', % Or maybe acute?

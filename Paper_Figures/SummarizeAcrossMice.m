@@ -1,6 +1,9 @@
 % SummarizeAcrossMice
+FromDate = datetime("2023-10-03 09:00:00");
+
 FSCoreFig = figure('name', 'Functional Scores');
 
+FRankFig = figure('name','ScoringVSRank')
 % Initialize
 TakeRank = 0 %if 0 , take cross-correlation scores (these may be less informative than rank)
 if TakeRank
@@ -40,6 +43,9 @@ minMatches = 10; % if less than 10, skip
 
 AUCCols = [0 0.7 0; 1 0 0; 0 0 0.7]; %WIthin %Match %non-match
 aucprecision = [0:0.05:1];
+
+cols = distinguishable_colors(10);
+takecol = 1;
 clear UMTrackingPerformancePerMouse
 for midx = 1:length(MiceOpt)
     fprintf('Reference %s...\n', MiceOpt{midx})
@@ -48,13 +54,19 @@ for midx = 1:length(MiceOpt)
     if isempty(tmpfile)
         continue
     end
+    flag = 0;
     for tmpid = 1:length(tmpfile)
-
+        if tmpfile(tmpid).date<FromDate
+            continue
+        end
         fprintf('Loading the data...\n')
         tic
         load(fullfile(tmpfile(tmpid).folder, tmpfile(tmpid).name), 'MatchTable', 'UMparam', 'UniqueIDConversion');
         toc
 
+        if ~any(ismember( MatchTable.Properties.VariableNames,'refPopRank'))
+            continue
+        end
         % Load AUCS
         if exist(fullfile(tmpfile(tmpid).folder, 'AUC.mat'))
             AUC = load(fullfile(tmpfile(tmpid).folder, 'AUC.mat'))';
@@ -91,10 +103,17 @@ for midx = 1:length(MiceOpt)
         recsesall = UniqueIDConversion.recsesAll;
         nRecs = length(unique(recsesall));
         AllKSDir = UMparam.KSDir; %original KS Dir
-        AllRawDir = UMparam.AllRawPaths; %
-        if isstruct(AllRawDir{1})
-            AllRawDir = cellfun(@(X) fullfile(X.folder,X.name),AllRawDir,'Uni',0);
+        if ~isfield(UMparam,'RawDataPaths')
+            UMparam.RawDataPaths = UMparam.AllRawPaths;
         end
+        AllRawDir = UMparam.RawDataPaths; %
+        if isstruct(AllRawDir{1})
+            AllRawDir = AllRawDir{1};
+        end
+        if  isstruct(AllRawDir)
+            AllRawDir = arrayfun(@(X) fullfile(X.folder,X.name),AllRawDir,'Uni',0);
+        end
+     
         nclus = length(UniqueID);
         if ~isfield(UMparam,'AllChannelPos')
             UMparam.AllChannelPos = UMparam.channelpos;
@@ -103,27 +122,16 @@ for midx = 1:length(MiceOpt)
 
         %% How many units vs number of units were tracked?
         fprintf('Evaluating tracked units...\n')
-        CrossCorrMatching = nan(0,4); % number of units matched with cross-correlation, % number of units matched of those % Number of units match with UM, % number of units mof those matched with Cross Corr
-        TrackingPerformance = nan(5, 0); % MatchesExpected, Difference between recording day, % Tracked units %maximum possibility % Difference in number of units
-        TrackingPerformanceKS = nan(5, 0); % MatchesExpected, Difference between recording day, % Tracked units %maximum possibility
+        CrossCorrMatching = nan(0,8); % number of units matched with cross-correlation, % number of units matched of those % Number of units match with UM, % number of units mof those matched with Cross Corr
+        TrackingPerformance = nan(9, 0); % MatchesExpected, Difference between recording day, % Tracked units %maximum possibility % Difference in number of units
+        TrackingPerformanceKS = nan(9, 0); % MatchesExpected, Difference between recording day, % Tracked units %maximum possibility
         AllDeltaDays = nan(1,nRecs);
-        ProbeSN = cell(1,nRecs); % To make sure the same probe was used, read the Serial number from the params file an store.
+        ProbeSN = UMparam.AllProbeSN; % To make sure the same probe was used, read the Serial number from the params file an store.
+        if length(ProbeSN) == 1 && UseKSLabels
+            ProbeSN = repmat(ProbeSN,1,nRecs);
+            AllRawDir = repmat(AllRawDir,1,nRecs);
+        end
         for did1 = 1:nRecs
-
-            % Read ProbeID
-            if isempty(ProbeSN{did1})
-                if any(strfind(AllRawDir{did1},'zinu')) && ~any(strfind(AllRawDir{did1},'\\zinu.cortexlab.net\'))
-                    AllRawDir{did1} = strrep(AllRawDir{did1},AllRawDir{did1}(1:strfind(AllRawDir{did1},'zinu')+3),'\\zinu.cortexlab.net\subjects');
-                end
-                rawdir = dir(fullfile(AllRawDir{did1}));
-                meta = ReadMeta2(fullfile(rawdir.folder,'*.ap.meta'));
-                try
-                    ProbeSN{did1} = meta.imDatPrb_sn;
-                catch ME
-                    disp(ME)
-                    keyboard
-                end
-            end
 
 
             % For difference in days
@@ -151,21 +159,6 @@ for midx = 1:length(MiceOpt)
                     continue
                 end
 
-                % Read ProbeID
-                if isempty(ProbeSN{did2})
-                    if any(strfind(AllRawDir{did2},'zinu')) && ~any(strfind(AllRawDir{did2},'\\zinu.cortexlab.net\'))
-
-                        AllRawDir{did2} = strrep(AllRawDir{did2},AllRawDir{did2}(1:strfind(AllRawDir{did2},'zinu')+3),'\\zinu.cortexlab.net\subjects');
-                    end
-                    rawdir = dir(fullfile(AllRawDir{did2}));
-                    meta = ReadMeta2(fullfile(rawdir.folder,'*.ap.meta'));
-                    try
-                        ProbeSN{did2} = meta.imDatPrb_sn;
-                    catch ME
-                        disp(ME)
-                        keyboard
-                    end
-                end
                 tmpday2 = strsplit(fullfile(AllRawDir{did2}),'\');% relies on yyyy-mm-dd format
                 tmpday2 = tmpday2(cellfun(@(X) any(strfind(X,'-')),tmpday2));
                 try
@@ -194,48 +187,157 @@ for midx = 1:length(MiceOpt)
                 %cross-correlation activity
                 rowidx = find(MatchTable.RecSes1 == did1 & MatchTable.RecSes2 == did2);
                 % find all pairs with a significant fingerprint cross-correlation
-                SigR = find(MatchTable.refPopCorr(rowidx) == 1);
+                SigR = find(MatchTable.refPopSig(rowidx) == 1);
                 NXCorr = length(SigR);
                 NXCorrUM = sum(MatchTable.MatchProb(rowidx(SigR))>0.5);
 
                 % OTher way around
                 SigUM = find(MatchTable.MatchProb(rowidx) > 0.5);
                 NUM = length(SigUM);
-                NUMXCorr = sum(MatchTable.refPopCorr(rowidx(SigUM))==1);
+                NUMXCorr = sum(MatchTable.refPopSig(rowidx(SigUM))==1);
 
-                CrossCorrMatching = cat(1, CrossCorrMatching, [NXCorr, NXCorrUM, NUM, NUMXCorr]);
+                NumRankRefPop = sum(MatchTable.refPopRank(rowidx) == 1)./2;
+                NumRankACG = sum(MatchTable.ACGRank(rowidx) == 1)./2;
+                NumRankNatIm = sum(MatchTable.natImRespRank(rowidx) == 1)./2;
+
+                NumRankAll = sum(MatchTable.refPopRank(rowidx) < 20 & MatchTable.ACGRank(rowidx) < 20 &  MatchTable.natImRespRank(rowidx) < 20)./2;
+                CrossCorrMatching = cat(1, CrossCorrMatching, [NXCorr, NXCorrUM, NUM, NUMXCorr,NumRankRefPop,NumRankACG,NumRankNatIm,NumRankAll]);
 
                 thesedaysidx = find(ismember(recses, [did1, did2]));
                 % can possibly only track these many units:
                 nMax = min([sum(recses(thesedaysidx) == did1), sum(recses(thesedaysidx) == did2)]);
                 diffN = sum(recses(thesedaysidx) == did2)-sum(recses(thesedaysidx) == did1);
-                if nMax < 25
+               
+                % Get table these two days
+                rowidx = find((MatchTable.RecSes1 == did1 & MatchTable.RecSes2 == did2) |  (MatchTable.RecSes2 == did1 & MatchTable.RecSes1 == did2));
+                ThisTable = MatchTable(rowidx,:);
+
+                % Match Idx
+                MatchIdx = find(ThisTable.UID1 == ThisTable.UID2);
+                nMatches = length(MatchIdx)./2;
+                if nMatches < 25
                     continue
                 end
-                if sum(recses(thesedaysidx) == did1)>sum(recses(thesedaysidx) == did2)
-                    nMatches = sum(ismember(UniqueID(recses==did2),UniqueID(recses==did1)));
-                else
-                    nMatches = sum(ismember(UniqueID(recses==did1),UniqueID(recses==did2)));
+
+                % Of these, how many matches by rank?
+                NumRankRefPop = sum(ThisTable.refPopRank(MatchIdx) == 1)./2;
+                NumRankACG = sum(ThisTable.ACGRank(MatchIdx) <20 )./2;
+                NumRankNatIm = sum(ThisTable.natImRespRank(MatchIdx) == 1)./2;
+
+                NumRankAll = sum(ThisTable.refPopRank(MatchIdx) == 1 | ThisTable.natImRespRank(MatchIdx) == 1)./2;
+                
+                figure(FRankFig)
+                subplot(3,2,1)
+                hold on
+                takerank = 1:20;
+
+                hsum = nan(1,length(takerank));
+                for rankid  = takerank
+                    hsum(rankid) = sum(ThisTable.natImRespRank(MatchIdx) <= rankid)./2;
                 end
+                plot(takerank,hsum,'.-','color',cols(takecol,:))
+                scatter(takerank(end)+1,length(MatchIdx)./2,20,cols(takecol,:),'filled')
+                xlabel('Rank')
+                ylabel('# Matches  (UnitMatch)')
+                title('NatImgRank')
+
+                     
+                subplot(3,2,3)
+                hold on
+                hsum = nan(1,length(takerank));
+                for rankid  = takerank
+                    hsum(rankid) = sum(ThisTable.refPopRank(MatchIdx) <= rankid)./2;
+                end
+                plot(takerank,hsum,'.-','color',cols(takecol,:))
+                scatter(takerank(end)+1,length(MatchIdx)./2,20,cols(takecol,:),'filled')              
+                xlabel('Rank')
+                ylabel('# Matches  (UnitMatch)')
+                title('RefPopRank')
+    
+
+                subplot(3,2,5)
+                hold on
+                hsum = nan(1,length(takerank));
+                for rankid  = takerank
+                    hsum(rankid) = sum(ThisTable.refPopRank(MatchIdx) <= rankid | ThisTable.natImRespRank(MatchIdx) <= rankid)./2;
+                end     
+                plot(takerank,hsum,'.-','color',cols(takecol,:))
+                scatter(takerank(end)+1,length(MatchIdx)./2,20,cols(takecol,:),'filled')              
+                xlabel('Rank')
+                ylabel('# Matches (UnitMatch)')
+                title('Either')
+              
+
+ 
+
+ 
                 if nMatches>nMax
                     keyboard
                 end
-                TrackingPerformance = cat(2, TrackingPerformance, [MatchesExpected, double(DDay), nMatches, nMax, diffN]');
+                TrackingPerformance = cat(2, TrackingPerformance, [MatchesExpected, double(DDay), nMatches, nMax, diffN, NumRankRefPop, NumRankACG, NumRankNatIm, NumRankAll]');
                 if MatchesExpected == 1 && (nMatches/nMax)<0.15 && double(DDay)<2
                     warning(['No matches unexpectedly for ' MiceOpt{midx}])
                 end
                 if MatchesExpected == 0 && (nMatches/nMax)>0.15
                     warning(['Some matches unexpectedly for ' MiceOpt{midx}])
                 end
-
-                if sum(recses(thesedaysidx) == did1)>sum(recses(thesedaysidx) == did2)
-                    nMatches = sum(ismember(OriID(recses==did2),OriID(recses==did1)));
-                else
-                    nMatches = sum(ismember(OriID(recses==did1),OriID(recses==did2)));
-                end
                 if UseKSLabels
-                    TrackingPerformanceKS = cat(2, TrackingPerformanceKS, [MatchesExpected, double(DDay), nMatches, nMax, diffN]');
+                    % Match Idx
+                    MatchIdx = find(ThisTable.ID1 == ThisTable.ID2);
+                    nMatches = length(MatchIdx)./2;
+
+                    % Of these, how many matches by rank?
+                    NumRankRefPop = sum(ThisTable.refPopRank(MatchIdx) == 1)./2;
+                    NumRankACG = sum(ThisTable.ACGRank(MatchIdx) <20 )./2;
+                    NumRankNatIm = sum(ThisTable.natImRespRank(MatchIdx) == 1)./2;
+
+                    NumRankAll = sum(ThisTable.refPopRank(MatchIdx) == 1 | ThisTable.natImRespRank(MatchIdx) == 1)./2;
+
+                    TrackingPerformanceKS = cat(2, TrackingPerformanceKS, [MatchesExpected, double(DDay), nMatches, nMax, diffN, NumRankRefPop, NumRankACG, NumRankNatIm, NumRankAll]');
+
+                    figure(FRankFig)
+                    subplot(3,2,2)
+                    hold on
+                    hsum = nan(1,length(takerank));
+                    for rankid  = takerank
+                        hsum(rankid) = sum(ThisTable.natImRespRank(MatchIdx) <= rankid)./2;
+                    end
+                    plot(takerank,hsum,'.-','color',cols(takecol,:))
+                    scatter(takerank(end)+1,length(MatchIdx)./2,20,cols(takecol,:),'filled')
+                    xlabel('Rank')
+                    ylabel('# Matches (Kilosort)')
+                    title('NatImgRank')
+            
+
+                    subplot(3,2,4)
+                    hold on
+                    hsum = nan(1,length(takerank));
+                    for rankid  = takerank
+                        hsum(rankid) = sum(ThisTable.refPopRank(MatchIdx) <= rankid)./2;
+                    end
+                    plot(takerank,hsum,'.-','color',cols(takecol,:))
+                    scatter(takerank(end)+1,length(MatchIdx)./2,20,cols(takecol,:),'filled')
+                    xlabel('Rank')
+                    ylabel('# Matches (Kilosort)')
+                    title('RefPopRank')
+     
+
+                    subplot(3,2,6)
+                    hold on
+                    hsum = nan(1,length(takerank));
+                    for rankid  = takerank
+                        hsum(rankid) = sum(ThisTable.refPopRank(MatchIdx) <= rankid | ThisTable.natImRespRank(MatchIdx) <= rankid)./2;
+                    end
+                    plot(takerank,hsum,'.-','color',cols(takecol,:))
+                    scatter(takerank(end)+1,length(MatchIdx)./2,20,cols(takecol,:),'filled')
+                    xlabel('Rank')
+                    ylabel('# Matches (Kilosort)')
+                    title('Either')
+ 
+ 
                 end
+                takecol = takecol + 1;
+
             end
         end
 
@@ -253,8 +355,9 @@ for midx = 1:length(MiceOpt)
         for nrec = 1:size(RecSesPerUID,2)
             RecSesPerUID(RecSesPerUID(:,nrec)>0,nrec) = RecSesPerUID(RecSesPerUID(:,nrec)>0,nrec)+(size(RecSesPerUID,2)-nrec)+1;
         end
-        if tmpid==1
+        if flag==0 
             MatrixFig = figure('name',[MiceOpt{midx} ' TrackingAcrossDaysMatrix']);
+            flag = 1;
         else
             figure(MatrixFig)
         end
@@ -663,6 +766,14 @@ for midx = 1:length(MiceOpt)
     end
 end
 
+figure(FRankFig)
+for subid = 1:6
+    subplot(3,2,subid)
+    hold on
+    makepretty
+    offsetAxes
+end
+linkaxes
 %% AUC
 if exist('AUCVals')
     meanAUC = nanmean(AUCVals,2);
@@ -717,15 +828,17 @@ if size(EPosAndNeg,1)>2
     makepretty
 end
 
-
+disp('False Pos/Neg (%)')
 nanmean(EPosAndNeg.*100,2)
 nanstd(EPosAndNeg.*100,[],2)
 
 %% Tracking performance
 %             TrackingPerformance = cat(2,TrackingPerformance,[did2-did1,nMatches,nMax]');
-
+%  [MatchesExpected, double(DDay), nMatches, nMax, diffN]
 % UMTrackingPerformancePerMouse{midx} = TrackingPerformance;
 %     KSTrackingPerformancePerMouse{midx} = TrackingPerformanceKS;
+%                     TrackingPerformanceKS = cat(2, TrackingPerformanceKS, [MatchesExpected, double(DDay), nMatches, nMax, diffN, NumRankRefPop, NumRankACG, NumRankNatIm, NumRankAll]');
+
 tmpUM = cat(2, UMTrackingPerformancePerMouse{:});
 tmpUM(:,tmpUM(4,:)<15) = [];
 if UseKSLabels
@@ -756,11 +869,60 @@ makepretty
 saveas(gcf,fullfile(SaveDir,'TrackingPerformance.fig'))
 saveas(gcf,fullfile(SaveDir,'TrackingPerformance.bmp'))
 
+%% UM vs KS
+if UseKSLabels
+    figure('name','UM vs KS');
+    plot(tmpUM(5,:)-min(tmpUM(5,:)),tmpUM(3,:),'.','color',[0 0 1])
+    hold on
+    plot(tmpUM(5,:)-min(tmpUM(5,:)),CrossCorrMatching(:,8),'.','color',[0 1 0])
+    plot(tmpKS(5,:)-min(tmpUM(5,:)),tmpKS(3,:),'.','color',[1 0 0])
+    plot(tmpUM(5,:)-min(tmpUM(5,:)),tmpUM(4,:),'.','color',[0 0 0])
+    legend('UnitMatch','Ranks','Kilosort','nMax')
+    xlabel('\DeltaDays')
+    ylabel('# Matches')
+    makepretty
+
+    %% Stacked bar plots
+    figure('name','Stacked Bar Functional Scores')
+
+    [deltadays,sortidx] = sort(tmpUM(2,:),'ascend');
+    FuncNames = {'RefPop','ACG','NatIm','RefPop OR NIm'};
+    nMatches = tmpUM(3,sortidx);
+
+    for idx = 1:4
+        subplot(4,2,(idx-1)*2+1)
+        bar(cat(1,tmpUM(5+idx,sortidx),nMatches-tmpUM(5+idx,sortidx))','stacked')
+        set(gca,'XTickLabel',deltadays-min(deltadays))
+        ylabel('# Matches')
+        xlabel('\DeltaDays')
+        legend('Stable','UnitMatch')
+        title(FuncNames{idx})   
+        makepretty
+        offsetAxes
+    end
+    nMatches = tmpKS(3,sortidx);
+
+    for idx = 1:4
+        subplot(4,2,(idx-1)*2+2)
+        bar(cat(1,tmpKS(5+idx,sortidx),nMatches-tmpKS(5+idx,sortidx))','stacked')
+        set(gca,'XTickLabel',deltadays-min(deltadays))
+        ylabel('# Matches')
+        xlabel('\DeltaDays')
+        legend('Stable','Kilosort')
+        title(FuncNames{idx})
+        makepretty
+        offsetAxes
+    end
+
+
+end
+
+
 %% Split per type of recordings
 NonEmptyIdx = ~cellfun(@isempty,UMTrackingPerformancePerMouse);
 RecTypeOpt = {'Acute','Some IMRO differences','Chronic - same IMRO'}
 UMTrackingPerformancePerMouse = UMTrackingPerformancePerMouse(NonEmptyIdx);
-tmpmice = MiceOpt(NonEmptyIdx);
+% tmpmice = MiceOpt(NonEmptyIdx);
 rectypeid = nan(1,size(tmpUM,2));
 rectypeid(find(tmpUM(1,:) == 0)) = 1; % Acute
 rectypeid(find(tmpUM(1,:) > 0 & tmpUM(1,:) <1 )) = 2; % Some IMRO differences
@@ -772,6 +934,7 @@ stepsz = 10;
 Edges = floor(min(AllDat)):stepsz:round(max(AllDat)+stepsz);
 histvec = floor(min(AllDat))+stepsz/2:stepsz:round(max(AllDat)+stepsz)-stepsz/2;
 
+%%
 cols = [0 0 1; 0 1 0; 1 0 0];
 figure('name','TrackedUnits (%)')
 clear h
@@ -844,7 +1007,7 @@ for tid = 1:length(RecTypeOpt)
 
     makepretty
 end
-legend(tmpmice)
+% legend(tmpmice)
 
 %% Tracking For chronic only
 expFun = @(p,d) p(1)*exp(-p(2)*d);%+p(3); % For nneurons decay
