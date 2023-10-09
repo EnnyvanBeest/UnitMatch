@@ -6,7 +6,9 @@ if exist('TmpFile', 'var')
     MatchTable = TmpFile.MatchTable;
     UMparam = TmpFile.UMparam;
 end
-
+if ~isfield(UMparam,'UseDatadrivenProbThrs')
+    UMparam.UseDatadrivenProbThrs = 0;
+end
 %% Subfunction in case you want to use this on a subset of the data/table
 [MatchTable, UniqueIDConversion] = AssignUniqueIDAlgorithm(MatchTable, UniqueIDConversion, UMparam);
 

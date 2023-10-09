@@ -21,8 +21,31 @@ GoodRecSesID = UniqueIDConversion.recsesAll;
 MatchTable.UID1 = PairID3(:);
 MatchTable.UID2 = PairID4(:);
 
+%% Find probability threshold to use
+if UMparam.UseDatadrivenProbThrs
+    stepsz = 0.1;
+    binedges = [0:stepsz:1];
+    plotvec = stepsz/2:stepsz:1-stepsz/2;
+    hw = histcounts(MatchTable.MatchProb(MatchTable.ID1==MatchTable.ID2 & MatchTable.RecSes1 == MatchTable.RecSes2),binedges)./sum(MatchTable.ID1==MatchTable.ID2 & MatchTable.RecSes1 == MatchTable.RecSes2);
+    %     hn = histcounts(MatchTable.MatchProb(MatchTable.ID1~=MatchTable.ID2 & MatchTable.RecSes1 == MatchTable.RecSes2),binedges)./sum(MatchTable.ID1~=MatchTable.ID2 & MatchTable.RecSes1 == MatchTable.RecSes2);
+    %     ha = histcounts(MatchTable.MatchProb(MatchTable.RecSes1 ~= MatchTable.RecSes2),binedges)./sum(MatchTable.RecSes1 ~= MatchTable.RecSes2);
+
+    %     find sudden increase and take that as probability threshold
+    UMparam.UsedProbability = plotvec(diff(hw)>0.1);
+    %
+    %     figure; plot(plotvec,hw,'g-')
+    %     hold on; plot(plotvec,ha,'r-')
+    %     plot(plotvec,hn,'b-')
+
+else
+
+    UMparam.UsedProbability = UMparam.ProbabilityThreshold;
+
+
+end
+
 %% Initial pairing based on matchscore
-Pairs = [MatchTable.UID1(MatchTable.MatchProb>UMparam.ProbabilityThreshold) MatchTable.UID2(MatchTable.MatchProb>UMparam.ProbabilityThreshold)]; % These are UIDs, not Indexes!
+Pairs = [MatchTable.UID1(MatchTable.MatchProb>UMparam.UsedProbability) MatchTable.UID2(MatchTable.MatchProb>UMparam.UsedProbability)]; % These are UIDs, not Indexes!
 Pairs(diff(Pairs,[],2)==0,:)=[]; %Remove own matches
 Pairs = sort(Pairs,2,'ascend'); % Only use each unique pair once
 Pairs = unique(Pairs,'stable','rows');
@@ -35,11 +58,11 @@ MatchProbabilityOri = MatchTable.MatchProb(tblidx);
 [~,tblidx] = ismember(Pairs,[MatchTable.UID2 MatchTable.UID1],'rows'); % Do the same for the other way around
 MatchProbabilityFlip = MatchTable.MatchProb(tblidx);
 
-Pairs(MatchProbabilityOri<UMparam.ProbabilityThreshold|MatchProbabilityFlip<UMparam.ProbabilityThreshold,:) = []; % don't bother with these
+Pairs(MatchProbabilityOri<UMparam.UsedProbability|MatchProbabilityFlip<UMparam.UsedProbability,:) = []; % don't bother with these
 
 %% Sort by average match probability
 MatchProbability = nanmean(cat(2,MatchProbabilityOri,MatchProbabilityFlip),2); %Average
-MatchProbability(MatchProbabilityOri<UMparam.ProbabilityThreshold|MatchProbabilityFlip<UMparam.ProbabilityThreshold) = []; % don't bother with these 
+MatchProbability(MatchProbabilityOri<UMparam.UsedProbability|MatchProbabilityFlip<UMparam.UsedProbability) = []; % don't bother with these 
 [~,sortidx] = sort(MatchProbability,'descend');
 Pairs = Pairs(sortidx,:); %Pairs as UID, but now sorted by match probability
 
@@ -59,7 +82,7 @@ if ~isempty(Pairs)
         % either of the currently considered units in Pairs
         tblidx = find((ismember(MatchTable.UID1,TheseOriUids)&ismember(MatchTable.UID2,Pairs(id,2)) | ismember(MatchTable.UID1,TheseOriUids)&ismember(MatchTable.UID2,Pairs(id,1)) | ismember(MatchTable.UID2,TheseOriUids)&ismember(MatchTable.UID1,Pairs(id,1)) | ismember(MatchTable.UID2,TheseOriUids)&ismember(MatchTable.UID1,Pairs(id,2))) & ~(MatchTable.UID1==MatchTable.UID2)); % !
 
-        if all(MatchTable.MatchProb(tblidx)>UMparam.ProbabilityThreshold) % All of these should survive the threshold
+        if all(MatchTable.MatchProb(tblidx)>UMparam.UsedProbability) % All of these should survive the threshold
             % All UIDs with this UID should now become the new UID
             Idx = find(ismember(OriUniqueID,TheseOriUids)); % Find all units that have to be considered
             UniqueID(Idx) = min(UniqueID(Idx)); % Assign them all with the minimum UniqueID 
