@@ -690,7 +690,7 @@ while flag<2
     ha = histcounts(tmp(:),Bins)./sum(~isnan(tmp(:)));
     [mua, sa] = normfit(tmp(~isnan(tmp)  & tmp<ThrsOpt));
 
-    if ~isnan(mua) && mua<muw % & ~flag
+    if ~isnan(mua) && mua<muw && ~flag
         ThrsOpt = ThrsOpt-abs(muw-mua); % Correct for general scores being lower across days (e.g. unresolved drift)
     end
     if flag  && drawthis

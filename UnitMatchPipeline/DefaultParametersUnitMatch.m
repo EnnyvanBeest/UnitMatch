@@ -56,7 +56,8 @@ if ~isfield(UMparam,'minGoodUnits')
 end
 %% Post processing
 if ~isfield(UMparam,'AssignUniqueID')
-UMparam.AssignUniqueID = 1; % Use our method of Assigning Unique ID based on match probability (recommended)
+    UMparam.AssignUniqueID = 1; % Use our method of Assigning Unique ID based on match probability (recommended)
+    UMparam.UseDatadrivenProbThrs = 1; % Use data driven probability threshold, if 0 use UMparam.ProbabilityThreshold
 end
 %% Inspection
 if ~isfield(UMparam,'MakePlotsOfPairs')

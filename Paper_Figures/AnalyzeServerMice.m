@@ -19,7 +19,7 @@ if ~exist('UMFiles') || isempty(UMFiles) % When using the example pipeline this 
         end
         for id = 1:length(tmpfile)
             if datetime(tmpfile(id).date) > FromDate % && any(cell2mat(cellfun(@(X) any(strfind(fullfile(tmpfile(id).folder,tmpfile(id).name),X)),UMFiles2Take,'Uni',0)))
-                QualityMetricsROCs(fullfile(tmpfile(id).folder))
+                AssignUniqueID(fullfile(tmpfile(id).folder))
 
                 %             FolderParts = strsplit(tmpfile(id).folder,filesep);
                 %             idx = find(ismember(FolderParts,MiceOpt{midx}));
@@ -30,4 +30,4 @@ if ~exist('UMFiles') || isempty(UMFiles) % When using the example pipeline this 
     end
     close all
 end
-summaryFunctionalPlots_Part2(UMFiles, 'Rank', groupvec)
+summaryFunctionalPlots_Part2(UMFiles, groupvec)
