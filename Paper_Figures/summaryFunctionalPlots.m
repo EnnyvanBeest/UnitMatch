@@ -403,19 +403,21 @@ function [FPSum, days, deltaDays, numMatchedUnits, maxAvailableUnits] = summaryF
 
     %
     for fpIdx = 1:numel(FPNames)
-        n = sum(~isnan(AUCMatrix{fpIdx}(1,:)),2);
-        mu = nanmean(AUCMatrix{fpIdx}(1,:)*100,2);
-        se = nanstd(AUCMatrix{fpIdx}(1,:)*100,[],2)./sqrt(n);
+        notNanIdx = ~isnan(slope(fpIdx,:));
+        n = sum(notNanIdx);
+        % n = sum(~isnan(AUCMatrix{fpIdx}(1,:)),2);
+        mu = nanmean(AUCMatrix{fpIdx}(1,notNanIdx)*100,2);
+        se = nanstd(AUCMatrix{fpIdx}(1,notNanIdx)*100,[],2)./sqrt(n);
         fprintf('%s across: %0.0f\x00B1%0.0f (n = %d mice)\n', FPNames{fpIdx}, mu, se, n)
 
-        n = sum(~isnan(AUCMatrix{fpIdx}(2,:)),2);
-        mu = nanmean(AUCMatrix{fpIdx}(2,:)*100,2);
-        se = nanstd(AUCMatrix{fpIdx}(2,:)*100,[],2)./sqrt(n);
+        % n = sum(~isnan(AUCMatrix{fpIdx}(2,:)),2);
+        mu = nanmean(AUCMatrix{fpIdx}(2,notNanIdx)*100,2);
+        se = nanstd(AUCMatrix{fpIdx}(2,notNanIdx)*100,[],2)./sqrt(n);
         fprintf('%s within: %0.0f\x00B1%0.0f (n = %d mice)\n', FPNames{fpIdx}, mu, se, n)
 
-        n = sum(~isnan(slope(fpIdx,:)),2);
-        mu = nanmedian(slope(fpIdx,:),2);
-        se = mad(slope(fpIdx,:));
+        % n = sum(~isnan(slope(fpIdx,:)),2);
+        mu = nanmedian(slope(fpIdx,notNanIdx),2);
+        se = mad(slope(fpIdx,notNanIdx));
         fprintf('%s slope: %0.5f\x00B1%0.5f (n = %d mice)\n', FPNames{fpIdx}, mu, se, n)
     end
 
