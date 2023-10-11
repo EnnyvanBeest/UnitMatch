@@ -71,8 +71,8 @@ function summaryFunctionalPlots_Part2(UMFiles, groupVector, UseKSLabels)
         maxAvailableUnits{midx} = nan(numel(sessIDs),numel(sessIDs));
         InitialDrift{midx} = nan(numel(sessIDs),numel(sessIDs));
         FixedDrift{midx} = nan(numel(sessIDs),numel(sessIDs));
-        nUnitsSelected(midx) = sum(UniqueIDConversion.GoodID);
-        nUnitsTotal(midx) = length(UniqueIDConversion.GoodID);
+        nUnitsSelected{midx} = arrayfun(@(X) sum(UniqueIDConversion.GoodID(UniqueIDConversion.recsesAll==X)),unique(UniqueIDConversion.recsesAll));
+        nUnitsTotal{midx} = arrayfun(@(X) length(UniqueIDConversion.GoodID(UniqueIDConversion.recsesAll==X)),unique(UniqueIDConversion.recsesAll));
 
         for sess1Idx = 1:numel(sessIDs)
     
@@ -163,7 +163,7 @@ function summaryFunctionalPlots_Part2(UMFiles, groupVector, UseKSLabels)
         toc
     end
 
-     SelUnitsPerc = nUnitsSelected./nUnitsTotal;
+     SelUnitsPerc = cat(1,nUnitsSelected{:})./cat(1,nUnitsTotal{:}).*100;
     %% AUC distributions for qMetrics
     figure('name','AUC Distr')
     stepsz = 0.05;
@@ -262,10 +262,11 @@ function summaryFunctionalPlots_Part2(UMFiles, groupVector, UseKSLabels)
     makepretty
     offsetAxes
     save(fullfile('C:\Users\EnnyB\OneDrive - University College London\UnitMatch_Manuscript','chronicMice.mat'),'PercNeurons','numMatchedUnits','maxAvailableUnits')
-    disp([num2str(nanmedian(PercNeurons.*100)) '+/- ' num2str(nanstd(PercNeurons.*100)./sqrt(sum(~isnan(PercNeurons))))])
+    disp([num2str(nanmedian(PercNeurons.*100)) '+/- ' num2str(mad(PercNeurons.*100)) ' in ' num2str(sum(~isnan(PercNeurons))) ' recordings'])
      
     %% 
     tmpAcute = load(fullfile('C:\Users\EnnyB\OneDrive - University College London\UnitMatch_Manuscript','AcuteMice.mat')) % Load other one
+    disp([num2str(nanmedian(tmpAcute.PercNeurons.*100)) '+/- ' num2str(mad(tmpAcute.PercNeurons.*100)) ' in ' num2str(sum(~isnan(tmpAcute.PercNeurons))) ' recordings'])
 
     figure('name','Acute vs Chronic')
     ha = histcounts(tmpAcute.PercNeurons.*100,binvec)./sum(~isnan(tmpAcute.PercNeurons)).*100;
