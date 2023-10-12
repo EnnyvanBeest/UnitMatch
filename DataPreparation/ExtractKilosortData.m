@@ -6,15 +6,13 @@ function Params = ExtractKilosortData(KiloSortPaths, Params, RawDataPathsInput)
 % calling 'dir') for all sessions you want to analyze as one session (e.g.
 % chronic recordings with same IMRO table: give a list with all sessions)
 
-% Params: with:
+% Params: default parameters available using DefaultParametersExtractKSData
 % Params.loadPCs=0;
 % Params.RunPyKSChronicStitched = 1
 % Params.DecompressLocal = 1; %if 1, uncompress data first if it's currently compressed
 % Params.RedoQM = 0; %if 1, redo quality metrics if it already exists
 % Params.RunQualityMetrics = 1; % If 1, Run the quality metrics
 % Params.InspectQualityMetrics =0; % Inspect the quality metrics/data set using the GUI
-% Params.UnitMatch = 1; % Matching chronic recording using QM instead of using pyks chronic output
-% Params.RedoUnitMatch = 0; % Redo unitmatch
 % Params.tmpdatafolder %Directory to temporarily decompress data --> must
 % be large enough!
 
@@ -22,39 +20,18 @@ function Params = ExtractKilosortData(KiloSortPaths, Params, RawDataPathsInput)
 % directory. If this input is missing, this code will try to find the raw
 % ephys data in the params.py file, first line (dat_path).
 
-%% Output
-% Clusinfo: Struct with cluster information. Read in from (Py)KS but
-% optionally Quality and Matches (oversplits/matches across recordings) are identified
-% Sp: Struct with spike information for all recordings
 
 %% Check inputs
 if ~iscell(KiloSortPaths) %isstruct(KiloSortPaths) || isfield(KiloSortPaths(1),'name') || isfield(KiloSortPaths(1),'folder')
     error('This is not a cell... give correct input please')
 end
-
+if nargin < 2
+    disp('No params given. Use default - although this is not advised...')
+    Params = struct;
+end
+Params = DefaultParametersExtractKSData(Params,KiloSortPaths);
 
 try
-    if nargin < 2
-        disp('No params given. Use default - although this is not advised...')
-        Params.loadPCs = 0;
-        Params.RunPyKSChronicStitched = 0;
-        Params.DecompressLocal = 1; %if 1, uncompress data first if it's currently compressed
-        Params.CleanUpTemporary = 0; % Clean up temporary data
-        Params.RedoQM = 0; %if 1, redo quality metrics if it already exists
-        Params.RunQualityMetrics = 1; % If 1, Run the quality metrics
-        Params.InspectQualityMetrics = 0; % Inspect the quality metrics/data set using the GUI
-        Params.UnitMatch = 1; % Matching chronic recording using QM instead of using pyks chronic output
-        Params.RedoUnitMatch = 0; % Redo unitmatch
-        Params.tmpdatafolder = KiloSortPaths(1); %
-        Params.binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
-        Params.saveSp = 1;
-        Params.extractSync = 0;
-        Params.deNoise = 1;
-        Params.nSavedChans = 385;
-        Params.nSyncChans = 1;
-    end
-
-
     if nargin < 3
         disp('Finding raw ephys data using the params.py file from (py)kilosort output')
         UseParamsKS = 1;
@@ -65,13 +42,7 @@ catch ME
     disp(ME)
     UseParamsKS = 1;
 end
-if ~isfield(Params, 'CleanUpTemporary')
-    Params.CleanUpTemporary = 0; % Clean up temporary folder
-end
-if ~isfield(Params, 'MinRecordingDuration')
-    Params.MinRecordingDuration = 10; % Clean up temporary folder
-end
-Params.CleanUpTemporary = 0; %remove
+
 %% Initialize everything
 channelmap = [];
 channelpos = [];
@@ -206,10 +177,8 @@ for subsesid = 1:length(KiloSortPaths)
         tmpparam = matfile(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat'));
         tmpparam = tmpparam.Params;
 
-        if tmpparam.RunQualityMetrics == Params.RunQualityMetrics && tmpparam.RunPyKSChronicStitched == Params.RunPyKSChronicStitched && ...
-                tmpparam.separateIMRO == Params.separateIMRO
+        if tmpparam.RunQualityMetrics == Params.RunQualityMetrics && tmpparam.RunPyKSChronicStitched == Params.RunPyKSChronicStitched
             disp(['Found existing data in ', KiloSortPaths{subsesid}, ', Using this...'])
-
             countid = countid + 1;
             continue
         end

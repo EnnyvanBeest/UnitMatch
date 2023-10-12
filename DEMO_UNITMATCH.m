@@ -32,6 +32,15 @@ clusinfo = struct; % Note, this can be kilosort input,
 % N.B. clusinfo can also be automatically extracted using clusinfo =
 % getClusinfo
 
+
+%% Add paths and subpaths
+mfilePath = mfilename('fullpath');
+if contains(mfilePath,'LiveEditorEvaluationHelper')
+    mfilePath = matlab.desktop.editor.getActiveFilename;
+end
+Components = strsplit(mfilePath,filesep);
+addpath(genpath(fullfile(Components{1:end-1})));
+
 %% Optional (for Kilosort + SpikeGLX users) --- see ExampleAnalysisPipelines for more detail!!
 % UMparam = ExtractKilosortData(KiloSortPaths, UMparam); % Extract KS data and do some noise removal, optionally decompresses cbin to bin data and uses BOMBCELL quality metric to define good single units
 % clusinfo = getClusinfo(PipelineParams.KSDir); % prepare clusinfo struct

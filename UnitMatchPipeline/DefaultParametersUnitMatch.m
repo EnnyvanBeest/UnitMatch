@@ -24,6 +24,7 @@ if ~isfield(UMparam,'AllChannelPos')
     error('ChannelPositions not given. TIP: Use UMparam = ExtractKilosortData(KiloSortPaths, UMparam) to automatically extract these')
 end
 
+
 %% Parameters for extracting raw waveforms
 if ~isfield(UMparam,'sampleamount')
     UMparam.sampleamount = 1000; % n raw waveforms to extract
@@ -36,6 +37,10 @@ if ~isfield(UMparam,'RedoExtraction')
 end
 
 %% Parameters used in standard UnitMatch
+if ~isfield(UMparam,'RunPyKSChronicStitched')
+    UMparam.RunPyKSChronicStitched = 0;
+end
+
 if ~isfield(UMparam,'UseHistology')
     UMparam.UseHistology = 0; % You can use actual Allen coordinates, if avaible and if using the example pipeline
 end
