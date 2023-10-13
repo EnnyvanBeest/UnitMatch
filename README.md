@@ -54,4 +54,3 @@ Two recording sessions of same IMRO table. In the first recording this unit was 
 
 For commercial use please contact e.beest@ucl.ac.uk
 
-[![DOI](https://zenodo.org/badge/572104021.svg)](https://zenodo.org/badge/latestdoi/572104021)
