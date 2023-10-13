@@ -149,7 +149,7 @@ for subsesid = 1:length(KiloSortPaths)
         RawDataPaths{subsesid} = rawD; % Definitely save as cell
         AllKiloSortPaths{subsesid} = KiloSortPaths{subsesid};
     end
-    DecompressionFlag = 0;
+    Params.DecompressionFlag = 0;
 
     %% Channel data
     myClusFile = dir(fullfile(KiloSortPaths{subsesid}, 'channel_map.npy'));
@@ -363,7 +363,7 @@ for subsesid = 1:length(KiloSortPaths)
                         [], [], 0, fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'bin')));
                     statusCopy = copyfile(strrep(fullfile(rawD(id).folder, rawD(id).name), 'cbin', 'meta'), strrep(fullfile(Params.tmpdatafolder, rawD(id).name), 'cbin', 'meta')); %QQ doesn't work on linux
                 end
-                DecompressionFlag = 1;
+                Params.DecompressionFlag = 1;
                 if ~exist('statusCopy','var') ||statusCopy == 0 %could not copy meta file - use original meta file
                     [Imecmeta] = ReadMeta2(fullfile(rawD(id).folder, strrep(rawD(id).name, 'cbin', 'meta')), 'ap');
                 else
@@ -387,7 +387,7 @@ for subsesid = 1:length(KiloSortPaths)
                         statusCopy = copyfile(strrep(fullfile(rawD(id).folder, rawD(id).name), 'cbin', 'meta'), strrep(fullfile(Params.tmpdatafolder, rawD(id).name), 'cbin', 'meta')); %QQ doesn't work on linux
                     end
 
-                    DecompressionFlag = 1;
+                    Params.DecompressionFlag = 1;
                     if Params.InspectQualityMetrics
                         InspectionFlag = 1;
                     end
@@ -557,7 +557,6 @@ end
 Params.AllChannelPos = AllChannelPos;
 Params.AllProbeSN = AllProbeSN;
 Params.RawDataPaths = RawDataPaths;
-Params.DecompressionFlag = DecompressionFlag;
 
 %% Remove temporary files
 if isstruct(RawDataPaths)

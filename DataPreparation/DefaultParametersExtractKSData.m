@@ -8,6 +8,9 @@ end
 if ~isfield(Params,'RunPyKSChronicStitched')
     Params.RunPyKSChronicStitched = 0;
 end
+if ~isfield(Params,'DecompressionFlag')
+    Params.DecompressionFlag = 0; %if 1, uncompress data first if it's currently compressed
+end
 if ~isfield(Params,'DecompressLocal')
     Params.DecompressLocal = 1; %if 1, uncompress data first if it's currently compressed
 end

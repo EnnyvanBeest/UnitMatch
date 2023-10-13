@@ -1,5 +1,5 @@
 %% DEMO UNIT MATCH 
-
+% This is a demo using the FigShareData on 10.6084/m9.figshare.24305758
 
 %% READ ME
 % If you do not use the suggested pipeline to extract raw waveforms (e.g. you don't use Neuropixels/SpikeGLX), make
@@ -11,15 +11,15 @@
 % recording for that cluster.
 
 %% User input: 
-UMparam.SaveDir = '\\path\to\save\UnitMatch'; % Recommended to use end this path with \Probe0\IMRO_1\ if more probes/IMRO tables were used or \AllProbes\AllIMRO\ otherwise
-UMparam.KSDir = {'\\path\to\firstrecording','\\path\to\secondrecording','\\path\to\nthrecording'};  % This is a cell array with a path, in the path there should be a subfolder called 'RawWaveforms'. 
+UMparam.SaveDir = 'H:\FigShare_UnitMatch\ExampleOutput'; % Recommended to use end this path with \Probe0\IMRO_1\ if more probes/IMRO tables were used or \AllProbes\AllIMRO\ otherwise
+UMparam.KSDir = {'H:\FigShare_UnitMatch\Mouse1\2019-11-21\Probe0\1','H:\FigShare_UnitMatch\Mouse1\2019-11-22\Probe0\1'};  % This is a cell array with a path, in the path there should be a subfolder called 'RawWaveforms'. 
 % N.B. if you want to use the functional score evaluation of UnitMatch, 'KSDir' should also contain typical 'Kilosort output', (e.g. spike times etc.)
 
 %% N.B. the following user input can also be automatically extracted and prepared/cleaned up using UMparam = ExtractKilosortData(KiloSortPaths, UMparam) for Kilosorted data of SpikeGLX recorded data (see next section);
-UMparam.RawDataPaths = {'\\path\to\firstrecording','\\path\to\secondrecording','\\path\to\nthrecording'};  % This is a cell array with info on where to find the decompressed recording (.cbin files) --> Necessary when you want UnitMatch to do waveform extraction
-UMparam.AllDecompPaths = {'\\path\to\firstrecording','\\path\to\secondrecording','\\path\to\nthrecording'};  % This is a cell array with info on where to find the decompressed recording (.bin files) --> Necessary when you want UnitMatch to do waveform extraction
-UMparam.AllChannelPos = {[RecordingSites_Recording1],[RecordingSites_Recording2]}; % These are coordinates of every recording channel on the probe (e.g. nRecordingChannels x 2)
-clusinfo = struct; % Note, this can be kilosort input, 
+% UMparam.RawDataPaths = {'\\path\to\firstrecording','\\path\to\secondrecording','\\path\to\nthrecording'};  % This is a cell array with info on where to find the decompressed recording (.cbin files) --> Necessary when you want UnitMatch to do waveform extraction
+% UMparam.AllDecompPaths = {'\\path\to\firstrecording','\\path\to\secondrecording','\\path\to\nthrecording'};  % This is a cell array with info on where to find the decompressed recording (.bin files) --> Necessary when you want UnitMatch to do waveform extraction
+% UMparam.AllChannelPos = {[RecordingSites_Recording1],[RecordingSites_Recording2]}; % These are coordinates of every recording channel on the probe (e.g. nRecordingChannels x 2)
+% clusinfo = struct; % Note, this can be kilosort input, 
 % - clusinfo (this is a struct that contains per unit the following information):
 % * cluster_id (e.g. kilosort output clus_id)
 % * Good_ID: ones for units that should be included in the analysis
@@ -33,7 +33,6 @@ clusinfo = struct; % Note, this can be kilosort input,
 % N.B. clusinfo can also be automatically extracted using clusinfo =
 % getClusinfo
 
-
 %% Add paths and subpaths
 mfilePath = mfilename('fullpath');
 if contains(mfilePath,'LiveEditorEvaluationHelper')
@@ -43,8 +42,8 @@ Components = strsplit(mfilePath,filesep);
 addpath(genpath(fullfile(Components{1:end-1})));
 
 %% Optional (for Kilosort + SpikeGLX users) --- see ExampleAnalysisPipelines for more detail!!
-% UMparam = ExtractKilosortData(UMparam.KSDir, UMparam); % Extract KS data and do some noise removal, optionally decompresses cbin to bin data and uses BOMBCELL quality metric to define good single units
-% clusinfo = getClusinfo(UMparam.KSDir); % prepare clusinfo struct
+UMparam = ExtractKilosortData(UMparam.KSDir, UMparam); % Extract KS data and do some noise removal, optionally decompresses cbin to bin data and uses BOMBCELL quality metric to define good single units
+clusinfo = getClusinfo(UMparam.KSDir); % prepare clusinfo struct
 
 %% Load default parameters
 UMparam = DefaultParametersUnitMatch(UMparam);

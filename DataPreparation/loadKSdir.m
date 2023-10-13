@@ -17,15 +17,12 @@ end
 spikeStruct = loadParamsPy(fullfile(ksDir, 'params.py'));
 
 if exist(fullfile(ksDir, 'spike_times_corrected.npy'))
-
     ss = readNPY(fullfile(ksDir, 'spike_times_corrected.npy')); %For chronic sessions
     sessionid = ones(size(ss));
     idx = find([0; diff(ss)]<0);
     for id = 1:length(idx)
         sessionid(idx(id):end) = id+1;
     end
-
-
 else
     ss = readNPY(fullfile(ksDir, 'spike_times.npy'));
     sessionid = ones(size(ss));
