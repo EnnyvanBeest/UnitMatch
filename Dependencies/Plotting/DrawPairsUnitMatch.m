@@ -9,7 +9,7 @@ end
 if ~loadMATsToSave
     TmpFile = matfile(fullfile(SaveDir, 'UnitMatch.mat')); % Access saved file
 else
-    load(fullfile(SaveDir, 'UnitMatch.mat'));
+    TmpFile = load(fullfile(SaveDir, 'UnitMatch.mat'));
 end
 
 UMparam = TmpFile.UMparam; % Extract parameters
