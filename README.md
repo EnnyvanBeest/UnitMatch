@@ -8,7 +8,7 @@ This toolbox was initially created between August 2022-January 2023 by Enny H. v
 We thank Julie Fabre, who implemented some changes to Bombcell - a toolbox for quality metrics and automated curation.
 We also thank Anna Lebedeva, Flora Takacs, Pip Coen, Kenneth Harris, and Matteo Carandini, as well as the rest of the Carandini-Harris laboratory for their feedback and contributions.
 
-For this work, van Beest was supported by a Marie Sklodowska-Curie fellowship (van Beest, 101022757), Bimbard by a European Molecular Biology Organization (ALTF 740-2019) and Wellcome Trust (xxxxx), and Carandini and Harris by a Wellcome Investigator Award.
+For this work, van Beest was supported by a Marie Sklodowska-Curie fellowship (van Beest, 101022757), Bimbard by a European Molecular Biology Organization (ALTF 740-2019), and Carandini and Harris by a Wellcome Investigator Award.
 
 ### Dependencies on other toolboxes/repositories
 Toolboxes used for matching part:
