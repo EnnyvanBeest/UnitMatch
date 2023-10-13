@@ -1,5 +1,5 @@
 %% DEMO UNIT MATCH 
-% This is a demo using the FigShareData on [xxxx]
+% This is a demo using the FigShareData on 10.6084/m9.figshare.24305758
 
 %% READ ME
 % If you do not use the suggested pipeline to extract raw waveforms (e.g. you don't use Neuropixels/SpikeGLX), make
