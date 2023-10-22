@@ -126,19 +126,12 @@ for subsesid = 1:length(KiloSortPaths)
                 rawD = dir(fullfile(FolderParts{1},'*bin'));
                 %                 rawD = fullfile(rawD.folder,rawD.name);
             end
-
-            % Save for later
-            try
-                RawDataPaths{subsesid} = rawD;
-            catch ME
-                disp(ME)
-                keyboard
-            end
-
+          
             if isempty(rawD)
-                disp('Bug...?')
-                keyboard
+               disp(['No raw data available for ' KiloSortPaths{subsesid}])
+               rawD = [];
             end
+
         else
             if isstruct(RawDataPathsInput)
                 rawD = RawDataPathsInput(subsesid);
@@ -161,15 +154,6 @@ for subsesid = 1:length(KiloSortPaths)
         channelmaptmp(end+1:length(channelpostmp)) = length(channelmaptmp):length(channelpostmp) - 1;
     end
 
-    %% Is it correct channelpos though...? Check using raw data. While reading this information, also extract recording duration and Serial number of probe
-    [channelpostmpconv, probeSN, recordingduration] = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done
-    if recordingduration<Params.MinRecordingDuration
-        disp([KiloSortPaths{subsesid} ' recording too short, skip...'])
-        continue
-    end
-    AllChannelPos{subsesid} = channelpostmpconv;
-    AllProbeSN{subsesid} = probeSN;
-
     %% Load existing?
     if exist(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat')) && ~Params.RedoQM && ~Params.ReLoadAlways
         % Check if parameters are the same, of not we have to redo it
@@ -184,6 +168,17 @@ for subsesid = 1:length(KiloSortPaths)
         end
     end
 
+    %% Is it correct channelpos though...? Check using raw data. While reading this information, also extract recording duration and Serial number of probe
+    if ~isempty(rawD)
+        [channelpostmpconv, probeSN, recordingduration] = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done
+        if recordingduration<Params.MinRecordingDuration
+            disp([KiloSortPaths{subsesid} ' recording too short, skip...'])
+            continue
+        end
+        AllChannelPos{subsesid} = channelpostmpconv;
+        AllProbeSN{subsesid} = probeSN;
+    end
+    
     %% Load histology if available
     tmphisto = dir(fullfile(KiloSortPaths{subsesid}, 'HistoEphysAlignment.mat'));
     clear Depth2AreaPerUnit

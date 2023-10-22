@@ -33,7 +33,7 @@ UMparam.KSDir = {'H:\FigShare_UnitMatch\Mouse1\2019-11-21\Probe0\1','H:\FigShare
 % N.B. clusinfo can also be automatically extracted using clusinfo =
 % getClusinfo
 
-%% Add paths and subpaths
+%% Add paths and subpaths - this will only work when running script in sequence, otherwise just manually add all UnitMatch subfolders
 mfilePath = mfilename('fullpath');
 if contains(mfilePath,'LiveEditorEvaluationHelper')
     mfilePath = matlab.desktop.editor.getActiveFilename;
