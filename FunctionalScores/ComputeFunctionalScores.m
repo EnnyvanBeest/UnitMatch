@@ -265,14 +265,19 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'natImRespCorr')) || recom
     spikeData_cv = cell(2,nRec);
     for ss = 1:nRec
         % Get the original binFile (also for stitched?)
-        if iscell(UMparam.AllRawPaths{RecOpt(ss)})
-            binFileRef = fullfile(UMparam.AllRawPaths{RecOpt(ss)});
+        Flag = 1;
+        if ~isempty(UMparam.AllRawPaths{RecOpt(ss)}) % When no raw data is available
+            if iscell(UMparam.AllRawPaths{RecOpt(ss)})
+                binFileRef = fullfile(UMparam.AllRawPaths{RecOpt(ss)});
+            else
+                binFileRef = fullfile(UMparam.AllRawPaths{RecOpt(ss)}.folder,UMparam.AllRawPaths{RecOpt(ss)}.name);
+            end
         else
-            binFileRef = fullfile(UMparam.AllRawPaths{RecOpt(ss)}.folder,UMparam.AllRawPaths{RecOpt(ss)}.name);
+            Flag = 0;
         end
 
         % Find the associated experiments
-        if ispc
+        if ispc && Flag
             exp2keep = getNatImExpRef(binFileRef);
         else
             exp2keep = [];
