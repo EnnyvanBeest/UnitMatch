@@ -58,7 +58,7 @@ end
 %%% results in your further analysis
 %% Automatic evaluation:
 EvaluatingUnitMatch(UMparam.SaveDir); % Within session cross-validation
-QualityMetricsROCs(UMparam.SaveDir); % Only works in combination with BOMBCELL
+QualityMetricsROCs(UMparam.SaveDir); % Only works in combination with BOMBCELL (and is added to path!!)
 ComputeFunctionalScores(UMparam.SaveDir) % Only works when having access to Kilosort output (e.g. spike times etc.) 
 
 %% Curation:
