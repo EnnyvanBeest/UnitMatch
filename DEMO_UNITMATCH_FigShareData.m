@@ -51,7 +51,7 @@ UMparam = DefaultParametersUnitMatch(UMparam);
 %% UnitMatch algorithm:
 [UniqueIDConversion, MatchTable, WaveformInfo, UMparam] = UnitMatch(clusinfo, UMparam);
 if UMparam.AssignUniqueID
-    AssignUniqueID(UMparam.SaveDir);
+   [UniqueIDConversion, MatchTable] = AssignUniqueID(UMparam.SaveDir);
 end
 
 %%% N.B. From here it is all evaluation, you don't need this to use UnitMatch
@@ -69,3 +69,6 @@ if UMparam.MakePlotsOfPairs
         pause
     end
 end
+
+%% Visualization
+PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
