@@ -222,6 +222,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'ACGCorr')) || recompute %
 
     %% Correlation between ACG
     ACGCorr = corr(squeeze(ACGMat(:, 1, :)), squeeze(ACGMat(:, 2, :)));
+    ACGCorr = tanh(.5*atanh(ACGCorr) + .5*atanh(ACGCorr)); %%% added after biorxiv
 
     [ACGRank, ACGSig] = getRank(ACGCorr,SessionSwitch);
 

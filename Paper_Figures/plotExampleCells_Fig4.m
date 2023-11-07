@@ -189,10 +189,10 @@ end
 sortCluIdx = [sortIdx1 numel(sortIdx1)+sortIdx2];
 
 % Plot figure
-figure('Position', [400 270 800 500]);
+figure('Position', [400 270 800 700]);
 
 % FR
-subplot(3,4,9) % matrix
+subplot(4,4,13) % matrix
 FRDiffMat = reshape(MatchTable.FRDiff, nclus, nclus);
 imagesc(FRDiffMat(sortCluIdx,sortCluIdx))
 hold on
@@ -208,13 +208,27 @@ freezeColors
 makepretty
 
 % ACG
-p(1) = subplot(3,4,2); % non-match
+p(1) = subplot(4,4,2); % non-match
 hold all
-idx1 = sp.spikeTemplates == clu1 & sp.RecSes == sess1;
-[CCGClu1, tClu1] = CCGBz([double(sp.st(idx1)); double(sp.st(idx1))], [ones(size(sp.st(idx1), 1), 1); ...
-    ones(size(sp.st(idx1), 1), 1) * 2], 'binSize', UMparam.ACGbinSize, 'duration', UMparam.ACGduration, 'norm', 'rate'); %function
-plot(tClu1(tClu1>0), CCGClu1(tClu1>0,1),'k');
-idx3 = sp.spikeTemplates == clu3 & sp.RecSes == sess1;
+idx1_1 = sp.spikeTemplates == clu1 & sp.RecSes == sess1 & sp.st < max(sp.st)/2;
+[CCGClu1_1, tClu1_1] = CCGBz([double(sp.st(idx1_1)); double(sp.st(idx1_1))], [ones(size(sp.st(idx1_1), 1), 1); ...
+    ones(size(sp.st(idx1_1), 1), 1) * 2], 'binSize', UMparam.ACGbinSize, 'duration', UMparam.ACGduration, 'norm', 'rate'); %function
+idx1_2 = sp.spikeTemplates == clu1 & sp.RecSes == sess1 & sp.st > max(sp.st)/2;
+[CCGClu1_2, tClu1_2] = CCGBz([double(sp.st(idx1_2)); double(sp.st(idx1_2))], [ones(size(sp.st(idx1_2), 1), 1); ...
+    ones(size(sp.st(idx1_2), 1), 1) * 2], 'binSize', UMparam.ACGbinSize, 'duration', UMparam.ACGduration, 'norm', 'rate'); %function
+plot(tClu1_2(tClu1_2>0), CCGClu1_2(tClu1_2>0,1),'color',[0.5 0.5 0.5]);
+plot(tClu1_1(tClu1_1>0), CCGClu1_1(tClu1_1>0,1),'k');
+xticks([0 0.01 UMparam.ACGduration/2])
+yticks([0 20])
+xlabel('Time (s)')
+ylabel('Firing rate (sp/s)')
+set(gca,'XScale','log')
+makepretty
+offsetAxes
+
+p(1) = subplot(4,4,6); % non-match
+hold all
+plot(tClu1_1(tClu1_1>0), CCGClu1_1(tClu1_1>0,1),'k');
 [CCGClu3, tClu3] = CCGBz([double(sp.st(idx3)); double(sp.st(idx3))], [ones(size(sp.st(idx3), 1), 1); ...
     ones(size(sp.st(idx3), 1), 1) * 2], 'binSize', UMparam.ACGbinSize, 'duration', UMparam.ACGduration, 'norm', 'rate'); %function
 plot(tClu3(tClu3>0), CCGClu3(tClu3>0,1),'color',colNonMatches);
@@ -226,13 +240,10 @@ set(gca,'XScale','log')
 makepretty
 offsetAxes
 
-p(2) = subplot(3,4,6); % match
+p(2) = subplot(4,4,10); % match
 hold all
-idx1 = sp.spikeTemplates == clu1 & sp.RecSes == sess1;
-[CCGClu1, tClu1] = CCGBz([double(sp.st(idx1)); double(sp.st(idx1))], [ones(size(sp.st(idx1), 1), 1); ...
-    ones(size(sp.st(idx1), 1), 1) * 2], 'binSize', UMparam.ACGbinSize, 'duration', UMparam.ACGduration, 'norm', 'rate'); %function
-plot(tClu1(tClu1>0), CCGClu1(tClu1>0,1),'k');
 idx2 = sp.spikeTemplates == clu2 & sp.RecSes == sess2;
+plot(tClu1_1(tClu1_1>0), CCGClu1_1(tClu1_1>0,1),'k');
 [CCGClu2, tClu2] = CCGBz([double(sp.st(idx2)); double(sp.st(idx2))], [ones(size(sp.st(idx2), 1), 1); ...
     ones(size(sp.st(idx2), 1), 1) * 2], 'binSize', UMparam.ACGbinSize, 'duration', UMparam.ACGduration, 'norm', 'rate'); %function
 plot(tClu2(tClu2>0), CCGClu2(tClu2>0,1),'color',colMatches);
@@ -245,7 +256,7 @@ makepretty
 offsetAxes
 linkaxes(p,'y')
 
-subplot(3,4,10) % matrix
+subplot(4,4,14) % matrix
 ACGCorrMat = reshape(MatchTable.ACGCorr, nclus, nclus);
 ACGCorrMat(ACGCorrMat<0.7) = 0.7;
 imagesc(ACGCorrMat(sortCluIdx,sortCluIdx))
@@ -262,19 +273,38 @@ freezeColors
 makepretty
 
 % NatImCorr 
-p(1) = subplot(3,4,3); % non-match
+p(1) = subplot(4,4,3); % non-match
 hold all
 respBin = bins<proc.window(2)+0.2 & bins>0;
-resp1 = nanmean(spikeData{recSesUni == sess1}(:,:,clusterIDs{recSesUni == sess1} == clu1,:),4);
-resp3 = nanmean(spikeData{recSesUni == sess1}(:,:,clusterIDs{recSesUni == sess1} == clu3,:),4);
+resp1_1 = nanmean(spikeData{recSesUni == sess1}(:,:,clusterIDs{recSesUni == sess1} == clu1,1:2:end),4);
+resp1_2 = nanmean(spikeData{recSesUni == sess1}(:,:,clusterIDs{recSesUni == sess1} == clu1,2:2:end),4);
 % plot timecourse
-plot(bins, mean(resp1),'k')
-plot(bins, mean(resp3),'color', colNonMatches)
+plot(bins, mean(resp1_2),'color',[0.5 0.5 0.5])
+plot(bins, mean(resp1_1),'k')
 % plot average response
-[~,natimOrd] = sort(nanmean(resp1(:,respBin),2),'descend');
+[~,natimOrd] = sort(nanmean(resp1_1(:,respBin),2),'descend');
 nIm = numel(natimOrd);
 xVal = bins(end)-bins(1) + 5*proc.binSize + linspace(0,bins(end)-bins(1),nIm);
-plot(xVal, nanmean(resp1(natimOrd,respBin),2),'k')
+plot(xVal, nanmean(resp1_2(natimOrd,respBin),2),'color',[0.5 0.5 0.5])
+plot(xVal, nanmean(resp1_1(natimOrd,respBin),2),'k')
+vline(0)
+vline(proc.window(2))
+xticks([0 proc.window(2) xVal(1) xVal(end)])
+xticklabels({'0' num2str(proc.window(2)) '1' num2str(nIm)})
+xlabel('Time (s) / Images')
+ylabel('Firing rate (sp/s)')
+makepretty
+offsetAxes
+
+% NatImCorr 
+p(1) = subplot(4,4,7); % non-match
+hold all
+resp3 = nanmean(spikeData{recSesUni == sess1}(:,:,clusterIDs{recSesUni == sess1} == clu3,:),4);
+% plot timecourse
+plot(bins, mean(resp1_1),'k')
+plot(bins, mean(resp3),'color', colNonMatches)
+% plot average response
+plot(xVal, nanmean(resp1_1(natimOrd,respBin),2),'k')
 plot(xVal, nanmean(resp3(natimOrd,respBin),2),'color', colNonMatches)
 vline(0)
 vline(proc.window(2))
@@ -285,15 +315,14 @@ ylabel('Firing rate (sp/s)')
 makepretty
 offsetAxes
 
-p(2) = subplot(3,4,7); % non-match
+p(2) = subplot(4,4,11); % non-match
 hold all
-respBin = bins<proc.window(2)+0.2 & bins>0;
 resp2 = nanmean(spikeData{recSesUni == sess2}(:,:,clusterIDs{recSesUni == sess2} == clu2,:),4);
 % plot timecourse
-plot(bins, mean(resp1),'k')
+plot(bins, mean(resp1_1),'k')
 plot(bins, mean(resp2),'color', colMatches)
 % plot average response
-plot(xVal, nanmean(resp1(natimOrd,respBin),2),'k')
+plot(xVal, nanmean(resp1_1(natimOrd,respBin),2),'k')
 plot(xVal, nanmean(resp2(natimOrd,respBin),2),'color', colMatches)
 vline(0)
 vline(proc.window(2))
@@ -305,7 +334,7 @@ makepretty
 offsetAxes
 linkaxes(p,'y')
 
-subplot(3,4,11) % matrix
+subplot(4,4,15) % matrix
 natImCorrMat = reshape(MatchTable.natImRespCorr, nclus, nclus);
 natImCorrMat(natImCorrMat<0.6) = 0.6;
 imagesc(natImCorrMat(sortCluIdx,sortCluIdx))
@@ -322,16 +351,27 @@ freezeColors
 makepretty
 
 % XCorr
-p(1) = subplot(3,4,4); % match
+p(1) = subplot(4,4,4); % match
 hold all
 clu1Idx = find(cluList1 == clu1);
-corrVec1 = corr(sr{sess1}(clu1Idx,:)', sr{sess1}(refPopIdx{sess1},:)');
+corrVec1_1 = corr(sr{sess1}(clu1Idx,1:floor(size(sr{sess1},2)/2))', sr{sess1}(refPopIdx{sess1},1:floor(size(sr{sess1},2)/2))');
+corrVec1_2 = corr(sr{sess1}(clu1Idx,floor(size(sr{sess1},2)/2):end)', sr{sess1}(refPopIdx{sess1},floor(size(sr{sess1},2)/2):end)');
+[c, neurOrd] = sort(corrVec1_1,'descend');
+neurOrd(c > 0.99999) = [];
+plot(corrVec1_2(neurOrd),'color',[0.5 0.5 0.5])
+plot(corrVec1_1(neurOrd),'k')
+xlabel('Ref. unit')
+ylabel('Correlation')
+xticks([1 numel(neurOrd)])
+makepretty
+offsetAxes
+
+p(1) = subplot(4,4,8); % match
+hold all
 clu3Idx = find(cluList1 == clu3);
 corrVec3 = corr(sr{sess1}(clu3Idx,:)', sr{sess1}(refPopIdx{sess1},:)');
 corrVec3(corrVec3 > 0.99999) = nan; % same unit
-[c, neurOrd] = sort(corrVec1,'descend');
-neurOrd(c > 0.99999) = [];
-plot(corrVec1(neurOrd),'k')
+plot(corrVec1_1(neurOrd),'k')
 plot(corrVec3(neurOrd),'color',colNonMatches)
 xlabel('Ref. unit')
 ylabel('Correlation')
@@ -339,12 +379,12 @@ xticks([1 numel(neurOrd)])
 makepretty
 offsetAxes
 
-p(2) = subplot(3,4,8); % non-match
+p(2) = subplot(4,4,12); % non-match
 hold all
 clu2Idx = find(cluList2 == clu2);
 corrVec2 = corr(sr{sess2}(clu2Idx,:)', sr{sess2}(refPopIdx{sess2},:)');
 corrVec2(corrVec2 > 0.99999) = nan; % same unit
-plot(corrVec1(neurOrd),'k')
+plot(corrVec1_1(neurOrd),'k')
 plot(corrVec2(neurOrd),'color',colMatches)
 xlabel('Ref. unit')
 ylabel('Correlation')
@@ -353,7 +393,7 @@ makepretty
 offsetAxes
 linkaxes(p,'y')
 
-subplot(3,4,12) % matrix
+subplot(4,4,16) % matrix
 xcorrCorrMat = reshape(MatchTable.refPopCorr, nclus, nclus);
 xcorrCorrMat(xcorrCorrMat<0.85) = 0.85;
 imagesc(xcorrCorrMat(sortCluIdx,sortCluIdx))
@@ -402,7 +442,7 @@ makepretty
 % figure('Position', [400 270 800 500]);
 % 
 % % FR
-% subplot(3,4,9) % matrix
+% subplot(4,4,9) % matrix
 % FRDiffMat = reshape(MatchTable.FRDiff, nclus, nclus);
 % imagesc(FRDiffMat(sortCluIdx,sortCluIdx))
 % hold on
@@ -418,7 +458,7 @@ makepretty
 % makepretty
 % 
 % % ACG
-% p(1) = subplot(3,4,2); % day 1
+% p(1) = subplot(4,4,2); % day 1
 % idx1 = sp.spikeTemplates == clu1 & sp.RecSes == sess1;
 % [CCGClu1, tClu1] = CCGBz([double(sp.st(idx1)); double(sp.st(idx1))], [ones(size(sp.st(idx1), 1), 1); ...
 %     ones(size(sp.st(idx1), 1), 1) * 2], 'binSize', UMparam.ACGbinSize, 'duration', UMparam.ACGduration, 'norm', 'rate'); %function
@@ -431,7 +471,7 @@ makepretty
 % makepretty
 % offsetAxes
 % 
-% p(2) = subplot(3,4,6); % day 2
+% p(2) = subplot(4,4,6); % day 2
 % idx2 = sp.spikeTemplates == clu2 & sp.RecSes == sess2;
 % [CCGClu2, tClu2] = CCGBz([double(sp.st(idx2)); double(sp.st(idx2))], [ones(size(sp.st(idx2), 1), 1); ...
 %     ones(size(sp.st(idx2), 1), 1) * 2], 'binSize', UMparam.ACGbinSize, 'duration', UMparam.ACGduration, 'norm', 'rate'); %function
@@ -445,7 +485,7 @@ makepretty
 % makepretty
 % offsetAxes
 % 
-% subplot(3,4,10) % matrix
+% subplot(4,4,10) % matrix
 % ACGCorrMat = reshape(MatchTable.ACGCorr, nclus, nclus);
 % imagesc(ACGCorrMat(sortCluIdx,sortCluIdx))
 % hold on
@@ -461,7 +501,7 @@ makepretty
 % makepretty
 % 
 % % XCorr
-% subplot(3,4,3); % day 
+% subplot(4,4,3); % day 
 % hold all
 % clu1Idx = find(cluList1 == clu1);
 % corrVec1 = corr(sr{sess1}(clu1Idx,:)', sr{sess1}(refPopIdx{sess1},:)');
@@ -484,7 +524,7 @@ makepretty
 % makepretty
 % offsetAxes
 % 
-% subplot(3,4,7) % day 2
+% subplot(4,4,7) % day 2
 % hold all
 % clu2Idx = find(cluList2 == clu2);
 % corrVec2 = corr(sr{sess2}(clu2Idx,:)', sr{sess2}(refPopIdx{sess2},:)');
@@ -501,7 +541,7 @@ makepretty
 % makepretty
 % offsetAxes
 % 
-% subplot(3,4,11) % matrix
+% subplot(4,4,11) % matrix
 % xcorrCorrMat = reshape(MatchTable.refPopCorr, nclus, nclus);
 % xcorrCorrMat(xcorrCorrMat<.8) = .8;
 % imagesc(xcorrCorrMat(sortCluIdx,sortCluIdx))
@@ -518,7 +558,7 @@ makepretty
 % makepretty
 % 
 % % NatImCorr 
-% subplot(3,4,4) % day 1
+% subplot(4,4,4) % day 1
 % hold all
 % respBin = bins > 0 & bins < 0.4;
 % resp1 = nanmean(spikeData{recSesUni == sess1}(:,:,clusterIDs{recSesUni == sess1} == clu1,:),4);
@@ -539,7 +579,7 @@ makepretty
 % makepretty
 % offsetAxes
 % 
-% subplot(3,4,8) % day 2
+% subplot(4,4,8) % day 2
 % hold all
 % resp2 = nanmean(spikeData{recSesUni == sess2}(:,:,clusterIDs{recSesUni == sess2} == clu2,:),4);
 % imagesc(1:size(resp2,1), bins, resp2(natimOrd,:)');
@@ -558,7 +598,7 @@ makepretty
 % makepretty
 % offsetAxes
 % 
-% subplot(3,4,12) % matrix
+% subplot(4,4,12) % matrix
 % natImCorrMat = reshape(MatchTable.natImRespCorr, nclus, nclus);
 % imagesc(natImCorrMat(sortCluIdx,sortCluIdx))
 % hold on
