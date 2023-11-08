@@ -8,7 +8,12 @@ This toolbox was initially created between August 2022-January 2023 by Enny H. v
 We thank Julie Fabre, who implemented some changes to Bombcell - a toolbox for quality metrics and automated curation.
 We also thank Anna Lebedeva, Flora Takacs, Pip Coen, Kenneth Harris, and Matteo Carandini, as well as the rest of the Carandini-Harris laboratory for their feedback and contributions.
 
-For this work, van Beest was supported by a Marie Sklodowska-Curie fellowship (van Beest, 101022757), Bimbard by a European Molecular Biology Organization (ALTF 740-2019) and Wellcome Trust (xxxxx), and Carandini and Harris by a Wellcome Investigator Award.
+For this work, van Beest was supported by a Marie Sklodowska-Curie fellowship (van Beest, 101022757), Bimbard by a European Molecular Biology Organization (ALTF 740-2019), and Carandini and Harris by a Wellcome Investigator Award.
+
+
+Preprint: https://www.biorxiv.org/content/10.1101/2023.10.12.562040v1
+
+Video: https://www.youtube.com/watch?v=4c_dgTZcBaQ&list=PLfhWmWntvjl7kljKozClpjS29DoY8V5pB&index=23&t=21s
 
 ### Dependencies on other toolboxes/repositories
 Toolboxes used for matching part:
@@ -53,3 +58,4 @@ Two recording sessions of same IMRO table. In the first recording this unit was 
 <a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by-nc-sa/4.0/88x31.png" /></a><br />This work is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/">Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License</a>.
 
 For commercial use please contact e.beest@ucl.ac.uk
+

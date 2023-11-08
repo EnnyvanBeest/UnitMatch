@@ -126,19 +126,8 @@ for subsesid = 1:length(KiloSortPaths)
                 rawD = dir(fullfile(FolderParts{1},'*bin'));
                 %                 rawD = fullfile(rawD.folder,rawD.name);
             end
-
-            % Save for later
-            try
-                RawDataPaths{subsesid} = rawD;
-            catch ME
-                disp(ME)
-                keyboard
-            end
-
-            if isempty(rawD)
-                disp('Bug...?')
-                keyboard
-            end
+          
+          
         else
             if isstruct(RawDataPathsInput)
                 rawD = RawDataPathsInput(subsesid);
@@ -146,10 +135,15 @@ for subsesid = 1:length(KiloSortPaths)
                 rawD = dir(fullfile(RawDataPathsInput{subsesid}));
             end
         end
+        if isempty(rawD)
+            disp(['No raw data available for ' KiloSortPaths{subsesid}])
+            rawD = [];
+        end
+
         RawDataPaths{subsesid} = rawD; % Definitely save as cell
         AllKiloSortPaths{subsesid} = KiloSortPaths{subsesid};
     end
-    DecompressionFlag = 0;
+    Params.DecompressionFlag = 0;
 
     %% Channel data
     myClusFile = dir(fullfile(KiloSortPaths{subsesid}, 'channel_map.npy'));
@@ -160,16 +154,21 @@ for subsesid = 1:length(KiloSortPaths)
     if length(channelmaptmp) < length(channelpostmp)
         channelmaptmp(end+1:length(channelpostmp)) = length(channelmaptmp):length(channelpostmp) - 1;
     end
-
+ 
     %% Is it correct channelpos though...? Check using raw data. While reading this information, also extract recording duration and Serial number of probe
-    [channelpostmpconv, probeSN, recordingduration] = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done
-    if recordingduration<Params.MinRecordingDuration
-        disp([KiloSortPaths{subsesid} ' recording too short, skip...'])
-        continue
+    if ~isempty(rawD)
+        [channelpostmpconv, probeSN, recordingduration] = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done
+        if recordingduration<Params.MinRecordingDuration
+            disp([KiloSortPaths{subsesid} ' recording too short, skip...'])
+            continue
+        end
+        AllChannelPos{subsesid} = channelpostmpconv;
+        AllProbeSN{subsesid} = probeSN;
+    else
+        AllChannelPos{subsesid} = channelpostmp;
+        AllProbeSN{subsesid} = '000000';
     end
-    AllChannelPos{subsesid} = channelpostmpconv;
-    AllProbeSN{subsesid} = probeSN;
-
+    
     %% Load existing?
     if exist(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat')) && ~Params.RedoQM && ~Params.ReLoadAlways
         % Check if parameters are the same, of not we have to redo it
@@ -184,6 +183,8 @@ for subsesid = 1:length(KiloSortPaths)
         end
     end
 
+   
+    
     %% Load histology if available
     tmphisto = dir(fullfile(KiloSortPaths{subsesid}, 'HistoEphysAlignment.mat'));
     clear Depth2AreaPerUnit
@@ -363,7 +364,7 @@ for subsesid = 1:length(KiloSortPaths)
                         [], [], 0, fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'bin')));
                     statusCopy = copyfile(strrep(fullfile(rawD(id).folder, rawD(id).name), 'cbin', 'meta'), strrep(fullfile(Params.tmpdatafolder, rawD(id).name), 'cbin', 'meta')); %QQ doesn't work on linux
                 end
-                DecompressionFlag = 1;
+                Params.DecompressionFlag = 1;
                 if ~exist('statusCopy','var') ||statusCopy == 0 %could not copy meta file - use original meta file
                     [Imecmeta] = ReadMeta2(fullfile(rawD(id).folder, strrep(rawD(id).name, 'cbin', 'meta')), 'ap');
                 else
@@ -387,7 +388,7 @@ for subsesid = 1:length(KiloSortPaths)
                         statusCopy = copyfile(strrep(fullfile(rawD(id).folder, rawD(id).name), 'cbin', 'meta'), strrep(fullfile(Params.tmpdatafolder, rawD(id).name), 'cbin', 'meta')); %QQ doesn't work on linux
                     end
 
-                    DecompressionFlag = 1;
+                    Params.DecompressionFlag = 1;
                     if Params.InspectQualityMetrics
                         InspectionFlag = 1;
                     end
@@ -557,7 +558,6 @@ end
 Params.AllChannelPos = AllChannelPos;
 Params.AllProbeSN = AllProbeSN;
 Params.RawDataPaths = RawDataPaths;
-Params.DecompressionFlag = DecompressionFlag;
 
 %% Remove temporary files
 if isstruct(RawDataPaths)
