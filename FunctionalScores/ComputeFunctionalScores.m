@@ -130,6 +130,9 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'refPopCorr')) || recomput
 
     % get rank
     [refPopRank, refPopSig] = getRank(refPopCorr,SessionSwitch);
+    refPopSig(refPopCorr==0) = nan; % Correlation of 0 means nothing
+    refPopRank(refPopCorr==0) = nan; % Correlation of 0 means nothing
+
 
     % Save in table
     MatchTable.refPopCorr = refPopCorr(:);
