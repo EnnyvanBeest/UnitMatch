@@ -56,11 +56,7 @@ end
 if ~isfield(Params,'nSyncChans')
     Params.nSyncChans = 1; % Number of sync channels
 end
-%% Post processing
-if ~isfield(Params,'AssignUniqueID')
-    Params.AssignUniqueID = 1; % Use our method of Assigning Unique ID based on match probability (recommended)
-    Params.UseDatadrivenProbThrs = 1; % Use data driven probability threshold, if 0 use Params.ProbabilityThreshold
-end
+
 %% Inspection
 if ~isfield(Params,'MakePlotsOfPairs')
     Params.MakePlotsOfPairs = 0; % Plots and saves matches for you to inspect
