@@ -155,7 +155,10 @@ for midx = 1:length(MiceOpt)
 
                 %% Evaluate (within unit ID cross-validation)
                 EvaluatingUnitMatch(UMparam.SaveDir);
-
+    
+                %% Function analysis
+                ComputeFunctionalScores(UMparam.SaveDir)
+                
                 %% Figures
                 if UMparam.MakePlotsOfPairs
                     DrawBlind = 0; %1 for blind drawing (for manual judging of pairs)
@@ -172,8 +175,7 @@ for midx = 1:length(MiceOpt)
                 catch ME
                     disp(['Couldn''t do Quality metrics for ' MiceOpt{midx}])
                 end
-                %% Function analysis
-                ComputeFunctionalScores(UMparam.SaveDir)
+            
             end
            
             %%

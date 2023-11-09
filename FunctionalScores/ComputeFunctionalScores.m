@@ -126,7 +126,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'refPopCorr')) || recomput
     Pairs = cat(2, r, c);
     Pairs = sortrows(Pairs);
     Pairs = unique(Pairs, 'rows');
-    [refPopCorr, AllSessionCorrelations] = CrossCorrelationFingerPrint(sessionCorrelationsAll, Pairs, OriID, recses, drawdrosscorr);
+    [refPopCorr,~,AllSessionCorrelations] = CrossCorrelationFingerPrint(sessionCorrelationsAll, Pairs, OriID, recses, drawdrosscorr);
 
     % get rank
     [refPopRank, refPopSig] = getRank(refPopCorr,SessionSwitch);

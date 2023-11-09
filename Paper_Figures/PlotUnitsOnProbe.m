@@ -33,5 +33,6 @@ for recid = 1:length(nrec)
     scatter3(nanmean(WaveformInfo.ProjectedLocation(1,recsesGood==nrec(recid),:),3),nanmean(WaveformInfo.ProjectedLocation(2,recsesGood==nrec(recid),:),3),nanmean(WaveformInfo.ProjectedLocation(3,recsesGood==nrec(recid),:),3),30,neuroncols(recsesGood==nrec(recid),:),'filled')
     makepretty
 offsetAxes
+title(['Recording ' num2str(recid)])
 end
 linkaxes

@@ -90,8 +90,8 @@ if ~iscell(Allchannelpos)
 end
 % Extract matchtable scores
 MatchProbability = reshape(MatchTable.MatchProb,nclus,nclus);
-FingerprintR = reshape(MatchTable.FingerprintCor,nclus,nclus);
-RankScoreAll = reshape(MatchTable.RankScore,nclus,nclus);
+FingerprintR = reshape(MatchTable.refPopCorr,nclus,nclus);
+RankScoreAll = reshape(MatchTable.refPopRank,nclus,nclus);
 for scid = 1:length(param.Scores2Include)
     eval([param.Scores2Include{scid} ' = reshape(MatchTable.' param.Scores2Include{scid} ',nclus,nclus);'])
 end
