@@ -126,7 +126,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'refPopCorr')) || recomput
     Pairs = cat(2, r, c);
     Pairs = sortrows(Pairs);
     Pairs = unique(Pairs, 'rows');
-    [refPopCorr, AllSessionCorrelations] = CrossCorrelationFingerPrint(sessionCorrelationsAll, Pairs, OriID, recses, drawdrosscorr);
+    [refPopCorr,~,AllSessionCorrelations] = CrossCorrelationFingerPrint(sessionCorrelationsAll, Pairs, OriID, recses, drawdrosscorr);
 
     % get rank
     [refPopRank, refPopSig] = getRank(refPopCorr,SessionSwitch);
@@ -222,6 +222,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'ACGCorr')) || recompute %
 
     %% Correlation between ACG
     ACGCorr = corr(squeeze(ACGMat(:, 1, :)), squeeze(ACGMat(:, 2, :)));
+    ACGCorr = tanh(.5*atanh(ACGCorr) + .5*atanh(ACGCorr)); %%% added after biorxiv
 
     [ACGRank, ACGSig] = getRank(ACGCorr,SessionSwitch);
 
