@@ -764,9 +764,9 @@ for shid=1:nshanks
     if coordinateflag
         clustercoord = repmat({[nan,nan,nan]},1,length(cluster_id(ShankID==shid)));
         clustercoord(idx) = num2cell(newtrackcoordinates{shid}(cell2mat(tmp(idx)),:),2);
-        Depth2AreaPerUnit{shid} = table(cluster_id(ShankID==shid)',depth(ShankID==shid),ShankID(ShankID==shid),clusterarea',clustercolor',clustercoord','VariableNames',{'Cluster_ID','Depth','Shank','Area','Color','Coordinates'});
+        Depth2AreaPerUnit{shid} = table(cluster_id(ShankID==shid),depth(ShankID==shid),ShankID(ShankID==shid),clusterarea',clustercolor',clustercoord','VariableNames',{'Cluster_ID','Depth','Shank','Area','Color','Coordinates'});
     else
-        Depth2AreaPerUnit{shid} = table(cluster_id(ShankID==shid)',depth(ShankID==shid),ShankID(ShankID==shid),clusterarea',clustercolor','VariableNames',{'Cluster_ID','Depth','Shank','Area','Color'});
+        Depth2AreaPerUnit{shid} = table(cluster_id(ShankID==shid),depth(ShankID==shid),ShankID(ShankID==shid),clusterarea',clustercolor','VariableNames',{'Cluster_ID','Depth','Shank','Area','Color'});
     end
 end
 Depth2AreaPerUnit=cat(1,Depth2AreaPerUnit{:});

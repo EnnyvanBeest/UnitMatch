@@ -227,7 +227,7 @@ for uid = 1:nclus
     end
     %Load channels
     ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChannel(uid,1),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius); %Averaging over 10 channels helps with drift
-    Locs = channelpos(ChanIdx,:);
+    Locs = round(channelpos(ChanIdx,:)./50).*50;
     AllowFlipping(cell2mat(arrayfun(@(X) length(unique(Locs(:,X))),1:size(Locs,2),'Uni',0))<=2 & cell2mat(arrayfun(@(X) length(unique(Locs(:,X))),1:size(Locs,2),'Uni',0))>1,:) = true;
 end
 FlipDim = find(any(AllowFlipping,2));
@@ -281,7 +281,7 @@ while flag<2
     clear y
 
     % memory efficient?
-    EuclDist = nan(nclus,length(waveidx),2,nclus);
+    EuclDist = nan(nclus,length(waveidx),length(FlipDim)+1,nclus);
     for batchid1 = 1:nbatch
         idx = (batchid1-1)*batchsz+1:batchsz*batchid1;
         idx(idx>nclus) = [];
@@ -337,7 +337,7 @@ while flag<2
     %     EuclDist2(w) = nan;
     disp('Computing location distances between pairs of units, per individual time point of the waveform, Recentered...')
     ProjectedLocationPerTPRecentered = permute(permute(ProjectedLocationPerTPAllFlips,[1,2,4,3,5]) - ProjectedLocation,[1,2,4,3,5]);
-    EuclDist2 = nan(nclus,length(waveidx),2,nclus);
+    EuclDist2 = nan(nclus,length(waveidx),length(FlipDim)+1,nclus);
     for batchid1 = 1:nbatch
         idx = (batchid1-1)*batchsz+1:batchsz*batchid1;
         idx(idx>nclus) = [];
@@ -390,8 +390,10 @@ while flag<2
             countid = countid + 1;
         end
     end
+
     % Sum the angles across dimensions
     LocAngle = nansum(LocAngle,5);
+
     clear x1 x2
 
     % Actually just taking the weighted sum of angles is better
