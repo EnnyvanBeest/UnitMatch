@@ -42,8 +42,8 @@ end
 
 % Save AUCs to help find best parameters
 disp('Computing location distances between pairs of units...')
-LocDist = sqrt((ProjectedLocation(1,:,1)'-ProjectedLocation(1,:,2)).^2 + ...
-    (ProjectedLocation(2,:,1)'-ProjectedLocation(2,:,2)).^2);
+Loc2D = cat(3,ProjectedLocation(1,:,1)'-ProjectedLocation(1,:,2),ProjectedLocation(2,:,1)'-ProjectedLocation(2,:,2),ProjectedLocation(3,:,1)'-ProjectedLocation(3,:,2));
+LocDist = squeeze(vecnorm(Loc2D,2,3)); % Distance
 
 
 SameIdx = logical(eye(nclus));
@@ -97,9 +97,6 @@ x1 = repmat(spatialdecayfit(:,1),[1 numel(spatialdecayfit(:,1))]);
 x2 = repmat(spatialdecayfit(:,2),[1 numel(spatialdecayfit(:,2))]);
 spatialdecayfitSim = abs(x1 - x2')./nanmean(cat(3,x1,x2'),3);
 clear x1 x2
-% Remove extreme outliers
-spatialdecayfitSim(spatialdecayfitSim<0) = quantile(spatialdecayfitSim(:),0.9999);
-spatialdecayfitSim((spatialdecayfitSim)>quantile(spatialdecayfitSim(:),0.9999)) = quantile(spatialdecayfitSim(:),0.9999);
 % Make (more) normal
 spatialdecayfitSim = sqrt(spatialdecayfitSim);
 spatialdecayfitSim = 1-((spatialdecayfitSim-nanmin(spatialdecayfitSim(:)))./(quantile(spatialdecayfitSim(:),0.99)-nanmin(spatialdecayfitSim(:))));

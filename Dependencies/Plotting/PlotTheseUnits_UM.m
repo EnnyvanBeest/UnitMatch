@@ -201,7 +201,7 @@ for pairid=1:length(Pairs)
         end
 
         h(1) = plot(squeeze(ProjectedLocationPerTPAllFlips(sortdims(1),uid,takesamples,cv,flipidx)),squeeze(ProjectedLocationPerTPAllFlips(sortdims(2),uid,takesamples,cv,flipidx)),'-','color',cols(uidx,:));
-        scatter(squeeze(ProjectedLocationPerTPAllFlips(sortdims(1),uid,takesamples,cv,flipidx)),squeeze(ProjectedLocationPerTPAllFlips(sortdims(2),uid,takesamples,cv,flipidx)),30,takesamples,'filled')
+%         scatter(squeeze(ProjectedLocationPerTPAllFlips(sortdims(1),uid,takesamples,cv,flipidx)),squeeze(ProjectedLocationPerTPAllFlips(sortdims(2),uid,takesamples,cv,flipidx)),30,takesamples,'filled')
         colormap(hot)
 
 

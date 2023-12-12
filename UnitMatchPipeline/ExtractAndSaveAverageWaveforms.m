@@ -5,7 +5,7 @@ function Path4UnitNPY = ExtractAndSaveAverageWaveforms(clusinfo,param)
 RedoExtraction = param.RedoExtraction; % Raw waveform and parameter extraction
 AllDecompPaths = param.AllDecompPaths;
 sampleamount = param.sampleamount; %500; % Nr. waveforms to include
-spikeWidth = param.spikeWidth; %83; % in sample space (time)
+spikeWidth = param.spikeWidth; % in sample space (time) - number of samples
 halfWidth = floor(spikeWidth/2);
 %% Extract all cluster info
 AllClusterIDs = clusinfo.cluster_id;

@@ -140,7 +140,7 @@ for uid = 1:nclus
     end
 
     % Extract channel positions that are relevant and extract mean location
-    [~,MaxChanneltmp] = nanmax(nanmax(abs(nanmean(spikeMap(35:70,:,:),3)),[],1));
+    [~,MaxChanneltmp] = nanmax(nanmax(abs(nanmean(spikeMap(waveidx,:,:),3)),[],1));
     OriChanIdx = find(cell2mat(arrayfun(@(Y) vecnorm(channelpos(MaxChanneltmp,:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius); %Averaging over 10 channels helps with drift
     OriLocs = channelpos(OriChanIdx,:);
 
@@ -150,7 +150,7 @@ for uid = 1:nclus
         ChanIdx = OriChanIdx;
         Locs = OriLocs;
         % Find maximum channels:
-        [~,MaxChannel(uid,cv)] = nanmax(nanmax(abs(spikeMap(35:70,ChanIdx,cv)),[],1)); %Only over relevant channels, in case there's other spikes happening elsewhere simultaneously
+        [~,MaxChannel(uid,cv)] = nanmax(nanmax(abs(spikeMap(waveidx,ChanIdx,cv)),[],1)); %Only over relevant channels, in case there's other spikes happening elsewhere simultaneously
         MaxChannel(uid,cv) = ChanIdx(MaxChannel(uid,cv));
 
 
@@ -206,7 +206,7 @@ for uid = 1:nclus
         end
 
         % Peak Time - to be safe take a bit of smoothing
-        [~,PeakTime(uid,cv)] = nanmax(abs(smooth(ProjectedWaveform(wvdurtmp(1):wvdurtmp(end),uid,cv),2)));
+        [~,PeakTime(uid,cv)] = nanmax(abs(ProjectedWaveform(wvdurtmp(1):wvdurtmp(end),uid,cv)));
         PeakTime(uid,cv) = PeakTime(uid,cv)+wvdurtmp(1)-1;
     end
     % Give each unit the best opportunity to correlate the waveform; cross
@@ -236,7 +236,7 @@ for uid = 1:nclus
                 ProjectedWaveform(1:-(PeakTime(uid,1)-NewPeakLoc),uid,cv) = nan;
                 spikeMap(1:-(PeakTime(uid,1)-NewPeakLoc),:,cv) = nan;
             else
-                ProjectedWaveform(spikeWidth-(PeakTime(uid,cv)-NewPeakLoc):spikeWidth,uid,cv) = nan;
+                ProjectedWaveform(spikeWidth-(PeakTime(uid,1)-NewPeakLoc):spikeWidth,uid,cv) = nan;
                 spikeMap(spikeWidth-(PeakTime(uid,1)-NewPeakLoc):spikeWidth,:,cv) = nan;
             end
         end
