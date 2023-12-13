@@ -4,7 +4,7 @@ function [clusinfo, sp, Params] = LoadPreparedClusInfo(KiloSortPaths,Params)
 clusinfo = cell(1,length(KiloSortPaths));
 addthis=0;
 for subsesid=1:length(KiloSortPaths)
-    if isempty(dir(fullfile(KiloSortPaths{subsesid},'*.npy')))
+    if isempty(dir(fullfile(KiloSortPaths{subsesid},'*.npy'))) || ~exist(fullfile(KiloSortPaths{subsesid},'PreparedData.mat'))
         continue
     end
 
@@ -39,7 +39,7 @@ clear clusinfoNew
 sp = cell(1,length(KiloSortPaths));
 countid=1;
 for subsesid=1:length(KiloSortPaths)
-    if isempty(dir(fullfile(KiloSortPaths{subsesid},'*.npy')))
+    if isempty(dir(fullfile(KiloSortPaths{subsesid},'*.npy')))  || ~exist(fullfile(KiloSortPaths{subsesid},'PreparedData.mat'))
         continue
     end
     disp(['Loading spike data for ' KiloSortPaths{subsesid}])

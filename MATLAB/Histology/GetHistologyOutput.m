@@ -16,6 +16,9 @@ if exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,'HistoEphysAlignment.
     end
 end
 if ~histodone %Just in case it's not done yet
+    if iscell(myKsDir)
+        myKsDir = myKsDir{1};
+    end
     histofile = dir(fullfile(myKsDir,'channel_locations.json'));
     if isempty(histofile)
         histofile = dir(fullfile(myKsDir,'*.csv'));
@@ -25,7 +28,14 @@ if ~histodone %Just in case it's not done yet
         end
         if isempty(histofile)
             % Maybe chronic?
-            histofile = dir(fullfile(HistoFolder,MiceOpt{midx},'ProbeTracks',thisprobe,'*.csv'));
+            MetaFileDir = dir(fullfile(myLFDir,'**',['*' strrep(thisprobe,'Probe','imec')]));
+            ImecMeta =ReadMeta2(fullfile(MetaFileDir(1).folder,MetaFileDir(1).name));
+            ProbeSN = ImecMeta.imDatPrb_sn;
+           
+            histofile = dir(fullfile(HistoFolder,MiceOpt{midx},'ProbeTracks',['*' ProbeSN],'*.csv')); % Use Probe Serial Number is safest!
+            if isempty(histofile)
+                histofile = dir(fullfile(HistoFolder,MiceOpt{midx},'ProbeTracks',thisprobe,'*.csv'));
+            end
         end
         if length(histofile)>1
             disp('Detecting multiple files... npix2 probe?')
