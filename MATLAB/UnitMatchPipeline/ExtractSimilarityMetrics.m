@@ -375,6 +375,9 @@ while flag<2
     x2 = ProjectedLocationPerTPAllFlips(:,:,waveidx(1):waveidx(end-1),:,:);
     % The distance traveled (Eucledian)
     TrajDist = squeeze(vecnorm(x1-x2,2,1));
+    %Use  TrajDist to select angle ehere there is a minimum amount movement
+    good_ang = zeros(size(TrajDist));
+    good_ang(TrajDist >= param.min_angledist) = 1;
     % Difference in angle between two time points
     LocAngle = nan(size(TrajDist,1),size(TrajDist,2),size(TrajDist,3),size(TrajDist,4),0);
     countid=1;
@@ -383,7 +386,7 @@ while flag<2
             if dimid2<=dimid1
                 continue
             end
-            LocAngle(:,:,:,:,countid) = squeeze(atan(abs(x1(dimid1,:,:,:,:)-x2(dimid1,:,:,:,:))./abs(x1(dimid2,:,:,:,:)-x2(dimid2,:,:,:,:))));
+            LocAngle(:,:,:,:,countid) = squeeze(atan(abs(x1(dimid1,:,:,:,:)-x2(dimid1,:,:,:,:))./abs(x1(dimid2,:,:,:,:)-x2(dimid2,:,:,:,:)))) .* good_ang;
             countid = countid + 1;
         end
     end

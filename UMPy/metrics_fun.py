@@ -198,6 +198,7 @@ def dist_angle(WAW_PerTP_flip, param):
     """
     waveidx = param['waveidx']
     n_units = param['n_units']
+    min_angledist = param['min_angledist']
     
     #Distance between time steps and angle
     x1 = WAW_PerTP_flip[:,:,waveidx[1]:waveidx[-1] +1,:,:]
@@ -208,7 +209,9 @@ def dist_angle(WAW_PerTP_flip, param):
     TrajDist = np.linalg.norm(x1-x2, axis= 0)
 
     LocAngle = np.full(np.append(TrajDist.shape, 3), np.nan)
-
+    #only select points which have enough movement to get a angle
+    good_ang = np.zeros_like(TrajDist)
+    good_ang[TrajDist>=min_angledist] = 1
 
     countid = 0
     for dimid1 in range(WAW_PerTP_flip.shape[0]):
@@ -216,7 +219,8 @@ def dist_angle(WAW_PerTP_flip, param):
             if dimid2 <= dimid1:
                 continue
             ang = np.abs( x1[dimid1,:,:,:,:] - x2[dimid1,:,:,:,:]) / np.abs(x1[dimid2,:,:,:,:] - x2[dimid2,:,:,:,:])
-            LocAngle[:,:,:,:,countid] = np.arctan( ang)
+            
+            LocAngle[:,:,:,:,countid] = np.arctan(ang) * good_ang # only selects angles for units where there is sufficent distance between time poitns
             countid +=1
 
 

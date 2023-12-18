@@ -104,7 +104,7 @@ def get_default_param():
     """
     param = {'spike_width' : 82, 'waveidx' : np.arange(33,56), 'channel_radius' : 150,
          'peak_loc' : 40, 'maxdist' : 100, 'NeighbourDist' : 50, 'stepsz' : 0.01, 
-         'SmoothProb' : 9, 
+         'SmoothProb' : 9, 'min_angledist' : 0.1
         }
     param['ScoreVector'] = np.arange(param['stepsz']/2 ,1 ,param['stepsz'])
     param['Bins'] = np.arange(0, 1 + param['stepsz'], param['stepsz'])
