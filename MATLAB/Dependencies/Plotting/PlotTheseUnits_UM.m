@@ -10,6 +10,25 @@ if ~isdir(fullfile(param.SaveDir,'MatchFigures'))
     mkdir(fullfile(param.SaveDir,'MatchFigures'))
 end
 
+% Remove figures that were drawn with old runs of UnitMatch
+tmpfile = dir(fullfile(param.SaveDir,'UnitMatch.mat'));
+AllFigs = dir(fullfile(param.SaveDir,'MatchFigures','*.fig'));
+% Don't delete new figures
+AllFigs(arrayfun(@(X) datenum(AllFigs(X).date)>=datenum(tmpfile.date),1:length(AllFigs))) = [];
+% Delete the rest
+for figid = 1:length(AllFigs)
+    delete(fullfile(AllFigs(figid).folder,AllFigs(figid).name))
+end
+
+AllFigs = dir(fullfile(param.SaveDir,'MatchFigures','*.bmp'));
+% Don't delete new figures
+AllFigs(arrayfun(@(X) datenum(AllFigs(X).date)>=datenum(tmpfile.date),1:length(AllFigs))) = [];
+% Delete the rest
+for figid = 1:length(AllFigs)
+    delete(fullfile(AllFigs(figid).folder,AllFigs(figid).name))
+end
+
+
 % Load sp
 disp('Loading spike information...')
 nKSFiles = length(param.KSDir);

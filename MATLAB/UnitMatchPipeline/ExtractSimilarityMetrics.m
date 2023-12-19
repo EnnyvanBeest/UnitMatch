@@ -52,6 +52,7 @@ for did = 1:ndays
     WithinIdx(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1) = true;
 end
 WithinIdx(LocDist>param.NeighbourDist) = false;
+WithinIdx(logical(eye(size(WithinIdx)))) = false;
 labels = [ones(1,sum(SameIdx(:))), zeros(1,sum(WithinIdx(:)))];
 paramNames = {'waveformTimePointSim','spatialdecaySim','spatialdecayfitSim','AmplitudeSim','WVCorr','WavformMSE','WavformSim','CentroidDist','CentroidVar','CentroidDistRecentered','CentroidOverlord','TrajAngleSim','TrajDistSim','LocTrajectorySim'};
 AUC = nan(1,length(paramNames));
@@ -95,7 +96,7 @@ paramid = find(ismember(paramNames,'spatialdecaySim'));
 % spatial decay fit
 x1 = repmat(spatialdecayfit(:,1),[1 numel(spatialdecayfit(:,1))]);
 x2 = repmat(spatialdecayfit(:,2),[1 numel(spatialdecayfit(:,2))]);
-spatialdecayfitSim = abs(x1 - x2')./nanmean(cat(3,x1,x2'),3);
+spatialdecayfitSim = abs(x1 - x2');%./nanmean(cat(3,x1,x2'),3);
 clear x1 x2
 % Make (more) normal
 spatialdecayfitSim = sqrt(spatialdecayfitSim);
@@ -225,7 +226,7 @@ for uid = 1:nclus
     %Load channels
     ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChannel(uid,1),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius); %Averaging over 10 channels helps with drift
     Locs = round(channelpos(ChanIdx,:)./50).*50;
-    AllowFlipping(cell2mat(arrayfun(@(X) length(unique(Locs(:,X))),1:size(Locs,2),'Uni',0))<=2 & cell2mat(arrayfun(@(X) length(unique(Locs(:,X))),1:size(Locs,2),'Uni',0))>1,:) = true;
+    AllowFlipping(cell2mat(arrayfun(@(X) length(unique(Locs(:,X))),1:size(Locs,2),'Uni',0))<=2 & cell2mat(arrayfun(@(X) length(unique(channelpos(ChanIdx,X))),1:size(Locs,2),'Uni',0))>1,:) = true;
 end
 FlipDim = find(any(AllowFlipping,2));
 % Housekeeping
@@ -387,7 +388,9 @@ while flag<2
             countid = countid + 1;
         end
     end
-
+    % Don't add angle if barely any movement
+    LocAngle(repmat(TrajDist<param.minDistTravelled,[1,1,1,1,size(LocAngle,5)])) = nan;
+    
     % Sum the angles across dimensions
     LocAngle = nansum(LocAngle,5);
 
