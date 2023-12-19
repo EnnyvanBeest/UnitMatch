@@ -391,9 +391,7 @@ while flag<2
             countid = countid + 1;
         end
     end
-    % Don't add angle if barely any movement
-    LocAngle(repmat(TrajDist<param.minDistTravelled,[1,1,1,1,size(LocAngle,5)])) = nan;
-    
+
     % Sum the angles across dimensions
     LocAngle = nansum(LocAngle,5);
 
