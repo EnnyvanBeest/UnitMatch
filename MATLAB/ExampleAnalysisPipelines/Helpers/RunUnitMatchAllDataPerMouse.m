@@ -10,6 +10,7 @@ FromDate = datetime("2023-10-03 09:00:00");
 
 LogError = {}; % Keep track of which runs didn't work
 for midx = 1:length(MiceOpt)
+    close all % to not overcrowd the graphics card
     %% Loading data from kilosort/phy easily
     if ~isempty(KilosortDir)
         myKsDir = fullfile(KilosortDir,MiceOpt{midx});
