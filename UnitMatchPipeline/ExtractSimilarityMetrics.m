@@ -42,8 +42,8 @@ end
 
 % Save AUCs to help find best parameters
 disp('Computing location distances between pairs of units...')
-LocDist = sqrt((ProjectedLocation(1,:,1)'-ProjectedLocation(1,:,2)).^2 + ...
-    (ProjectedLocation(2,:,1)'-ProjectedLocation(2,:,2)).^2);
+Loc2D = cat(3,ProjectedLocation(1,:,1)'-ProjectedLocation(1,:,2),ProjectedLocation(2,:,1)'-ProjectedLocation(2,:,2),ProjectedLocation(3,:,1)'-ProjectedLocation(3,:,2));
+LocDist = squeeze(vecnorm(Loc2D,2,3)); % Distance
 
 
 SameIdx = logical(eye(nclus));
@@ -52,6 +52,7 @@ for did = 1:ndays
     WithinIdx(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1) = true;
 end
 WithinIdx(LocDist>param.NeighbourDist) = false;
+WithinIdx(logical(eye(size(WithinIdx)))) = false;
 labels = [ones(1,sum(SameIdx(:))), zeros(1,sum(WithinIdx(:)))];
 paramNames = {'waveformTimePointSim','spatialdecaySim','spatialdecayfitSim','AmplitudeSim','WVCorr','WavformMSE','WavformSim','CentroidDist','CentroidVar','CentroidDistRecentered','CentroidOverlord','TrajAngleSim','TrajDistSim','LocTrajectorySim'};
 AUC = nan(1,length(paramNames));
@@ -95,11 +96,8 @@ paramid = find(ismember(paramNames,'spatialdecaySim'));
 % spatial decay fit
 x1 = repmat(spatialdecayfit(:,1),[1 numel(spatialdecayfit(:,1))]);
 x2 = repmat(spatialdecayfit(:,2),[1 numel(spatialdecayfit(:,2))]);
-spatialdecayfitSim = abs(x1 - x2')./nanmean(cat(3,x1,x2'),3);
+spatialdecayfitSim = abs(x1 - x2');%./nanmean(cat(3,x1,x2'),3);
 clear x1 x2
-% Remove extreme outliers
-spatialdecayfitSim(spatialdecayfitSim<0) = quantile(spatialdecayfitSim(:),0.9999);
-spatialdecayfitSim((spatialdecayfitSim)>quantile(spatialdecayfitSim(:),0.9999)) = quantile(spatialdecayfitSim(:),0.9999);
 % Make (more) normal
 spatialdecayfitSim = sqrt(spatialdecayfitSim);
 spatialdecayfitSim = 1-((spatialdecayfitSim-nanmin(spatialdecayfitSim(:)))./(quantile(spatialdecayfitSim(:),0.99)-nanmin(spatialdecayfitSim(:))));
@@ -227,8 +225,8 @@ for uid = 1:nclus
     end
     %Load channels
     ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChannel(uid,1),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius); %Averaging over 10 channels helps with drift
-    Locs = channelpos(ChanIdx,:);
-    AllowFlipping(cell2mat(arrayfun(@(X) length(unique(Locs(:,X))),1:size(Locs,2),'Uni',0))<=2 & cell2mat(arrayfun(@(X) length(unique(Locs(:,X))),1:size(Locs,2),'Uni',0))>1,:) = true;
+    Locs = round(channelpos(ChanIdx,:)./50).*50;
+    AllowFlipping(cell2mat(arrayfun(@(X) length(unique(Locs(:,X))),1:size(Locs,2),'Uni',0))<=2 & cell2mat(arrayfun(@(X) length(unique(channelpos(ChanIdx,X))),1:size(Locs,2),'Uni',0))>1,:) = true;
 end
 FlipDim = find(any(AllowFlipping,2));
 % Housekeeping
@@ -281,7 +279,7 @@ while flag<2
     clear y
 
     % memory efficient?
-    EuclDist = nan(nclus,length(waveidx),2,nclus);
+    EuclDist = nan(nclus,length(waveidx),length(FlipDim)+1,nclus);
     for batchid1 = 1:nbatch
         idx = (batchid1-1)*batchsz+1:batchsz*batchid1;
         idx(idx>nclus) = [];
@@ -337,7 +335,7 @@ while flag<2
     %     EuclDist2(w) = nan;
     disp('Computing location distances between pairs of units, per individual time point of the waveform, Recentered...')
     ProjectedLocationPerTPRecentered = permute(permute(ProjectedLocationPerTPAllFlips,[1,2,4,3,5]) - ProjectedLocation,[1,2,4,3,5]);
-    EuclDist2 = nan(nclus,length(waveidx),2,nclus);
+    EuclDist2 = nan(nclus,length(waveidx),length(FlipDim)+1,nclus);
     for batchid1 = 1:nbatch
         idx = (batchid1-1)*batchsz+1:batchsz*batchid1;
         idx(idx>nclus) = [];
@@ -378,6 +376,9 @@ while flag<2
     x2 = ProjectedLocationPerTPAllFlips(:,:,waveidx(1):waveidx(end-1),:,:);
     % The distance traveled (Eucledian)
     TrajDist = squeeze(vecnorm(x1-x2,2,1));
+    %Use  TrajDist to select angle ehere there is a minimum amount movement
+    good_ang = zeros(size(TrajDist));
+    good_ang(TrajDist >= param.min_angledist) = 1;
     % Difference in angle between two time points
     LocAngle = nan(size(TrajDist,1),size(TrajDist,2),size(TrajDist,3),size(TrajDist,4),0);
     countid=1;
@@ -386,12 +387,14 @@ while flag<2
             if dimid2<=dimid1
                 continue
             end
-            LocAngle(:,:,:,:,countid) = squeeze(atan(abs(x1(dimid1,:,:,:,:)-x2(dimid1,:,:,:,:))./abs(x1(dimid2,:,:,:,:)-x2(dimid2,:,:,:,:))));
+            LocAngle(:,:,:,:,countid) = squeeze(atan(abs(x1(dimid1,:,:,:,:)-x2(dimid1,:,:,:,:))./abs(x1(dimid2,:,:,:,:)-x2(dimid2,:,:,:,:)))) .* good_ang;
             countid = countid + 1;
         end
     end
+
     % Sum the angles across dimensions
     LocAngle = nansum(LocAngle,5);
+
     clear x1 x2
 
     % Actually just taking the weighted sum of angles is better
