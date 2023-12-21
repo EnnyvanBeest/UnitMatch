@@ -1,11 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import os
-from scipy.signal import detrend
 import scipy as sp
 import Param_fun as pf
-import csv
-import pandas as pd
 #from sklearn.metrics import roc_auc_score
 
 def re_scale(vector):
@@ -20,22 +16,22 @@ def re_scale(vector):
 
 def get_simple_metric(wave_param, outlier = False):
     """
-    This function is suitable for, spatial decay, spatial decay fit, amplitude and other (no_units,2) paramaters,
+    This function is suitable for, spatial decay, spatial decay fit, amplitude and other (no_units,2) parameters,
     where one wants to make the weighted difference the metric (CAN CHANGE THIS IF WANTED e.g if diff + True do this else do this.. )
-    use if outlier = True to apply extra filetiring of extreme values
+    use if outlier = True to apply extra filtering of extreme values
     """
     n_units = wave_param.shape[0]
     x1 = np.broadcast_to(wave_param[:,0], (n_units, n_units)).T
     x2 = np.broadcast_to(wave_param[:,1], (n_units, n_units))
 
-    # takes the difference weighted by the mean of the value of the two cross-validation halfs,
+    # takes the difference weighted by the mean of the value of the two cross-validation halves,
     diff = np.abs(x1 - x2) / np.nanmean(np.abs( np.stack((x1,x2), axis = -1)), axis = 2)
 
     if outlier == True: 
         diff[diff<0] = np.nanquantile(diff, 0.9999) 
         # i think above should be diff[ diff < np.nanquantile(diff,0.0001)] = np.nanquantile(diff, 0.0001) 
         diff[ diff > np.nanquantile(diff,0.9999)] = np.nanquantile(diff, 0.9999)
-        # #Below i have made it slighlty less extreme, as may be difference in quantile functions
+        # #Below i have made it slightly less extreme, as may be difference in quantile functions
         # diff[diff<0] = np.nanquantile(diff, 0.99) 
         # # i think above should be diff[ diff < np.nanquantile(diff,0.001)] = np.nanquantile(diff, 0.001) 
         # diff[ diff > np.nanquantile(diff,0.99)] = np.nanquantile(diff, 0.99)
@@ -55,11 +51,13 @@ def get_WVcorr(Avg_waveform, param):
     x1 = Avg_waveform[waveidx,:,0].T 
     x2 = Avg_waveform[waveidx,:,1].T
 
+    #calculate the correlation
     WVcorr_tmp = np.corrcoef(x1,x2)
     WVcorr = WVcorr_tmp[:n_units,n_units:]
 
 
-    WVcorr = np.arctanh(WVcorr)
+    WVcorr = np.arctanh(WVcorr) # apply Fisher z transformation
+    #make into a score
     WVcorr = (WVcorr - np.nanquantile(WVcorr,0.005)) / (np.nanquantile(WVcorr,0.995) - np.nanquantile(WVcorr, 0.005))
     WVcorr[np.isnan(WVcorr)] = 0
     WVcorr[WVcorr<0] = 0
@@ -75,22 +73,22 @@ def get_WaveFormMSE(Avg_waveform, param):
     ProjectedWaveFormnorm = Avg_waveform[waveidx,:,:]
     ProjectedWaveFormnorm =  (ProjectedWaveFormnorm - np.nanmin(ProjectedWaveFormnorm,axis = 0)) / (np.nanmax(ProjectedWaveFormnorm, axis=0) - np.nanmin(ProjectedWaveFormnorm, axis = 0))
 
-
     x1 = np.tile(np.expand_dims(ProjectedWaveFormnorm[:,:,0], axis = 2), (1,1,ProjectedWaveFormnorm.shape[1]))
     x2 = np.swapaxes(np.tile(np.expand_dims(ProjectedWaveFormnorm[:,:,1], axis = 2), (1,1,ProjectedWaveFormnorm.shape[1])), 1,2 )
     RawWVMSE = np.nanmean( (x1 - x2)**2, axis = 0 ).squeeze()
     RawWVMSENorm = np.sqrt(RawWVMSE)
+
     WaveformMSE = re_scale(RawWVMSENorm)
     return WaveformMSE
 
-def Flip_Dim(WAW_PerTP, param):
+def flip_dim(WAW_PerTP, param):
     """
-    Creates a verssion of the weighted average wavefunction per time point, where the x axis is flipped, due to the effect
+    Creates a version of the weighted average wavefunction per time point, where the x axis is flipped, due to the effect
     where the average position tends to wards the center of the x coords when the wave is decaying
     """
     n_units = param['n_units']
 
-    FlipDim = np.array((1,)) # BE CAREFUL HERE, Which dimesnion os thex ,axis  
+    FlipDim = np.array((1,)) # BE CAREFUL HERE, Which dimension is the x-axis  
     WAW_PerTP_flip = np.full((3, n_units,82,2, len(FlipDim)+1), np.nan)
 
     for i in range(len(FlipDim)):
@@ -104,15 +102,15 @@ def Flip_Dim(WAW_PerTP, param):
 
     return WAW_PerTP_flip
 
-def get_Euclidiean_dist(WAW_PerTP_flip,param):
+def get_Euclidean_dist(WAW_PerTP_flip,param):
     """
-    Calculated the Euclidiean distance between the units at each time point and for the fliped axis case
+    Calculated the Euclidean distance between the units at each time point and for the flipped axis case
     """
-    # Euclidiean distance between WAW_PerTP_ML_flip, between the 2 CV
+    # Euclidean distance between WAW_PerTP_ML_flip, between the 2 CV
 
     # This can get to LARGE arrays 3*566*82*2*2*566 ~ Billions...
-    #ifthis is slow dask may be a good idea..
-    # all function have dask version so *shold be simple to use dask* 
+    #if this is slow dask may be a good idea..
+    # all function have dask version so *should be simple to use dask* 
 
     waveidx = param['waveidx']
     n_units = param['n_units']
@@ -133,21 +131,21 @@ def get_Euclidiean_dist(WAW_PerTP_flip,param):
 
 def Centroid_metrics(EuclDist, param):
     """
-    This fucntion calcualtes the score for the centroid distance and centroid variance.
+    This function calculates the score for the centroid distance and centroid variance.
     """
-    maxdist = param['maxdist']
+    MaxDist = param['MaxDist']
     waveidx = param['waveidx']
-    new_peak_loc = param['peak_loc']    
+    NewPeakLoc = param['PeakLoc']    
 
-    CentroidDist = np.nanmin( EuclDist[:,new_peak_loc - waveidx ==0,:,:].squeeze(), axis =1 ).squeeze()
+    CentroidDist = np.nanmin( EuclDist[:,NewPeakLoc - waveidx ==0,:,:].squeeze(), axis =1 ).squeeze()
 
 
-    CentroidDist = 1 - ((CentroidDist - np.nanmin(CentroidDist)) / (maxdist - np.nanmin(CentroidDist)))
+    CentroidDist = 1 - ((CentroidDist - np.nanmin(CentroidDist)) / (MaxDist - np.nanmin(CentroidDist)))
     CentroidDist[CentroidDist<0] = 0
     CentroidDist[np.isnan(CentroidDist)] = 0
 
     #Centroid Var
-    # need ddof = 1 to mathc with ML
+    # need ddof = 1 to match with ML
     CentroidVar = np.nanmin( np.nanvar(EuclDist, axis = 1, ddof = 1 ).squeeze(), axis =1 ).squeeze()
     CentroidVar = np.sqrt(CentroidVar)
     CentroidVar = re_scale(CentroidVar)
@@ -155,16 +153,16 @@ def Centroid_metrics(EuclDist, param):
 
     return CentroidDist, CentroidVar
 
-def get_recenterd_Euclidean_dist(WAW_PerTP_flip, avg_centroid, param):
+def get_recentered_Euclidean_dist(WAW_PerTP_flip, AvgCentroid, param):
     """
-    Find a Euclidean distance where the location per time has been centerd around the average positon
+    Find a Euclidean distance where the location per time has been centered around the average position
     """
 
     waveidx = param['waveidx']
     n_units = param['n_units']
 
     # Recented projectlocation , aka subtract the avg location, the we can unique info
-    Avg_centroid_broadcast = np.tile(np.expand_dims(avg_centroid, axis= (3,4)), (1,1,1,82,2))
+    Avg_centroid_broadcast = np.tile(np.expand_dims(AvgCentroid, axis= (3,4)), (1,1,1,82,2))
     WAW_PerTP_ML_flip_Recnt = np.swapaxes( np.swapaxes(WAW_PerTP_flip, 2,3) - Avg_centroid_broadcast,2,3)
     x1 = np.tile( np.expand_dims(WAW_PerTP_ML_flip_Recnt[:,:,waveidx,0,:], axis = -1), (1,1,1,1,n_units)).squeeze()
     x2 = np.swapaxes(np.tile( np.expand_dims(WAW_PerTP_ML_flip_Recnt[:,:,waveidx,1,:], axis = -1), (1,1,1,1,n_units)).squeeze(), 1, 4)
@@ -180,25 +178,25 @@ def get_recenterd_Euclidean_dist(WAW_PerTP_flip, avg_centroid, param):
     del tmpEu
     return EuclDist_2
 
-def Recentred_metrics(EuclDist_2, param = None):
+def recentered_metrics(EuclDist_2, param = None):
     """
     Calculates the euclidean distance between units when the centroid has been recentered
     """
 
-    CentroidDistRecenterd = np.nanmin( np.nanmean(EuclDist_2, axis =1), axis =1)
-    CentroidDistRecenterd = re_scale(CentroidDistRecenterd)
-    CentroidDistRecenterd[np.isnan(CentroidDistRecenterd)] = 0
-    return CentroidDistRecenterd
+    CentroidDistRecentered = np.nanmin( np.nanmean(EuclDist_2, axis =1), axis =1)
+    CentroidDistRecentered = re_scale(CentroidDistRecentered)
+    CentroidDistRecentered[np.isnan(CentroidDistRecentered)] = 0
+    return CentroidDistRecentered
 
 def dist_angle(WAW_PerTP_flip, param):
     """
     This function uses the weighted average location per time point, to find metric based of off:
-    The distance travelled by the unit at each time point
+    The distance traveled by the unit at each time point
     The angle at each time point 
     """
     waveidx = param['waveidx']
     n_units = param['n_units']
-    min_angledist = param['min_angledist']
+    MinAngleDist = param['MinAngleDist']
     
     #Distance between time steps and angle
     x1 = WAW_PerTP_flip[:,:,waveidx[1]:waveidx[-1] +1,:,:]
@@ -211,7 +209,7 @@ def dist_angle(WAW_PerTP_flip, param):
     LocAngle = np.full(np.append(TrajDist.shape, 3), np.nan)
     #only select points which have enough movement to get a angle
     good_ang = np.zeros_like(TrajDist)
-    good_ang[TrajDist>=min_angledist] = 1
+    good_ang[TrajDist>=MinAngleDist] = 1
 
     countid = 0
     for dimid1 in range(WAW_PerTP_flip.shape[0]):
@@ -220,7 +218,7 @@ def dist_angle(WAW_PerTP_flip, param):
                 continue
             ang = np.abs( x1[dimid1,:,:,:,:] - x2[dimid1,:,:,:,:]) / np.abs(x1[dimid2,:,:,:,:] - x2[dimid2,:,:,:,:])
             
-            LocAngle[:,:,:,:,countid] = np.arctan(ang) * good_ang # only selects angles for units where there is sufficent distance between time poitns
+            LocAngle[:,:,:,:,countid] = np.arctan(ang) * good_ang # only selects angles for units where there is sufficient distance between time poitns
             countid +=1
 
 
@@ -249,12 +247,12 @@ def dist_angle(WAW_PerTP_flip, param):
     return TrajAngleSim, TrajDistSim
 
 
-def get_threshold(TotalScore, within_session, EuclDist, param, is_first_pass = True):
+def get_threshold(TotalScore, WithinSession, EuclDist, param, is_first_pass = True):
     """
-    Uses the TotalScore, Euclidian distance,to determine a threshold for putative matches.
+    Uses the TotalScore, Euclidean distance,to determine a threshold for putative matches.
 
     If it is the first pass through the data i.e no drift correction has been done, we would expect the
-    Total score for the matches to be smalle than expected, therfore we calcualte the difference in mean
+    Total score for the matches to be smaller than expected, therefore we calculate the difference in mean
     for within and and between session to lower the threshold
     """
     # take between session out
@@ -264,7 +262,7 @@ def get_threshold(TotalScore, within_session, EuclDist, param, is_first_pass = T
     tmp = TotalScore.copy()
     tmp[EuclDist > param['NeighbourDist'] ] = np.nan
 
-    tmp[within_session == 1] = np.nan
+    tmp[WithinSession == 1] = np.nan
 
     hd, __ = np.histogram(np.diag(tmp), Bins)
     hd = hd /  param['n_units']
@@ -281,33 +279,34 @@ def get_threshold(TotalScore, within_session, EuclDist, param, is_first_pass = T
     muw = np.mean(fit)
     stdw = np.std(fit)
 
-    if is_first_pass == True:
-        # take within session out
+    if param['n_days'] > 1:
+        if is_first_pass == True:
+            # take within session out
 
-        tmp = TotalScore.copy()
-        tmp[EuclDist > param['NeighbourDist'] ] = np.nan
+            tmp = TotalScore.copy()
+            tmp[EuclDist > param['NeighbourDist'] ] = np.nan
 
-        tmp[within_session == 0] = np.nan
+            tmp[WithinSession == 0] = np.nan
 
-        ha, __ = np.histogram(tmp, Bins)
-        ha = ha / np.nansum(tmp)
-        fit = tmp[ ~np.isnan(tmp) * (tmp < ThrsOpt)]
-        mua = np.mean(fit)
-        stda = np.std(fit)
+            ha, __ = np.histogram(tmp, Bins)
+            ha = ha / np.nansum(tmp)
+            fit = tmp[ ~np.isnan(tmp) * (tmp < ThrsOpt)]
+            mua = np.mean(fit)
+            stda = np.std(fit)
 
 
-        # for first pass only (i.e before drift correction)
-        #This is to decrease the threshold for the first pass so that the threshold is lowered
-        # as without drift correction even matches should have a lower total score
-        if (~np.isnan(mua) and mua<muw):
-            ThrsOpt = ThrsOpt - np.abs(muw - mua)
+            # for first pass only (i.e before drift correction)
+            #This is to decrease the threshold for the first pass so that the threshold is lowered
+            # as without drift correction even matches should have a lower total score
+            if (~np.isnan(mua) and mua<muw):
+                ThrsOpt = ThrsOpt - np.abs(muw - mua)
 
     return ThrsOpt
 
-def drift_correction_basic(CandidatePairs, sessionswitch, avg_centroid, WeightedAvgWaveF_PerTP):
+def drift_correction_basic(CandidatePairs, SessionSwitch, AvgCentroid, WeightedAvgWaveF_PerTP):
     """
     Uses the median difference in position, between putative matches to gain a value of drift between sessions 
-    This is then applied to the avg_centroid and the WeightedAvgWaveF_PerTP
+    This is then applied to the AvgCentroid and the WeightedAvgWaveF_PerTP
     """
     #Drift.. currently only doing drift correction between 2 days/sessions
     BestPairs = np.argwhere(CandidatePairs == 1)
@@ -316,43 +315,43 @@ def drift_correction_basic(CandidatePairs, sessionswitch, avg_centroid, Weighted
     BestPairs[:, [0,1]] = BestPairs[:, [1,0]]
 
 
-    idx = np.argwhere( ((BestPairs[:,0] < sessionswitch[1]) * (BestPairs[:,1] >= sessionswitch[1])) == True)
+    idx = np.argwhere( ((BestPairs[:,0] < SessionSwitch[1]) * (BestPairs[:,1] >= SessionSwitch[1])) == True)
 
-    drift = np.nanmedian( np.nanmean( avg_centroid[:, BestPairs[idx,0].squeeze(),:], axis = 2) - np.nanmean( avg_centroid[:,BestPairs[idx,1].squeeze(),:], axis = 2), axis = 1)
+    drift = np.nanmedian( np.nanmean( AvgCentroid[:, BestPairs[idx,0].squeeze(),:], axis = 2) - np.nanmean( AvgCentroid[:,BestPairs[idx,1].squeeze(),:], axis = 2), axis = 1)
 
 
     ##need to add the drift to the location on each of these, and the flipped if I decide to not recalulate it
-    WeightedAvgWaveF_PerTP[0,sessionswitch[1]:,:,:] += drift[0]
-    WeightedAvgWaveF_PerTP[1,sessionswitch[1]:,:,:] += drift[1]
-    WeightedAvgWaveF_PerTP[2,sessionswitch[1]:,:,:] += drift[2]
+    WeightedAvgWaveF_PerTP[0,SessionSwitch[1]:,:,:] += drift[0]
+    WeightedAvgWaveF_PerTP[1,SessionSwitch[1]:,:,:] += drift[1]
+    WeightedAvgWaveF_PerTP[2,SessionSwitch[1]:,:,:] += drift[2]
 
-    avg_centroid[0,sessionswitch[1]:,:] += drift[0]
-    avg_centroid[1,sessionswitch[1]:,:] += drift[1]
-    avg_centroid[2,sessionswitch[1]:,:] += drift[2]
+    AvgCentroid[0,SessionSwitch[1]:,:] += drift[0]
+    AvgCentroid[1,SessionSwitch[1]:,:] += drift[1]
+    AvgCentroid[2,SessionSwitch[1]:,:] += drift[2]
 
-    return drift, avg_centroid, WeightedAvgWaveF_PerTP
+    return drift, AvgCentroid, WeightedAvgWaveF_PerTP
 
-def apply_drift_corection_basic(idx, did, BestPairs, sessionswitch, avg_centroid, WeightedAvgWaveF_PerTP):
+def apply_drift_corection_basic(idx, did, BestPairs, SessionSwitch, AvgCentroid, WeightedAvgWaveF_PerTP):
     """
     This function applies the basic style drift correction to a pair of sessions, as part of a n_daydrift correction  
     """
 
-    drift = np.nanmedian( np.nanmean( avg_centroid[:, BestPairs[idx,0].squeeze(),:], axis = 2) - np.nanmean( avg_centroid[:,BestPairs[idx,1].squeeze(),:], axis = 2), axis = 1)
+    drift = np.nanmedian( np.nanmean( AvgCentroid[:, BestPairs[idx,0].squeeze(),:], axis = 2) - np.nanmean( AvgCentroid[:,BestPairs[idx,1].squeeze(),:], axis = 2), axis = 1)
 
 
     ##need to add the drift to the location on each of these, and the flipped if I decide to not recalulate it
-    WeightedAvgWaveF_PerTP[0,sessionswitch[did+1]:sessionswitch[did+2],:,:] += drift[0]
-    WeightedAvgWaveF_PerTP[1,sessionswitch[did+1]:sessionswitch[did+2],:,:] += drift[1]
-    WeightedAvgWaveF_PerTP[2,sessionswitch[did+1]:sessionswitch[did]+2,:,:] += drift[2]
+    WeightedAvgWaveF_PerTP[0,SessionSwitch[did+1]:SessionSwitch[did+2],:,:] += drift[0]
+    WeightedAvgWaveF_PerTP[1,SessionSwitch[did+1]:SessionSwitch[did+2],:,:] += drift[1]
+    WeightedAvgWaveF_PerTP[2,SessionSwitch[did+1]:SessionSwitch[did]+2,:,:] += drift[2]
 
-    avg_centroid[0,sessionswitch[did+1]:sessionswitch[did+2],:] += drift[0]
-    avg_centroid[1,sessionswitch[did+1]:sessionswitch[did+2],:] += drift[1]
-    avg_centroid[2,sessionswitch[did+1]:sessionswitch[did+2],:] += drift[2]
+    AvgCentroid[0,SessionSwitch[did+1]:SessionSwitch[did+2],:] += drift[0]
+    AvgCentroid[1,SessionSwitch[did+1]:SessionSwitch[did+2],:] += drift[1]
+    AvgCentroid[2,SessionSwitch[did+1]:SessionSwitch[did+2],:] += drift[2]
 
-    return drift, WeightedAvgWaveF_PerTP, avg_centroid
+    return drift, WeightedAvgWaveF_PerTP, AvgCentroid
 
 
-def drift_n_days(CandidatePairs, sessionswitch, avg_centroid, WeightedAvgWaveF_PerTP, param):
+def drift_n_days(CandidatePairs, SessionSwitch, AvgCentroid, WeightedAvgWaveF_PerTP, param):
     """
     This function applies drift correction between n_days, currently this is done by alligning session 2 to session 1,
     then session 3 to session 2 etc.   
@@ -367,12 +366,12 @@ def drift_n_days(CandidatePairs, sessionswitch, avg_centroid, WeightedAvgWaveF_P
     drifts = np.zeros( (param['n_days'] - 1, 3))
 
     for did in range(param['n_days'] - 1):
-            idx = np.argwhere( ( (BestPairs[:,0] >= sessionswitch[did]) * (BestPairs[:,0] < sessionswitch[did + 1]) *
-                                (BestPairs[:,1] >= sessionswitch[did + 1]) * (BestPairs[:,1] < sessionswitch[did + 2]) ) == True)
+            idx = np.argwhere( ( (BestPairs[:,0] >= SessionSwitch[did]) * (BestPairs[:,0] < SessionSwitch[did + 1]) *
+                                (BestPairs[:,1] >= SessionSwitch[did + 1]) * (BestPairs[:,1] < SessionSwitch[did + 2]) ) == True)
 
-            drifts[did,:], WeightedAvgWaveF_PerTP, avg_centroid = apply_drift_corection_basic(idx, did, BestPairs, sessionswitch, avg_centroid, WeightedAvgWaveF_PerTP)
+            drifts[did,:], WeightedAvgWaveF_PerTP, AvgCentroid = apply_drift_corection_basic(idx, did, BestPairs, SessionSwitch, AvgCentroid, WeightedAvgWaveF_PerTP)
 
-    return drifts, avg_centroid, WeightedAvgWaveF_PerTP
+    return drifts, AvgCentroid, WeightedAvgWaveF_PerTP
 
 
 

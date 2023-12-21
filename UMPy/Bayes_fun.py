@@ -3,45 +3,45 @@ import Param_fun as pf
 
 def get_ParameterKernels(Scores2Include, labels, Cond, param, addone = 1):
     """
-    ******* I think it would probaly be nice to input alot of these parameters as a dictionary,
-    ******* which can be automatical created with defaut values
+    ******* I think it would probably be nice to input a lot of these parameters as a dictionary,
+    ******* which can be automatically created with default values
 
     Mainly requires Score2Include, a dictionary where the keys are the metric used and the values are
-    n_unts * n_units with the score for each unit.
+    n_units * n_units with the score for each unit.
 
-    Smoothing and addone is done to try and compensate for the fact the histogram used as a prediction for the 
-    probabilty distn has few values, therefore this smoothing hopesto make it more similar to the true distn
-    by smoothing nearby peaks and trough to reduce shot nosie
+    Smoothing and add one is done to try and compensate for the fact the histogram used as a prediction for the 
+    probability distn has few values, therefore this smoothing hopes to make it more similar to the true distn
+    by smoothing nearby peaks and trough to reduce shot noise
     """
 
     ScoreVector = param['ScoreVector']
     Bins = param['Bins']
     SmoothProb = param['SmoothProb']
 
-    ParamaterKernels = np.full((len(ScoreVector), len(Scores2Include), len(Cond)), np.nan)
+    ParameterKernels = np.full((len(ScoreVector), len(Scores2Include), len(Cond)), np.nan)
 
     sc_no = 0
     for sc in Scores2Include:
         Scorestmp = Scores2Include[sc]
 
-        SmoothTmp = SmoothProb # Notdoingthe different ones for now (default the same)
+        SmoothTmp = SmoothProb # Not doing the different ones for now (default the same)
 
 
         for Ck in range(len(Cond)):
             
             hist_tmp , __ = np.histogram(Scorestmp[labels == Ck], Bins)
-            ParamaterKernels[:,sc_no, Ck] = pf.smooth(hist_tmp, SmoothTmp)
-            ParamaterKernels[:,sc_no, Ck] /= np.sum(ParamaterKernels[:,sc_no,Ck])
+            ParameterKernels[:,sc_no, Ck] = pf.smooth(hist_tmp, SmoothTmp)
+            ParameterKernels[:,sc_no, Ck] /= np.sum(ParameterKernels[:,sc_no,Ck])
 
-            ParamaterKernels[:,sc_no, Ck] += addone* np.min(ParamaterKernels[ParamaterKernels[:,sc_no, Ck] !=0, sc_no, Ck], axis = 0)
+            ParameterKernels[:,sc_no, Ck] += addone* np.min(ParameterKernels[ParameterKernels[:,sc_no, Ck] !=0, sc_no, Ck], axis = 0)
 
         sc_no +=1    
 
-    return ParamaterKernels
+    return ParameterKernels
 
-def apply_naive_bayes(ParamaterKernels,Priors, Predictors, param, Cond):
+def apply_naive_bayes(ParameterKernels,Priors, Predictors, param, Cond):
     """
-    Using the Paramter knernels, Priors and Predictors, calculatethe proabiblty each pair of units is a 
+    Using the Paramater kernels, Priors and Predictors, calculate the probability each pair of units is a 
     match
     """
     ScoreVector = param['ScoreVector']
@@ -58,12 +58,12 @@ def apply_naive_bayes(ParamaterKernels,Priors, Predictors, param, Cond):
     for Ck in range(len(Cond)):
         tmpp = np.zeros_like(minidx, np.float64)
         for yy in range(minidx.shape[1]):
-            tmpp[:,yy] = ParamaterKernels[minidx[:,yy],yy,Ck]
+            tmpp[:,yy] = ParameterKernels[minidx[:,yy],yy,Ck]
         likelihood[:,Ck] = np.prod(tmpp, axis=1)
 
 
-    Probabilty = np.full((nPairs,2), np.nan )    
+    Probability = np.full((nPairs,2), np.nan )    
     for Ck in range(len(Cond)):
-        Probabilty[:,Ck] = Priors[Ck] * likelihood[:,Ck] / np.nansum((Priors * likelihood), axis =1)
+        Probability[:,Ck] = Priors[Ck] * likelihood[:,Ck] / np.nansum((Priors * likelihood), axis =1)
     
-    return Probabilty
+    return Probability
