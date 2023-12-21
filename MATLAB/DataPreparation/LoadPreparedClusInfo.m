@@ -9,7 +9,7 @@ for subsesid=1:length(KiloSortPaths)
     end
 
     disp(['Loading clusinfo for ' KiloSortPaths{subsesid}])
-    tmp = matfile(fullfile(KiloSortPaths{subsesid},'PreparedData.mat'));
+    tmp = load(fullfile(KiloSortPaths{subsesid},'PreparedData.mat'),'clusinfo');
     clusinfo{subsesid} = tmp.clusinfo;
 
     % Replace recsesid with subsesid
@@ -43,7 +43,7 @@ for subsesid=1:length(KiloSortPaths)
         continue
     end
     disp(['Loading spike data for ' KiloSortPaths{subsesid}])
-    tmp = matfile(fullfile(KiloSortPaths{subsesid},'PreparedData.mat'));
+    tmp = load(fullfile(KiloSortPaths{subsesid},'PreparedData.mat'),'sp');
     sp{subsesid} = tmp.sp;
     % Replace recsesid with subsesid
     sp{subsesid}.RecSes = repmat(countid,size(sp{subsesid}.RecSes));
@@ -84,7 +84,7 @@ if Params.UnitMatch
         IMROId = strsplit(IMROId{end-1},'_');
         IMROId = str2num(IMROId{end});
 
-        UMOutput = matfile(fullfile(UMOutputAll(imroid).folder,UMOutputAll(imroid).name));
+        UMOutput = load(fullfile(UMOutputAll(imroid).folder,UMOutputAll(imroid).name),'UMparam','UniqueIDConversion');
         UMparam = UMOutput.UMparam;
         recsesidx = find(ismember(UMparam.KSDir,KiloSortPaths)); % Find which recses id they should have in UM output
         recsesidx2 = find(ismember(KiloSortPaths,UMparam.KSDir));

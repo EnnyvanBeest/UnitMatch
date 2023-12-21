@@ -59,6 +59,10 @@ end
 if ~isfield(UMparam,'minGoodUnits')
     UMparam.minGoodUnits = 25; % Recommended
 end
+
+if ~isfield(UMparam,'minDistTravelled')
+    UMparam.minDistTravelled = 0.1; % Recommended to include, otherwise angle is very strange.
+end
 %% Post processing
 if ~isfield(UMparam,'AssignUniqueID')
     UMparam.AssignUniqueID = 1; % Use our method of Assigning Unique ID based on match probability (recommended)

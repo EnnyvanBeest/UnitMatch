@@ -95,12 +95,6 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'refPopCorr')) || recomput
     %% Get correlation matrics for fingerprint correlations
     sessionCorrelationsAll = cell(1, nRec);
     for did = 1:nRec
-        % Load sp for correct day
-        if length(AllKSDir) > 1
-            tmp = matfile(fullfile(AllKSDir{did}, 'PreparedData.mat'));
-        else %Stitched
-            tmp = matfile(fullfile(AllKSDir{1}, 'PreparedData.mat'));
-        end
         if length(SessionCorrelations) == nRec
             sessionCorrelationsAll{did} = SessionCorrelations{did};
         elseif length(SessionCorrelations) == 1 %Normal situation

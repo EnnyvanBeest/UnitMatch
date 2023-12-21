@@ -445,7 +445,8 @@ for midx = 1:length(MiceOpt)
      Idx = (AvgMan'>CurationThrs | PyKS'==1 | MatchProb>0.5);
 
 %      h = venn([sum(PyKS(Idx)'==1 & MatchProb(Idx)<=0.5) sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5) sum(PyKS(Idx)'==1 & MatchProb(Idx)>0.5)]) 
-
+keyboard
+% Check these: should be z1, z2, z3, z12, z13, z23, z123
       h = venn([sum(PyKS(Idx)'==1 & MatchProb(Idx)<=0.5 & AvgMan(Idx)'<=CurationThrs) sum(PyKS(Idx)'==1 & MatchProb(Idx)>0.5 & AvgMan(Idx)'<=CurationThrs) sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'<=CurationThrs) sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'>CurationThrs) ...
         sum(PyKS(Idx)'==0 & MatchProb(Idx)<=0.5 & AvgMan(Idx)'>CurationThrs) sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'>CurationThrs) sum(PyKS(Idx)'==1 & AvgMan(Idx)'>CurationThrs&MatchProb(Idx)>0.5)] );
       axis square

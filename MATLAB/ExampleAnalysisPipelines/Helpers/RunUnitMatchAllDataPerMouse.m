@@ -10,6 +10,7 @@ FromDate = datetime("2023-10-03 09:00:00");
 
 LogError = {}; % Keep track of which runs didn't work
 for midx = 1:length(MiceOpt)
+    close all % to not overcrowd the graphics card
     %% Loading data from kilosort/phy easily
     if ~isempty(KilosortDir)
         myKsDir = fullfile(KilosortDir,MiceOpt{midx});
@@ -81,20 +82,31 @@ for midx = 1:length(MiceOpt)
         RunSet = ones(1,length(AllKiloSortPaths)); %Run everything at the same time
         nRuns = 1;
     else
-        % Extract different IMRO tables
-        channelpositionMatrix = cat(3,PipelineParams.AllChannelPos{:});
-        [UCHanOpt,~,idIMRO] = unique(reshape(channelpositionMatrix,size(channelpositionMatrix,1)*size(channelpositionMatrix,2),[])','rows','stable');
-        UCHanOpt = reshape(UCHanOpt',size(channelpositionMatrix,1),size(channelpositionMatrix,2),[]);
 
-        % Extract unique probes used
-        [ProbeOpt,~,idProbe]  = unique([PipelineParams.AllProbeSN{:}]);
-        PosComb = combvec(1:length(ProbeOpt),1:size(UCHanOpt,3)); % Possible combinations Probe X IMRO
-        % Assign a number to each KS path related to PosComb
-        RunSet = nan(1,length(AllKiloSortPaths));
-        for ksid = 1:length(AllKiloSortPaths)
-            RunSet(ksid) = find(PosComb(2,:)==idIMRO(ksid) & PosComb(1,:)==idProbe(ksid));
+            % Extract different IMRO tables
+            channelpositionMatrix = cat(3,PipelineParams.AllChannelPos{:});
+            [UCHanOpt,~,idIMRO] = unique(reshape(channelpositionMatrix,size(channelpositionMatrix,1)*size(channelpositionMatrix,2),[])','rows','stable');
+            UCHanOpt = reshape(UCHanOpt',size(channelpositionMatrix,1),size(channelpositionMatrix,2),[]);
+
+            % Extract unique probes used
+            [ProbeOpt,~,idProbe]  = unique([PipelineParams.AllProbeSN{:}]);
+            PosComb = combvec(1:length(ProbeOpt),1:size(UCHanOpt,3)); % Possible combinations Probe X IMRO
+            % Assign a number to each KS path related to PosComb
+        if strcmp(RecordingType{midx},'Chronic')
+
+            RunSet = nan(1,length(AllKiloSortPaths));
+            for ksid = 1:length(AllKiloSortPaths)
+                RunSet(ksid) = find(PosComb(2,:)==idIMRO(ksid) & PosComb(1,:)==idProbe(ksid));
+            end
+            nRuns = length(PosComb);
+        elseif strcmp(RecordingType{midx},'Acute') % Run every recording separately
+            RunSet = 1:length(AllKiloSortPaths);
+            PosComb = cat(1,idProbe',RunSet);
+            nRuns = length(PosComb);
+        else
+            disp('Unknown recording type')
         end
-        nRuns = length(PosComb);
+
     end
 
     ORIParams = PipelineParams; % RESET
