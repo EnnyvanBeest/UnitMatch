@@ -19,6 +19,8 @@ show_region_table = true;
       
 % black brain?
 black_brain = false;
+
+SaveFigs = SaveDir;
 %% Automated
 % Load all data
 % Find available datasets (always using dates as folders)
@@ -59,7 +61,7 @@ end
 
 for midx = 1:length(MiceOpt)
     %% which probes?
-    myKsDir = fullfile(LocalDir,MiceOpt{midx});
+    myKsDir = fullfile(KilosortDir,MiceOpt{midx});
     subksdirs = dir(fullfile(myKsDir,'*','Probe*')); %This changed because now I suddenly had 2 probes per recording
     multidate = cellfun(@(X) strsplit(X,'\'),{subksdirs(:).folder},'UniformOutput',0);
     multidate = cellfun(@(X) X{end},multidate,'UniformOutput',0);
@@ -167,7 +169,7 @@ for midx = 1:length(MiceOpt)
             thisdate = Dates4Mouse{didx};
            
             %% Loading data from kilosort/phy easily
-            myKsDir = fullfile(LocalDir,MiceOpt{midx},thisdate);
+            myKsDir = fullfile(KilosortDir,MiceOpt{midx},thisdate);
             subksdirs = dir(fullfile(myKsDir,'Probe*')); %This changed because now I suddenly had 2 probes per recording
             if length(subksdirs)<1
                 clear subksdirs
@@ -204,7 +206,7 @@ for midx = 1:length(MiceOpt)
                         continue
                     end
                 elseif RedoAfterClustering || NewHistologyNeeded
-                    myKsDir = fullfile(LocalDir,MiceOpt{midx},thisdate,thisprobe);
+                    myKsDir = fullfile(KilosortDir,MiceOpt{midx},thisdate,thisprobe);
                     myClusFile = dir(fullfile(myKsDir,'cluster_info.tsv'));
                     if isempty(myClusFile)
                         disp([MiceOpt{midx} ' ' thisdate 'is not yet curated with phy!!'])
