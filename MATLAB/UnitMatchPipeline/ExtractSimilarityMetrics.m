@@ -678,7 +678,10 @@ while flag<2
     hd = histcounts(diag(tmp),Bins)./nclus;
     hnd = histcounts(tmp(~eye(size(tmp))),Bins)./sum(~isnan(tmp(~eye(size(tmp)))));
     hp = histcounts(tmp(:),Bins)./sum(~isnan(tmp(:)));
-    ThrsOpt = ScoreVector(find(smooth(hd,3)>smooth(hnd,3)&ScoreVector'>0.6,1,'first'));
+    if size(ScoreVector) ~= size(hd)
+        ScoreVector = ScoreVector';
+    end
+    ThrsOpt = ScoreVector(find(smoothdata(hd)>smoothdata(hnd)&ScoreVector>0.6,1,'first'));
     [muw, sw] = normfit(tmp(~isnan(tmp) & tmp<ThrsOpt));
 
 
