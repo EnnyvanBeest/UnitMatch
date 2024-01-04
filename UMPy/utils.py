@@ -51,7 +51,8 @@ def get_default_param(param = None):
     """
     tmp = {'SpikeWidth' : 82, 'waveidx' : np.arange(33,56), 'ChannelRadius' : 150,
          'PeakLoc' : 40, 'MaxDist' : 100, 'NeighbourDist' : 50, 'stepsz' : 0.01, 
-         'SmoothProb' : 9, 'MinAngleDist' : 0.1
+         'SmoothProb' : 9, 'MinAngleDist' : 0.1, 'NoShanks' : 4, 'ShankDist' : 175,
+         'MatchNumThreshold' : 15
         }
     tmp['ScoreVector'] = np.arange(tmp['stepsz']/2 ,1 ,tmp['stepsz'])
     tmp['Bins'] = np.arange(0, 1 + tmp['stepsz'], tmp['stepsz'])

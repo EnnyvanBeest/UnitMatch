@@ -89,7 +89,7 @@ def extract_metric_scores(ExtractedWaveProperties, SessionSwitch, WithinSession,
             priorMatch = 1 - ( param['nExpectedMatches'] / len(IncludeThesePairs))
             CandidatePairs = TotalScore > ThrsOpt
 
-            drifts, AvgCentroid, WeightedAvgWaveF_PerTP = mf.drift_n_days(CandidatePairs, SessionSwitch, AvgCentroid, WeightedAvgWaveF_PerTP, param)
+            drifts, AvgCentroid, WeightedAvgWaveF_PerTP = mf.drift_n_days(CandidatePairs, SessionSwitch, AvgCentroid, WeightedAvgWaveF_PerTP, TotalScore, param)
 
 
     ThrsOpt = mf.get_threshold(TotalScore, WithinSession, EuclDist, param, is_first_pass = False)

@@ -303,6 +303,41 @@ def get_threshold(TotalScore, WithinSession, EuclDist, param, is_first_pass = Tr
 
     return ThrsOpt
 
+def get_good_matches(pairs, TotalScore):
+    """
+    This function takes in a list of potential matches (n, 2) and return a list of matches where each unit can only appear once.
+    This mean one unit will not be mathced to multiple units providing a better estimate at the cost of loosing some units.
+    The "best" match is decided by the match which has the highest total score.
+    """
+    # Need to make sure the first and second unit in the matchesonly appears once
+    for PairID in range(2):
+
+        idx, count = np.unique(pairs[:,PairID], return_counts= True)
+        ls = np.argwhere(count != 1)
+        tmp_vals = idx[ls] # returns the unit idx for PairID, where there is more than one potential match
+
+        #Go through each case where there is more than 1 match
+        for i in range(len(tmp_vals)):
+            # find the unit idx pair, e.g if unit 2 matches with unit 272 and 278 this will find (2,272) then (2,278)
+            tmp_pair = np.argwhere(pairs[:,PairID] == tmp_vals[i]) # idx of pair for the multiple mathced unit
+            tmp = pairs[tmp_pair,:].squeeze() # unit idx pair, for each double match e.g (2,272) and (2,278)
+
+            scores = np.zeros(len(tmp))
+            for z in range(len(tmp)):
+                scores[z] = TotalScore[tmp[z,0], tmp[z,1]] #Get their score
+
+            BestMatch = np.argmax(scores)
+            #set the worse matches to -1
+            for z in range(len(tmp)):
+                if z != BestMatch:
+                    # cannot remove yet, as it will change all of the found indices, so set the value to -1, the at the end can remove all apperaances of -1
+                    pairs[tmp_pair[z], :] = np.full_like(pairs[tmp_pair[z], :], -1)
+    
+    good_pairs = np.delete(pairs, np.argwhere(pairs[:,0] == -1), axis = 0)
+
+    return good_pairs
+   
+
 def drift_correction_basic(CandidatePairs, SessionSwitch, AvgCentroid, WeightedAvgWaveF_PerTP):
     """
     Uses the median difference in position, between putative matches to gain a value of drift between sessions 
@@ -313,8 +348,6 @@ def drift_correction_basic(CandidatePairs, SessionSwitch, AvgCentroid, WeightedA
 
     # #Just to make it like the matlab code, as in matlab the axes are swapped
     BestPairs[:, [0,1]] = BestPairs[:, [1,0]]
-
-
     idx = np.argwhere( ((BestPairs[:,0] < SessionSwitch[1]) * (BestPairs[:,1] >= SessionSwitch[1])) == True)
 
     drift = np.nanmedian( np.nanmean( AvgCentroid[:, BestPairs[idx,0].squeeze(),:], axis = 2) - np.nanmean( AvgCentroid[:,BestPairs[idx,1].squeeze(),:], axis = 2), axis = 1)
@@ -331,12 +364,12 @@ def drift_correction_basic(CandidatePairs, SessionSwitch, AvgCentroid, WeightedA
 
     return drift, AvgCentroid, WeightedAvgWaveF_PerTP
 
-def apply_drift_corection_basic(idx, did, BestPairs, SessionSwitch, AvgCentroid, WeightedAvgWaveF_PerTP):
+def apply_drift_corection_basic(Pairs, did, SessionSwitch, AvgCentroid, WeightedAvgWaveF_PerTP):
     """
     This function applies the basic style drift correction to a pair of sessions, as part of a n_daydrift correction  
     """
 
-    drift = np.nanmedian( np.nanmean( AvgCentroid[:, BestPairs[idx,0].squeeze(),:], axis = 2) - np.nanmean( AvgCentroid[:,BestPairs[idx,1].squeeze(),:], axis = 2), axis = 1)
+    drift = np.nanmedian( np.nanmean( AvgCentroid[:, Pairs[:,0],:], axis = 2) - np.nanmean( AvgCentroid[:,Pairs[:,1],:], axis = 2), axis = 1)
 
 
     ##need to add the drift to the location on each of these, and the flipped if I decide to not recalulate it
@@ -350,8 +383,116 @@ def apply_drift_corection_basic(idx, did, BestPairs, SessionSwitch, AvgCentroid,
 
     return drift, WeightedAvgWaveF_PerTP, AvgCentroid
 
+def appply_drift_correction_per_shank(Pairs, did, SessionSwitch, AvgCentroid, WeightedAvgWaveF_PerTP, param):
+    """
+    This is the same as "basic" drift correction, however treats each shank seperatley 
+    """
+    ShankID = shank_ID_per_session(AvgCentroid ,SessionSwitch ,did , param)
+    No_shanks = param['NoShanks']
+    Shank_dist = param['ShankDist']
 
-def drift_n_days(CandidatePairs, SessionSwitch, AvgCentroid, WeightedAvgWaveF_PerTP, param):
+    
+    CentroidA = np.nanmean( AvgCentroid[:,Pairs[:,0],:], axis = 2)
+    CentroidB = np.nanmean( AvgCentroid[:,Pairs[:,1],:], axis = 2)
+
+    max_dist = 0
+    min_dist = 0
+    drift_per_shank = np.zeros([4,3])
+
+    for i in range(No_shanks):
+        max_dist += Shank_dist
+
+        #test to see if a centroid is within the area of that shank
+        a_idx = np.logical_and(CentroidA[1,:] < max_dist,  CentroidA[1,:] > min_dist)
+        b_idx = np.logical_and(CentroidB[1,:] < max_dist,  CentroidB[1,:] > min_dist)
+
+        if np.all(a_idx == b_idx) != True:
+            print(f'These pairs may be bad {np.argwhere(a_idx != b_idx)}')
+
+        drifts = CentroidA[:,a_idx] - CentroidB[:,b_idx]
+        drift =  np.nanmedian(drifts, axis = 1)
+        drift_per_shank[i,:] = drift
+
+        #need to get idx for each shank, to apply correct drift correction
+
+        shank_session_idx = SessionSwitch[did] + np.argwhere( ShankID == i) 
+
+        WeightedAvgWaveF_PerTP[0,shank_session_idx,:,:] += drift[0]
+        WeightedAvgWaveF_PerTP[1,shank_session_idx,:,:] += drift[1]
+        WeightedAvgWaveF_PerTP[2,shank_session_idx,:,:] += drift[2]
+
+        AvgCentroid[0,shank_session_idx,:] += drift[0]
+        AvgCentroid[1,shank_session_idx,:] += drift[1]
+        AvgCentroid[2,shank_session_idx,:] += drift[2]
+
+        min_dist += Shank_dist
+
+    return drift_per_shank, WeightedAvgWaveF_PerTP, AvgCentroid
+
+def shank_ID_per_session(AvgCentroid ,SessionSwitch ,did , param):
+    """
+    This function use the average centroid, to assign each unit in a session to a shank
+    """
+
+    No_shanks = param['NoShanks']
+    Shank_dist = param['ShankDist']
+    max_dist = 0
+    min_dist = 0
+
+    #loadcentroid position for 1 recording session
+    CentroidPos = np.nanmean( AvgCentroid[:, SessionSwitch[did]:SessionSwitch[did + 1],:], axis = 2)
+    ShankID = np.zeros(CentroidPos.shape[1])
+
+    for i in range(No_shanks):
+        max_dist += Shank_dist
+        #Test to see if the centroid position is in the region of the i'th shank
+        a_idx = np.logical_and(CentroidPos[1,:] < max_dist,  CentroidPos[1,:] > min_dist)
+        ShankID[a_idx] = i
+        min_dist += Shank_dist
+       
+    return ShankID
+
+def test_matches_per_shank(Pairs, AvgCentroid, did, param):
+    """
+    Checks to see how many matches there are per shank, and returns false if there are less than MatchNumthreshold for one shank
+    """
+
+    DoPerShankCorrection = True
+
+    a_pos = np.nanmean( AvgCentroid[:,Pairs[:,0],:], axis = 2)
+    b_pos = np.nanmean( AvgCentroid[:,Pairs[:,1],:], axis = 2)
+    ShankID_tmp = np.zeros(a_pos.shape[1])
+
+    MatchNumThreshold = param['MatchNumThreshold']
+
+    max_dist = 0
+    min_dist = 0
+    No_shanks = param['NoShanks']
+    Shank_dist = param['ShankDist']
+
+    for i in range(No_shanks):
+        max_dist += Shank_dist
+
+        a_idx = np.logical_and(a_pos[1,:] < max_dist,  a_pos[1,:] > min_dist)
+        b_idx = np.logical_and(b_pos[1,:] < max_dist,  b_pos[1,:] > min_dist)
+
+        if np.all(a_idx == b_idx) != True:
+            print(f'These pairs may be bad {np.argwhere(a_idx != b_idx)}')
+            
+        ShankID_tmp[a_idx] = i
+
+        min_dist += Shank_dist
+
+    __, counts = np.unique(ShankID_tmp, return_counts=True)
+
+    if np.any(counts < MatchNumThreshold):
+        DoPerShankCorrection = False
+        print(f'Session pair {did+1}/{did+2} has {counts} matches per shank, which is below threshold to do per shank drift correction')
+
+    return DoPerShankCorrection
+
+
+def drift_n_days(CandidatePairs, SessionSwitch, AvgCentroid, WeightedAvgWaveF_PerTP, TotalScore, param, BestMatch = True, BestDrift = True):
     """
     This function applies drift correction between n_days, currently this is done by alligning session 2 to session 1,
     then session 3 to session 2 etc.   
@@ -360,7 +501,7 @@ def drift_n_days(CandidatePairs, SessionSwitch, AvgCentroid, WeightedAvgWaveF_Pe
     """
     BestPairs = np.argwhere(CandidatePairs == 1)
 
-    #Just to make it like the matlab code, (small unit idx, larger unit idx)
+    #make it like the matlab code, (small unit idx, larger unit idx)
     BestPairs[:, [0,1]] = BestPairs[:, [1,0]]
 
     drifts = np.zeros( (param['n_days'] - 1, 3))
@@ -369,7 +510,18 @@ def drift_n_days(CandidatePairs, SessionSwitch, AvgCentroid, WeightedAvgWaveF_Pe
             idx = np.argwhere( ( (BestPairs[:,0] >= SessionSwitch[did]) * (BestPairs[:,0] < SessionSwitch[did + 1]) *
                                 (BestPairs[:,1] >= SessionSwitch[did + 1]) * (BestPairs[:,1] < SessionSwitch[did + 2]) ) == True)
 
-            drifts[did,:], WeightedAvgWaveF_PerTP, AvgCentroid = apply_drift_corection_basic(idx, did, BestPairs, SessionSwitch, AvgCentroid, WeightedAvgWaveF_PerTP)
+            Pairs = BestPairs[idx,:].squeeze()
+            if BestMatch == True:
+                Pairs = get_good_matches(Pairs, TotalScore)
+
+            #Test to see if there are enough mathces to do drift correction pershank
+            if test_matches_per_shank(Pairs, AvgCentroid, did, param) == True and BestDrift == True:
+                drifts = np.zeros( (param['n_days'] - 1, param['NoShanks'], 3)) # need to changeto number of shanks!!!!!!!!!!!!!!!!!
+                drifts[did,:,:], WeightedAvgWaveF_PerTP, AvgCentroid = appply_drift_correction_per_shank(Pairs, did, SessionSwitch, AvgCentroid, WeightedAvgWaveF_PerTP, param)
+                print(f'Done drift correction per shank for session pair {did+1} and {did+2}')
+            else:
+                drifts = np.zeros( (param['n_days'] - 1, 3))
+                drifts[did,:], WeightedAvgWaveF_PerTP, AvgCentroid = apply_drift_corection_basic(Pairs, did, SessionSwitch, AvgCentroid, WeightedAvgWaveF_PerTP)
 
     return drifts, AvgCentroid, WeightedAvgWaveF_PerTP
 
