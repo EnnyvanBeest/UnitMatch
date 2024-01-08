@@ -1,4 +1,4 @@
-# This file will containall the necessary function for extracting waveform parameters from average waveforms
+# This file will containa ll the necessary function for extracting waveform parameters from average waveforms
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -11,27 +11,27 @@ import pandas as pd
 
 def detrend_waveform(waveform):
     """
-    This function accepts the raw waveforms (no_units, SpikeWidth, no_channels, CV)
+    This function accepts the raw waveforms (nUnits, SpikeWidth, nChannels, CV)
     The output is the same shape, and linearly detrended across time.
     """ 
     return detrend(waveform, axis = 2)
 
 def get_spatialfp(waveform):
     """
-    Input: waveform np array (No. units, time, channel No., first/second half)
+    Input: waveform np array (nUnits, time, nChannels, first/second half)
     By taking the maximum value along the time axis of the absolute values
-    Output: np array (No. units, channel No., first/second half)
+    Output: np array (Units, nChannels, first/second half)
     """
-    spatial_fp = np.max(np.abs(waveform), axis = 1)
-    return spatial_fp
+    SpatialFP = np.max(np.abs(waveform), axis = 1)
+    return SpatialFP
 
-def get_max_site(spatial_fp):
+def get_max_site(SpatialFP):
     """
-    Input: spatial_fp (No. units, channel No., first/second half)
+    Input: SpatialFP (nUnits, nChannels, first/second half)
     By taking the index of maximum argument along the channel axis,
-    Output: (No units, first/second half), which gives the maximum site for each unit in first/second half
+    Output: (nUnits, first/second half), which gives the maximum site for each unit in first/second half
     """
-    MaxSite = np.argmax(spatial_fp, axis = 1)
+    MaxSite = np.argmax(SpatialFP, axis = 1)
     return MaxSite
 
 def get_max_sites(waveform, ChannelPos, param):
@@ -40,39 +40,39 @@ def get_max_sites(waveform, ChannelPos, param):
     returns good idx's / positions, by selecting channels within ChannelRadius (default 150 um) 
     """
 
-    n_units = param['n_units']
-    n_channels = param['n_channels']
+    nUnits = param['nUnits']
+    nChannels = param['nChannels']
     ChannelRadius = param['ChannelRadius']
     waveidx = param['waveidx']
     
-    mean_cv = np.mean(waveform, axis = 3) # average of each cv
-    spatial_footprint = get_spatialfp(mean_cv) # choose max time 
-    MaxSiteMean= get_max_site(spatial_footprint) # argument of MaxSite
+    MeanCV = np.mean(waveform, axis = 3) # average of each cv
+    SpatialFootprint = get_spatialfp(MeanCV) # choose max time 
+    MaxSiteMean= get_max_site(SpatialFootprint) # argument of MaxSite
 
-    # Finds the indices where the distance between the avg max site is small
-    good_idx = np.empty((n_units, n_channels))
+    # Finds the indices where the distance from the max site mean is small
+    goodidx = np.empty((nUnits, nChannels))
     for i in range(ChannelPos.shape[0]): #looping over each site
         dist = np.linalg.norm(ChannelPos[MaxSiteMean,:] - ChannelPos[i,:], axis=1)
         good = dist < ChannelRadius
-        good_idx[:,i] = good
+        goodidx[:,i] = good
 
-    good_pos = np.zeros((n_units, n_channels, 3))
-    for i in range(n_units):
-        good_pos[i] = ChannelPos * np.tile(good_idx[i], (3,1)).T #gives the 3-d positions of the channels if they are close to the max site  
+    goodpos = np.zeros((nUnits, nChannels, 3))
+    for i in range(nUnits):
+        goodpos[i] = ChannelPos * np.tile(goodidx[i], (3,1)).T #gives the 3-d positions of the channels if they are close to the max site  
 
-    # Wave_filt, is the waveform, only at 'good' spatial points
-    wavef_filt = np.zeros_like(waveform)
+    # Wave_filt, is the waveform, only at 'good' spatial points and a waveidx/good time points
+    WaveformFilt = np.zeros_like(waveform)
     mask = np.zeros_like(waveform)
-    for i in range(n_units):
-        mask[i, waveidx[0]:waveidx[-1], good_idx[i,:].astype(bool),:] = 1 
+    for i in range(nUnits):
+        mask[i, waveidx[0]:waveidx[-1], goodidx[i,:].astype(bool),:] = 1 
 
-    wavef_filt = mask * waveform
+    WaveformFilt = mask * waveform   #applying the filter, so only allow good time points/spatial points
 
-    filt_spfp = get_spatialfp(wavef_filt)
+    SpatialFootprintFilt = get_spatialfp(WaveformFilt)
 
-    filt_max_site = get_max_site(filt_spfp) #This is the MAX site of individual cv
-    #waveforms, using a filter waveform to be robust to noise
-    return filt_max_site, good_idx, good_pos, MaxSiteMean
+    MaxSite = get_max_site(SpatialFootprintFilt) #This is the MAX site of each individual cv
+
+    return MaxSite, goodidx, goodpos, MaxSiteMean
 
 def exponential_func(d, p_1, p_2):
     """ 
@@ -92,84 +92,83 @@ def smooth(array, size = 2):
     out = np.convolve(np.squeeze(array), filt,'same') / np.convolve(tmp, filt ,'same')      
     return out
 
-def decay_and_average_WaveF(waveform,ChannelPos, good_idx, max_site, MaxSiteMean, param):
+def decay_and_average_Waveform(waveform,ChannelPos, goodidx, MaxSite, MaxSiteMean, param):
     """
     This functions, extracts decay parameters of the units, and uses them to create weighted average waveforms 
     of each unit.
     """
-    n_units = param['n_units']
+    nUnits = param['nUnits']
     SpikeWidth = param['SpikeWidth']
-    n_channels = param['n_channels']
+    nChannels = param['nChannels']
     NewPeakLoc = param['PeakLoc']
     waveidx = param['waveidx']
     ChannelRadius = param['ChannelRadius']
 
 
-    SpatialDecayFit = np.zeros((n_units,2))
-    SpatialDecay = np.zeros((n_units,2))
-    d_10 = np.zeros((n_units, 2))
-    AvgCentroid = np.zeros((3,n_units, 2))
-    WeightedAvgWaveF = np.zeros((SpikeWidth, n_units, 2))
-    PeakTime = np.zeros((n_units, 2))
+    SpatialDecayFit = np.zeros((nUnits,2))
+    SpatialDecay = np.zeros((nUnits,2))
+    d_10 = np.zeros((nUnits, 2))
+    AvgCentroid = np.zeros((3,nUnits, 2))
+    AvgWaveform = np.zeros((SpikeWidth, nUnits, 2))
+    PeakTime = np.zeros((nUnits, 2))
 
 
 
-    for i in range(n_units):
+    for i in range(nUnits):
         #use the good indices calculated, to get the nearby positions of each unit
-        near_pos = ChannelPos[good_idx[i,:].astype(bool),:]
+        goodpos = ChannelPos[goodidx[i,:].astype(bool),:]
         for cv in range(2):
-            Dist2MaxChan = np.linalg.norm( near_pos - ChannelPos[max_site[i,cv]], axis= 1 )
-            tmp_amp = abs(waveform[i,NewPeakLoc,good_idx[i,:].astype(bool),cv])
+            Dist2MaxChan = np.linalg.norm( goodpos - ChannelPos[MaxSite[i,cv]], axis= 1 )
+            TmpAmp = abs(waveform[i,NewPeakLoc,goodidx[i,:].astype(bool),cv])
 
-            # need to remove 0 values, as divide by Dist2MaxChan, and need tmp_amp to be same size
-            tmp_amp = tmp_amp[Dist2MaxChan != 0]
+            # need to remove 0 values, as divide by Dist2MaxChan, and need TmpAmp to be same size
+            TmpAmp = TmpAmp[Dist2MaxChan != 0]
             Dist2MaxChan = Dist2MaxChan[Dist2MaxChan != 0]
 
-            # there is variation in how different languages/options fit to a curve
-            popt, pcurve = sp.optimize.curve_fit(exponential_func, Dist2MaxChan.T , tmp_amp, p0 = (np.max(tmp_amp), 0.05), method = 'trf' )
-            #popt, pcurve = sp.optimize.least_squares(exponential_func, Dist2MaxChan, tmp_amp, p0 = (np.max(tmp_amp), 0.05) )
+            # there is variation in how different programming languages/options fit to a curve
+            popt, pcurve = sp.optimize.curve_fit(exponential_func, Dist2MaxChan.T , TmpAmp, p0 = (np.max(TmpAmp), 0.05), method = 'trf' )
+            #popt, pcurve = sp.optimize.least_squares(exponential_func, Dist2MaxChan, TmpAmp, p0 = (np.max(TmpAmp), 0.05) )
 
             SpatialDecayFit[i,cv] = popt[1]
-            SpatialDecay[i,cv] = np.mean(tmp_amp / Dist2MaxChan)
+            SpatialDecay[i,cv] = np.mean(TmpAmp / Dist2MaxChan)
 
             tmpmin = np.log(10) / popt[1] # min value which is above noise
 
             #this if statement shouldn't trigger for a good unit
             if tmpmin > ChannelRadius or tmpmin <0:
                 tmpmin = ChannelRadius
-                # print(f'this index{i} and cv {cv} produces a highly questionable d_10 distance')
 
             d_10[i,cv] = tmpmin # distance to where the amplitude decay to 10% of its peak
 
-            # Now need to get indices and location for specific cv
-            tmp_idx = np.empty((n_channels))
-            for s in range(n_channels): #looping over each site
+            # Find channel sites which are within d_10 of the max site for that unit and cv
+            tmpidx = np.empty(nChannels)
+            for s in range(nChannels): #looping over each site
 
 ########################################################################################################
-                #can test distance to its max site, or the mean of it two halves max site, default is mean
-                #dist = np.linalg.norm(ChannelPos[max_site[i],:] - ChannelPos[s,:])
+                #can change to use max site of each cv, or max site of the mean of each cv
+                #dist = np.linalg.norm(ChannelPos[MaxSite[i],:] - ChannelPos[s,:])
                 dist = np.linalg.norm(ChannelPos[MaxSiteMean[i],:] - ChannelPos[s,:])
 ########################################################################################################
 
                 good = dist < d_10[i,cv]
-                tmp_idx[s] = good
+                tmpidx[s] = good
 
-            loc = ChannelPos[tmp_idx.astype(bool),:]
+            loc = ChannelPos[tmpidx.astype(bool),:]
 
-            #average centroid, sum of spatial footprint * position / spatial foot print
-            spatial_fp = np.max(np.abs(waveform[i,:,tmp_idx.astype(bool),cv]), axis = 1)
-            spatial_fp = np.expand_dims(spatial_fp, axis = -1)
-            mu = np.sum( np.tile(spatial_fp[:], (1,3)) * loc, axis = 0) / np.sum(spatial_fp[:])
+            #average centroid is the sum of spatial footprint * position / spatial foot print
+            SpatialFootprint = np.max(np.abs(waveform[i,:,tmpidx.astype(bool),cv]), axis = 1)
+            SpatialFootprint = np.expand_dims(SpatialFootprint, axis = -1)
+            mu = np.sum( np.tile(SpatialFootprint[:], (1,3)) * loc, axis = 0) / np.sum(SpatialFootprint[:])
 
             AvgCentroid[:,i,cv] = mu
 
             #Weighted average waveform
             Dist2MaxProj = np.linalg.norm(loc - AvgCentroid[:,i,cv].T, axis = 1) #it is transposed here
             weight = (d_10[i,cv] - Dist2MaxProj) / d_10[i,cv]
-            WeightedAvgWaveF[:,i,cv] = np.nansum( waveform[i,:,tmp_idx.astype(bool),cv].T * np.tile(weight, (SpikeWidth, 1)), axis = 1 ) / np.sum(weight)
+            AvgWaveform[:,i,cv] = np.nansum( waveform[i,:,tmpidx.astype(bool),cv].T * np.tile(weight, (SpikeWidth, 1)), axis = 1 ) / np.sum(weight)
             
             #significant time points 
-            wvdurtmp = np.argwhere( np.abs(WeightedAvgWaveF[:,i,cv]) - np.mean(WeightedAvgWaveF[0:20,i,cv]) > 2.5 * np.std(WeightedAvgWaveF[0:20,i,cv], axis = 0))
+            wvdurtmp = np.argwhere( np.abs(AvgWaveform[:,i,cv]) - np.mean(AvgWaveform[0:20,i,cv]) > 2.5 * np.std(AvgWaveform[0:20,i,cv], axis = 0))
             if wvdurtmp.size == 0:
                 wvdurtmp = waveidx
             wvdurtmp = wvdurtmp[np.isin(wvdurtmp, waveidx)] #okay over achiever, gonna cut you off there
@@ -178,41 +177,41 @@ def decay_and_average_WaveF(waveform,ChannelPos, good_idx, max_site, MaxSiteMean
 
             # may want to ad smoothing here?
             #PeakTime[i,cv] = np.argmax( np.abs(smooth(WeightedAvgWaveF[wvdurtmp[0]:wvdurtmp[-1],i,cv], 2) ) )
-            PeakTime[i,cv] = np.argmax( np.abs(WeightedAvgWaveF[wvdurtmp[0]:wvdurtmp[-1] + 1 ,i,cv])) # +1 due to python/ML difference
+            PeakTime[i,cv] = np.argmax( np.abs(AvgWaveform[wvdurtmp[0]:wvdurtmp[-1] + 1 ,i,cv])) #potential  +1 due to python/ML difference
             PeakTime[i,cv] = PeakTime[i,cv] + wvdurtmp[0] 
 
-    return SpatialDecayFit , SpatialDecay,  d_10, AvgCentroid, WeightedAvgWaveF, PeakTime
+    return SpatialDecayFit , SpatialDecay,  d_10, AvgCentroid, AvgWaveform, PeakTime
 
 
-def get_amplitude_shift_WaveF(waveform,WeightedAvgWaveF, PeakTime, param):
+def get_amplitude_shift_Waveform(waveform,AvgWaveform, PeakTime, param):
     """
-    This function aligns the different cv to maximize their corelation, the shifts BOTH cv by the SAME amount
+    This function aligns the different cv as to maximize their corelation, then shift BOTH cv's by the SAME amount
     so cv 1 has its peak at param['PeakLoc']
     """
-    n_units = param['n_units']
+    nUnits = param['nUnits']
     SpikeWidth = param['SpikeWidth']
     NewPeakLoc = param['PeakLoc']
 
-    Amplitude = np.zeros((n_units,2))
+    Amplitude = np.zeros((nUnits,2))
 
-    for i in range(n_units):
+    for i in range(nUnits):
         # Shift cv 2 so it has the there is maximum alignment between the 2 waveforms
-        tmpcorr = np.correlate(WeightedAvgWaveF[:,i,0], WeightedAvgWaveF[:,i,1], 'full')
-        max_lag = np.argmax(tmpcorr) - (len(WeightedAvgWaveF[:,i,0]) - 1)
+        tmpcorr = np.correlate(AvgWaveform[:,i,0], AvgWaveform[:,i,1], 'full')
+        MaxLag = np.argmax(tmpcorr) - (len(AvgWaveform[:,i,0]) - 1)
 
-        WeightedAvgWaveF[:,i,:] = WeightedAvgWaveF[:,i,:]
+        AvgWaveform[:,i,:] = AvgWaveform[:,i,:]
         waveform[i,:,:,:] = waveform[i,:,:,:]
 
-        WeightedAvgWaveF[:,i,1] = np.roll(WeightedAvgWaveF[:,i,1], max_lag)
-        waveform[i,:,:,1] = np.roll(waveform[i,:,:,1], max_lag, axis = 0)
+        AvgWaveform[:,i,1] = np.roll(AvgWaveform[:,i,1], MaxLag)
+        waveform[i,:,:,1] = np.roll(waveform[i,:,:,1], MaxLag, axis = 0)
 
-        if max_lag>0:
-            WeightedAvgWaveF[0:max_lag ,i,1] = np.nan
-            waveform[i,0:max_lag ,:,1] = np.nan
+        if MaxLag>0:
+            AvgWaveform[0:MaxLag ,i,1] = np.nan
+            waveform[i,0:MaxLag ,:,1] = np.nan
 
-        elif max_lag<0:
-            WeightedAvgWaveF[SpikeWidth - 1 + max_lag: ,i,1] = np.nan
-            waveform[i,SpikeWidth - 1 + max_lag: ,:,1] = np.nan        
+        elif MaxLag<0:
+            AvgWaveform[SpikeWidth - 1 + MaxLag: ,i,1] = np.nan
+            waveform[i,SpikeWidth - 1 + MaxLag: ,:,1] = np.nan        
 
 
         for cv in [0,1]:
@@ -220,55 +219,55 @@ def get_amplitude_shift_WaveF(waveform,WeightedAvgWaveF, PeakTime, param):
             if PeakTime[i,0] != NewPeakLoc: #yes the first CV 
                 shift = int(-( PeakTime[i,0] - NewPeakLoc))
                 if shift !=0:
-                    WeightedAvgWaveF[:,i,cv] = np.roll(WeightedAvgWaveF[:,i,cv], shift)
+                    AvgWaveform[:,i,cv] = np.roll(AvgWaveform[:,i,cv], shift)
                     waveform[i,:,:,cv] = np.roll(waveform[i,:,:,cv], shift, axis = 0)
 
                     if shift>0:
-                        WeightedAvgWaveF[0:shift ,i,cv] = np.nan
+                        AvgWaveform[0:shift ,i,cv] = np.nan
                         waveform[i,0:shift ,:,cv] = np.nan
                     elif shift<0:
-                        # alt_shift = int(-( PeakTime[i,cv] - NewPeakLoc)) # This alt_shift should not be used , include to match with (old?) ML code
+                        # altShift = int(-( PeakTime[i,cv] - NewPeakLoc)) # This altShift should not be used , include to match with (old?) ML code
 
-                        WeightedAvgWaveF[SpikeWidth - 1 + shift: ,i,cv] = np.nan
+                        AvgWaveform[SpikeWidth - 1 + shift: ,i,cv] = np.nan
                         waveform[i,SpikeWidth - 1 + shift: ,:,cv] = np.nan    
 
-            temp_peak = WeightedAvgWaveF[NewPeakLoc,i,cv]
+            tmpPeak = AvgWaveform[NewPeakLoc,i,cv]
 
-            if np.isnan(temp_peak) == True : # This is a catch for  bad units
-                #temp_peak = np.nanmax(WeightedAvgWaveF_copy[:,i,cv])
-                temp_peak = np.nan
+            if np.isnan(tmpPeak) == True : # This is a catch for  bad units
+                #tmpPeak = np.nanmax(WeightedAvgWaveF_copy[:,i,cv]) 
+                tmpPeak = np.nan
                 print(f'This unit {i}, CV {cv} is very likely a bad unit!')
-            Amplitude[i,cv] = temp_peak  
+            Amplitude[i,cv] = tmpPeak  
+
+    return Amplitude, waveform, AvgWaveform
 
 
-    return Amplitude, waveform, WeightedAvgWaveF
-                                                                          
-def avg_WaveF_PerTP(waveform,ChannelPos, d_10, MaxSiteMean, Amplitude, WeightedAvgWaveF, param):
+def avg_Waveform_PerTP(waveform,ChannelPos, d_10, MaxSiteMean, Amplitude, AvgWaveform, param):
     """
-    This function calculates the weighted average wavefunction per time point, as well as the good time points for each unit
+    This function calculates the weighted average waveform per time point, as well as the good time points for each unit
     """
-    n_units = param['n_units']
+    nUnits = param['nUnits']
     SpikeWidth = param['SpikeWidth']
-    n_channels = param['n_channels']
+    nChannels = param['nChannels']
     waveidx = param['waveidx']
 
-    good_site_id = np.empty((n_units,n_channels,2))
-    WaveformDuration = np.full((n_units,2), np.nan)
-    WeightedAvgWaveF_PerTP = np.full((3, n_units,SpikeWidth,2), np.nan)
-    WaveIdx = np.zeros((n_units, SpikeWidth, 2))
+    GoodSiteId = np.empty((nUnits,nChannels,2))
+    WaveformDuration = np.full((nUnits,2), np.nan)
+    AvgWaveformPerTP = np.full((3, nUnits,SpikeWidth,2), np.nan)
+    WaveIdx = np.zeros((nUnits, SpikeWidth, 2))
 
-    for i in range(n_units):
+    for i in range(nUnits):
         
         for cv in range(2):
-            #dist = np.linalg.norm(ChannelPos[filt_max_site[i,cv],:] - ChannelPos[:,:], axis = 1)
+            #dist = np.linalg.norm(ChannelPos[MaxSite[i,cv],:] - ChannelPos[:,:], axis = 1)
             dist = np.linalg.norm(ChannelPos[MaxSiteMean[i],:] - ChannelPos[:,:], axis = 1)
 
             test = dist < np.abs(d_10[i,cv])
-            good_site_id[i,:,cv] = test
-            Locs = ChannelPos[good_site_id[i,:,cv].astype(bool), :]
+            GoodSiteId[i,:,cv] = test
+            Locs = ChannelPos[GoodSiteId[i,:,cv].astype(bool), :]
 
             # select time points where the values are above 25% of the amplitude
-            wvdurtmp = np.argwhere( np.abs(np.sign(Amplitude[i,cv]) * WeightedAvgWaveF[waveidx,i,cv] )> (np.sign(Amplitude[i,cv]) * Amplitude[i,cv] * 0.25))
+            wvdurtmp = np.argwhere( np.abs(np.sign(Amplitude[i,cv]) * AvgWaveform[waveidx,i,cv] )> (np.sign(Amplitude[i,cv]) * Amplitude[i,cv] * 0.25))
 
             if wvdurtmp.sum != 0:
                 try:
@@ -285,12 +284,12 @@ def avg_WaveF_PerTP(waveform,ChannelPos, d_10, MaxSiteMean, Amplitude, WeightedA
             
         #Projected location per time point 
             for idx in wvdurtmp:
-                tmp_1 = np.abs(waveform[i,idx,good_site_id[i,:,cv].astype(bool),cv])
-                tmp_1 = np.expand_dims(tmp_1, axis = 1)
-                tmp_1 = np.tile(tmp_1, (1,3))
-                tmp = np.sum(tmp_1 * Locs , axis = 0) / np.sum(tmp_1, axis = 0)
-                WeightedAvgWaveF_PerTP[:,i,idx,cv] = tmp.reshape((3,1))
+                tmp = np.abs(waveform[i,idx,GoodSiteId[i,:,cv].astype(bool),cv])
+                tmp = np.expand_dims(tmp, axis = 1)
+                tmp = np.tile(tmp, (1,3))
+                tmp = np.sum(tmp * Locs , axis = 0) / np.sum(tmp, axis = 0)
+                AvgWaveformPerTP[:,i,idx,cv] = tmp.reshape((3,1))
                 WaveIdx[i,idx,cv] = 1 
     
-    return WaveformDuration, WeightedAvgWaveF_PerTP, WaveIdx
+    return WaveformDuration, AvgWaveformPerTP, WaveIdx
         

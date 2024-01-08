@@ -11,20 +11,22 @@ def re_scale(vector):
     score = ( np.nanquantile(vector,0.99) - vector) / (np.nanquantile(vector,0.99) - np.nanmin(vector))
     score[score<0] = 0
 
-    #score[np.isnan(score)] = 0 I would like to do but not in ML
+    #score[np.isnan(score)] = 0 #can add this to save code elsewhere, if want to include this for all units
     return score
 
-def get_simple_metric(wave_param, outlier = False):
+def get_simple_metric(WaveformParameter, outlier = False):
     """
     This function is suitable for, spatial decay, spatial decay fit, amplitude and other (no_units,2) parameters,
     where one wants to make the weighted difference the metric (CAN CHANGE THIS IF WANTED e.g if diff + True do this else do this.. )
     use if outlier = True to apply extra filtering of extreme values
     """
-    n_units = wave_param.shape[0]
-    x1 = np.broadcast_to(wave_param[:,0], (n_units, n_units)).T
-    x2 = np.broadcast_to(wave_param[:,1], (n_units, n_units))
+    nUnits = WaveformParameter.shape[0]
+    #select each cv then broadcast to nUnits * nUnits as to comapare each pair of units
+    x1 = np.broadcast_to(WaveformParameter[:,0], (nUnits, nUnits)).T
+    x2 = np.broadcast_to(WaveformParameter[:,1], (nUnits, nUnits))
 
-    # takes the difference weighted by the mean of the value of the two cross-validation halves,
+    # takes the difference weighted by the mean of the value of the two cross-validation halves
+    # to make the difference between 99-100 less significant than 5-6
     diff = np.abs(x1 - x2) / np.nanmean(np.abs( np.stack((x1,x2), axis = -1)), axis = 2)
 
     if outlier == True: 
@@ -36,24 +38,24 @@ def get_simple_metric(wave_param, outlier = False):
         # # i think above should be diff[ diff < np.nanquantile(diff,0.001)] = np.nanquantile(diff, 0.001) 
         # diff[ diff > np.nanquantile(diff,0.99)] = np.nanquantile(diff, 0.99)
 
-    sqrt_diff = np.sqrt(diff) 
-    metric = re_scale(sqrt_diff)
+    SqrtDiff = np.sqrt(diff) 
+    metric = re_scale(SqrtDiff)
 
     return metric
 
-def get_WVcorr(Avg_waveform, param):
+def get_WVcorr(AvgWaveform, param):
     """
     Calculates the correlation between weighted average wavefunction, and rescales it into a score 
     """
     waveidx = param['waveidx']
-    n_units = param['n_units']
+    nUnits = param['nUnits']
 
-    x1 = Avg_waveform[waveidx,:,0].T 
-    x2 = Avg_waveform[waveidx,:,1].T
+    x1 = AvgWaveform[waveidx,:,0].T 
+    x2 = AvgWaveform[waveidx,:,1].T
 
     #calculate the correlation
-    WVcorr_tmp = np.corrcoef(x1,x2)
-    WVcorr = WVcorr_tmp[:n_units,n_units:]
+    WVcorrTmp = np.corrcoef(x1,x2)
+    WVcorr = WVcorrTmp[:nUnits,nUnits:]
 
 
     WVcorr = np.arctanh(WVcorr) # apply Fisher z transformation
@@ -65,12 +67,12 @@ def get_WVcorr(Avg_waveform, param):
 
     return WVcorr
 
-def get_WaveFormMSE(Avg_waveform, param):
+def get_WaveformMSE(AvgWaveform, param):
     """
     Calculates the waveform mean square error, and rescales it into a score
     """
     waveidx = param['waveidx']
-    ProjectedWaveFormnorm = Avg_waveform[waveidx,:,:]
+    ProjectedWaveFormnorm = AvgWaveform[waveidx,:,:]
     ProjectedWaveFormnorm =  (ProjectedWaveFormnorm - np.nanmin(ProjectedWaveFormnorm,axis = 0)) / (np.nanmax(ProjectedWaveFormnorm, axis=0) - np.nanmin(ProjectedWaveFormnorm, axis = 0))
 
     x1 = np.tile(np.expand_dims(ProjectedWaveFormnorm[:,:,0], axis = 2), (1,1,ProjectedWaveFormnorm.shape[1]))
@@ -81,42 +83,40 @@ def get_WaveFormMSE(Avg_waveform, param):
     WaveformMSE = re_scale(RawWVMSENorm)
     return WaveformMSE
 
-def flip_dim(WAW_PerTP, param):
+def flip_dim(AvgWaveformPerTP, param):
     """
     Creates a version of the weighted average wavefunction per time point, where the x axis is flipped, due to the effect
     where the average position tends to wards the center of the x coords when the wave is decaying
     """
-    n_units = param['n_units']
+    nUnits = param['nUnits']
 
     FlipDim = np.array((1,)) # BE CAREFUL HERE, Which dimension is the x-axis  
-    WAW_PerTP_flip = np.full((3, n_units,82,2, len(FlipDim)+1), np.nan)
+    AvgWaveformPerTPFlip = np.full((3, nUnits,82,2, len(FlipDim)+1), np.nan)
 
     for i in range(len(FlipDim)):
-        tmpdat = WAW_PerTP[FlipDim[i]  ,:,:,:]
+        tmpdat = AvgWaveformPerTP[FlipDim[i]  ,:,:,:]
 
-        newvals = np.nanmin(tmpdat, axis =1, keepdims=True) + np.nanmax(tmpdat, axis = 1, keepdims=True) - tmpdat
-        WAW_PerTP_flip[:,:,:,:,i] = WAW_PerTP
-        WAW_PerTP_flip[FlipDim[i],:,:,:,i] = newvals
+        NewVals = np.nanmin(tmpdat, axis =1, keepdims=True) + np.nanmax(tmpdat, axis = 1, keepdims=True) - tmpdat
+        AvgWaveformPerTPFlip[:,:,:,:,i] = AvgWaveformPerTP
+        AvgWaveformPerTPFlip[FlipDim[i],:,:,:,i] = NewVals
 
-    WAW_PerTP_flip[:,:,:,:,-1] = WAW_PerTP
+    AvgWaveformPerTPFlip[:,:,:,:,-1] = AvgWaveformPerTP
 
-    return WAW_PerTP_flip
+    return AvgWaveformPerTPFlip
 
-def get_Euclidean_dist(WAW_PerTP_flip,param):
+def get_Euclidean_dist(AvgWaveformPerTPFlip,param):
     """
     Calculated the Euclidean distance between the units at each time point and for the flipped axis case
     """
-    # Euclidean distance between WAW_PerTP_ML_flip, between the 2 CV
-
     # This can get to LARGE arrays 3*566*82*2*2*566 ~ Billions...
     #if this is slow dask may be a good idea..
     # all function have dask version so *should be simple to use dask* 
 
     waveidx = param['waveidx']
-    n_units = param['n_units']
+    nUnits = param['nUnits']
 
-    x1 = np.tile( np.expand_dims(WAW_PerTP_flip[:,:,waveidx,0,:], axis = -1), (1,1,1,1,n_units)).squeeze()
-    x2 = np.swapaxes(np.tile( np.expand_dims(WAW_PerTP_flip[:,:,waveidx,1,:], axis = -1), (1,1,1,1,n_units)).squeeze(), 1, 4)
+    x1 = np.tile( np.expand_dims(AvgWaveformPerTPFlip[:,:,waveidx,0,:], axis = -1), (1,1,1,1,nUnits)).squeeze()
+    x2 = np.swapaxes(np.tile( np.expand_dims(AvgWaveformPerTPFlip[:,:,waveidx,1,:], axis = -1), (1,1,1,1,nUnits)).squeeze(), 1, 4)
 
     w = np.isnan( np.abs(x1[0,:,:,:,:] - x2[0,:,:,:,:])).squeeze()
 
@@ -153,54 +153,54 @@ def Centroid_metrics(EuclDist, param):
 
     return CentroidDist, CentroidVar
 
-def get_recentered_Euclidean_dist(WAW_PerTP_flip, AvgCentroid, param):
+def get_recentered_Euclidean_dist(AvgWaveformPerTPFlip, AvgCentroid, param):
     """
     Find a Euclidean distance where the location per time has been centered around the average position
     """
 
     waveidx = param['waveidx']
-    n_units = param['n_units']
+    nUnits = param['nUnits']
 
-    # Recented projectlocation , aka subtract the avg location, the we can unique info
-    Avg_centroid_broadcast = np.tile(np.expand_dims(AvgCentroid, axis= (3,4)), (1,1,1,82,2))
-    WAW_PerTP_ML_flip_Recnt = np.swapaxes( np.swapaxes(WAW_PerTP_flip, 2,3) - Avg_centroid_broadcast,2,3)
-    x1 = np.tile( np.expand_dims(WAW_PerTP_ML_flip_Recnt[:,:,waveidx,0,:], axis = -1), (1,1,1,1,n_units)).squeeze()
-    x2 = np.swapaxes(np.tile( np.expand_dims(WAW_PerTP_ML_flip_Recnt[:,:,waveidx,1,:], axis = -1), (1,1,1,1,n_units)).squeeze(), 1, 4)
+    # Recented projected location , aka subtract the avg location, the we can unique info
+    AvgCentroidBroadcast = np.tile(np.expand_dims(AvgCentroid, axis= (3,4)), (1,1,1,82,2))
+    AvgWaveformPerTPFlipRecentered = np.swapaxes( np.swapaxes(AvgWaveformPerTPFlip, 2,3) - AvgCentroidBroadcast,2,3)
+    x1 = np.tile( np.expand_dims(AvgWaveformPerTPFlipRecentered[:,:,waveidx,0,:], axis = -1), (1,1,1,1,nUnits)).squeeze()
+    x2 = np.swapaxes(np.tile( np.expand_dims(AvgWaveformPerTPFlipRecentered[:,:,waveidx,1,:], axis = -1), (1,1,1,1,nUnits)).squeeze(), 1, 4)
 
     w = np.isnan( np.abs(x1[0,:,:,:,:] - x2[0,:,:,:,:])).squeeze()
 
     tmpEu = np.linalg.norm(x1-x2, axis = 0)
     tmpEu[w] = np.nan
-    EuclDist_2 = tmpEu
+    EuclDist2 = tmpEu
     del x1
     del x2
     del w
     del tmpEu
-    return EuclDist_2
+    return EuclDist2
 
-def recentered_metrics(EuclDist_2, param = None):
+def recentered_metrics(EuclDist2, param = None):
     """
     Calculates the euclidean distance between units when the centroid has been recentered
     """
 
-    CentroidDistRecentered = np.nanmin( np.nanmean(EuclDist_2, axis =1), axis =1)
+    CentroidDistRecentered = np.nanmin( np.nanmean(EuclDist2, axis =1), axis =1)
     CentroidDistRecentered = re_scale(CentroidDistRecentered)
     CentroidDistRecentered[np.isnan(CentroidDistRecentered)] = 0
     return CentroidDistRecentered
 
-def dist_angle(WAW_PerTP_flip, param):
+def dist_angle(AvgWaveformPerTPFlip, param):
     """
     This function uses the weighted average location per time point, to find metric based of off:
     The distance traveled by the unit at each time point
-    The angle at each time point 
+    The angle between units at each time point 
     """
     waveidx = param['waveidx']
-    n_units = param['n_units']
+    nUnits = param['nUnits']
     MinAngleDist = param['MinAngleDist']
     
     #Distance between time steps and angle
-    x1 = WAW_PerTP_flip[:,:,waveidx[1]:waveidx[-1] +1,:,:]
-    x2 = WAW_PerTP_flip[:,:,waveidx[0]:waveidx[-2] +1,:,:] # Difference between python and ML indexing
+    x1 = AvgWaveformPerTPFlip[:,:,waveidx[1]:waveidx[-1] +1,:,:]
+    x2 = AvgWaveformPerTPFlip[:,:,waveidx[0]:waveidx[-2] +1,:,:] # Difference between python and ML indexing
 
 
 
@@ -208,23 +208,23 @@ def dist_angle(WAW_PerTP_flip, param):
 
     LocAngle = np.full(np.append(TrajDist.shape, 3), np.nan)
     #only select points which have enough movement to get a angle
-    good_ang = np.zeros_like(TrajDist)
-    good_ang[TrajDist>=MinAngleDist] = 1
+    GoodAngle = np.zeros_like(TrajDist)
+    GoodAngle[TrajDist>=MinAngleDist] = 1
 
     countid = 0
-    for dimid1 in range(WAW_PerTP_flip.shape[0]):
-        for dimid2 in np.arange(1,WAW_PerTP_flip.shape[0]):
+    for dimid1 in range(AvgWaveformPerTPFlip.shape[0]):
+        for dimid2 in np.arange(1,AvgWaveformPerTPFlip.shape[0]):
             if dimid2 <= dimid1:
                 continue
             ang = np.abs( x1[dimid1,:,:,:,:] - x2[dimid1,:,:,:,:]) / np.abs(x1[dimid2,:,:,:,:] - x2[dimid2,:,:,:,:])
             
-            LocAngle[:,:,:,:,countid] = np.arctan(ang) * good_ang # only selects angles for units where there is sufficient distance between time poitns
+            LocAngle[:,:,:,:,countid] = np.arctan(ang) * GoodAngle # only selects angles for units where there is sufficient distance between time poitns
             countid +=1
 
 
     LocAngle = np.nansum(LocAngle, axis=4)
-    x1 = np.tile (np.expand_dims(LocAngle[:,:,0,:], axis = -1), (1,1,1,n_units))
-    x2 = np.swapaxes(np.tile(np.expand_dims(LocAngle[:,:,1,:], axis = -1), (1,1,1,n_units)), 0,3)
+    x1 = np.tile (np.expand_dims(LocAngle[:,:,0,:], axis = -1), (1,1,1,nUnits))
+    x2 = np.swapaxes(np.tile(np.expand_dims(LocAngle[:,:,1,:], axis = -1), (1,1,1,nUnits)), 0,3)
 
 
     AngleSubtraction = np.abs(x1-x2)
@@ -234,12 +234,12 @@ def dist_angle(WAW_PerTP_flip, param):
     TrajAngleSim = re_scale(TrajAngleSim)
     TrajAngleSim[np.isnan(TrajAngleSim)] = 0
 
-    x1 = np.tile (np.expand_dims(TrajDist[:,:,0,:], axis = -1), (1,1,1,n_units))
-    x2 = np.swapaxes(np.tile(np.expand_dims(TrajDist[:,:,1,:], axis = -1), (1,1,1,n_units)), 0,3)
+    x1 = np.tile (np.expand_dims(TrajDist[:,:,0,:], axis = -1), (1,1,1,nUnits))
+    x2 = np.swapaxes(np.tile(np.expand_dims(TrajDist[:,:,1,:], axis = -1), (1,1,1,nUnits)), 0,3)
 
-    TrajDistComapred = np.abs(x1-x2)
+    TrajDistCompared = np.abs(x1-x2)
 
-    TrajDistSim = np.nanmin( np.nansum(TrajDistComapred , axis = 1), axis= 1)
+    TrajDistSim = np.nanmin( np.nansum(TrajDistCompared , axis = 1), axis= 1)
     TrajDistSim = np.sqrt(TrajDistSim)
     TrajDistSim = re_scale(TrajDistSim)
     TrajDistSim[np.isnan(TrajDistSim)] = 0
@@ -247,9 +247,9 @@ def dist_angle(WAW_PerTP_flip, param):
     return TrajAngleSim, TrajDistSim
 
 
-def get_threshold(TotalScore, WithinSession, EuclDist, param, is_first_pass = True):
+def get_threshold(TotalScore, WithinSession, EuclDist, param, IsFirstPass = True):
     """
-    Uses the TotalScore, Euclidean distance,to determine a threshold for putative matches.
+    Uses the TotalScore and Euclidean distance,to determine a threshold for putative matches.
 
     If it is the first pass through the data i.e no drift correction has been done, we would expect the
     Total score for the matches to be smaller than expected, therefore we calculate the difference in mean
@@ -265,9 +265,9 @@ def get_threshold(TotalScore, WithinSession, EuclDist, param, is_first_pass = Tr
     tmp[WithinSession == 1] = np.nan
 
     hd, __ = np.histogram(np.diag(tmp), Bins)
-    hd = hd /  param['n_units']
-    hnd, __ = np.histogram( (tmp - tmp *np.eye(param['n_units'])), Bins)
-    hnd = hnd / np.nansum( (tmp - tmp *np.eye(param['n_units'])) )
+    hd = hd /  param['nUnits']
+    hnd, __ = np.histogram( (tmp - tmp *np.eye(param['nUnits'])), Bins)
+    hnd = hnd / np.nansum( (tmp - tmp *np.eye(param['nUnits'])) )
     hp, __ = np.histogram(tmp, Bins)
     hp = hp / np.nansum(tmp)
 
@@ -279,8 +279,8 @@ def get_threshold(TotalScore, WithinSession, EuclDist, param, is_first_pass = Tr
     muw = np.mean(fit)
     stdw = np.std(fit)
 
-    if param['n_days'] > 1:
-        if is_first_pass == True:
+    if param['nSessions'] > 1:
+        if IsFirstPass == True:
             # take within session out
 
             tmp = TotalScore.copy()
@@ -312,15 +312,15 @@ def get_good_matches(pairs, TotalScore):
     # Need to make sure the first and second unit in the matchesonly appears once
     for PairID in range(2):
 
-        idx, count = np.unique(pairs[:,PairID], return_counts= True)
+        idx, count = np.unique(pairs[:,PairID], return_counts = True)
         ls = np.argwhere(count != 1)
-        tmp_vals = idx[ls] # returns the unit idx for PairID, where there is more than one potential match
+        tmpVals = idx[ls] # returns the unit idx for PairID, where there is more than one potential match
 
         #Go through each case where there is more than 1 match
-        for i in range(len(tmp_vals)):
+        for i in range(len(tmpVals)):
             # find the unit idx pair, e.g if unit 2 matches with unit 272 and 278 this will find (2,272) then (2,278)
-            tmp_pair = np.argwhere(pairs[:,PairID] == tmp_vals[i]) # idx of pair for the multiple mathced unit
-            tmp = pairs[tmp_pair,:].squeeze() # unit idx pair, for each double match e.g (2,272) and (2,278)
+            tmpPair = np.argwhere(pairs[:,PairID] == tmpVals[i]) # idx of pair for the multiple mathced unit
+            tmp = pairs[tmpPair,:].squeeze() # unit idx pair, for each double match e.g (2,272) and (2,278)
 
             scores = np.zeros(len(tmp))
             for z in range(len(tmp)):
@@ -331,17 +331,17 @@ def get_good_matches(pairs, TotalScore):
             for z in range(len(tmp)):
                 if z != BestMatch:
                     # cannot remove yet, as it will change all of the found indices, so set the value to -1, the at the end can remove all apperaances of -1
-                    pairs[tmp_pair[z], :] = np.full_like(pairs[tmp_pair[z], :], -1)
+                    pairs[tmpPair[z], :] = np.full_like(pairs[tmpPair[z], :], -1)
     
-    good_pairs = np.delete(pairs, np.argwhere(pairs[:,0] == -1), axis = 0)
+    GoodPairs = np.delete(pairs, np.argwhere(pairs[:,0] == -1), axis = 0)
 
-    return good_pairs
+    return GoodPairs
    
 
-def drift_correction_basic(CandidatePairs, SessionSwitch, AvgCentroid, WeightedAvgWaveF_PerTP):
+def drift_correction_basic(CandidatePairs, SessionSwitch, AvgCentroid, AvgWaveformPerTP):
     """
     Uses the median difference in position, between putative matches to gain a value of drift between sessions 
-    This is then applied to the AvgCentroid and the WeightedAvgWaveF_PerTP
+    This is then applied to the AvgCentroid and the AvgWaveformPerTP
     """
     #Drift.. currently only doing drift correction between 2 days/sessions
     BestPairs = np.argwhere(CandidatePairs == 1)
@@ -353,102 +353,102 @@ def drift_correction_basic(CandidatePairs, SessionSwitch, AvgCentroid, WeightedA
     drift = np.nanmedian( np.nanmean( AvgCentroid[:, BestPairs[idx,0].squeeze(),:], axis = 2) - np.nanmean( AvgCentroid[:,BestPairs[idx,1].squeeze(),:], axis = 2), axis = 1)
 
 
-    ##need to add the drift to the location on each of these, and the flipped if I decide to not recalulate it
-    WeightedAvgWaveF_PerTP[0,SessionSwitch[1]:,:,:] += drift[0]
-    WeightedAvgWaveF_PerTP[1,SessionSwitch[1]:,:,:] += drift[1]
-    WeightedAvgWaveF_PerTP[2,SessionSwitch[1]:,:,:] += drift[2]
+    ##need to add the drift to the location
+    AvgWaveformPerTP[0,SessionSwitch[1]:,:,:] += drift[0]
+    AvgWaveformPerTP[1,SessionSwitch[1]:,:,:] += drift[1]
+    AvgWaveformPerTP[2,SessionSwitch[1]:,:,:] += drift[2]
 
     AvgCentroid[0,SessionSwitch[1]:,:] += drift[0]
     AvgCentroid[1,SessionSwitch[1]:,:] += drift[1]
     AvgCentroid[2,SessionSwitch[1]:,:] += drift[2]
 
-    return drift, AvgCentroid, WeightedAvgWaveF_PerTP
+    return drift, AvgCentroid, AvgWaveformPerTP
 
-def apply_drift_corection_basic(Pairs, did, SessionSwitch, AvgCentroid, WeightedAvgWaveF_PerTP):
+def apply_drift_corection_basic(Pairs, did, SessionSwitch, AvgCentroid, AvgWaveformPerTP):
     """
-    This function applies the basic style drift correction to a pair of sessions, as part of a n_daydrift correction  
+    This function applies the basic style drift correction to a pair of sessions, as part of a nSession drift correction  
     """
 
     drift = np.nanmedian( np.nanmean( AvgCentroid[:, Pairs[:,0],:], axis = 2) - np.nanmean( AvgCentroid[:,Pairs[:,1],:], axis = 2), axis = 1)
 
 
-    ##need to add the drift to the location on each of these, and the flipped if I decide to not recalulate it
-    WeightedAvgWaveF_PerTP[0,SessionSwitch[did+1]:SessionSwitch[did+2],:,:] += drift[0]
-    WeightedAvgWaveF_PerTP[1,SessionSwitch[did+1]:SessionSwitch[did+2],:,:] += drift[1]
-    WeightedAvgWaveF_PerTP[2,SessionSwitch[did+1]:SessionSwitch[did]+2,:,:] += drift[2]
+    ##need to add the drift to the location
+    AvgWaveformPerTP[0,SessionSwitch[did+1]:SessionSwitch[did+2],:,:] += drift[0]
+    AvgWaveformPerTP[1,SessionSwitch[did+1]:SessionSwitch[did+2],:,:] += drift[1]
+    AvgWaveformPerTP[2,SessionSwitch[did+1]:SessionSwitch[did]+2,:,:] += drift[2]
 
     AvgCentroid[0,SessionSwitch[did+1]:SessionSwitch[did+2],:] += drift[0]
     AvgCentroid[1,SessionSwitch[did+1]:SessionSwitch[did+2],:] += drift[1]
     AvgCentroid[2,SessionSwitch[did+1]:SessionSwitch[did+2],:] += drift[2]
 
-    return drift, WeightedAvgWaveF_PerTP, AvgCentroid
+    return drift, AvgWaveformPerTP, AvgCentroid
 
-def appply_drift_correction_per_shank(Pairs, did, SessionSwitch, AvgCentroid, WeightedAvgWaveF_PerTP, param):
+def appply_drift_correction_per_shank(Pairs, did, SessionSwitch, AvgCentroid, AvgWaveformPerTP, param):
     """
     This is the same as "basic" drift correction, however treats each shank seperatley 
     """
     ShankID = shank_ID_per_session(AvgCentroid ,SessionSwitch ,did , param)
-    No_shanks = param['NoShanks']
-    Shank_dist = param['ShankDist']
+    NoShanks = param['NoShanks']
+    ShankDist = param['ShankDist']
 
     
     CentroidA = np.nanmean( AvgCentroid[:,Pairs[:,0],:], axis = 2)
     CentroidB = np.nanmean( AvgCentroid[:,Pairs[:,1],:], axis = 2)
 
-    max_dist = 0
-    min_dist = 0
-    drift_per_shank = np.zeros([4,3])
+    MaxDist = 0
+    MinDist = 0
+    DriftPerShank = np.zeros([4,3])
 
-    for i in range(No_shanks):
-        max_dist += Shank_dist
+    for i in range(NoShanks):
+        MaxDist += ShankDist
 
         #test to see if a centroid is within the area of that shank
-        a_idx = np.logical_and(CentroidA[1,:] < max_dist,  CentroidA[1,:] > min_dist)
-        b_idx = np.logical_and(CentroidB[1,:] < max_dist,  CentroidB[1,:] > min_dist)
+        CorrectShankA = np.logical_and(CentroidA[1,:] < MaxDist,  CentroidA[1,:] > MinDist)
+        CorrectShankB = np.logical_and(CentroidB[1,:] < MaxDist,  CentroidB[1,:] > MinDist)
 
-        if np.all(a_idx == b_idx) != True:
-            print(f'These pairs may be bad {np.argwhere(a_idx != b_idx)}')
+        if np.all(CorrectShankA == CorrectShankB) != True:
+            print(f'These pairs may be bad {np.argwhere(CorrectShankA != CorrectShankB)}')
 
-        drifts = CentroidA[:,a_idx] - CentroidB[:,b_idx]
+        drifts = CentroidA[:,CorrectShankA] - CentroidB[:,CorrectShankB]
         drift =  np.nanmedian(drifts, axis = 1)
-        drift_per_shank[i,:] = drift
+        DriftPerShank[i,:] = drift
 
         #need to get idx for each shank, to apply correct drift correction
 
-        shank_session_idx = SessionSwitch[did] + np.argwhere( ShankID == i) 
+        ShankSessionIdx = SessionSwitch[did] + np.argwhere( ShankID == i) 
 
-        WeightedAvgWaveF_PerTP[0,shank_session_idx,:,:] += drift[0]
-        WeightedAvgWaveF_PerTP[1,shank_session_idx,:,:] += drift[1]
-        WeightedAvgWaveF_PerTP[2,shank_session_idx,:,:] += drift[2]
+        AvgWaveformPerTP[0,ShankSessionIdx,:,:] += drift[0]
+        AvgWaveformPerTP[1,ShankSessionIdx,:,:] += drift[1]
+        AvgWaveformPerTP[2,ShankSessionIdx,:,:] += drift[2]
 
-        AvgCentroid[0,shank_session_idx,:] += drift[0]
-        AvgCentroid[1,shank_session_idx,:] += drift[1]
-        AvgCentroid[2,shank_session_idx,:] += drift[2]
+        AvgCentroid[0,ShankSessionIdx,:] += drift[0]
+        AvgCentroid[1,ShankSessionIdx,:] += drift[1]
+        AvgCentroid[2,ShankSessionIdx,:] += drift[2]
 
-        min_dist += Shank_dist
+        MinDist += ShankDist
 
-    return drift_per_shank, WeightedAvgWaveF_PerTP, AvgCentroid
+    return DriftPerShank, AvgWaveformPerTP, AvgCentroid
 
 def shank_ID_per_session(AvgCentroid ,SessionSwitch ,did , param):
     """
     This function use the average centroid, to assign each unit in a session to a shank
     """
 
-    No_shanks = param['NoShanks']
-    Shank_dist = param['ShankDist']
-    max_dist = 0
-    min_dist = 0
+    NoShanks = param['NoShanks']
+    ShankDist = param['ShankDist']
+    MaxDist = 0
+    MinDist = 0
 
     #loadcentroid position for 1 recording session
     CentroidPos = np.nanmean( AvgCentroid[:, SessionSwitch[did]:SessionSwitch[did + 1],:], axis = 2)
     ShankID = np.zeros(CentroidPos.shape[1])
 
-    for i in range(No_shanks):
-        max_dist += Shank_dist
+    for i in range(NoShanks):
+        MaxDist += ShankDist
         #Test to see if the centroid position is in the region of the i'th shank
-        a_idx = np.logical_and(CentroidPos[1,:] < max_dist,  CentroidPos[1,:] > min_dist)
-        ShankID[a_idx] = i
-        min_dist += Shank_dist
+        ShankIdx = np.logical_and(CentroidPos[1,:] < MaxDist,  CentroidPos[1,:] > MinDist)
+        ShankID[ShankIdx] = i
+        MinDist += ShankDist
        
     return ShankID
 
@@ -459,31 +459,31 @@ def test_matches_per_shank(Pairs, AvgCentroid, did, param):
 
     DoPerShankCorrection = True
 
-    a_pos = np.nanmean( AvgCentroid[:,Pairs[:,0],:], axis = 2)
-    b_pos = np.nanmean( AvgCentroid[:,Pairs[:,1],:], axis = 2)
-    ShankID_tmp = np.zeros(a_pos.shape[1])
+    CentroidA = np.nanmean( AvgCentroid[:,Pairs[:,0],:], axis = 2)
+    CentroidB = np.nanmean( AvgCentroid[:,Pairs[:,1],:], axis = 2)
+    ShankIDtmp = np.zeros(CentroidA.shape[1])
 
     MatchNumThreshold = param['MatchNumThreshold']
 
-    max_dist = 0
-    min_dist = 0
-    No_shanks = param['NoShanks']
-    Shank_dist = param['ShankDist']
+    MaxDist = 0
+    MinDist = 0
+    NoShanks = param['NoShanks']
+    ShankDist = param['ShankDist']
 
-    for i in range(No_shanks):
-        max_dist += Shank_dist
+    for i in range(NoShanks):
+        MaxDist += ShankDist
 
-        a_idx = np.logical_and(a_pos[1,:] < max_dist,  a_pos[1,:] > min_dist)
-        b_idx = np.logical_and(b_pos[1,:] < max_dist,  b_pos[1,:] > min_dist)
+        CorrectShankA = np.logical_and(CentroidA[1,:] < MaxDist,  CentroidA[1,:] > MinDist)
+        CorrectShankB = np.logical_and(CentroidB[1,:] < MaxDist,  CentroidB[1,:] > MinDist)
 
-        if np.all(a_idx == b_idx) != True:
-            print(f'These pairs may be bad {np.argwhere(a_idx != b_idx)}')
+        if np.all(CorrectShankA == CorrectShankB) != True:
+            print(f'These pairs may be bad {np.argwhere(CorrectShankA != CorrectShankB)}')
             
-        ShankID_tmp[a_idx] = i
+        ShankIDtmp[CorrectShankA] = i
 
-        min_dist += Shank_dist
+        MinDist += ShankDist
 
-    __, counts = np.unique(ShankID_tmp, return_counts=True)
+    __, counts = np.unique(ShankIDtmp, return_counts=True)
 
     if np.any(counts < MatchNumThreshold):
         DoPerShankCorrection = False
@@ -492,21 +492,22 @@ def test_matches_per_shank(Pairs, AvgCentroid, did, param):
     return DoPerShankCorrection
 
 
-def drift_n_days(CandidatePairs, SessionSwitch, AvgCentroid, WeightedAvgWaveF_PerTP, TotalScore, param, BestMatch = True, BestDrift = True):
+def drift_nSessions(CandidatePairs, SessionSwitch, AvgCentroid, AvgWaveformPerTP, TotalScore, param, BestMatch = True, BestDrift = True):
     """
     This function applies drift correction between n_days, currently this is done by alligning session 2 to session 1,
     then session 3 to session 2 etc.   
     This function, calls another function to apply the drift correction, to be able to apply different type of drift correction 
     easily.
     """
+    nSessions = param['nSessions']
     BestPairs = np.argwhere(CandidatePairs == 1)
 
     #make it like the matlab code, (small unit idx, larger unit idx)
     BestPairs[:, [0,1]] = BestPairs[:, [1,0]]
 
-    drifts = np.zeros( (param['n_days'] - 1, 3))
+    drifts = np.zeros( (nSessions - 1, 3))
 
-    for did in range(param['n_days'] - 1):
+    for did in range(nSessions - 1):
             idx = np.argwhere( ( (BestPairs[:,0] >= SessionSwitch[did]) * (BestPairs[:,0] < SessionSwitch[did + 1]) *
                                 (BestPairs[:,1] >= SessionSwitch[did + 1]) * (BestPairs[:,1] < SessionSwitch[did + 2]) ) == True)
 
@@ -516,25 +517,25 @@ def drift_n_days(CandidatePairs, SessionSwitch, AvgCentroid, WeightedAvgWaveF_Pe
 
             #Test to see if there are enough mathces to do drift correction pershank
             if test_matches_per_shank(Pairs, AvgCentroid, did, param) == True and BestDrift == True:
-                drifts = np.zeros( (param['n_days'] - 1, param['NoShanks'], 3)) # need to changeto number of shanks!!!!!!!!!!!!!!!!!
-                drifts[did,:,:], WeightedAvgWaveF_PerTP, AvgCentroid = appply_drift_correction_per_shank(Pairs, did, SessionSwitch, AvgCentroid, WeightedAvgWaveF_PerTP, param)
+                drifts = np.zeros( (nSessions - 1, param['NoShanks'], 3)) 
+                drifts[did,:,:], AvgWaveformPerTP, AvgCentroid = appply_drift_correction_per_shank(Pairs, did, SessionSwitch, AvgCentroid, AvgWaveformPerTP, param)
                 print(f'Done drift correction per shank for session pair {did+1} and {did+2}')
             else:
-                drifts = np.zeros( (param['n_days'] - 1, 3))
-                drifts[did,:], WeightedAvgWaveF_PerTP, AvgCentroid = apply_drift_corection_basic(Pairs, did, SessionSwitch, AvgCentroid, WeightedAvgWaveF_PerTP)
+                drifts = np.zeros( (nSessions - 1, 3))
+                drifts[did,:], AvgWaveformPerTP, AvgCentroid = apply_drift_corection_basic(Pairs, did, SessionSwitch, AvgCentroid, AvgWaveformPerTP)
 
-    return drifts, AvgCentroid, WeightedAvgWaveF_PerTP
+    return drifts, AvgCentroid, AvgWaveformPerTP
 
 
 
 def get_total_score(Scores2Include, param):
     """
-    Using the Scores2Include dictioanry (keys are the name of the scores/metric, values are the n_units*n_units arrays)
-    Return Total Score - a normalised sum of the indivdual score (n_units,n_units)
-    Predictors - the values Score2Include as a (n_units,n_units, n_scores (default 6)) array 
+    Using the Scores2Include dictioanry (keys are the name of the scores/metric, values are the nUnits*nUnits arrays)
+    Return Total Score - a normalised sum of the indivdual score (nUnits,nUnits)
+    Predictors - the values Score2Include as a (nUnits,nUnits, nScores (default 6)) array 
     """
-    TotalScore = np.zeros((param['n_units'],param['n_units']))
-    Predictors =  np.zeros((param['n_units'],param['n_units'], 0))
+    TotalScore = np.zeros((param['nUnits'],param['nUnits']))
+    Predictors =  np.zeros((param['nUnits'],param['nUnits'], 0))
 
 
     for sid in Scores2Include:

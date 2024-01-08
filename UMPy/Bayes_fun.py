@@ -3,11 +3,8 @@ import Param_fun as pf
 
 def get_ParameterKernels(Scores2Include, labels, Cond, param, addone = 1):
     """
-    ******* I think it would probably be nice to input a lot of these parameters as a dictionary,
-    ******* which can be automatically created with default values
-
-    Mainly requires Score2Include, a dictionary where the keys are the metric used and the values are
-    n_units * n_units with the score for each unit.
+    Requires Score2Include, a dictionary where the keys are the metric used and the values are
+    nUnits * nUnits with the score for each unit.
 
     Smoothing and add one is done to try and compensate for the fact the histogram used as a prediction for the 
     probability distn has few values, therefore this smoothing hopes to make it more similar to the true distn
@@ -20,7 +17,7 @@ def get_ParameterKernels(Scores2Include, labels, Cond, param, addone = 1):
 
     ParameterKernels = np.full((len(ScoreVector), len(Scores2Include), len(Cond)), np.nan)
 
-    sc_no = 0
+    ScoreID = 0
     for sc in Scores2Include:
         Scorestmp = Scores2Include[sc]
 
@@ -29,13 +26,13 @@ def get_ParameterKernels(Scores2Include, labels, Cond, param, addone = 1):
 
         for Ck in range(len(Cond)):
             
-            hist_tmp , __ = np.histogram(Scorestmp[labels == Ck], Bins)
-            ParameterKernels[:,sc_no, Ck] = pf.smooth(hist_tmp, SmoothTmp)
-            ParameterKernels[:,sc_no, Ck] /= np.sum(ParameterKernels[:,sc_no,Ck])
+            HistTmp , __ = np.histogram(Scorestmp[labels == Ck], Bins)
+            ParameterKernels[:,ScoreID, Ck] = pf.smooth(HistTmp, SmoothTmp)
+            ParameterKernels[:,ScoreID, Ck] /= np.sum(ParameterKernels[:,ScoreID,Ck])
 
-            ParameterKernels[:,sc_no, Ck] += addone* np.min(ParameterKernels[ParameterKernels[:,sc_no, Ck] !=0, sc_no, Ck], axis = 0)
+            ParameterKernels[:,ScoreID, Ck] += addone* np.min(ParameterKernels[ParameterKernels[:,ScoreID, Ck] !=0, ScoreID, Ck], axis = 0)
 
-        sc_no +=1    
+        ScoreID +=1    
 
     return ParameterKernels
 
