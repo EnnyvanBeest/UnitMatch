@@ -1,9 +1,10 @@
 # UnitMatch
 Ephys toolbox to match single units (electrophysiology) either within the same recording (oversplits) or across recordings, by using spatial position and waveform-based parameters - both standard and unstandard metrics to the field. 
 
-![image](https://github.com/EnnyvanBeest/UnitMatch/blob/main/LogoAndExamples/Logo.svg)
+![image](https://github.com/EnnyvanBeest/UnitMatch/blob/main/MATLAB/LogoAndExamples/Logo.svg)
 
 This toolbox was initially created between August 2022-January 2023 by Enny H. van Beest as a tool to match units across multiple recording(day)s, and/or merge oversplit units within the same day. The toolbox was further optimized between February-October 2023 in collaboration with Célian Bimbard.
+A python version was created between November 2023 and January 2024 by Sam Dodgson. The python version only contains core UnitMatch code. Other functionality such as computing functional scores etc. for now is only available in the Matlab version.
 
 We thank Julie Fabre, who implemented some changes to Bombcell - a toolbox for quality metrics and automated curation.
 We also thank Anna Lebedeva, Flora Takacs, Pip Coen, Kenneth Harris, and Matteo Carandini, as well as the rest of the Carandini-Harris laboratory for their feedback and contributions.
@@ -15,6 +16,7 @@ Preprint: https://www.biorxiv.org/content/10.1101/2023.10.12.562040v1
 
 Video: https://www.youtube.com/watch?v=4c_dgTZcBaQ&list=PLfhWmWntvjl7kljKozClpjS29DoY8V5pB&index=23&t=21s
 
+Below instructions are for the Matlab version. Please see the python folder for more information on the Python version.
 ### Dependencies on other toolboxes/repositories
 Toolboxes used for matching part:
 - https://github.com/kwikteam/npy-matlab
@@ -53,7 +55,7 @@ After the initial UnitMatch algorithm, you can use different 'Modules' to check 
 
 Two recording sessions of same IMRO table. In the first recording this unit was oversplit, and UnitMatch will Merge it. Additonally it found it's match in the second recording.
 
-![image](https://github.com/EnnyvanBeest/UnitMatch/blob/main/LogoAndExamples/Example1.bmp)
+![image](https://github.com/EnnyvanBeest/UnitMatch/blob/main/MATLAB/LogoAndExamples/Example1.bmp)
 
 <a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by-nc-sa/4.0/88x31.png" /></a><br />This work is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/">Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License</a>.
 
