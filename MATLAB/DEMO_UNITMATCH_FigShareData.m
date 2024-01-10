@@ -2,8 +2,12 @@
 % This is a demo using the FigShareData on 10.6084/m9.figshare.24305758
 
 %% READ ME
-% If you do not use the suggested pipeline to extract raw waveforms (e.g. you don't use Neuropixels/SpikeGLX), make
-% sure your 'KiloSortPaths' contains a subfolder called 'RawWaveforms'. There
+% UnitMatch contains a script (i.e. ExtractAndSaveAverageWaveform.m) to extract average waveforms from raw SpikeGLX data. 
+% If you do not use SpikeGLX, you have multiple options:
+% 1. Convert your data to SpikeGLX format (e.g. Use OpenEphys?)
+% 2. Use Bombcell frist, the extracted waveforms with the defaults for UnitMatch, raw waveforms will be stored in the KS folder
+% 3. Extract the waveforms yourself. 
+% Either one of the options above should result in 'KiloSortPaths' containing a subfolder called 'RawWaveforms'. There
 % should be a NPY file for every cluster with the dimensions of
 % UMparam.spikeWidth X nRecordingChannels X 2 (1 for each half of a
 % recording). This should contain the average waveform (recommended of at
