@@ -273,7 +273,7 @@ for midx = 1:length(MiceOpt)
                     end
                     % PyKS2
                     try
-                        success = pyrunfile("RunPyKS2_FromMatlab.py","success",ThisFile = strrep(fullfile(tmpdatafolder,tmpfile(sesid).name),'\','/'))
+                        success = pyrunfile("RunPyKS2_FromMatlab.py","success",bin_file = strrep(fullfile(tmpdatafolder,tmpfile(sesid).name),'\','/'))
                         clear success
                     catch ME
                         disp(ME)

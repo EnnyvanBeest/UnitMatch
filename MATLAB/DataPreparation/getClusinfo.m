@@ -4,7 +4,7 @@ function clusinfo = getClusinfo(AllKiloSortPaths)
 clusinfo = cell(1, length(AllKiloSortPaths));
 addthis = 0;
 for subsesid = 1:length(AllKiloSortPaths)
-    if isempty(dir(fullfile(AllKiloSortPaths{subsesid}, '*.npy')))
+    if isempty(dir(fullfile(AllKiloSortPaths{subsesid}, '*.npy'))) || fullfile(AllKiloSortPaths{subsesid}, 'PreparedData.mat')
         continue
     end
 

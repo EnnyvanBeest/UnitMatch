@@ -16,7 +16,7 @@
 
 %% User input: 
 UMparam.SaveDir = 'H:\FigShare_UnitMatch\ExampleOutput'; % Recommended to use end this path with \Probe0\IMRO_1\ if more probes/IMRO tables were used or \AllProbes\AllIMRO\ otherwise
-UMparam.KSDir = {'H:\FigShare_UnitMatch\Mouse1\2019-11-21\Probe0\1','H:\FigShare_UnitMatch\Mouse1\2019-11-22\Probe0\1'};  % This is a cell array with a path, in the path there should be a subfolder called 'RawWaveforms'. 
+UMparam.KSDir = {'H:\FigShare_UnitMatch\JF067\2022-02-14\Probe0\4','H:\FigShare_UnitMatch\JF067\2022-02-15\Probe0\5'};  % This is a cell array with a path, in the path there should be a subfolder called 'RawWaveforms'. 
 % N.B. if you want to use the functional score evaluation of UnitMatch, 'KSDir' should also contain typical 'Kilosort output', (e.g. spike times etc.)
 
 %% N.B. the following user input can also be automatically extracted and prepared/cleaned up using UMparam = ExtractKilosortData(KiloSortPaths, UMparam) for Kilosorted data of SpikeGLX recorded data (see next section);
