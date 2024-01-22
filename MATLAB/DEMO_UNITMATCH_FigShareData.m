@@ -45,7 +45,7 @@ end
 Components = strsplit(mfilePath,filesep);
 addpath(genpath(fullfile(Components{1:end-1})));
 
-%% Optional (for Kilosort + SpikeGLX users) --- see ExampleAnalysisPipelines for more detail!!
+%% Optional (for Kilosort + SpikeGLX users) --- see ExampleAnalysisPipelines for more detail!
 UMparam = ExtractKilosortData(UMparam.KSDir, UMparam); % Extract KS data and do some noise removal, optionally decompresses cbin to bin data and uses BOMBCELL quality metric to define good single units
 clusinfo = getClusinfo(UMparam.KSDir); % prepare clusinfo struct
 
