@@ -234,7 +234,13 @@ for midx = 1:length(MiceOpt)
                     Sesinfo = strsplit(Sesinfo{1},MiceOpt{midx});
                     Sesinfo = Sesinfo{2};
                     if isempty(Sesinfo)
+                        Sesinfo = strsplit(tmpephysdir(id).name,'_g0');
+                        Sesinfo = strsplit(Sesinfo{2},'_');
+                        Sesinfo = Sesinfo{2};
+                        if isempty(Sesinfo)
+
                         Sesinfo = '';
+                        end
                     else
                         Sesinfo = Sesinfo(end);
                     end
@@ -273,7 +279,7 @@ for midx = 1:length(MiceOpt)
                     end
                     % PyKS2
                     try
-                        success = pyrunfile("RunPyKS2_FromMatlab.py","success",ThisFile = strrep(fullfile(tmpdatafolder,tmpfile(sesid).name),'\','/'))
+                        success = pyrunfile("RunPyKS2_FromMatlab.py","success",bin_file = strrep(fullfile(tmpdatafolder,tmpfile(sesid).name),'\','/'))
                         clear success
                     catch ME
                         disp(ME)
