@@ -144,6 +144,24 @@ for subsesid = 1:length(KiloSortPaths)
         AllKiloSortPaths{subsesid} = KiloSortPaths{subsesid};
     end
     Params.DecompressionFlag = 0;
+  
+
+    %% Load existing?
+    if exist(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat')) && ~Params.RedoQM && ~Params.ReLoadAlways
+        % Check if parameters are the same, of not we have to redo it
+        % anyway
+        tmpparam = matfile(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat'));
+        tmpparam = tmpparam.Params;
+
+        if tmpparam.RunQualityMetrics == Params.RunQualityMetrics && tmpparam.RunPyKSChronicStitched == Params.RunPyKSChronicStitched
+            disp(['Found existing data in ', KiloSortPaths{subsesid}, ', Using this...'])
+
+            AllChannelPos{subsesid} = tmpparam.AllChannelPos{1};
+            AllProbeSN{subsesid} = tmpparam.AllProbeSN{1};
+            countid = countid + 1;
+            continue
+        end
+    end
 
     %% Channel data
     myClusFile = dir(fullfile(KiloSortPaths{subsesid}, 'channel_map.npy'));
@@ -154,7 +172,7 @@ for subsesid = 1:length(KiloSortPaths)
     if length(channelmaptmp) < length(channelpostmp)
         channelmaptmp(end+1:length(channelpostmp)) = length(channelmaptmp):length(channelpostmp) - 1;
     end
- 
+
     %% Is it correct channelpos though...? Check using raw data. While reading this information, also extract recording duration and Serial number of probe
     if ~isempty(rawD)
         [channelpostmpconv, probeSN, recordingduration] = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done
@@ -168,22 +186,6 @@ for subsesid = 1:length(KiloSortPaths)
         AllChannelPos{subsesid} = channelpostmp;
         AllProbeSN{subsesid} = '000000';
     end
-    
-    %% Load existing?
-    if exist(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat')) && ~Params.RedoQM && ~Params.ReLoadAlways
-        % Check if parameters are the same, of not we have to redo it
-        % anyway
-        tmpparam = matfile(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat'));
-        tmpparam = tmpparam.Params;
-
-        if tmpparam.RunQualityMetrics == Params.RunQualityMetrics && tmpparam.RunPyKSChronicStitched == Params.RunPyKSChronicStitched
-            disp(['Found existing data in ', KiloSortPaths{subsesid}, ', Using this...'])
-            countid = countid + 1;
-            continue
-        end
-    end
-
-   
     
     %% Load histology if available
     tmphisto = dir(fullfile(KiloSortPaths{subsesid}, 'HistoEphysAlignment.mat'));
