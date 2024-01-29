@@ -274,7 +274,7 @@ for midx = 1:length(MiceOpt)
                         copyfile(fullfile(tmpfile(sesid).folder,tmpfile(sesid).name),fullfile(tmpdatafolder,tmpfile(sesid).name))
                         copyfile(fullfile(metafile.folder,metafile.name),fullfile(tmpdatafolder,metafile.name))
                         if Compressed
-                        copyfile(fullfile(chfile.folder,chfile.name),fullfile(tmpdatafolder,chfile.name))
+                            copyfile(fullfile(chfile.folder,chfile.name),fullfile(tmpdatafolder,chfile.name))
                         end
                     end
                     % PyKS2

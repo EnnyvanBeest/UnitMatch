@@ -27,5 +27,5 @@ def RunPyKS(bin_file):
 
 
 if __name__ == '__main__':
-	# bin_file = 'H:/tmpdata/2024-01-23_EB036_g0_10_g0_t0.imec0.ap.cbin'
+	bin_file = 'D:/tmpdata/2024-01-24_EB036_OrangeRigs_g0_t0.imec1.ap.cbin'
 	success = RunPyKS(bin_file)

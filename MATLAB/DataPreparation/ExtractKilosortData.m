@@ -71,7 +71,7 @@ for subsesid = 1:length(KiloSortPaths)
     AllUniqueTemplates = [];
     cluster_id = [];
     recses = [];
-
+    ExtractChannelMapThenContinue = 0;
 
     %% save data paths information
     if Params.RunPyKSChronicStitched %CALL THIS STITCHED --> Only works when using RunPyKS2_FromMatlab as well from this toolbox
@@ -156,10 +156,15 @@ for subsesid = 1:length(KiloSortPaths)
         if tmpparam.RunQualityMetrics == Params.RunQualityMetrics && tmpparam.RunPyKSChronicStitched == Params.RunPyKSChronicStitched
             disp(['Found existing data in ', KiloSortPaths{subsesid}, ', Using this...'])
 
-            AllChannelPos{subsesid} = tmpparam.AllChannelPos{1};
-            AllProbeSN{subsesid} = tmpparam.AllProbeSN{1};
-            countid = countid + 1;
-            continue
+            if isfield(tmpparam,'AllChannelPos')
+
+                AllChannelPos{subsesid} = tmpparam.AllChannelPos{1};
+                AllProbeSN{subsesid} = tmpparam.AllProbeSN{1};
+                countid = countid + 1;
+                continue
+            else
+                ExtractChannelMapThenContinue = 1;
+            end
         end
     end
 
@@ -185,6 +190,12 @@ for subsesid = 1:length(KiloSortPaths)
     else
         AllChannelPos{subsesid} = channelpostmp;
         AllProbeSN{subsesid} = '000000';
+    end
+
+    if ExtractChannelMapThenContinue % Version compatibility
+        countid = countid + 1;
+        ExtractChannelMapThenContinue = 0;
+        continue
     end
     
     %% Load histology if available
