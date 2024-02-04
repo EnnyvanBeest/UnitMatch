@@ -390,6 +390,11 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'natImRespCorr')) || recom
     % Get rank
     [natImRespRank, natImRespSig] = getRank(corrResp_big, SessionSwitch);
 
+    % Output needs transposing to be properly stored in table
+    corrResp_big = corrResp_big';
+    natImRespRank = natImRespRank';
+    natImRespSig = natImRespSig';
+
     % Save in table
     MatchTable.natImRespCorr = corrResp_big(:);
     MatchTable.natImRespRank = natImRespRank(:); % What goes in the table should give ndays for every output when you do sum(refPopRank==1,1), if it's not, transpose!
