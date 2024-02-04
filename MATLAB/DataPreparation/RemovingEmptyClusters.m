@@ -56,7 +56,7 @@ end
 %% Remove the empty clusters
 fields = fieldnames(clusinfo);
 for id = 1:length(fields)
-    eval(['clusinfo.' fields{id} '(emptyclus)=[];'])
+    eval(['clusinfo.' fields{id} '(emptyclus,:)=[];'])
     %cluster_id(emptyclus)=[];
 %     clusinfo.Amplitude(emptyclus)=[];
 %     clusinfo.ContamPct(emptyclus)=[];

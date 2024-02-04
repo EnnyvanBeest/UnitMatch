@@ -279,7 +279,7 @@ for midx = 1:length(MiceOpt)
                     end
                     % PyKS2
                     try
-                        success = pyrunfile("RunPyKS2_FromMatlab.py","success",bin_file = strrep(fullfile(tmpdatafolder,tmpfile(sesid).name),'\','/'))
+                        success = pyrunfile("RunPyKS2_FromMatlab.py","success",bin_file = strrep(fullfile(tmpdatafolder,tmpfile(sesid).name),'\','/'));
                         clear success
                     catch ME
                         disp(ME)
@@ -307,6 +307,12 @@ for midx = 1:length(MiceOpt)
                     try
                         delete(fullfile(tmpdatafolder,'output','*'))
                         rmdir(fullfile(tmpdatafolder,'output'))
+                    catch ME
+                        disp(ME)
+                    end
+                    try
+                        delete(fullfile(tmpdatafolder,'.kilosort',tmpfile(sesid).name))
+                        rmdir(fullfile(tmpdatafolder,'.kilosort'))
                     catch ME
                         disp(ME)
                     end

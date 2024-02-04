@@ -1,7 +1,7 @@
 from pathlib import Path
 from pykilosort.ibl import run, ibl_pykilosort_params
 import os
-#import PyQt5
+import cupy as cp
 import shutil
 
 def RunPyKS(bin_file):		
@@ -27,5 +27,5 @@ def RunPyKS(bin_file):
 
 
 if __name__ == '__main__':
-	bin_file = 'D:/tmpdata/2024-01-24_EB036_OrangeRigs_g0_t0.imec1.ap.cbin'
+	#bin_file = 'D:/tmpdata/2024-01-31_EB037_OrangeRigs_1_g0_t0.imec1.ap.cbin'
 	success = RunPyKS(bin_file)

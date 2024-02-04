@@ -7,7 +7,7 @@ SaveDir = 'H:\OpenEphys_Example\SaveDir'; %'\\znas.cortexlab.net\Lab\Share\UNITM
 tmpdatafolder = 'H:\OpenEphys_Example\Tmp'; % temporary folder for temporary decompression of data 
 KilosortDir = 'H:\OpenEphys_Example\KilosortOutput'; % '\\znas.cortexlab.net\Lab\Share\Enny\UnitMatch\KSComparisonSubset';%'\\znas.cortexlab.net\Lab\Share\Enny\UnitMatch\KilosortOutputMonthApart';%'H:\MatchingUnits\KilosortOutputMonthApart';%'\\znas.cortexlab.net\Lab\Share\Celian\UnitMatch\KilosortOutputMonthApart';% Kilosort output folder
 GithubDir = 'C:\Users\EnnyB\Documents\GitHub'; % Github directory
-PythonEXE = 'C:\Users\EnnyB\anaconda3\envs\pyks2\pythonw.exe' % Python version to run python code in:
+PythonEXE = 'C:\Users\EnnyB\anaconda3\envs\pyks2_debug\pythonw.exe' % Python version to run python code in:
 
 %% Information on experiments
 MiceOpt = {'AL032','AV008','CB016','EB019','JF067'}; %'AL032', Add all mice you want to analyze
@@ -71,16 +71,23 @@ addpath(genpath(fullfile(GithubDir,'allenCCF'))) % https://github.com/cortex-lab
 % UNITMATCH - Move to top of paths 
 addpath(genpath(fullfile(GithubDir,'UnitMatch'))) % Make sure to have this one fresh in the path (so run this last)
 
+
 try
     % Only need to do this once:
     % Follow instructions on installing pykilosort in anaconda environment,
     % eg. https://github.com/int-brain-lab/pykilosort
-    % Additially run (from within this environment):
+    % Additionally run (from within this environment):
     % pip install matlab
-    % Python version to run python code in:    pyversion(PythonEXE) %Explanation on how to do this is provided in the README
+    % pip install pyqt5-tools
+    % If it doesn't work, please try the forked version on my github repo: 
+    % https://github.com/EnnyvanBeest/pykilosort/tree/UnitMatchPipeline
+    % Python version to run python code in:
+    pyversion(PythonEXE) %Explanation on how to do this is provided in the README
+
 catch ME
     disp(ME)
 end
+
 
 %% Actual pipeline
 %% PyKS - run pykilosort from Matlab/Python integration

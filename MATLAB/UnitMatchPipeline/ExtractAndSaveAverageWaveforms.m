@@ -9,6 +9,7 @@ spikeWidth = param.spikeWidth; % in sample space (time) - number of samples
 halfWidth = floor(spikeWidth/2);
 %% Extract all cluster info
 AllClusterIDs = clusinfo.cluster_id;
+AllRecSes = clusinfo.RecSesID;
 if param.GoodUnitsOnly
     Good_Idx = find(clusinfo.Good_ID); %Only care about good units at this point
 else
@@ -19,7 +20,7 @@ GoodRecSesID = clusinfo.RecSesID(Good_Idx);
 
 % Define day stucture
 nclus = length(Good_Idx);
-UseMemMap = 1;
+UseMemMap = 0;
 
 %% Actual extraction
 dataTypeNBytes = numel(typecast(cast(0, 'uint16'), 'uint8')); % Define datatype
@@ -53,7 +54,7 @@ for uid = 1:nclus
         if ~(GoodRecSesID(uid) == Currentlyloaded) % Only load new memmap if not already loaded
 
             % Map the data
-            if ~UseMemMap
+            if ~UseMemMap & exist('fid')
                 fclose(fid);
             end
             clear memMapData
@@ -72,11 +73,9 @@ for uid = 1:nclus
             if UseMemMap
                 try %hacky way of figuring out if sync channel present or not
                     n_samples = spikeFile.bytes / (param.nChannels * dataTypeNBytes);
-                    nChannels = param.nChannels - 1; % Last channel is sync, ignore for now
+                    nChannels = param.nChannels -1; % Last channel is sync, ignore for now
                     ap_data = memmapfile(AllDecompPaths{GoodRecSesID(uid)}, 'Format', {'int16', [param.nChannels, n_samples], 'data'});
                 catch
-                    nChannels = param.nChannels - 1;
-                    n_samples = spikeFile.bytes / (param.nChannels * dataTypeNBytes);
                     ap_data = memmapfile(AllDecompPaths{GoodRecSesID(uid)}, 'Format', {'int16', [nChannels, n_samples], 'data'});
                 end
                 memMapData = ap_data.Data.data;
@@ -98,37 +97,43 @@ for uid = 1:nclus
         tmpclusinfo = tmp.clusinfo; %Load original clusinfo
 
         % Spike samples
-        idx1=(sp.st(sp.spikeTemplates == AllClusterIDs(Good_Idx(uid)) & sp.SessionID == tmpclusinfo.RecSesID(Good_Idx(uid))).*round(sp.sample_rate));  % Spike times in samples;
-
+        if length(param.KSDir)>1
+            idx1=(sp.st(sp.spikeTemplates == AllClusterIDs(Good_Idx(uid)) & sp.SessionID == tmpclusinfo.RecSesID(Good_Idx(uid)- find(AllRecSes==GoodRecSesID(uid),1,'first')+1)).*round(sp.sample_rate));  % Spike times in samples;
+        else
+            idx1=(sp.st(sp.spikeTemplates == AllClusterIDs(Good_Idx(uid)) & sp.SessionID == tmpclusinfo.RecSesID(Good_Idx(uid))).*round(sp.sample_rate));  % Spike times in samples;
+        end
         %Extract raw waveforms on the fly - % Unit uid
         if sampleamount<length(idx1)
-            spikeIndicestmp = sort(datasample(idx1,sampleamount,'replace',false));
+            spksubi = round(linspace(1, numel(idx1), sampleamount))';
+            spikeIndicestmp = sort(idx1(spksubi));
         else
             spikeIndicestmp = sort(idx1);
         end
         spikeMap = nan(spikeWidth,nChannels,length(spikeIndicestmp));
         for iSpike = 1:length(spikeIndicestmp)
-            thisSpikeIdx = int32(spikeIndicestmp(iSpike));
+            thisSpikeIdx = spikeIndicestmp(iSpike);
 
             if UseMemMap
                 if thisSpikeIdx > halfWidth && (thisSpikeIdx + halfWidth) < size(memMapData,2) % check that it's not out of bounds
-                    tmp = smoothdata(double(memMapData(1:nChannels,thisSpikeIdx-halfWidth:thisSpikeIdx+halfWidth)),2,'gaussian',5);
+                    tmp = smoothdata(double(memMapData(1:param.nSavedChans,thisSpikeIdx-halfWidth:thisSpikeIdx+halfWidth)),2,'gaussian',5);
                     tmp = (tmp - mean(tmp(:,1:20),2))';
                     tmp(:,end+1:nChannels) = nan(size(tmp,1),nChannels-size(tmp,2));
                     % Subtract first 10 samples to level spikes
-                    spikeMap(:,:,iSpike) = tmp(1:spikeWidth,:);
+                    spikeMap(:,:,iSpike) = tmp(1:spikeWidth,1:nChannels);
                 end
             else
-
-                bytei = ((thisSpikeIdx - halfWidth) * param.nSavedChans) * dataTypeNBytes;
-                fseek(fid, bytei, 'bof');
-                data0 = fread(fid, param.nSavedChans*spikeWidth, 'int16=>int16'); % read individual waveform from binary file
-                frewind(fid);
-                data = reshape(data0, param.nSavedChans, []);
-                tmp = smoothdata(double(data(1:nChannels,:)),2,'gaussian',5);
-                tmp = (tmp - mean(tmp(:,1:20),2))';
-                tmp(:,end+1:nChannels) = nan(size(tmp,1),nChannels-size(tmp,2));
-                spikeMap(:,:,iSpike) = tmp(1:spikeWidth,:);
+                if ((thisSpikeIdx - halfWidth) * param.nSavedChans) * dataTypeNBytes > halfWidth &&...
+                        (thisSpikeIdx + halfWidth) * param.nSavedChans * dataTypeNBytes < spikeFile.bytes %
+                    bytei = ((thisSpikeIdx - halfWidth) * param.nSavedChans) * dataTypeNBytes;
+                    fseek(fid, bytei, 'bof');
+                    data0 = fread(fid, param.nSavedChans*spikeWidth, 'int16=>int16'); % read individual waveform from binary file
+                    frewind(fid);
+                    data = reshape(data0, param.nSavedChans, []);
+                    tmp = smoothdata(double(data(1:nChannels,:)),2,'gaussian',5);
+                    tmp = (tmp - mean(tmp(:,1:20),2))';
+                    tmp(:,end+1:nChannels) = nan(size(tmp,1),nChannels-size(tmp,2));
+                    spikeMap(:,:,iSpike) = tmp(1:spikeWidth,1:nChannels);
+                end
             end
         end
         %Actual number of wavefroms
@@ -147,7 +152,7 @@ for uid = 1:nclus
 
     end
 end
-if ~UseMemMap
+if ~UseMemMap & exist('fid')
     fclose(fid);
 else
     clear memMapData

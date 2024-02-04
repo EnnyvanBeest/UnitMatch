@@ -31,8 +31,11 @@ if nargin < 2
 end
 Params = DefaultParametersExtractKSData(Params,KiloSortPaths);
 
+if nargin>2 && exist('RawDataPathsInput')
+    Params.RawDataPaths = RawDataPathsInput;
+end
 try
-    if nargin < 3
+    if ~isfield(Params,'RawDataPaths') || isempty(Params.RawDataPaths) || length(Params.RawDataPaths)~=length(KiloSortPaths)
         disp('Finding raw ephys data using the params.py file from (py)kilosort output')
         UseParamsKS = 1;
     else
@@ -110,8 +113,10 @@ for subsesid = 1:length(KiloSortPaths)
         if UseParamsKS
             spikeStruct = loadParamsPy(fullfile(KiloSortPaths{subsesid}, 'params.py'));
             rawD = spikeStruct.dat_path;
-            rawD = rawD(strfind(rawD, '"')+1:end);
-            rawD = rawD(1:strfind(rawD, '"')-1);
+            if any(strfind(rawD, '"'))
+                rawD = rawD(strfind(rawD, '"')+1:end);
+                rawD = rawD(1:strfind(rawD, '"')-1);
+            end
             if any(strfind(rawD,'../'))
                 rawD = rawD(strfind(rawD,'../')+3:end)
             end
@@ -129,10 +134,10 @@ for subsesid = 1:length(KiloSortPaths)
           
           
         else
-            if isstruct(RawDataPathsInput)
-                rawD = RawDataPathsInput(subsesid);
+            if isstruct(Params.RawDataPaths)
+                rawD = Params.RawDataPaths(subsesid);
             else
-                rawD = dir(fullfile(RawDataPathsInput{subsesid}));
+                rawD = dir(fullfile(Params.RawDataPaths{subsesid}));
             end
         end
         if isempty(rawD)
@@ -179,7 +184,7 @@ for subsesid = 1:length(KiloSortPaths)
     end
 
     %% Is it correct channelpos though...? Check using raw data. While reading this information, also extract recording duration and Serial number of probe
-    if ~isempty(rawD)
+    if ~isempty(rawD) & ~contains(rawD.name,'.dat')
         [channelpostmpconv, probeSN, recordingduration] = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done
         if recordingduration<Params.MinRecordingDuration
             disp([KiloSortPaths{subsesid} ' recording too short, skip...'])
@@ -188,8 +193,10 @@ for subsesid = 1:length(KiloSortPaths)
         AllChannelPos{subsesid} = channelpostmpconv;
         AllProbeSN{subsesid} = probeSN;
     else
+        channelpostmpconv = channelpostmp;
         AllChannelPos{subsesid} = channelpostmp;
-        AllProbeSN{subsesid} = '000000';
+        probeSN = '000000';
+        AllProbeSN{subsesid} = probeSN;
     end
 
     if ExtractChannelMapThenContinue % Version compatibility
@@ -222,8 +229,9 @@ for subsesid = 1:length(KiloSortPaths)
 
     %% Bombcell parameters
     % clear paramBC
-    paramBC = bc_qualityParamValuesForUnitMatch(dir(strrep(fullfile(rawD(1).folder, rawD(1).name), 'cbin', 'meta')), fullfile(Params.tmpdatafolder, strrep(rawD(1).name, 'cbin', 'bin')));
-
+    if Params.RunQualityMetrics
+        paramBC = bc_qualityParamValuesForUnitMatch(dir(strrep(fullfile(rawD(1).folder, rawD(1).name), 'cbin', 'meta')), fullfile(Params.tmpdatafolder, strrep(rawD(1).name, 'cbin', 'bin')));
+    end
     %% Load Cluster Info
     myClusFile = dir(fullfile(KiloSortPaths{subsesid}, 'cluster_info.tsv')); % If you did phy (manual curation) we will find this one... We can trust you, right?
     if isempty(myClusFile)
@@ -283,6 +291,10 @@ for subsesid = 1:length(KiloSortPaths)
         % template are not necessarily the same after  splitting/merging)
         [clusinfo, sp, emptyclus] = RemovingEmptyClusters(clusinfo, sp);
 
+        if ~any(~isnan(clusinfo.group))
+            disp('clusinfo.group is empty, taking KS labels')
+            clusinfo.group = clusinfo.KSLabel;
+        end
         curratedflag = 1;
         if isfield(clusinfo, 'id')
             clusidtmp = clusinfo.id;
