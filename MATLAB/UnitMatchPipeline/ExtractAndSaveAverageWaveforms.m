@@ -20,7 +20,7 @@ GoodRecSesID = clusinfo.RecSesID(Good_Idx);
 
 % Define day stucture
 nclus = length(Good_Idx);
-UseMemMap = 0;
+UseMemMap = 1;
 
 %% Actual extraction
 dataTypeNBytes = numel(typecast(cast(0, 'uint16'), 'uint8')); % Define datatype
