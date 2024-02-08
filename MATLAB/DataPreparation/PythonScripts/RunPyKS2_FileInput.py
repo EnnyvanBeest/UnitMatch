@@ -1,5 +1,5 @@
 from pathlib import Path
-from pykilosort import run, add_default_handler, np1_probe, np2_probe, np2_4shank_probe, neuropixel_probe_from_metafile
+from pykilosort.ibl import run_spike_sorting_ibl, ibl_pykilosort_params
 import glob
 import os
 
@@ -11,10 +11,23 @@ def RunPyKS(ThisFile):
 		print(Path(name))
 		data_paths.append(Path(name))
 		
-	ProbeType = neuropixel_probe_from_metafile(data_paths[0])
+
+	# Path management
+	scratch_dir = Path(os.path.dirname(ThisFile))
+	ks_output_dir = scratch_dir.joinpath('output')	
+	
+	#shutil.rmtree(scratch_dir, ignore_errors=True)
+	scratch_dir.mkdir(parents=True, exist_ok=True)
+	ks_output_dir.mkdir(parents=True, exist_ok=True)
+	
+	# Load parameters
+	params = ibl_pykilosort_params(data_paths)
 	print('Starting PyKS2 now')	
+	# Run PyKS2
+	run(data_paths, dir_path=scratch_dir, output_dir=ks_output_dir, **params)
+
 	# run(data_path, probe=ProbeType, dir_path=OutputDir) #this runs from server, not ideal
-	run(data_paths, probe=ProbeType) #This runs from local
+	run_spike_sorting_ibl(data_paths, delete=DELETE, log_level='INFO', params=params) #This runs from local
 	print('DONE')
 	success=1
 	return success

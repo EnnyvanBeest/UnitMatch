@@ -50,9 +50,11 @@ else
     clu = spikeTemplates; % Original
 end
 
-
-tempScalingAmps = readNPY(fullfile(ksDir, 'amplitudes.npy'));
-
+try
+    tempScalingAmps = readNPY(fullfile(ksDir, 'amplitudes.npy'));
+catch
+    tempScalingAmps = nan(length(st),1);
+end
 if params.loadPCs
     pcFeat = readNPY(fullfile(ksDir,'pc_features.npy')); % nSpikes x nFeatures x nLocalChannels
     pcFeatInd = readNPY(fullfile(ksDir,'pc_feature_ind.npy')); % nTemplates x nLocalChannels

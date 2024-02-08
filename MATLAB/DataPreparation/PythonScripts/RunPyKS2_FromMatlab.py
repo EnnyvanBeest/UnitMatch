@@ -1,25 +1,31 @@
 from pathlib import Path
-from pykilosort import run, add_default_handler, np1_probe, np2_probe, np2_4shank_probe, neuropixel_probe_from_metafile
-#import glob
-#import shutil
-#import os
+from pykilosort.ibl import run, ibl_pykilosort_params
+import os
+import cupy as cp
+import shutil
 
-def RunPyKS(ThisFile):		
+def RunPyKS(bin_file):		
 	print('Starting PyKS2 now')
-	print(ThisFile)
-	try:
-		ProbeType = neuropixel_probe_from_metafile(ThisFile)
-	except:
-		print('Could not load probetype. Assume np1_probe')
-		run(ThisFile, probe=np1_probe, template_snapshots = [0.2, 0.5, 0.8]) #This runs from local
+	bin_file = Path(bin_file)	
+	print(bin_file)
+
+	# Path management
+	scratch_dir = Path(os.path.dirname(bin_file))
+	ks_output_dir = scratch_dir.joinpath('output')	
 	
-	run(ThisFile, probe=ProbeType, template_snapshots = [0.2, 0.5, 0.8]) #This runs from local
-	# run(data_path, probe=ProbeType, dir_path=OutputDir) #this runs from server, not ideal
+	#shutil.rmtree(scratch_dir, ignore_errors=True)
+	scratch_dir.mkdir(parents=True, exist_ok=True)
+	ks_output_dir.mkdir(parents=True, exist_ok=True)
+
+	# load parameters
+	params = ibl_pykilosort_params(bin_file)
+	# Run PyKS2
+	run(bin_file, dir_path=scratch_dir, output_dir=ks_output_dir, **params)
 	print('DONE')
 	success=1
 	return success
 
 
 if __name__ == '__main__':
-   # ThisFile = 'D:/tmpdata/2021-02-24_EB001_g0_t0.imec0.ap.cbin' # #
-    success = RunPyKS(ThisFile)
+	#bin_file = 'D:/tmpdata/2024-01-31_EB037_OrangeRigs_1_g0_t0.imec1.ap.cbin'
+	success = RunPyKS(bin_file)

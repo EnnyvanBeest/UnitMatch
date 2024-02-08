@@ -84,6 +84,9 @@ if Params.UnitMatch
         IMROId = strsplit(UMOutputAll(imroid).folder,'\');
         IMROId = strsplit(IMROId{end-1},'_');
         IMROId = str2num(IMROId{end});
+        if Params.separateIMRO & isempty(IMROId)
+            continue
+        end
 
         UMOutput = load(fullfile(UMOutputAll(imroid).folder,UMOutputAll(imroid).name),'UMparam','UniqueIDConversion');
         UMparam = UMOutput.UMparam;

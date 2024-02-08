@@ -126,11 +126,15 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'refPopCorr')) || recomput
     [refPopRank, refPopSig] = getRank(refPopCorr,SessionSwitch);
     refPopSig(refPopCorr==0) = nan; % Correlation of 0 means nothing
     refPopRank(refPopCorr==0) = nan; % Correlation of 0 means nothing
-
+    
+    % Output needs transposing to be properly stored in table
+    refPopCorr = refPopCorr';
+    refPopRank = refPopRank'; 
+    refPopSig = refPopSig';
 
     % Save in table
     MatchTable.refPopCorr = refPopCorr(:);
-    MatchTable.refPopRank = refPopRank(:);
+    MatchTable.refPopRank = refPopRank(:); % What goes in the table should give ndays for every output when you do sum(refPopRank==1,1), if it's not, transpose!
     MatchTable.refPopSig = refPopSig(:);
 
     %% Compare to functional scores
@@ -182,6 +186,21 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'refPopCorr')) || recomput
         makepretty
         saveas(gcf, fullfile(SaveDir, 'RankVSProbabilityScatter.fig'))
         saveas(gcf, fullfile(SaveDir, 'RankVSProbabilityScatter.bmp'))
+
+
+        % Check these: should be z1, z2, z3, z12, z13, z23, z123
+        VenFig = figure('name','Venn, r=Rank, b=sig, g=Match');
+        subplot(2,2,1)
+        Idx = MatchTable.refPopRank(:) == 1 | MatchTable.refPopSig(:) == 1 | MatchTable.MatchProb(:) > 0.5;
+        h = venn([sum(MatchTable.refPopRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.refPopSig(Idx)==0) sum(MatchTable.refPopRank(Idx)>1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.refPopSig(Idx)==1) ...
+            sum(MatchTable.refPopRank(Idx)>1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.refPopSig(Idx)==0) sum(MatchTable.refPopRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.refPopSig(Idx)==1) ...
+            sum(MatchTable.refPopRank(Idx)==1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.refPopSig(Idx)==0) sum(MatchTable.refPopRank(Idx)>1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.refPopSig(Idx)==1) ...
+            sum(MatchTable.refPopRank(Idx)==1 & MatchTable.refPopSig(Idx)==1 & MatchTable.MatchProb(Idx)>0.5)] );
+        axis square
+        axis off
+        makepretty
+        title('RefPopCor')
+
     end
 end
 
@@ -220,8 +239,14 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'ACGCorr')) || recompute %
     %% Correlation between ACG
     ACGCorr = corr(squeeze(ACGMat(:, 1, :)), squeeze(ACGMat(:, 2, :)));
     ACGCorr = tanh(.5*atanh(ACGCorr) + .5*atanh(ACGCorr)); %%% added after biorxiv
+    ACGCorr = ACGCorr'; % getRank expects different input
 
     [ACGRank, ACGSig] = getRank(ACGCorr,SessionSwitch);
+
+    % Transpose
+    ACGCorr = ACGCorr';
+    ACGRank = ACGRank';
+    ACGSig = ACGSig';
 
     % Save in table
     MatchTable.ACGCorr = ACGCorr(:);
@@ -229,19 +254,54 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'ACGCorr')) || recompute %
     MatchTable.ACGSig = ACGSig(:);
 end
 
+if saveFig
+    % Check these: should be z1, z2, z3, z12, z13, z23, z123
+    figure(VenFig)
+    subplot(2,2,2)
+    Idx = MatchTable.ACGRank(:) == 1 | MatchTable.ACGSig(:) == 1 | MatchTable.MatchProb(:) > 0.5;
+    h = venn([sum(MatchTable.ACGRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.ACGSig(Idx)==0) sum(MatchTable.ACGRank(Idx)>1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.ACGSig(Idx)==1) ...
+        sum(MatchTable.ACGRank(Idx)>1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.ACGSig(Idx)==0) sum(MatchTable.ACGRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.ACGSig(Idx)==1) ...
+        sum(MatchTable.ACGRank(Idx)==1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.ACGSig(Idx)==0) sum(MatchTable.ACGRank(Idx)>1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.ACGSig(Idx)==1) ...
+        sum(MatchTable.ACGRank(Idx)>1 & MatchTable.ACGSig(Idx)==1 & MatchTable.MatchProb(Idx)>0.5)] );
+    axis square
+    axis off
+    makepretty
+    title('ACGCor')
+end
+
 %% Get FR difference
 
 if ~any(ismember(MatchTable.Properties.VariableNames, 'FRDiff')) || recompute
     FR = repmat(permute(FR, [2, 1]), [1, 1, nclus]);
     FRDiff = abs(squeeze(FR(:, 2, :)-permute(FR(:, 1, :), [3, 2, 1])));
-
     [FRRank, FRSig] = getRank(-FRDiff,SessionSwitch);
+
+    % Transpose
+    FRDiff = FRDiff';
+    FRRank = FRRank';
+    FRSig = FRSig';
 
     % Save in table
     MatchTable.FRDiff = FRDiff(:);
     MatchTable.FRRank = FRRank(:);
     MatchTable.FRSig = FRSig(:);
 end
+if saveFig
+    % Check these: should be z1, z2, z3, z12, z13, z23, z123
+    figure(VenFig)
+    subplot(2,2,3)
+    Idx = MatchTable.FRRank(:) == 1 | MatchTable.FRSig(:) == 1 | MatchTable.MatchProb(:) > 0.5;
+    h = venn([sum(MatchTable.FRRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.FRSig(Idx)==0) sum(MatchTable.FRRank(Idx)>1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.FRSig(Idx)==1) ...
+        sum(MatchTable.FRRank(Idx)>1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.FRSig(Idx)==0) sum(MatchTable.FRRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.FRSig(Idx)==1) ...
+        sum(MatchTable.FRRank(Idx)==1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.FRSig(Idx)==0) sum(MatchTable.FRRank(Idx)>1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.FRSig(Idx)==1) ...
+        sum(MatchTable.FRRank(Idx)==1 & MatchTable.FRSig(Idx)==1 & MatchTable.MatchProb(Idx)>0.5)] );
+    axis square
+    axis off
+    makepretty
+    title('FRDiff')
+   
+end
+
 
 %% Get natural images fingerprints correlations
 
@@ -329,11 +389,35 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'natImRespCorr')) || recom
 
     % Get rank
     [natImRespRank, natImRespSig] = getRank(corrResp_big, SessionSwitch);
-    
+
+    % Output needs transposing to be properly stored in table
+    corrResp_big = corrResp_big';
+    natImRespRank = natImRespRank';
+    natImRespSig = natImRespSig';
+
     % Save in table
     MatchTable.natImRespCorr = corrResp_big(:);
-    MatchTable.natImRespRank = natImRespRank(:);
+    MatchTable.natImRespRank = natImRespRank(:); % What goes in the table should give ndays for every output when you do sum(refPopRank==1,1), if it's not, transpose!
     MatchTable.natImRespSig = natImRespSig(:);
+
+    if saveFig & ~isempty(exp2keep)
+        % Check these: should be z1, z2, z3, z12, z13, z23, z123
+        figure(VenFig)
+        subplot(2,2,3)
+        Idx = MatchTable.natImRespRank(:) == 1 | MatchTable.natImRespSig(:) == 1 | MatchTable.MatchProb(:) > 0.5;
+        h = venn([sum(MatchTable.natImRespRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.natImRespSig(Idx)==0) sum(MatchTable.natImRespRank(Idx)>1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.natImRespSig(Idx)==1) ...
+            sum(MatchTable.natImRespRank(Idx)>1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.natImRespSig(Idx)==0) sum(MatchTable.natImRespRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.natImRespSig(Idx)==1) ...
+            sum(MatchTable.natImRespRank(Idx)==1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.natImRespSig(Idx)==0) sum(MatchTable.natImRespRank(Idx)>1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.natImRespSig(Idx)==1) ...
+            sum(MatchTable.natImRespRank(Idx)==1 & MatchTable.natImRespSig(Idx)==1 & MatchTable.MatchProb(Idx)>0.5)] );
+        axis square
+        axis off
+        makepretty
+        title('NatImg')
+
+
+
+    end
+
 
 %     % ---
 %     % Second fingerprint with CCA
@@ -426,6 +510,10 @@ for id = 1:ntimes
     refPopCorr = reshape(MatchTable.refPopCorr, nclus, nclus);
 
     if saveFig
+
+        saveas(VenFig, fullfile(SaveDir, ['VennFunctionalScores.fig']))
+        saveas(VenFig, fullfile(SaveDir, ['VennFunctionalScores.bmp']))
+
         figure('name', ['Functional score separatability ', addname])
 
         subplot(4, 3, 1)
@@ -483,6 +571,8 @@ for id = 1:ntimes
         title(sprintf('Cross-Correlation Fingerprint AUC: %.3f, %.3f, %.3f', AUC1, AUC2, AUC3))
         makepretty
         drawnow %Something to look at while ACG calculations are ongoing
+
+    
     end
 
 

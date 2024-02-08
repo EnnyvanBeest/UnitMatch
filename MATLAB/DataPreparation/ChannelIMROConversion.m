@@ -60,6 +60,7 @@ if isfield(meta,'snsShankMap')
         vSep = 15;      % in um
         hSep = 32;
         shankSep = 250;
+        basex = 27; % shift by this much in x
 
     else
         disp('No layout known')
@@ -96,24 +97,6 @@ elseif isfield(meta,'snsGeomMap')
     nChan = length(Shankmap);
     nCols = 2;
 
-    % Read channel positions - stand for shank number, column, and row
-    % (channel)
-    Shankmap = Shankmap(2:end);
-    Shankmap = cellfun(@(X) strsplit(X,':'),Shankmap,'UniformOutput',0);
-    Shank = cell2mat(cellfun(@(X) str2num(X{1}),Shankmap,'UniformOutput',0));
-    Col = cell2mat(cellfun(@(X) str2num(X{2}),Shankmap,'UniformOutput',0));
-    Row = cell2mat(cellfun(@(X) str2num(X{3}),Shankmap,'UniformOutput',0));
-    draw = cell2mat(cellfun(@(X) str2num(X{4}),Shankmap,'UniformOutput',0));
-
-    % Make channelMapToPos for conversion
-    channelPos = nan(length(Shank),2);
-    channelPos(APRecordingOrder+1,1) = Col; %x-position
-    channelPos(APRecordingOrder+1,2) = Row; %y-position
-
-end
-
-
-if drawthis
 
     if nShanks==1
 
@@ -126,17 +109,39 @@ if drawthis
         vSep = 15;      % in um
         hSep = 32;
         shankSep = 250;
+        basex = 27; % shift by this much in x
 
     else
         disp('No layout known')
     end
+
+    % Read channel positions - stand for shank number, column, and row
+    % (channel)
+    Shankmap = Shankmap(2:end);
+    Shankmap = cellfun(@(X) strsplit(X,':'),Shankmap,'UniformOutput',0);
+    Shank = cell2mat(cellfun(@(X) str2num(X{1}),Shankmap,'UniformOutput',0));
+    Col = cell2mat(cellfun(@(X) str2num(X{2}),Shankmap,'UniformOutput',0));
+    Row = cell2mat(cellfun(@(X) str2num(X{3}),Shankmap,'UniformOutput',0));
+    draw = cell2mat(cellfun(@(X) str2num(X{4}),Shankmap,'UniformOutput',0));
+
+    % Make channelMapToPos for conversion
+    channelPos = nan(length(Shank),2);
+    channelPos(APRecordingOrder+1,1) = Col+(Shank*shankSep); %x-position
+    channelPos(APRecordingOrder+1,2) = Row; %y-position
+
+end
+
+
+if drawthis
+
+   
     % Draw probe layout
     xpos = [];
     ypos = [];
     for shid = 1:nShanks
         for colid = 1:nCols
             for chanid = 1:nChan
-                xpos = [xpos (shid-1)*shankSep+(colid-1)*hSep];
+                xpos = [xpos (shid-1)*shankSep+(colid-1)*hSep+basex];
                 ypos = [ypos (chanid-1)*vSep];
             end
         end

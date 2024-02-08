@@ -234,7 +234,13 @@ for midx = 1:length(MiceOpt)
                     Sesinfo = strsplit(Sesinfo{1},MiceOpt{midx});
                     Sesinfo = Sesinfo{2};
                     if isempty(Sesinfo)
+                        Sesinfo = strsplit(tmpephysdir(id).name,'_g0');
+                        Sesinfo = strsplit(Sesinfo{2},'_');
+                        Sesinfo = Sesinfo{2};
+                        if isempty(Sesinfo)
+
                         Sesinfo = '';
+                        end
                     else
                         Sesinfo = Sesinfo(end);
                     end
@@ -268,12 +274,12 @@ for midx = 1:length(MiceOpt)
                         copyfile(fullfile(tmpfile(sesid).folder,tmpfile(sesid).name),fullfile(tmpdatafolder,tmpfile(sesid).name))
                         copyfile(fullfile(metafile.folder,metafile.name),fullfile(tmpdatafolder,metafile.name))
                         if Compressed
-                        copyfile(fullfile(chfile.folder,chfile.name),fullfile(tmpdatafolder,chfile.name))
+                            copyfile(fullfile(chfile.folder,chfile.name),fullfile(tmpdatafolder,chfile.name))
                         end
                     end
                     % PyKS2
                     try
-                        success = pyrunfile("RunPyKS2_FromMatlab.py","success",ThisFile = strrep(fullfile(tmpdatafolder,tmpfile(sesid).name),'\','/'))
+                        success = pyrunfile("RunPyKS2_FromMatlab.py","success",bin_file = strrep(fullfile(tmpdatafolder,tmpfile(sesid).name),'\','/'));
                         clear success
                     catch ME
                         disp(ME)
@@ -301,6 +307,12 @@ for midx = 1:length(MiceOpt)
                     try
                         delete(fullfile(tmpdatafolder,'output','*'))
                         rmdir(fullfile(tmpdatafolder,'output'))
+                    catch ME
+                        disp(ME)
+                    end
+                    try
+                        delete(fullfile(tmpdatafolder,'.kilosort',tmpfile(sesid).name))
+                        rmdir(fullfile(tmpdatafolder,'.kilosort'))
                     catch ME
                         disp(ME)
                     end
