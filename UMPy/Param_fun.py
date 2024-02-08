@@ -34,7 +34,7 @@ def get_max_site(SpatialFP):
     MaxSite = np.argmax(SpatialFP, axis = 1)
     return MaxSite
 
-def get_max_sites(waveform, ChannelPos, param):
+def get_max_sites(waveform, ChannelPos, ClusInfo, param):
     """
     Using waveforms, ChannelPos and param, to find the max channel for each unit and cv, this function also
     returns good idx's / positions, by selecting channels within ChannelRadius (default 150 um) 
@@ -44,6 +44,7 @@ def get_max_sites(waveform, ChannelPos, param):
     nChannels = param['nChannels']
     ChannelRadius = param['ChannelRadius']
     waveidx = param['waveidx']
+    SessionID = ClusInfo['SessionID']
     
     MeanCV = np.mean(waveform, axis = 3) # average of each cv
     SpatialFootprint = get_spatialfp(MeanCV) # choose max time 
@@ -51,14 +52,15 @@ def get_max_sites(waveform, ChannelPos, param):
 
     # Finds the indices where the distance from the max site mean is small
     goodidx = np.empty((nUnits, nChannels))
-    for i in range(ChannelPos.shape[0]): #looping over each site
-        dist = np.linalg.norm(ChannelPos[MaxSiteMean,:] - ChannelPos[i,:], axis=1)
-        good = dist < ChannelRadius
-        goodidx[:,i] = good
+    for i in range(ChannelPos[0].shape[0]): #looping over each site, assuming all ChannelPos, are the same no of channels
+        for j in range(nUnits):
+            dist = np.linalg.norm(ChannelPos[SessionID[j]][MaxSiteMean[j],:] - ChannelPos[SessionID[j]][i,:])
+            good = dist < ChannelRadius
+            goodidx[j,i] = good
 
     goodpos = np.zeros((nUnits, nChannels, 3))
     for i in range(nUnits):
-        goodpos[i] = ChannelPos * np.tile(goodidx[i], (3,1)).T #gives the 3-d positions of the channels if they are close to the max site  
+        goodpos[i] = ChannelPos[SessionID[i]] * np.tile(goodidx[i], (3,1)).T #gives the 3-d positions of the channels if they are close to the max site  
 
     # Wave_filt, is the waveform, only at 'good' spatial points and a waveidx/good time points
     WaveformFilt = np.zeros_like(waveform)
@@ -92,7 +94,7 @@ def smooth(array, size = 2):
     out = np.convolve(np.squeeze(array), filt,'same') / np.convolve(tmp, filt ,'same')      
     return out
 
-def decay_and_average_Waveform(waveform,ChannelPos, goodidx, MaxSite, MaxSiteMean, param):
+def decay_and_average_Waveform(waveform,ChannelPos, goodidx, MaxSite, MaxSiteMean, ClusInfo, param):
     """
     This functions, extracts decay parameters of the units, and uses them to create weighted average waveforms 
     of each unit.
@@ -103,6 +105,7 @@ def decay_and_average_Waveform(waveform,ChannelPos, goodidx, MaxSite, MaxSiteMea
     NewPeakLoc = param['PeakLoc']
     waveidx = param['waveidx']
     ChannelRadius = param['ChannelRadius']
+    SessionID = ClusInfo['SessionID']
 
 
     SpatialDecayFit = np.zeros((nUnits,2))
@@ -116,9 +119,9 @@ def decay_and_average_Waveform(waveform,ChannelPos, goodidx, MaxSite, MaxSiteMea
 
     for i in range(nUnits):
         #use the good indices calculated, to get the nearby positions of each unit
-        goodpos = ChannelPos[goodidx[i,:].astype(bool),:]
+        goodpos = ChannelPos[SessionID[i]][goodidx[i,:].astype(bool),:]
         for cv in range(2):
-            Dist2MaxChan = np.linalg.norm( goodpos - ChannelPos[MaxSite[i,cv]], axis= 1 )
+            Dist2MaxChan = np.linalg.norm( goodpos - ChannelPos[SessionID[i]][MaxSite[i,cv]], axis= 1 )
             TmpAmp = abs(waveform[i,NewPeakLoc,goodidx[i,:].astype(bool),cv])
 
             # need to remove 0 values, as divide by Dist2MaxChan, and need TmpAmp to be same size
@@ -146,14 +149,14 @@ def decay_and_average_Waveform(waveform,ChannelPos, goodidx, MaxSite, MaxSiteMea
 
 ########################################################################################################
                 #can change to use max site of each cv, or max site of the mean of each cv
-                #dist = np.linalg.norm(ChannelPos[MaxSite[i],:] - ChannelPos[s,:])
-                dist = np.linalg.norm(ChannelPos[MaxSiteMean[i],:] - ChannelPos[s,:])
+                #dist = np.linalg.norm(ChannelPos[SessionID[i]][MaxSite[i],:] - ChannelPos[SessionID[i]][s,:])
+                dist = np.linalg.norm(ChannelPos[SessionID[i]][MaxSiteMean[i],:] - ChannelPos[SessionID[i]][s,:])
 ########################################################################################################
 
                 good = dist < d_10[i,cv]
                 tmpidx[s] = good
 
-            loc = ChannelPos[tmpidx.astype(bool),:]
+            loc = ChannelPos[SessionID[i]][tmpidx.astype(bool),:]
 
             #average centroid is the sum of spatial footprint * position / spatial foot print
             SpatialFootprint = np.max(np.abs(waveform[i,:,tmpidx.astype(bool),cv]), axis = 1)
@@ -242,7 +245,7 @@ def get_amplitude_shift_Waveform(waveform,AvgWaveform, PeakTime, param):
     return Amplitude, waveform, AvgWaveform
 
 
-def avg_Waveform_PerTP(waveform,ChannelPos, d_10, MaxSiteMean, Amplitude, AvgWaveform, param):
+def avg_Waveform_PerTP(waveform,ChannelPos, d_10, MaxSiteMean, Amplitude, AvgWaveform, ClusInfo, param):
     """
     This function calculates the weighted average waveform per time point, as well as the good time points for each unit
     """
@@ -250,6 +253,7 @@ def avg_Waveform_PerTP(waveform,ChannelPos, d_10, MaxSiteMean, Amplitude, AvgWav
     SpikeWidth = param['SpikeWidth']
     nChannels = param['nChannels']
     waveidx = param['waveidx']
+    SessionID = ClusInfo['SessionID']
 
     GoodSiteId = np.empty((nUnits,nChannels,2))
     WaveformDuration = np.full((nUnits,2), np.nan)
@@ -259,12 +263,12 @@ def avg_Waveform_PerTP(waveform,ChannelPos, d_10, MaxSiteMean, Amplitude, AvgWav
     for i in range(nUnits):
         
         for cv in range(2):
-            #dist = np.linalg.norm(ChannelPos[MaxSite[i,cv],:] - ChannelPos[:,:], axis = 1)
-            dist = np.linalg.norm(ChannelPos[MaxSiteMean[i],:] - ChannelPos[:,:], axis = 1)
+            #dist = np.linalg.norm(ChannelPos[SessionID[i]][MaxSite[i,cv],:] - ChannelPos[SessionID[i]][:,:], axis = 1)
+            dist = np.linalg.norm(ChannelPos[SessionID[i]][MaxSiteMean[i],:] - ChannelPos[SessionID[i]][:,:], axis = 1)
 
             test = dist < np.abs(d_10[i,cv])
             GoodSiteId[i,:,cv] = test
-            Locs = ChannelPos[GoodSiteId[i,:,cv].astype(bool), :]
+            Locs = ChannelPos[SessionID[i]][GoodSiteId[i,:,cv].astype(bool), :]
 
             # select time points where the values are above 25% of the amplitude
             wvdurtmp = np.argwhere( np.abs(np.sign(Amplitude[i,cv]) * AvgWaveform[waveidx,i,cv] )> (np.sign(Amplitude[i,cv]) * Amplitude[i,cv] * 0.25))
