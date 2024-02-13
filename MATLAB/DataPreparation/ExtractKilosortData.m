@@ -20,7 +20,6 @@ function Params = ExtractKilosortData(KiloSortPaths, Params, RawDataPathsInput)
 % directory. If this input is missing, this code will try to find the raw
 % ephys data in the params.py file, first line (dat_path).
 
-
 %% Check inputs
 if ~iscell(KiloSortPaths) %isstruct(KiloSortPaths) || isfield(KiloSortPaths(1),'name') || isfield(KiloSortPaths(1),'folder')
     error('This is not a cell... give correct input please')
@@ -31,8 +30,11 @@ if nargin < 2
 end
 Params = DefaultParametersExtractKSData(Params,KiloSortPaths);
 
+if nargin>2 && exist('RawDataPathsInput')
+    Params.RawDataPaths = RawDataPathsInput;
+end
 try
-    if nargin < 3
+    if ~isfield(Params,'RawDataPaths') || isempty(Params.RawDataPaths) || length(Params.RawDataPaths)~=length(KiloSortPaths)
         disp('Finding raw ephys data using the params.py file from (py)kilosort output')
         UseParamsKS = 1;
     else
@@ -71,7 +73,7 @@ for subsesid = 1:length(KiloSortPaths)
     AllUniqueTemplates = [];
     cluster_id = [];
     recses = [];
-
+    ExtractChannelMapThenContinue = 0;
 
     %% save data paths information
     if Params.RunPyKSChronicStitched %CALL THIS STITCHED --> Only works when using RunPyKS2_FromMatlab as well from this toolbox
@@ -110,8 +112,10 @@ for subsesid = 1:length(KiloSortPaths)
         if UseParamsKS
             spikeStruct = loadParamsPy(fullfile(KiloSortPaths{subsesid}, 'params.py'));
             rawD = spikeStruct.dat_path;
-            rawD = rawD(strfind(rawD, '"')+1:end);
-            rawD = rawD(1:strfind(rawD, '"')-1);
+            if any(strfind(rawD, '"'))
+                rawD = rawD(strfind(rawD, '"')+1:end);
+                rawD = rawD(1:strfind(rawD, '"')-1);
+            end
             if any(strfind(rawD,'../'))
                 rawD = rawD(strfind(rawD,'../')+3:end)
             end
@@ -129,10 +133,10 @@ for subsesid = 1:length(KiloSortPaths)
           
           
         else
-            if isstruct(RawDataPathsInput)
-                rawD = RawDataPathsInput(subsesid);
+            if isstruct(Params.RawDataPaths)
+                rawD = Params.RawDataPaths(subsesid);
             else
-                rawD = dir(fullfile(RawDataPathsInput{subsesid}));
+                rawD = dir(fullfile(Params.RawDataPaths{subsesid}));
             end
         end
         if isempty(rawD)
@@ -144,6 +148,38 @@ for subsesid = 1:length(KiloSortPaths)
         AllKiloSortPaths{subsesid} = KiloSortPaths{subsesid};
     end
     Params.DecompressionFlag = 0;
+  
+
+    %% Load existing?
+    if exist(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat')) && ~Params.RedoQM && ~Params.ReLoadAlways
+        % Check if parameters are the same, of not we have to redo it
+        % anyway
+        tmpparam = matfile(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat'));
+        tmpparam = tmpparam.Params;
+
+        if tmpparam.RunQualityMetrics == Params.RunQualityMetrics && tmpparam.RunPyKSChronicStitched == Params.RunPyKSChronicStitched
+            if ~isfield(tmpparam,'RecordingDuration') || tmpparam.RecordingDuration < Params.MinRecordingDuration
+                if ~isempty(rawD) & ~contains(rawD.name,'.dat')
+                    [channelpostmpconv, probeSN, recordingduration] = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done
+                    if recordingduration<Params.MinRecordingDuration
+                        disp([KiloSortPaths{subsesid} ' recording too short, skip...'])
+                        continue
+                    end
+                end
+            end
+
+            disp(['Found existing data in ', KiloSortPaths{subsesid}, ', Using this...'])
+
+            if isfield(tmpparam,'AllChannelPos')
+                AllChannelPos{subsesid} = tmpparam.AllChannelPos{1};
+                AllProbeSN{subsesid} = tmpparam.AllProbeSN{1};
+                countid = countid + 1;
+                continue
+            else
+                ExtractChannelMapThenContinue = 1;
+            end
+        end
+    end
 
     %% Channel data
     myClusFile = dir(fullfile(KiloSortPaths{subsesid}, 'channel_map.npy'));
@@ -154,9 +190,9 @@ for subsesid = 1:length(KiloSortPaths)
     if length(channelmaptmp) < length(channelpostmp)
         channelmaptmp(end+1:length(channelpostmp)) = length(channelmaptmp):length(channelpostmp) - 1;
     end
- 
+
     %% Is it correct channelpos though...? Check using raw data. While reading this information, also extract recording duration and Serial number of probe
-    if ~isempty(rawD)
+    if ~isempty(rawD) & ~contains(rawD.name,'.dat')
         [channelpostmpconv, probeSN, recordingduration] = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done
         if recordingduration<Params.MinRecordingDuration
             disp([KiloSortPaths{subsesid} ' recording too short, skip...'])
@@ -165,25 +201,17 @@ for subsesid = 1:length(KiloSortPaths)
         AllChannelPos{subsesid} = channelpostmpconv;
         AllProbeSN{subsesid} = probeSN;
     else
+        channelpostmpconv = channelpostmp;
         AllChannelPos{subsesid} = channelpostmp;
-        AllProbeSN{subsesid} = '000000';
-    end
-    
-    %% Load existing?
-    if exist(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat')) && ~Params.RedoQM && ~Params.ReLoadAlways
-        % Check if parameters are the same, of not we have to redo it
-        % anyway
-        tmpparam = matfile(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat'));
-        tmpparam = tmpparam.Params;
-
-        if tmpparam.RunQualityMetrics == Params.RunQualityMetrics && tmpparam.RunPyKSChronicStitched == Params.RunPyKSChronicStitched
-            disp(['Found existing data in ', KiloSortPaths{subsesid}, ', Using this...'])
-            countid = countid + 1;
-            continue
-        end
+        probeSN = '000000';
+        AllProbeSN{subsesid} = probeSN;
     end
 
-   
+    if ExtractChannelMapThenContinue % Version compatibility
+        countid = countid + 1;
+        ExtractChannelMapThenContinue = 0;
+        continue
+    end
     
     %% Load histology if available
     tmphisto = dir(fullfile(KiloSortPaths{subsesid}, 'HistoEphysAlignment.mat'));
@@ -209,8 +237,9 @@ for subsesid = 1:length(KiloSortPaths)
 
     %% Bombcell parameters
     % clear paramBC
-    paramBC = bc_qualityParamValuesForUnitMatch(dir(strrep(fullfile(rawD(1).folder, rawD(1).name), 'cbin', 'meta')), fullfile(Params.tmpdatafolder, strrep(rawD(1).name, 'cbin', 'bin')));
-
+    if Params.RunQualityMetrics
+        paramBC = bc_qualityParamValuesForUnitMatch(dir(strrep(fullfile(rawD(1).folder, rawD(1).name), 'cbin', 'meta')), fullfile(Params.tmpdatafolder, strrep(rawD(1).name, 'cbin', 'bin')));
+    end
     %% Load Cluster Info
     myClusFile = dir(fullfile(KiloSortPaths{subsesid}, 'cluster_info.tsv')); % If you did phy (manual curation) we will find this one... We can trust you, right?
     if isempty(myClusFile)
@@ -270,6 +299,10 @@ for subsesid = 1:length(KiloSortPaths)
         % template are not necessarily the same after  splitting/merging)
         [clusinfo, sp, emptyclus] = RemovingEmptyClusters(clusinfo, sp);
 
+        if ~any(~isnan(clusinfo.group))
+            disp('clusinfo.group is empty, taking KS labels')
+            clusinfo.group = clusinfo.KSLabel;
+        end
         curratedflag = 1;
         if isfield(clusinfo, 'id')
             clusidtmp = clusinfo.id;
@@ -548,6 +581,7 @@ for subsesid = 1:length(KiloSortPaths)
     sp = rmfield(sp, 'tempsUnW');
     sp = rmfield(sp, 'templateDuration');
     sp = rmfield(sp, 'waveforms');
+    Params.RecordingDuration = recordingduration;
     save(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat'), 'clusinfo', 'Params', '-v7.3')
     if Params.saveSp %QQ not using savePaths
         try

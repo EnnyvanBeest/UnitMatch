@@ -9,8 +9,11 @@ DateOpt = cellfun(@(X) {X.name},DateOpt,'UniformOutput',0);
 FromDate = datetime("2023-10-03 09:00:00");
 
 LogError = {}; % Keep track of which runs didn't work
+
+PipelineParamsOri = PipelineParams;
 for midx = 1:length(MiceOpt)
     close all % to not overcrowd the graphics card
+    PipelineParams = PipelineParamsOri; % Reset
     %% Loading data from kilosort/phy easily
     if ~isempty(KilosortDir)
         myKsDir = fullfile(KilosortDir,MiceOpt{midx});
@@ -76,22 +79,22 @@ for midx = 1:length(MiceOpt)
     PipelineParams.AllChannelPos(EmptyFolders) = [];
     PipelineParams.AllProbeSN(EmptyFolders) = [];
     PipelineParams.RawDataPaths(EmptyFolders) = [];
+    PipelineParams.KSDir = AllKiloSortPaths;
 
     %% Might want to run UM for separate IMRO tables & Probes (although UM can handle running all at the same time and takes position into account)
     if ~PipelineParams.separateIMRO
         RunSet = ones(1,length(AllKiloSortPaths)); %Run everything at the same time
         nRuns = 1;
     else
+        % Extract different IMRO tables
+        channelpositionMatrix = cat(3,PipelineParams.AllChannelPos{:});
+        [UCHanOpt,~,idIMRO] = unique(reshape(channelpositionMatrix,size(channelpositionMatrix,1)*size(channelpositionMatrix,2),[])','rows','stable');
+        UCHanOpt = reshape(UCHanOpt',size(channelpositionMatrix,1),size(channelpositionMatrix,2),[]);
 
-            % Extract different IMRO tables
-            channelpositionMatrix = cat(3,PipelineParams.AllChannelPos{:});
-            [UCHanOpt,~,idIMRO] = unique(reshape(channelpositionMatrix,size(channelpositionMatrix,1)*size(channelpositionMatrix,2),[])','rows','stable');
-            UCHanOpt = reshape(UCHanOpt',size(channelpositionMatrix,1),size(channelpositionMatrix,2),[]);
-
-            % Extract unique probes used
-            [ProbeOpt,~,idProbe]  = unique([PipelineParams.AllProbeSN{:}]);
-            PosComb = combvec(1:length(ProbeOpt),1:size(UCHanOpt,3)); % Possible combinations Probe X IMRO
-            % Assign a number to each KS path related to PosComb
+        % Extract unique probes used
+        [ProbeOpt,~,idProbe]  = unique([PipelineParams.AllProbeSN{:}]);
+        PosComb = combvec(1:length(ProbeOpt),1:size(UCHanOpt,3)); % Possible combinations Probe X IMRO
+        % Assign a number to each KS path related to PosComb
         if strcmp(RecordingType{midx},'Chronic')
 
             RunSet = nan(1,length(AllKiloSortPaths));
@@ -188,6 +191,17 @@ for midx = 1:length(MiceOpt)
                     disp(['Couldn''t do Quality metrics for ' MiceOpt{midx}])
                 end
             
+            else
+                  %% Get clusinfo
+                clusinfo = getClusinfo(UMparam.KSDir);
+                if ~any(clusinfo.Good_ID) || sum(clusinfo.Good_ID)<UMparam.minGoodUnits
+                    disp('No good units, continue')
+                    continue
+                end
+                load(fullfile(UMparam.SaveDir,'UnitMatch.mat'),'UMparam','UniqueIDConversion','WaveformInfo')
+                %% Visualization
+                PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
+
             end
            
             %%

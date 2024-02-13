@@ -4,24 +4,24 @@ import Bayes_fun as bf
 import utils as util
 import numpy as np
 
-def extract_parameters(waveform, ChannelPos, param):
+def extract_parameters(waveform, ChannelPos, ClusInfo, param):
     """
     This function runs all of the parameter extraction in one step!
     """
     
     waveform = pf.detrend_waveform(waveform)
 
-    MaxSite, good_idx, good_pos, MaxSiteMean = pf.get_max_sites(waveform, ChannelPos, param)
+    MaxSite, good_idx, good_pos, MaxSiteMean = pf.get_max_sites(waveform, ChannelPos, ClusInfo, param)
 
-    SpatialDecayFit , SpatialDecay,  d_10, AvgCentroid, WeightedAvgWaveF, PeakTime = pf.decay_and_average_Waveform(waveform,ChannelPos, good_idx, MaxSite, MaxSiteMean, param)
+    SpatialDecayFit , SpatialDecay,  d_10, AvgCentroid, AvgWaveform, PeakTime = pf.decay_and_average_Waveform(waveform,ChannelPos, good_idx, MaxSite, MaxSiteMean, ClusInfo, param)
 
-    Amplitude, waveform, WeightedAvgWaveF = pf.get_amplitude_shift_Waveform(waveform,WeightedAvgWaveF, PeakTime, param)
+    Amplitude, waveform, AvgWaveform = pf.get_amplitude_shift_Waveform(waveform,AvgWaveform, PeakTime, param)
 
-    WaveformDuration, WeightedAvgWaveF_PerTP, WaveIdx = pf.avg_Waveform_PerTP(waveform,ChannelPos, d_10, MaxSiteMean, Amplitude, WeightedAvgWaveF, param)
+    WaveformDuration, AvgWaveformPerTP, WaveIdx = pf.avg_Waveform_PerTP(waveform,ChannelPos, d_10, MaxSiteMean, Amplitude, AvgWaveform, ClusInfo, param)
 
     ExtractedWaveProperties = {'SpatialDecayFit' : SpatialDecayFit, 'SpatialDecay' : SpatialDecay , 'AvgCentroid' : AvgCentroid,
-                                'WaveformDuration' : WaveformDuration, 'WeightedAvgWaveF_PerTP' : WeightedAvgWaveF_PerTP, 'WaveIdx' : WaveIdx,
-                                 'Amplitude' : Amplitude, 'WeightedAvgWaveF' : WeightedAvgWaveF }
+                                'WaveformDuration' : WaveformDuration, 'AvgWaveformPerTP' : AvgWaveformPerTP, 'WaveIdx' : WaveIdx,
+                                 'Amplitude' : Amplitude, 'AvgWaveform' : AvgWaveform, 'MaxSite' : MaxSite, 'MaxSiteMean' : MaxSiteMean}
     
     return ExtractedWaveProperties
 
@@ -38,20 +38,20 @@ def extract_metric_scores(ExtractedWaveProperties, SessionSwitch, WithinSession,
     Amplitude = ExtractedWaveProperties['Amplitude']
     SpatialDecay = ExtractedWaveProperties['SpatialDecay']
     SpatialDecayFit = ExtractedWaveProperties['SpatialDecayFit']
-    WeightedAvgWaveF = ExtractedWaveProperties['WeightedAvgWaveF']
-    WeightedAvgWaveF_PerTP = ExtractedWaveProperties['WeightedAvgWaveF_PerTP']
+    AvgWaveform = ExtractedWaveProperties['AvgWaveform']
+    AvgWaveformPerTP = ExtractedWaveProperties['AvgWaveformPerTP']
     AvgCentroid = ExtractedWaveProperties['AvgCentroid']
 
     #These scores are NOT effected by the drift correction
     AmpScore = mf.get_simple_metric(Amplitude)
     SpatialDecayScore = mf.get_simple_metric(SpatialDecay)
     SpatialDecayFitScore = mf.get_simple_metric(SpatialDecayFit, outlier = True)
-    WVcorrScore = mf.get_WVcorr(WeightedAvgWaveF, param)
-    WVcorrScore = mf.get_WaveformMSE(WeightedAvgWaveF, param)
+    WVcorrScore = mf.get_WVcorr(AvgWaveform, param)
+    WVcorrScore = mf.get_WaveformMSE(AvgWaveform, param)
 
     #effected by drift
     for i in range(niter):
-        WAW_PerTP_flip = mf.flip_dim(WeightedAvgWaveF_PerTP, param)
+        WAW_PerTP_flip = mf.flip_dim(AvgWaveformPerTP, param)
         EuclDist = mf.get_Euclidean_dist(WAW_PerTP_flip,param)
 
         CentroidDist, CentroidVar = mf.Centroid_metrics(EuclDist, param)
@@ -89,7 +89,7 @@ def extract_metric_scores(ExtractedWaveProperties, SessionSwitch, WithinSession,
             priorMatch = 1 - ( param['nExpectedMatches'] / len(IncludeThesePairs))
             CandidatePairs = TotalScore > ThrsOpt
 
-            drifts, AvgCentroid, WeightedAvgWaveF_PerTP = mf.drift_nSessions(CandidatePairs, SessionSwitch, AvgCentroid, WeightedAvgWaveF_PerTP, TotalScore, param)
+            drifts, AvgCentroid, AvgWaveformPerTP = mf.drift_nSessions(CandidatePairs, SessionSwitch, AvgCentroid, AvgWaveformPerTP, TotalScore, param)
 
 
     ThrsOpt = mf.get_threshold(TotalScore, WithinSession, EuclDist, param, IsFirstPass = False)
