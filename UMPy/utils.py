@@ -11,6 +11,12 @@ def load_tsv(path):
     df  = pd.read_csv(path, sep='\t', skiprows = 0)
     return df.values
 
+def get_session_number(unitid, SessionSwitch):
+
+    for i in range(len(SessionSwitch) - 1):
+        if (SessionSwitch[i] <= unitid < SessionSwitch[i+1]):
+            return i
+
 def get_session_data(nUnitsPerSession):
     """
     Input the number of units per day/session as a numpy array, will return:
@@ -20,11 +26,11 @@ def get_session_data(nUnitsPerSession):
     nSessions = len(nUnitsPerSession)                  
     nUnits = nUnitsPerSession.sum()
 
-    sessionid = np.zeros(nUnits)
+    sessionid = np.zeros(nUnits, dtype = int)
     SessionSwitch = np.cumsum(nUnitsPerSession)
     SessionSwitch = np.insert(SessionSwitch, 0, 0)
     for i in range(nSessions):
-        sessionid[SessionSwitch[i]:SessionSwitch[i+1]] = i
+        sessionid[SessionSwitch[i]:SessionSwitch[i+1]] = int(i)
 
     return nUnits, sessionid, SessionSwitch, nSessions
 
@@ -114,7 +120,7 @@ def load_good_waveforms(WavePaths, UnitLabelPaths, param):
     param['nUnits'], sessionid, SessionSwitch, param['nSessions'] = get_session_data(nUnitsPerSession)
     WithinSession = get_within_session(sessionid, param)
     param['nChannels'] = waveform.shape[2]
-    return waveform, sessionid, SessionSwitch, WithinSession, param
+    return waveform, sessionid, SessionSwitch, WithinSession, GoodUnits, param
 
 def get_good_units(UnitLabelPaths, good = True):
     """
@@ -131,7 +137,7 @@ def get_good_units(UnitLabelPaths, good = True):
             TmpIdx = UnitLabel[:,0] # every unit index in the first column
         GoodUnitIdx = UnitLabel[TmpIdx, 0]
         GoodUnits.append(GoodUnitIdx)
-    return GoodUnits 
+    return GoodUnits
 
 def load_good_units(GoodUnits, WavePaths, param):
     """
