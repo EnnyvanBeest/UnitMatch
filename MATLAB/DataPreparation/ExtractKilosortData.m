@@ -20,7 +20,6 @@ function Params = ExtractKilosortData(KiloSortPaths, Params, RawDataPathsInput)
 % directory. If this input is missing, this code will try to find the raw
 % ephys data in the params.py file, first line (dat_path).
 
-
 %% Check inputs
 if ~iscell(KiloSortPaths) %isstruct(KiloSortPaths) || isfield(KiloSortPaths(1),'name') || isfield(KiloSortPaths(1),'folder')
     error('This is not a cell... give correct input please')
@@ -159,10 +158,19 @@ for subsesid = 1:length(KiloSortPaths)
         tmpparam = tmpparam.Params;
 
         if tmpparam.RunQualityMetrics == Params.RunQualityMetrics && tmpparam.RunPyKSChronicStitched == Params.RunPyKSChronicStitched
+            if ~isfield(tmpparam,'RecordingDuration') || tmpparam.RecordingDuration < Params.MinRecordingDuration
+                if ~isempty(rawD) & ~contains(rawD.name,'.dat')
+                    [channelpostmpconv, probeSN, recordingduration] = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done
+                    if recordingduration<Params.MinRecordingDuration
+                        disp([KiloSortPaths{subsesid} ' recording too short, skip...'])
+                        continue
+                    end
+                end
+            end
+
             disp(['Found existing data in ', KiloSortPaths{subsesid}, ', Using this...'])
 
             if isfield(tmpparam,'AllChannelPos')
-
                 AllChannelPos{subsesid} = tmpparam.AllChannelPos{1};
                 AllProbeSN{subsesid} = tmpparam.AllProbeSN{1};
                 countid = countid + 1;
@@ -573,6 +581,7 @@ for subsesid = 1:length(KiloSortPaths)
     sp = rmfield(sp, 'tempsUnW');
     sp = rmfield(sp, 'templateDuration');
     sp = rmfield(sp, 'waveforms');
+    Params.RecordingDuration = recordingduration;
     save(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat'), 'clusinfo', 'Params', '-v7.3')
     if Params.saveSp %QQ not using savePaths
         try

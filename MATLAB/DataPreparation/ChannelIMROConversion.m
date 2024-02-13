@@ -78,7 +78,7 @@ if isfield(meta,'snsShankMap')
   
     % Make channelMapToPos for conversion
     channelPos = nan(length(Shank),2);
-    channelPos(APRecordingOrder+1,1) = Shank*shankSep+Col*hSep; %x-position
+    channelPos(APRecordingOrder+1,1) = Shank*shankSep+Col*hSep+basex; %x-position
     channelPos(APRecordingOrder+1,2) = Row*vSep; %y-position
 
 elseif isfield(meta,'snsGeomMap')

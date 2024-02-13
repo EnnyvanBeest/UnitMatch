@@ -8,6 +8,7 @@ function [MatchTable, UniqueIDConversion] = AssignUniqueIDAlgorithm(MatchTable, 
 AllClusterIDs = UniqueIDConversion.OriginalClusID;
 UniqueID = 1:length(AllClusterIDs); % Initial assumption: All clusters are unique
 OriUniqueID = UniqueID; % COPY
+UniqueIDConservative = UniqueID;% Conservative equivalent
 if UMparam.GoodUnitsOnly
     Good_Idx = find(UniqueIDConversion.GoodID); %Only care about good units at this point
 else
@@ -15,7 +16,8 @@ else
     disp('Use all units including MUA and noise')
 end
 GoodRecSesID = UniqueIDConversion.recsesAll;
-
+recOpt = unique(GoodRecSesID);
+nRec = length(recOpt);
 % Re-initialize UID
 [PairID3,PairID4]=meshgrid(OriUniqueID(Good_Idx));
 MatchTable.UID1 = PairID3(:);
@@ -66,12 +68,20 @@ MatchProbability(MatchProbabilityOri<UMparam.UsedProbability|MatchProbabilityFli
 [~,sortidx] = sort(MatchProbability,'descend');
 Pairs = Pairs(sortidx,:); %Pairs as UID, but now sorted by match probability
 
-%% Serial assigning of Unique ID
+%% assigning of Unique ID
 disp('Assigning correct Unique ID values now')
 if ~isempty(Pairs)
+    nMatchesConservative = 0;
     nMatches = 0;
     for id = 1:size(Pairs,1)
+        
+        %% Liberal
         TheseOriUids = OriUniqueID(ismember(UniqueID,Pairs(id,:))); % Find all units that are currently having the same UniqueID as either one of the current pairs, and their original unique ID as they are known in matchtable
+        Idx = find(ismember(OriUniqueID,TheseOriUids)); % Find all units that have to be considered
+        UniqueID(Idx) = min(UniqueID(Idx)); % Assign them all with the minimum UniqueID
+        nMatches = nMatches + 1;
+
+        %% Conservative
         
         % Far away days can be ignored - this will be decided later
         %         TheseRecs = GoodRecSesID(Pairs(id,:));
@@ -84,20 +94,27 @@ if ~isempty(Pairs)
 
         if all(MatchTable.MatchProb(tblidx)>UMparam.UsedProbability) % All of these should survive the threshold
             % All UIDs with this UID should now become the new UID
-            Idx = find(ismember(OriUniqueID,TheseOriUids)); % Find all units that have to be considered
-            UniqueID(Idx) = min(UniqueID(Idx)); % Assign them all with the minimum UniqueID 
-            nMatches = nMatches + 1;
+            UniqueIDConservative(Idx) = min(UniqueIDConservative(Idx)); % Assign them all with the minimum UniqueID 
+            nMatchesConservative = nMatchesConservative + 1;
         end
-    end
-    disp([num2str(nMatches) ' matches/' num2str(length(UniqueID))])
+
+            end
+    disp([num2str(nMatches) ' liberal matches/' num2str(length(UniqueID))])
+    disp([num2str(nMatchesConservative) ' conservative matches/' num2str(length(UniqueID))])
+
 end
 
 %% Replace in table
+[PairID3,PairID4] = meshgrid(UniqueIDConservative(Good_Idx));
+MatchTable.UID2Conservative = PairID3(:);
+MatchTable.UID1Conservative = PairID4(:);
 [PairID3,PairID4] = meshgrid(UniqueID(Good_Idx));
 MatchTable.UID1 = PairID3(:);
 MatchTable.UID2 = PairID4(:);
-
 %% Replace in UniqueIDConversion
+UniqueIDConversion.UniqueIDConservative = UniqueIDConservative;
 UniqueIDConversion.UniqueID = UniqueID;
+
+
 
 return
