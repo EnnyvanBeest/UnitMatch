@@ -236,10 +236,13 @@ for midx = 1:length(MiceOpt)
                     if isempty(Sesinfo)
                         Sesinfo = strsplit(tmpephysdir(id).name,'_g0');
                         Sesinfo = strsplit(Sesinfo{2},'_');
-                        Sesinfo = Sesinfo{2};
+                        if length(Sesinfo)>1
+                            Sesinfo = Sesinfo{2};
+                        else
+                            Sesinfo = Sesinfo{1};
+                        end
                         if isempty(Sesinfo)
-
-                        Sesinfo = '';
+                            Sesinfo = '';
                         end
                     else
                         Sesinfo = Sesinfo(end);

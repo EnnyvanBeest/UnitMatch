@@ -120,8 +120,8 @@ hold on
 hBar = handles.bar;
 
 if nRows > 1
-    hErrorbar = zeros(1,nCols);
-    for col = 1:nCols
+    hErrorbar = zeros(1,nRows);
+    for col = 1:nRows
         % Extract the x location data needed for the errorbar plots:
         if verLessThan('matlab', '8.4')
             % Original graphics:
@@ -135,7 +135,7 @@ if nRows > 1
         % Use the mean x values to call the standard errorbar fn; the
         % errorbars will now be centred on each bar; these are in ascending
         % order so use xOrder to ensure y values and errors are too:
-        hErrorbar(col) = errorbar(mean(x,1), values(xOrder,col), lowerErrors(xOrder,col), upperErrors(xOrder, col), '.k');
+        hErrorbar(col) = errorbar(mean(x,1), values(col,xOrder), lowerErrors(col,xOrder), upperErrors(col,xOrder), '.k');
         set(hErrorbar(col), 'marker', 'none')
     end
 else
