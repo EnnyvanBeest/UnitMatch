@@ -28,7 +28,7 @@ if ~isfield(Params,'ReLoadAlways')
     Params.ReLoadAlways = 0; % Always reprep data, even if we already have a saved set?
 end
 if ~isfield(Params,'ExtractNewDataNow')
-    PipelineParams.ExtractNewDataNow = 1; % If data is not (yet) extracted, don't bother for now if 0
+    Params.ExtractNewDataNow = 1; % If data is not (yet) extracted, don't bother for now if 0
 end
 if ~isfield(Params,'deNoise')
     Params.deNoise = 1; % Calls RemoveNoiseAmplitudeBased for average channel based removal of noise
