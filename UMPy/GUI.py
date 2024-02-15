@@ -5,7 +5,14 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg,  
 NavigationToolbar2Tk) 
 import numpy as np
-
+from matplotlib import rcParams
+rcParams.update({'figure.autolayout': True})
+rcParams.update({'font.size': 10})
+Color = 'white'
+rcParams['text.color'] = Color
+rcParams['axes.labelcolor'] = Color
+rcParams['xtick.color'] = Color
+rcParams['ytick.color'] = Color
 
 def run_GUI():
     global CVtkinter
@@ -26,7 +33,10 @@ def run_GUI():
     global IsMatch
     global NotMatch
     global OptionA
+    global OptionB
     global EntryFrame
+    global ToggleRawVal
+    global ToggleUMScoreVal
     
     np.set_printoptions(suppress = True)
     IsMatch = []
@@ -145,8 +155,7 @@ def run_GUI():
     HistNames12, Hist12, HistMatches12 =  get_score_histrograms(Scores2IncludeGUI[0], (OutputGUI[0] > MatchThreshold))
     HistNames21, Hist21, HistMatches21 =  get_score_histrograms(Scores2IncludeGUI[1], (OutputGUI[1] > MatchThreshold))
 
-    update(None)
-    MatchIdx = 0
+
     #place the widgets on the EntryFrame
     LabelCV.grid(row = 0, column = 0)
     LabelA.grid(row = 0, column = 1)
@@ -166,6 +175,15 @@ def run_GUI():
     MatchButton = ttk.Button(root, text = 'Set as Match', command = set_match)
     NonMatchButton = ttk.Button(root, text='Set as Non Match', command = set_not_match)
 
+    #Toggle Plots
+    ######################################################################################
+    ToggleRawVal = BooleanVar()
+    ToggleUMScoreVal = BooleanVar()
+    ToggleRawVal.set(False)
+    ToggleUMScoreVal.set(False)
+    ToggleRawPlot = ttk.Checkbutton(root, text ='Hide Raw Data', variable = ToggleRawVal)
+    ToggleUMScorePlot = ttk.Checkbutton(root, text ='Hide UM Score Histograms', variable = ToggleUMScoreVal)
+
 
 
     # Set up Key-Board shortcuts
@@ -173,6 +191,8 @@ def run_GUI():
     root.bind_all('<Return>', update)
     root.bind_all('<Right>', next_pair)
     root.bind_all('<Left>', previous_pair)
+    root.bind_all('<Up>', Up_OptionB_List)
+    root.bind_all('<Down>', Down_OptionB_List)
     root.bind_all('q', set_match)
     root.bind_all('m', set_match)
     root.bind_all('e', set_not_match)
@@ -180,8 +200,14 @@ def run_GUI():
 
     #Grid the units
     EntryFrame.grid(row = 0, column = 0, pady=5, padx = 5)
-    MatchButton.grid(row = 4, column = 3, sticky = 'E', padx = 5)
-    NonMatchButton.grid(row = 4, column = 4, sticky = 'W', padx = 5)
+    MatchButton.grid(row = 4, column = 3, sticky = 'E',  padx = 50, pady = 5)
+    NonMatchButton.grid(row = 4, column = 4, sticky = 'W', padx = 50, pady = 5)
+    ToggleUMScorePlot.grid(row = 4, column = 5, sticky = 'W',  padx = 50, pady = 5)
+    ToggleRawPlot.grid(row = 4, column = 6, sticky = 'E',  padx = 50, pady = 5)
+
+
+    update(None)
+    MatchIdx = 0
 
     root.mainloop()
 
@@ -326,18 +352,86 @@ def update(event):
 
     plot_AvgWaveforms(UnitA, UnitB, CV)
     plot_trajectories(UnitA, UnitB, CV)
-    plot_raw_waveforms(UnitA, UnitB, CV)
+
+    if ToggleRawVal.get() is False:
+        plot_raw_waveforms(UnitA, UnitB, CV)
+    else:
+        if RawWaveformPlot.winfo_exists() == 1:
+            RawWaveformPlot.destroy()
+
     add_probability_label(UnitA, UnitB, CVoption)
     add_original_ID(UnitA, UnitB)
 
-    #plot histograms based of off the CV
-    if CVoption == -1:
-        plot_Histograms(HistNamesAvg, HistAvg, HistMatchesAvg, Scores2IncludeAvg, UnitA, UnitB)
-    if CVoption == 0:
-        plot_Histograms(HistNames12, Hist12, HistMatches12, Scores2IncludeGUI[CVoption], UnitA, UnitB)
-    if CVoption == 1:
-        plot_Histograms(HistNames21, Hist21, HistMatches21, Scores2IncludeGUI[CVoption], UnitA, UnitB)
+    if ToggleUMScoreVal.get() is False:
+        #plot histograms based of off the CV
+        if CVoption == -1:
+            plot_Histograms(HistNamesAvg, HistAvg, HistMatchesAvg, Scores2IncludeAvg, UnitA, UnitB)
+        if CVoption == 0:
+            plot_Histograms(HistNames12, Hist12, HistMatches12, Scores2IncludeGUI[CVoption], UnitA, UnitB)
+        if CVoption == 1:
+            plot_Histograms(HistNames21, Hist21, HistMatches21, Scores2IncludeGUI[CVoption], UnitA, UnitB)
+    else:
+        if HistPlot.winfo_exists() == 1:
+            HistPlot.destroy()
 
+def Up_OptionB_List(event):
+    """  
+    Selects the next highst probaiblty unit w.r.t unit A
+    """
+    global EntryFrame
+    global OptionB
+    global EntryB
+
+    tmpEntryB = int(EntryB.get())
+
+    tmpLs = np.asarray(OptionB)
+    CurrentIdx = int(np.argwhere(tmpLs == tmpEntryB))
+    if CurrentIdx == 0:
+        return
+    else:
+        CurrentIdx -=1
+        if EntryB.winfo_exists() == 1:
+                EntryB.destroy()
+
+    NewEntryB = tmpLs[CurrentIdx]
+
+    EntryB = ttk.Combobox(EntryFrame, values = OptionB, width = 10 )
+    EntryB.set(NewEntryB )
+    EntryB.bind('<<ComboboxSelected>>', update)  
+
+    EntryB.grid(row = 2, column = 3, columnspan = 2, sticky = 'WE', padx = 5)
+
+    update(event)
+
+
+def Down_OptionB_List(event):
+    """  
+    Selects the next highst probaiblty unit w.r.t unit A
+    """
+    global EntryFrame 
+    global OptionB
+    global EntryB
+
+    tmpEntryB = int(EntryB.get())
+
+    tmpLs = np.asarray(OptionB)
+    CurrentIdx = int(np.argwhere(tmpLs == tmpEntryB))
+    if CurrentIdx == (len(tmpLs) -1):
+        return
+    else:
+        CurrentIdx +=1
+        if EntryB.winfo_exists() == 1:
+            EntryB.destroy()
+
+    NewEntryB = tmpLs[CurrentIdx]
+
+    EntryB = ttk.Combobox(EntryFrame, values = OptionB, width = 10 )
+    EntryB.set(NewEntryB)
+    EntryB.bind('<<ComboboxSelected>>', update)  
+
+    EntryB.grid(row = 2, column = 3, columnspan = 2, sticky = 'WE', padx = 5)
+
+    update(event)
 
 #sort CV function as to be calleed as part of update
 def get_cv_option():
@@ -962,7 +1056,7 @@ def plot_AvgWaveforms(UnitA, UnitB, CV):
     #plt1.spines[["left", "bottom"]].set_position(("data", 0))
     plt1.spines[["bottom"]].set_position(("data", 0))
     plt1.spines[["top", "right"]].set_visible(False)
-    #plt1.patch.set_facecolor('none')
+    plt1.patch.set_facecolor('#5f6669')
     plt1.xaxis.set_label_coords(0.9,0)
 
 
@@ -997,7 +1091,7 @@ def plot_trajectories(UnitA, UnitB, CV):
 
     
     plt2 = fig.add_subplot(111)
-    #plt2.patch.set_facecolor('#33393b')
+    plt2.patch.set_facecolor('#5f6669')
     plt2.set_aspect(0.5)
     plt2.spines[['right', 'top']].set_visible(False)
     
@@ -1085,7 +1179,7 @@ def plot_raw_waveforms(UnitA, UnitB, CV):
     fig.patch.set_facecolor('#33393b')
 
     MainAx = fig.add_axes([0.2,0.2,0.8,0.8])
-    #MainAx.set_facecolor('none')
+    MainAx.set_facecolor('#5f6669')
     MainAxOffset = 0.2
     MainAxScale = 0.8
 
@@ -1158,7 +1252,7 @@ def plot_raw_waveforms(UnitA, UnitB, CV):
     RawWaveformPlot = RawWaveformPlot.get_tk_widget()
     #RawWaveformPlot.configure(bg = '#33393b')
 
-    RawWaveformPlot.grid(row = 0, column = 4, rowspan = 4, padx = 15, pady = 25, ipadx = 15)
+    RawWaveformPlot.grid(row = 0, column = 5, columnspan = 2, rowspan = 4, padx = 15, pady = 25, ipadx = 15)
 
 def plot_Histograms(HistNames, Hist, HistMatched, Scores2Include, UnitA, UnitB):
 
@@ -1180,11 +1274,11 @@ def plot_Histograms(HistNames, Hist, HistMatched, Scores2Include, UnitA, UnitB):
         axs[i].set_title(HistNames[i], fontsize = 12)
         #axs[i].get_yaxis().set_visible(False)
         axs[i].axvline(Scores2Include[HistNames[i]][UnitA,UnitB], ls = '--', color = 'grey')
-
+        axs[i].set_facecolor('#5f6669')
 
     HistPlot = FigureCanvasTkAgg(fig, master = root)
     HistPlot.draw()
     HistPlot = HistPlot.get_tk_widget()
 
-    HistPlot.grid(row = 0, column = 3, rowspan = 4, padx = 5, pady = 20)
+    HistPlot.grid(row = 0, column = 3, columnspan = 2, rowspan = 4, padx = 5, pady = 20)
 
