@@ -236,6 +236,35 @@ def evaluate_output(output, param, WithinSession, SessionSwitch, MatchThreshold 
 
     print('\nThis assumes that the spike sorter has made no mistakes')
 
+def currate_matches(MatchesGUI, IsMatch, NotMatch, Mode = 'And'):
+    """ 
+    Thereare two options, 'And' 'Or'. 
+    'And' gives a match if both CV give it as a match
+    'Or gives a mathc if either CV gives it as a match
+    """
+    MatchesA = MatchesGUI[0]
+    MatchesB = MatchesGUI[1]
+
+    IsMatch = np.array(IsMatch)
+    NotMatch = np.array(NotMatch)
+
+    if Mode == 'And':
+        MatchesTmp = np.concatenate((MatchesA, MatchesB), axis = 0)
+        MatchesTmp, counts = np.unique(MatchesTmp, return_counts = True, axis = 0)
+        Matches = MatchesTmp[counts == 2]
+    
+    if Mode == 'Or':
+        Matches = np.unique(np.concatenate((MatchesA, MatchesB), axis = 0), axis = 0)
+        
+    #add matches in IS Matches
+    Matches = np.unique(np.concatenate((Matches, IsMatch), axis = 0), axis = 0)
+    print(Matches.shape)
+    #remove Matches in NotMatch
+    MatchesTmp = np.concatenate((Matches, NotMatch), axis = 0)
+    MatchesTmp, counts = np.unique(MatchesTmp, return_counts = True, axis = 0)
+    Matches = MatchesTmp[counts == 1]
+
+    return Matches
 
 ##########################################################################################################################
 #The folowing functions are the old way of reading in units, is slower and will not work if unit are missing e.g 1,2,4
