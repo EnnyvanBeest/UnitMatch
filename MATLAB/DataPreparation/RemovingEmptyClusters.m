@@ -40,6 +40,8 @@ takeclus = 1:nclus;
 takeclus(emptyclus)=[];
 
 % Save out
+sp.cgs = sp.cgs(takeclus);
+sp.cids = sp.cids(takeclus);
 sp.temps=temps(takeclus,:,:);
 sp.pcFeatInd = pcFeatInd(takeclus,:);
 sp.templateDepths = templateDepths(takeclus);
