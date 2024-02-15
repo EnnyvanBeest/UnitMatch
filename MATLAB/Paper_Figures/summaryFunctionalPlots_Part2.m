@@ -11,7 +11,7 @@ function summaryFunctionalPlots_Part2(UMFiles, groupVector, UseKSLabels)
         groupVector = 1:length(UMFiles);
     end
     groups = unique(groupVector);
-    groupColor = gray(length(groups)+1);
+    groupColor = gray(max(groups)+1);
 
     if ~exist('UseKSLabels','var')
         UseKSLabels = 0;
@@ -68,6 +68,7 @@ function summaryFunctionalPlots_Part2(UMFiles, groupVector, UseKSLabels)
         days{midx} = cell2mat(days{midx}) - days{midx}{1};
         deltaDays{midx} = nan(numel(sessIDs),numel(sessIDs));
         numMatchedUnits{midx} = nan(numel(sessIDs),numel(sessIDs));
+        numMatchedUnitsCons{midx} = nan(numel(sessIDs),numel(sessIDs)); % Conservative matching
         maxAvailableUnits{midx} = nan(numel(sessIDs),numel(sessIDs));
         InitialDrift{midx} = nan(numel(sessIDs),numel(sessIDs));
         FixedDrift{midx} = nan(numel(sessIDs),numel(sessIDs));
@@ -78,7 +79,11 @@ function summaryFunctionalPlots_Part2(UMFiles, groupVector, UseKSLabels)
     
             sess1 = sessIDs(sess1Idx);
             day1 = days{midx}(sess1Idx);
+            try
             meta = ReadMeta2(UMparam.RawDataPaths{sess1}.folder);
+            catch ME
+                keyboard
+            end
             durSess1 = str2double(meta.fileTimeSecs);
             if durSess1 < durLim 
                 continue
@@ -108,8 +113,10 @@ function summaryFunctionalPlots_Part2(UMFiles, groupVector, UseKSLabels)
                     %%% CHOOSE BASED ON UID
                     if sess1 ~= sess2
                         matchedUnitsIdx = (MatchTable_2sess.UID1 == MatchTable_2sess.UID2) & (MatchTable_2sess.RecSes1 ~= MatchTable_2sess.RecSes2); % using Unique ID
+                        matchedUnitsIdxCons = (MatchTable_2sess.UID1Conservative == MatchTable_2sess.UID2Conservative) & (MatchTable_2sess.RecSes1 ~= MatchTable_2sess.RecSes2); % using Unique ID
                     else
                         matchedUnitsIdx = (MatchTable_2sess.UID1 == MatchTable_2sess.UID2) & (MatchTable_2sess.ID1 ~= MatchTable_2sess.ID2); % using Unique ID
+                        matchedUnitsIdxCons = (MatchTable_2sess.UID1Conservative == MatchTable_2sess.UID2Conservative) & (MatchTable_2sess.ID1 ~= MatchTable_2sess.ID2); % using Unique ID
                     end
                     %%% OR RECOMPUTE
 %                     [~,~,idx,~] = getPairsAcross2Sess(MatchTable_2sess, UMparam.ProbabilityThreshold);
@@ -117,9 +124,11 @@ function summaryFunctionalPlots_Part2(UMFiles, groupVector, UseKSLabels)
 %                     matchedUnitsIdx(idx) = 1;
                 else
                     matchedUnitsIdx = (MatchTable_2sess.ID1 == MatchTable_2sess.ID2) & (MatchTable_2sess.RecSes1 ~= MatchTable_2sess.RecSes2);
+                    matchedUnitsIdxCons = (MatchTable_2sess.ID1 == MatchTable_2sess.ID2) & (MatchTable_2sess.RecSes1 ~= MatchTable_2sess.RecSes2);
                 end
                 numMatchedUnits{midx}(sess1Idx,sess2Idx) = sum(matchedUnitsIdx)/2; % Divided by two because looking both ways -- can be non-integer
-                
+                numMatchedUnitsCons{midx}(sess1Idx,sess2Idx) = sum(matchedUnitsIdxCons)/2; % Divided by two because looking both ways -- can be non-integer
+              
                 maxAvailableUnits{midx}(sess1Idx,sess2Idx) = min([length(unique(MatchTable_2sess.ID1(MatchTable_2sess.RecSes1 == sess1))) length(unique(MatchTable_2sess.ID1(MatchTable_2sess.RecSes1 == sess2)))]);%
 
                 if sess1Idx == sess2Idx  && numMatchedUnits{midx}(sess1Idx,sess2Idx)/maxAvailableUnits{midx}(sess1Idx,sess2Idx) > WithinSesNoiseLim
@@ -137,19 +146,22 @@ function summaryFunctionalPlots_Part2(UMFiles, groupVector, UseKSLabels)
         end
         if WithinSesNoise % This file shouldn't count, too much within session noise
             numMatchedUnits{midx} = nan(numel(sessIDs),numel(sessIDs));
+            numMatchedUnitsCons{midx} = nan(numel(sessIDs),numel(sessIDs));
             maxAvailableUnits{midx} = nan(numel(sessIDs),numel(sessIDs));
             InitialDrift{midx} = nan(numel(sessIDs),numel(sessIDs));
             FixedDrift{midx} = nan(numel(sessIDs),numel(sessIDs));
         end
         %% qParams
+        noQmetric = 0;
         if ~exist(fullfile(tmpfile.folder, 'qMetricAUCs.mat'))
             try
                 QualityMetricsROCs(UMparam.SaveDir)
                 close all
             catch ME
-                keyboard
+                noQmetric = 1;
             end
         end
+        if ~noQmetric
         load(fullfile(tmpfile.folder, 'qMetricAUCs.mat'))
 
         if ~exist('qParamNames')
@@ -161,6 +173,7 @@ function summaryFunctionalPlots_Part2(UMFiles, groupVector, UseKSLabels)
         tmpQP(puthere(puthere~=0)) = AUCqParams.AUCMvNM(takethese);
         AUCPerqParam = cat(2,AUCPerqParam,tmpQP);
         toc
+        end
     end
 
      SelUnitsPerc = cat(1,nUnitsSelected{:})./cat(1,nUnitsTotal{:}).*100;

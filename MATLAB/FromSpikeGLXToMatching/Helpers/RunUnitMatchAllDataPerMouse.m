@@ -9,9 +9,10 @@ DateOpt = cellfun(@(X) {X.name},DateOpt,'UniformOutput',0);
 FromDate = datetime("2023-10-03 09:00:00");
 
 LogError = {}; % Keep track of which runs didn't work
-
+if ~exist('PipelineParamsOri','var')
 PipelineParamsOri = PipelineParams;
-for midx = 1:length(MiceOpt)
+end
+for midx = 3:length(MiceOpt)
     close all % to not overcrowd the graphics card
     PipelineParams = PipelineParamsOri; % Reset
     %% Loading data from kilosort/phy easily
@@ -71,6 +72,7 @@ for midx = 1:length(MiceOpt)
 
     %% Prepare cluster information
     PipelineParams = ExtractKilosortData(AllKiloSortPaths,PipelineParams);
+     
     PipelineParams.RecType = RecordingType{midx};%
 
     % Remove empty ones

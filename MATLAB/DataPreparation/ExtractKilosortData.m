@@ -170,7 +170,7 @@ for subsesid = 1:length(KiloSortPaths)
 
             disp(['Found existing data in ', KiloSortPaths{subsesid}, ', Using this...'])
 
-            if isfield(tmpparam,'AllChannelPos')
+            if isfield(tmpparam,'AllProbeSN')
                 AllChannelPos{subsesid} = tmpparam.AllChannelPos{1};
                 AllProbeSN{subsesid} = tmpparam.AllProbeSN{1};
                 countid = countid + 1;
@@ -207,7 +207,7 @@ for subsesid = 1:length(KiloSortPaths)
         AllProbeSN{subsesid} = probeSN;
     end
 
-    if ExtractChannelMapThenContinue % Version compatibility
+    if ExtractChannelMapThenContinue || ~Params.ExtractNewDataNow % Version compatibility
         countid = countid + 1;
         ExtractChannelMapThenContinue = 0;
         continue
