@@ -211,6 +211,13 @@ def run_GUI():
 
     root.mainloop()
 
+    #set default plot color back to black
+    Color = 'black'
+    rcParams['text.color'] = Color
+    rcParams['axes.labelcolor'] = Color
+    rcParams['xtick.color'] = Color
+    rcParams['ytick.color'] = Color
+
     return IsMatch, NotMatch
 
 def process_info_for_GUI(Output, MatchThresholdIn, Scores2Include, TotalScore, AmplitudeIn, SpatialDecayIn,

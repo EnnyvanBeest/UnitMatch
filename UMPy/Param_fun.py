@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import detrend
 import scipy as sp
+from scipy.ndimage import gaussian_filter
 
 
 import pandas as pd
@@ -295,5 +296,11 @@ def avg_Waveform_PerTP(waveform,ChannelPos, d_10, MaxSiteMean, Amplitude, AvgWav
                 AvgWaveformPerTP[:,i,idx,cv] = tmp.reshape((3,1))
                 WaveIdx[i,idx,cv] = 1 
     
+    #apply some smothing the the trajectories
+    for uid in range(nUnits):
+        for cv in range(2):
+            for dim in range(AvgWaveformPerTP.shape[0]):
+                AvgWaveformPerTP[dim, uid, WaveIdx[uid,:,cv].astype(bool), cv] = gaussian_filter(AvgWaveformPerTP[dim, uid, WaveIdx[uid,:,cv].astype(bool), cv], 1, radius = 2, axes = 0)
+        
     return WaveformDuration, AvgWaveformPerTP, WaveIdx
         
