@@ -161,6 +161,7 @@ for subsesid = 1:length(KiloSortPaths)
             if ~isfield(tmpparam,'RecordingDuration') || tmpparam.RecordingDuration < Params.MinRecordingDuration
                 if ~isempty(rawD) & ~contains(rawD.name,'.dat')
                     [channelpostmpconv, probeSN, recordingduration] = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done
+                    Params.RecordingDuration = recordingduration;
                     if recordingduration<Params.MinRecordingDuration
                         disp([KiloSortPaths{subsesid} ' recording too short, skip...'])
                         continue
@@ -581,7 +582,6 @@ for subsesid = 1:length(KiloSortPaths)
     sp = rmfield(sp, 'tempsUnW');
     sp = rmfield(sp, 'templateDuration');
     sp = rmfield(sp, 'waveforms');
-    Params.RecordingDuration = recordingduration;
     save(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat'), 'clusinfo', 'Params', '-v7.3')
     if Params.saveSp %QQ not using savePaths
         try
