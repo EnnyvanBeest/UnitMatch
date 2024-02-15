@@ -67,7 +67,7 @@ for recid = 1:length(nrec)
         drift = drift + UMparam.drift(recid-1,:,1); % Initial drift only, is cumulative across days
     end
 
-    subplot(ceil(sqrt(length(nrec))),round(sqrt(length(nrec))),recid)
+    subplot(length(nrec),1,recid)
     scatter(UMparam.Coordinates{nrec(recid)}(:,2),UMparam.Coordinates{nrec(recid)}(:,3),30,[0 0 0],'filled','Marker','s')
     hold on
     scatter(nanmean(WaveformInfo.ProjectedLocation(2,recsesGood==nrec(recid) & ismember(id2,TrackedNeuronPop),:),3)+drift(2),nanmean(WaveformInfo.ProjectedLocation(3,recsesGood==nrec(recid)& ismember(id2,TrackedNeuronPop),:),3)+drift(3),30,neuroncols(recsesGood==nrec(recid)& ismember(id2,TrackedNeuronPop),:),'filled')
@@ -76,3 +76,4 @@ for recid = 1:length(nrec)
     title(['Recording ' num2str(recid)])
 
 end
+linkaxes

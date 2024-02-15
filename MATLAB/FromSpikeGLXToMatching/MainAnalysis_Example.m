@@ -3,7 +3,7 @@
 %% User Input
 %% Path information
 DataDir = {'H:\MatchingUnits\RawData'};% ;%Raw data folders, typically servers were e.g. *.cbin files are stored
-SaveDir = 'H:\MatchingUnits\ArtificialDriftOutput'; %'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\2ConsecutiveDays\Stitched';%'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\MonthApart\Stitched';%%'H:\MatchingUnits\Output\MonthApartStitched'% 'H:\MatchingUnits\Output\NotConcatenated';%'\\znas.cortexlab.net\Lab\Share\Celian\UnitMatch\MatchTables\NewSep27\MonthApart\Stitched'% %%;% %'H:\MatchingUnits\Output\ManyRecordings'%Folder where to store the results
+SaveDir = 'H:\MatchingUnits\Output'; %'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\2ConsecutiveDays\Stitched';%'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\MonthApart\Stitched';%%'H:\MatchingUnits\Output\MonthApartStitched'% 'H:\MatchingUnits\Output\NotConcatenated';%'\\znas.cortexlab.net\Lab\Share\Celian\UnitMatch\MatchTables\NewSep27\MonthApart\Stitched'% %%;% %'H:\MatchingUnits\Output\ManyRecordings'%Folder where to store the results
 tmpdatafolder = 'H:\OpenEphys_Example\Tmp'; % temporary folder for temporary decompression of data 
 KilosortDir = 'H:\MatchingUnits\KilosortOutput'; % '\\znas.cortexlab.net\Lab\Share\Enny\UnitMatch\KSComparisonSubset';%'\\znas.cortexlab.net\Lab\Share\Enny\UnitMatch\KilosortOutputMonthApart';%'H:\MatchingUnits\KilosortOutputMonthApart';%'\\znas.cortexlab.net\Lab\Share\Celian\UnitMatch\KilosortOutputMonthApart';% Kilosort output folder
 GithubDir = 'C:\Users\EnnyB\Documents\GitHub'; % Github directory
@@ -16,7 +16,7 @@ RecordingType = repmat({'Chronic'},1,length(MiceOpt)); % And whether recordings 
 RecordingType(ismember(MiceOpt,{''}))={'Acute'}; %EB014', % Or maybe acute?
 
 %% Parameters on how to prepare units/data for analysis
-PipelineParams.RunPyKSChronicStitched = 1; % Default 0. if 1, run PyKS chronic recordings stitched when same IMRO table was used
+PipelineParams.RunPyKSChronicStitched = 0; % Default 0. if 1, run PyKS chronic recordings stitched when same IMRO table was used
 PipelineParams.CopyToTmpFirst = 1; % If 1, copy data to local first, don't run from server (= advised!)
 PipelineParams.DecompressLocal = 1; % If 1, uncompress data first if it's currently compressed (= necessary for unitmatch and faster for QualityMetrics)
 
@@ -46,8 +46,8 @@ PipelineParams.Scores2Include = {'CentroidDist','WavformSim','CentroidOverlord',
 PipelineParams.ApplyExistingBayesModel = 0; %If 1, use probability distributions made available by us - 
 PipelineParams.AssignUniqueID = 1; % Assign UniqueID 
 PipelineParams.GoodUnitsOnly = 1; % Include only good untis in the UnitMatch analysis - faster and more sensical
-PipelineParams.MakePlotsOfPairs = 0; % Plots pairs for inspection (UnitMatch)
-PipelineParams.GUI = 1; % Flick through and do manual curation of matching - only works if MakePlotsofPairs = 1
+PipelineParams.MakePlotsOfPairs = 1; % Plots pairs for inspection (UnitMatch)
+PipelineParams.GUI = 0; % Flick through and do manual curation of matching - only works if MakePlotsofPairs = 1
 
 %% Automatic from here
 PipelineParams.SaveDir = SaveDir; % Save results here

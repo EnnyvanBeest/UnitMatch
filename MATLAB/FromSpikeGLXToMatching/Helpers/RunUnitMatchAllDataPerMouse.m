@@ -12,7 +12,7 @@ LogError = {}; % Keep track of which runs didn't work
 if ~exist('PipelineParamsOri','var')
 PipelineParamsOri = PipelineParams;
 end
-for midx = 3:length(MiceOpt)
+for midx = 1:length(MiceOpt)
     close all % to not overcrowd the graphics card
     PipelineParams = PipelineParamsOri; % Reset
     %% Loading data from kilosort/phy easily
@@ -174,7 +174,7 @@ for midx = 3:length(MiceOpt)
                 EvaluatingUnitMatch(UMparam.SaveDir);
     
                 %% Function analysis
-                ComputeFunctionalScores(UMparam.SaveDir)
+                ComputeFunctionalScores(UMparam.SaveDir,1)
                 
                 %% Figures
                 if UMparam.MakePlotsOfPairs

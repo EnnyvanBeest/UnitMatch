@@ -261,7 +261,7 @@ for uid = 1:nclus
         for dim = 1:size(tmp,1)
             tmp(dim,:) = smoothdata(tmp(dim,:),'gaussian',5);
         end
-        ProjectedLocationPerTP(:,uid,wvdurtmp,cv) = cell2mat(arrayfun(@(tp) sum(repmat(abs(spikeMap(tp,ChanIdx,cv)),size(Locs,2),1).*Locs',2)./sum(repmat(abs(spikeMap(tp,ChanIdx,cv)),size(Locs,2),1),2),wvdurtmp,'Uni',0));
+        ProjectedLocationPerTP(:,uid,wvdurtmp,cv) = tmp;
         WaveIdx(uid,wvdurtmp,cv) = 1;
         % Save spikes for these channels
         %         MultiDimMatrix(wvdurtmp,1:length(ChanIdx),uid,cv) = nanmean(spikeMap(wvdurtmp,ChanIdx,wavidx),3);

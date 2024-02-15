@@ -55,6 +55,8 @@ if isfield(meta,'snsShankMap')
         vSep = 20;      % in um
         hSep = 15;
         shankSep = 0;
+        basex = 0; % shift by this much in x
+
     elseif nShanks == 4
         % NP 2.0 MS (4 shank), probe type 24 electrode positions
         vSep = 15;      % in um
@@ -104,6 +106,8 @@ elseif isfield(meta,'snsGeomMap')
         vSep = 20;      % in um
         hSep = 15;
         shankSep = 0;
+        basex = 0; % shift by this much in x
+
     elseif nShanks == 4
         % NP 2.0 MS (4 shank), probe type 24 electrode positions
         vSep = 15;      % in um
