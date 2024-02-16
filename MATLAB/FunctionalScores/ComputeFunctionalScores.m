@@ -290,6 +290,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'FRDiff')) || recompute
     MatchTable.FRSig = FRSig(:); % Saves out number of standard deviations away from mean
 end
 if saveFig
+    try
     % Check these: should be z1, z2, z3, z12, z13, z23, z123
     figure(VenFig)
     subplot(2,2,3)
@@ -302,6 +303,8 @@ if saveFig
     axis off
     makepretty
     title('FRDiff')
+    catch ME
+    end
    
 end
 
@@ -406,7 +409,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'natImRespCorr')) || recom
     if saveFig & ~isempty(exp2keep)
         % Check these: should be z1, z2, z3, z12, z13, z23, z123
         figure(VenFig)
-        subplot(2,2,3)
+        subplot(2,2,4)
         Idx = MatchTable.natImRespRank(:) == 1 | MatchTable.natImRespSig(:) > SigThrs | MatchTable.MatchProb(:) > 0.5;
         h = venn([sum(MatchTable.natImRespRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.natImRespSig(Idx) < SigThrs) sum(MatchTable.natImRespRank(Idx)>1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.natImRespSig(Idx)> SigThrs) ...
             sum(MatchTable.natImRespRank(Idx)>1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.natImRespSig(Idx)< SigThrs) sum(MatchTable.natImRespRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.natImRespSig(Idx)> SigThrs) ...

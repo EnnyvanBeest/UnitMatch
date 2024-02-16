@@ -1,79 +1,116 @@
-function PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo,Conservative,AddDriftBack)
-if nargin<6
+function PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo,AddDriftBack)
+if nargin<5
     AddDriftBack = 1;
 end
-if nargin<5
-    Conservative = 1;
-end
-if Conservative
-    [~,id1,id2] = unique(UniqueIDConversion.UniqueIDConservative(UniqueIDConversion.GoodID==1));
-else
-    [~,id1,id2] = unique(UniqueIDConversion.UniqueID(UniqueIDConversion.GoodID==1));
-end
+
+[~,id1,id2] = unique(UniqueIDConversion.UniqueID(UniqueIDConversion.GoodID==1));
 
 % Draw findings on probe
 neuroncols = jet(length(id1)); % Colours per unit
-neuroncols = datasample(neuroncols,length(id1),1,'replace',false); 
+neuroncols = datasample(neuroncols,length(id1),1,'replace',false);
 % give same units same colour
 neuroncols = neuroncols(id2,:);
+id2ori = id2;
+id1ori = id1;
+neuroncolsori = neuroncols;
+ExampleFig = figure('name',['Projection locations example units, DriftCorrected = ' num2str(~AddDriftBack)]');
 
-% Units that only occur once:
-neuroncols(logical(arrayfun(@(X) sum(id2==X)==1,id2)),:) = repmat([0.5 0.5 0.5],sum(arrayfun(@(X) sum(id2==X)==1,id2)),1); % Gray if no match is found
-drift = [0 0 0];
+for modethis = 1:2
+    neuroncols = neuroncolsori;
 
-% Extract good rec ses id
-recsesGood = clusinfo.RecSesID(logical(clusinfo.Good_ID));
-nrec = unique(recsesGood);
-figure('name',['Projection locations all units, conservative = ' num2str(Conservative) ', DriftCorrected = ' num2str(~AddDriftBack)])
-for recid = 1:length(nrec)
-
-    if AddDriftBack && recid > 1 && ~ any(isnan(UMparam.drift(recid-1,:,1)))       
-        drift = drift + UMparam.drift(recid-1,:,1); % Initial drift only, is cumulative across days
+    if modethis==2
+        Conservative = 1;
+        [~,id1,id2] = unique(UniqueIDConversion.UniqueIDConservative(UniqueIDConversion.GoodID==1));
+        % 
+        splitUnit = find(arrayfun(@(X) length(unique(id2(id2ori==X))),id1ori)>1); % also unique in this one or two different ones?
+        for Xid = 1:length(splitUnit)
+            tmpselect = id2(id2ori==id1ori(splitUnit(Xid))); % Find new IDs of other pairs
+            [tmpselect, iid1, iid2] = unique(tmpselect);
+            [maxn,maxid] = max(arrayfun(@(X) sum(iid2==X),iid1));
+            tmpselect(maxid)=[];
+            for newid = 1:length(tmpselect)
+                neuroncols(id2==tmpselect(newid),:)=repmat(datasample(neuroncols,1,1),sum(id2==tmpselect(newid)),1); % Replace colour for second set of unique neurons
+            end
+        end
+    else
+        Conservative = 0;
+        [~,id1,id2] = unique(UniqueIDConversion.UniqueIDConservative(UniqueIDConversion.GoodID==1));
     end
-    scatter3(UMparam.Coordinates{nrec(recid)}(:,1),UMparam.Coordinates{nrec(recid)}(:,2),UMparam.Coordinates{nrec(recid)}(:,3),30,[0 0 0],'filled','Marker','s')
-    hold on
-    scatter3(nanmean(WaveformInfo.ProjectedLocation(1,recsesGood==nrec(recid),:),3)+drift(1),nanmean(WaveformInfo.ProjectedLocation(2,recsesGood==nrec(recid),:),3)+drift(2),nanmean(WaveformInfo.ProjectedLocation(3,recsesGood==nrec(recid),:),3)+drift(3),30,neuroncols(recsesGood==nrec(recid),:),'filled')
-end
-makepretty
-offsetAxes
+    % Units that only occur once:
+    neuroncols(logical(arrayfun(@(X) sum(id2==X)==1,id2)),:) = repmat([0.5 0.5 0.5],sum(arrayfun(@(X) sum(id2==X)==1,id2)),1); % Gray if no match is found
+    drift = [0 0 0];
 
-drift = [0 0 0];
-% In separate plots
-figure('name',['Projection locations all units, conservative = ' num2str(Conservative) ', DriftCorrected = ' num2str(~AddDriftBack)]')
-for recid = 1:length(nrec)
-   if AddDriftBack && recid > 1 && ~ any(isnan(UMparam.drift(recid-1,:,1)))    
-        drift = drift + UMparam.drift(recid-1,:,1); % Initial drift only, is cumulative across days
+    % Extract good rec ses id
+    recsesGood = clusinfo.RecSesID(logical(clusinfo.Good_ID));
+    nrec = unique(recsesGood);
+    figure('name',['Projection locations all units, conservative = ' num2str(Conservative) ', DriftCorrected = ' num2str(~AddDriftBack)])
+    for recid = 1:length(nrec)
+
+        if AddDriftBack && recid > 1 && ~ any(isnan(UMparam.drift(recid-1,:,1)))
+            drift = [0 0 0] +  + UMparam.drift(recid-1,:,1); % Initial drift only, is not cumulative across days
+        end
+        scatter3(UMparam.Coordinates{nrec(recid)}(:,1),UMparam.Coordinates{nrec(recid)}(:,2),UMparam.Coordinates{nrec(recid)}(:,3),30,[0 0 0],'square','filled')
+        hold on
+        scatter3(nanmean(WaveformInfo.ProjectedLocation(1,recsesGood==nrec(recid),:),3)+drift(1),nanmean(WaveformInfo.ProjectedLocation(2,recsesGood==nrec(recid),:),3)+drift(2),nanmean(WaveformInfo.ProjectedLocation(3,recsesGood==nrec(recid),:),3)+drift(3),30,neuroncols(recsesGood==nrec(recid),:),'filled')
     end
-    subplot(ceil(sqrt(length(nrec))),round(sqrt(length(nrec))),recid)
-    scatter3(UMparam.Coordinates{nrec(recid)}(:,1),UMparam.Coordinates{nrec(recid)}(:,2),UMparam.Coordinates{nrec(recid)}(:,3),30,[0 0 0],'filled','Marker','s')
-    hold on
-    scatter3(nanmean(WaveformInfo.ProjectedLocation(1,recsesGood==nrec(recid),:),3)+drift(1),nanmean(WaveformInfo.ProjectedLocation(2,recsesGood==nrec(recid),:),3)+drift(2),nanmean(WaveformInfo.ProjectedLocation(3,recsesGood==nrec(recid),:),3)+drift(3),30,neuroncols(recsesGood==nrec(recid),:),'filled')
-    makepretty
-offsetAxes
-title(['Recording ' num2str(recid)])
-end
-linkaxes
-
-
-%% Show example neurons that was tracked across most recordings
-nRecPerUnit = arrayfun(@(X) sum(id2==X),id1);
-TrackedNeuronPop = id1(find(nRecPerUnit>0.3*length(nrec)));
-
-drift = [0 0 0];
-
-figure('name',['Projection locations example units, conservative = ' num2str(Conservative) ', DriftCorrected = ' num2str(~AddDriftBack)]')
-for recid = 1:length(nrec)
-    if AddDriftBack && recid > 1 && ~ any(isnan(UMparam.drift(recid-1,:,1)))
-        drift = drift + UMparam.drift(recid-1,:,1); % Initial drift only, is cumulative across days
-    end
-
-    subplot(length(nrec),1,recid)
-    scatter(UMparam.Coordinates{nrec(recid)}(:,2),UMparam.Coordinates{nrec(recid)}(:,3),30,[0 0 0],'filled','Marker','s')
-    hold on
-    scatter(nanmean(WaveformInfo.ProjectedLocation(2,recsesGood==nrec(recid) & ismember(id2,TrackedNeuronPop),:),3)+drift(2),nanmean(WaveformInfo.ProjectedLocation(3,recsesGood==nrec(recid)& ismember(id2,TrackedNeuronPop),:),3)+drift(3),30,neuroncols(recsesGood==nrec(recid)& ismember(id2,TrackedNeuronPop),:),'filled')
     makepretty
     offsetAxes
-    title(['Recording ' num2str(recid)])
+
+    drift = [0 0 0];
+    % In separate plots
+    figure('name',['Projection locations all units, conservative = ' num2str(Conservative) ', DriftCorrected = ' num2str(~AddDriftBack)]')
+    for recid = 1:length(nrec)
+        if AddDriftBack && recid > 1 && ~ any(isnan(UMparam.drift(recid-1,:,1)))
+            drift = [0 0 0] + UMparam.drift(recid-1,:,1); % Initial drift only, is not cumulative across days
+        end
+        subplot(ceil(sqrt(length(nrec))),round(sqrt(length(nrec))),recid)
+        scatter3(UMparam.Coordinates{nrec(recid)}(:,1)-drift(1),UMparam.Coordinates{nrec(recid)}(:,2)-drift(2),UMparam.Coordinates{nrec(recid)}(:,3)-drift(3),30,[0 0 0],'square','filled')
+        hold on
+        scatter3(nanmean(WaveformInfo.ProjectedLocation(1,recsesGood==nrec(recid),:),3),nanmean(WaveformInfo.ProjectedLocation(2,recsesGood==nrec(recid),:),3),nanmean(WaveformInfo.ProjectedLocation(3,recsesGood==nrec(recid),:),3),30,neuroncols(recsesGood==nrec(recid),:),'filled')
+        makepretty
+        offsetAxes
+        title(['Recording ' num2str(recid)])
+    end
+    linkaxes
+
+
+    %% Show example neurons that was tracked across most recordings
+    if modethis==1
+    nRecPerUnit = arrayfun(@(X) sum(id2==X),id1);
+    TrackedNeuronPop = id1(find(nRecPerUnit>0.25*length(nrec)));
+    end
+
+    figure(ExampleFig)
+    driftprobe = [0 0 0];
+
+    for recid = 1:length(nrec)
+        if AddDriftBack && recid > 1 && ~ any(isnan(UMparam.drift(recid-1,:,1)))
+            driftprobe = [0 0 0] + UMparam.drift(recid-1,:,1); % Initial drift only, is not cumulative across days
+        end
+
+        subplot(length(nrec),2,(recid-1)*2+modethis)
+        scatter(UMparam.Coordinates{nrec(recid)}(:,2)-driftprobe(2),UMparam.Coordinates{nrec(recid)}(:,3)-driftprobe(3),30,[0 0 0],'square','filled');
+        hold on
+        scatter(nanmean(WaveformInfo.ProjectedLocation(2,recsesGood==nrec(recid) & ismember(id2,TrackedNeuronPop),:),3),nanmean(WaveformInfo.ProjectedLocation(3,recsesGood==nrec(recid)& ismember(id2,TrackedNeuronPop),:),3),30,neuroncols(recsesGood==nrec(recid)& ismember(id2,TrackedNeuronPop),:),'filled');
+        offsetAxes
+        makepretty
+        if recid==1
+            title(['Conservative = ' num2str(Conservative)])
+        end
+        if recid < length(nrec)
+            set(gca,'XTickLabel',[])
+        end
+        if modethis == 2
+            set(gca,'YTickLabel',[])
+        else
+                    ylabel(['R ' num2str(recid)])
+        end
+        % axis equal
+        % set(gca,'DataAspectRatio',[1 2000 1]);
+
+
+    end
+
+    linkaxes
 
 end
-linkaxes

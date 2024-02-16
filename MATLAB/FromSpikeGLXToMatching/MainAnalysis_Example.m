@@ -10,7 +10,7 @@ GithubDir = 'C:\Users\EnnyB\Documents\GitHub'; % Github directory
 PythonEXE = 'C:\Users\EnnyB\anaconda3\envs\pyks2_debug\pythonw.exe' % Python version to run python code in:
 
 %% Information on experiments
-MiceOpt = {'AL032','AV008','CB016','EB019','JF067'}; %'AL032', Add all mice you want to analyze
+MiceOpt = {'AL032'};%{'AL032','AV008','CB016','EB019','JF067'}; %'AL032', Add all mice you want to analyze
 DataDir2Use = repmat(1,[1,length(MiceOpt)]); % In case you have multiple DataDir, index which directory is used for each mouse
 RecordingType = repmat({'Chronic'},1,length(MiceOpt)); % And whether recordings were Chronic (default)
 RecordingType(ismember(MiceOpt,{''}))={'Acute'}; %EB014', % Or maybe acute?
@@ -46,7 +46,7 @@ PipelineParams.Scores2Include = {'CentroidDist','WavformSim','CentroidOverlord',
 PipelineParams.ApplyExistingBayesModel = 0; %If 1, use probability distributions made available by us - 
 PipelineParams.AssignUniqueID = 1; % Assign UniqueID 
 PipelineParams.GoodUnitsOnly = 1; % Include only good untis in the UnitMatch analysis - faster and more sensical
-PipelineParams.MakePlotsOfPairs = 1; % Plots pairs for inspection (UnitMatch)
+PipelineParams.MakePlotsOfPairs =1; % Plots pairs for inspection (UnitMatch)
 PipelineParams.GUI = 0; % Flick through and do manual curation of matching - only works if MakePlotsofPairs = 1
 
 %% Automatic from here
@@ -99,10 +99,11 @@ RunUnitMatchAllDataPerMouse
 %% Across Mice Graphs
 % SummarizeAcrossMice
 
-FromDate = datetime("2023-10-02 13:00:00");
+FromDate = datetime("2024-02-15 09:00:00");
 UMFiles = cell(1,0); % Define your UMfolders here or use below:
 groupvec = nan(1,0);
 if ~exist('UMFiles') || isempty(UMFiles) % When using the example pipeline this may be useful:
+    countid = 0;
     for midx = 1:length(MiceOpt)
         fprintf('Reference %s...\n', MiceOpt{midx})
         % Identify all UM tables
@@ -110,16 +111,20 @@ if ~exist('UMFiles') || isempty(UMFiles) % When using the example pipeline this 
         if isempty(tmpfile) 
             continue
         end
-        for id = 1:length(tmpfile)
-            if datetime(tmpfile(id).date) >FromDate 
-%                AssignUniqueID(fullfile(tmpfile(id).folder,tmpfile(id).name));
+        countid = countid+1;
 
+        for id = 1:length(tmpfile)
+            if datetime(tmpfile(id).date) > FromDate % && any(cell2mat(cellfun(@(X) any(strfind(fullfile(tmpfile(id).folder,tmpfile(id).name),X)),UMFiles2Take,'Uni',0)))
                 %             FolderParts = strsplit(tmpfile(id).folder,filesep);
                 %             idx = find(ismember(FolderParts,MiceOpt{midx}));
                 UMFiles = cat(2,UMFiles,fullfile(tmpfile(id).folder,tmpfile(id).name));
-                groupvec = cat(2,groupvec,midx);
+                groupvec = cat(2,groupvec,countid);
+%             elseif datetime(tmpfile(id).date)<FromDate
+%                 rmdir(tmpfile(id).folder,'s')
+
             end
         end
     end
 end
-summaryFunctionalPlots(UMFiles, 1, groupvec)
+% summaryFunctionalPlots(UMFiles, 'Rank', groupvec)
+summaryFunctionalPlots_Part2(UMFiles, groupvec)

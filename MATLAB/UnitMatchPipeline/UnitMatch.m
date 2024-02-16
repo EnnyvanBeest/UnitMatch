@@ -129,6 +129,9 @@ FPEst=nan(1,ndays);
 for did = 1:ndays
     tmpprob = double(MatchProbability(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1)>param.ProbabilityThreshold);
     tmpprob(logical(eye(size(tmpprob)))) = nan;
+    tmpEuclDist = EuclDist(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1);
+    tmpprob(tmpEuclDist>param.maxdist) = nan;
+    % To be fair we should include the EuclDist
     FPEst(did) = sum(tmpprob(:)==1)./sum(~isnan(tmpprob(:)))*100;
     disp(['False positive estimate recording ' num2str(did) ': ' num2str(round(FPEst(did)*100)/100) '%'])
 end

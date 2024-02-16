@@ -72,7 +72,7 @@ if ~isfield(Params,'RunPyKSChronicStitched')
 end
 %% Paramseters only used for compute functional scores
 if ~isfield(Params,'ACGbinSize')
-    Params.ACGbinSize = 1E-03; %
+    Params.ACGbinSize = 1E-2; %
 end
 if ~isfield(Params,'ACGduration')
     Params.ACGduration = 1; % in seconds

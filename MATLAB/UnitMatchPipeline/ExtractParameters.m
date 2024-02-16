@@ -6,7 +6,11 @@ nclus = length(Path4UnitNPY);
 spikeWidth = param.spikeWidth;
 Allchannelpos = param.AllChannelPos;
 RecSes = clusinfo.RecSesID;
-
+if isfield(param,'ImposeDrift') % To test against artifical drift
+    ImposeDrift = param.ImposeDrift;
+else
+    ImposeDrift = 0;
+end
 if isfield(clusinfo,'Coordinates') && param.UseHistology% Allow for real coordinates
     for recid = 1:max(RecSes)
         % Cluster
@@ -137,6 +141,38 @@ for uid = 1:nclus
     catch ME
         % assume they all have the same configuration
         channelpos = Allchannelpos{1};
+    end
+    % Figure out drift (by number of channels)
+    if ImposeDrift~=0
+        [val,id1,id2] = unique(diff(channelpos(:,3)));
+        id1(val==0)=[];
+        val(val==0) = [];
+        [~,id3] = max(arrayfun(@(X) (sum(id2==X)),1:length(val)));
+        Channelspacing = val(id3);
+
+        % Apply this drift to data
+        ShiftDataBy = ImposeDrift./Channelspacing;
+        [UniqueXPos, id1, id2] = unique(channelpos(:,2));
+        for xid = 1:length(UniqueXPos)
+            tmp3 = tmp2(:,id2==xid); % All channels on this xpos
+            % figure; subplot(2,2,1); imagesc(1:size(tmp3,1),channelpos(id2==xid,3),tmp3'); xlabel('time'); ylabel('Depth'); title('Original')
+            % Upsample
+            tmp4 = nan(size(tmp3,1),size(tmp3,2)*10);
+            for tp = 1:size(tmp3,1)
+                tmp4(tp,:) = interp(tmp3(tp,:),10);
+            end         
+            % subplot(2,2,3); imagesc(1:size(tmp4,1),channelpos(id2==xid,3),tmp4'); xlabel('time'); ylabel('Depth'); title('Upsampled')
+         
+            tmp4 = circshift(tmp4,round(ShiftDataBy*10),2);
+            % subplot(2,2,4); imagesc(1:size(tmp4,1),channelpos(id2==xid,3),tmp4'); xlabel('time'); ylabel('Depth'); title([num2str(ImposeDrift) ' Drift added'])
+
+            for tp = 1:size(tmp3,1)
+                tmp3(tp,:) = downsample(tmp4(tp,:),10);
+            end
+                % subplot(2,2,2); imagesc(1:size(tmp3,1),channelpos(id2==xid,3),tmp3'); xlabel('time'); ylabel('Depth'); title([num2str(ImposeDrift) ' Drift added'])
+            tmp2(:,id2==xid) = tmp3;
+        end
+        spikeMap(:,:,2) = tmp2;
     end
 
     % Extract channel positions that are relevant and extract mean location

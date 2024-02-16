@@ -27,6 +27,7 @@ function summaryFunctionalPlots_Part2(UMFiles, groupVector, UseKSLabels)
     %% Loop over mice to get all Distributions & q params
     deltaDays = cell(1, length(UMFiles));
     numMatchedUnits = cell(1, length(UMFiles));
+    ZDrift = cell(1,length(UMFiles));
     InitialDrift = cell(1,length(UMFiles));
     FixedDrift =  cell(1,length(UMFiles));
     maxAvailableUnits = cell(1, length(UMFiles));
@@ -70,6 +71,9 @@ function summaryFunctionalPlots_Part2(UMFiles, groupVector, UseKSLabels)
         numMatchedUnits{midx} = nan(numel(sessIDs),numel(sessIDs));
         numMatchedUnitsCons{midx} = nan(numel(sessIDs),numel(sessIDs)); % Conservative matching
         maxAvailableUnits{midx} = nan(numel(sessIDs),numel(sessIDs));
+       
+        ZDrift{midx} = nan(numel(sessIDs),numel(sessIDs));
+
         InitialDrift{midx} = nan(numel(sessIDs),numel(sessIDs));
         FixedDrift{midx} = nan(numel(sessIDs),numel(sessIDs));
         nUnitsSelected{midx} = arrayfun(@(X) sum(UniqueIDConversion.GoodID(UniqueIDConversion.recsesAll==X)),unique(UniqueIDConversion.recsesAll));
@@ -139,6 +143,9 @@ function summaryFunctionalPlots_Part2(UMFiles, groupVector, UseKSLabels)
                 %% Extract drift if present
     
                 if isfield(UMparam,'drift') && sess2Idx>1
+                    if sess1Idx<sess2Idx
+                    ZDrift{midx}(sess1Idx,sess2Idx) = UMparam.drift(sess2Idx-1,3,1); %Zdrift only
+                    end
                     InitialDrift{midx}(sess1Idx,sess2Idx) =  vecnorm(UMparam.drift(sess2Idx-1,:,1),2); % Drift in recording 1 is 1 vs 2, etc.
                     FixedDrift{midx}(sess1Idx,sess2Idx) =  vecnorm(UMparam.drift(sess2Idx-1,:,2),2); % Drift in recording 1 is 1 vs 2, etc.
                 end
@@ -176,7 +183,10 @@ function summaryFunctionalPlots_Part2(UMFiles, groupVector, UseKSLabels)
         end
     end
 
-     SelUnitsPerc = cat(1,nUnitsSelected{:})./cat(1,nUnitsTotal{:}).*100;
+    allZdrift = [ZDrift{:}];
+    figure; histogram(allZdrift(~isnan(allZdrift)));
+    title('Z-drift')
+    SelUnitsPerc = cat(1,nUnitsSelected{:})./cat(1,nUnitsTotal{:}).*100;
     %% AUC distributions for qMetrics
     figure('name','AUC Distr')
     stepsz = 0.05;

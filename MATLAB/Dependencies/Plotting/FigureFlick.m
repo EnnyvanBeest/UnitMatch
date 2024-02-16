@@ -17,6 +17,10 @@ function FigureFlick(UMDir,user,recompute, loadMATsToSave)
     %   p: select pair number
     %   s: SAVE
 
+    mf = msgbox(["Key presses:";"Right arrow: next pair";"Left arrow: previous pair";...
+        "Up arrow: label as match"; "Down arrow: label as non-match"; "o: label as I don't know (=uncurated)";...
+        " m: go to first uncurated pair","p: select pair number","s: SAVE","A warning will appear if you've seen all pairs"]);
+
     if ~exist('user','var')
         warning('No user specified. Will use default computername.')
         [ret,user] = system('hostname');%'default';
