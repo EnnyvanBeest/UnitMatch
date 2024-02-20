@@ -81,6 +81,30 @@ if UMparam.RunPyKSChronicStitched
     Pairs = cat(2, Pairs, arrayfun(@(X) PairsPKS(X, :), 1:length(PairsPKS), 'Uni', 0)); % Add these for plotting - inspection
 end
 
+% Results from Yuan et al.?
+if exist(fullfile(UMparam.SaveDir,'Yuan_Output.mat'))
+    tmp = load(fullfile(UMparam.SaveDir,'Yuan_Output.mat'));
+    all_matches = tmp.output.all_results_post;
+    thresh_match_ind = all_matches(:,7) < 10;
+    thresh_matches = all_matches(thresh_match_ind,:);
+    d2label = thresh_matches(:,2);
+    d1label = thresh_matches(:,3);
+
+    PairsYuan = [];
+    for id = 1:length(d1label)
+        try
+            PairsYuan = cat(1,PairsYuan,[find(OriID == d1label(id) & recses == 1) find(OriID == d2label(id) & recses == 2)])
+        catch
+
+        end
+    end
+    PairsYuan = arrayfun(@(X) {PairsYuan(X,:)},1:size(PairsYuan,1));
+    Pairs = cat(2,PairsYuan,Pairs);
+
+end
+
+
+
 if DrawBlind
     % Keep length 2 for each pair
     tmptbl = dir(fullfile(UMparam.SaveDir, 'BlindFigures', 'BlindTable.mat'));

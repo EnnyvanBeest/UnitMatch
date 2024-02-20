@@ -13,7 +13,11 @@ meta = ReadMeta2(datapath);
 probeSN = str2num(meta.imDatPrb_sn);
 
 % Recording duration in minutes
-recordingduration = str2num(meta.fileTimeSecs)./60;
+if isfield(meta,'fileTimeSecs')
+    recordingduration = str2num(meta.fileTimeSecs)./60;
+else
+    recordingduration = nan;
+end
 
 % To make sure the order of recording is correct
 APRecordingOrder = meta.snsChanMap;
