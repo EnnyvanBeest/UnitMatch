@@ -78,3 +78,29 @@ function [unitPresence, unitProbaMatch, days] = summaryMatchingPlots(UMFiles)
     end
 
     %% Summary plots
+    deltaDaysBins = [0.1 1 2 5 10 20 50 100 inf];
+    deltaDaysBins = [-deltaDaysBins(end:-1:1)-0.1, deltaDaysBins];
+
+    probaBinned = nan(numel(deltaDaysBins)-1, length(UMFiles));
+    for midx = 1:length(UMFiles)
+        for bb = 1:numel(deltaDaysBins)-1
+            idx = deltaDaysUni{midx} > deltaDaysBins(bb) & deltaDaysUni{midx} <= deltaDaysBins(bb+1);
+            if any(idx)
+                probaBinned(bb,midx) = nanmean(unitProbaMatch{midx}(idx,:),[1 2]);
+            end
+        end
+    end
+
+    figure;
+    x = (1:numel(deltaDaysBins)-1)';
+    y = nanmean(probaBinned,2);
+    err = 2*nanstd(probaBinned,[],2)./sqrt(sum(~isnan(probaBinned),2));
+    plot(x,y,'k')
+    patch([x; flip(x)], [y-err; flip(y+err)], 'k', 'FaceAlpha',0.25, 'EdgeColor','none')
+    xticks(1:numel(deltaDaysBins)-1)
+    yTickLabels = cell(1,numel(deltaDaysBins)-1);
+    for bb = 1:numel(deltaDaysBins)-1
+        yTickLabels{bb} = sprintf('%.0f< %cdays < %.0f',deltaDaysBins(bb), 916, deltaDaysBins(bb+1));
+    end
+    xticklabels(yTickLabels)
+    ylabel('P(match)')
