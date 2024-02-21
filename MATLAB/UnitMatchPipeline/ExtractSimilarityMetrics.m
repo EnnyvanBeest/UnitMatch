@@ -279,7 +279,7 @@ while flag<2
     clear y
 
     % memory efficient?
-    EuclDist = nan(nclus,length(waveidx),length(FlipDim)+1,nclus);
+    EuclDist = nan(nclus,length(waveidx),2*(length(FlipDim)+1),nclus);
     for batchid1 = 1:nbatch
         idx = (batchid1-1)*batchsz+1:batchsz*batchid1;
         idx(idx>nclus) = [];
@@ -289,7 +289,9 @@ while flag<2
             idx2(idx2>nclus) = [];
 
             x1 = repmat(squeeze(ProjectedLocationPerTPAllFlips(:,idx,waveidx,1,:)),[1 1 1 1 numel(idx2)]);
+            x1 = cat(4,x1,x1(:,:,:,end:-1:1,:));
             x2 = permute(repmat(squeeze(ProjectedLocationPerTPAllFlips(:,idx2,waveidx,2,:)),[1 1 1 1 numel(idx)]),[1,5,3,4,2]);%Switch the two nclus around
+            x2 = cat(4,x2,x2);
 
             w = squeeze(isnan(abs(x1(1,:,:,:,:)-x2(1,:,:,:,:))));
             tmpEu = squeeze(vecnorm(x1-x2,2,1)); % Distance
@@ -335,7 +337,7 @@ while flag<2
     %     EuclDist2(w) = nan;
     disp('Computing location distances between pairs of units, per individual time point of the waveform, Recentered...')
     ProjectedLocationPerTPRecentered = permute(permute(ProjectedLocationPerTPAllFlips,[1,2,4,3,5]) - ProjectedLocation,[1,2,4,3,5]);
-    EuclDist2 = nan(nclus,length(waveidx),length(FlipDim)+1,nclus);
+    EuclDist2 = nan(nclus,length(waveidx),2*(length(FlipDim)+1),nclus);
     for batchid1 = 1:nbatch
         idx = (batchid1-1)*batchsz+1:batchsz*batchid1;
         idx(idx>nclus) = [];
@@ -345,7 +347,9 @@ while flag<2
             idx2(idx2>nclus) = [];
 
             x1 = repmat(squeeze(ProjectedLocationPerTPRecentered(:,idx,waveidx,1,:)),[1 1 1 1 numel(idx2)]);
+            x1 = cat(4,x1,x1(:,:,:,end:-1:1,:));
             x2 = permute(repmat(squeeze(ProjectedLocationPerTPRecentered(:,idx2,waveidx,2,:)),[1 1 1 1 numel(idx)]),[1,5,3,4,2]);%Switch the two nclus around
+            x2 = cat(4,x2,x2);
 
             w = squeeze(isnan(abs(x1(1,:,:,:,:)-x2(1,:,:,:,:))));
             tmpEu = squeeze(vecnorm(x1-x2,2,1)); % Distance
@@ -370,6 +374,7 @@ while flag<2
     [x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
 
     disp('Computing location angle (direction) differences between pairs of units, per individual time point of the waveform...')
+    tic
     x1 = ProjectedLocationPerTPAllFlips(:,:,waveidx(2):waveidx(end),:,:);
     x2 = ProjectedLocationPerTPAllFlips(:,:,waveidx(1):waveidx(end-1),:,:);
   
@@ -410,11 +415,13 @@ while flag<2
 
     % Continue distance traveled
     x1 = repmat(squeeze(TrajDist(:,:,1,:)),[1 1 1 nclus]);
+    x1 = cat(3,x1,x1(:,:,end:-1:1,:));
     x2 = permute(repmat(squeeze(TrajDist(:,:,2,:)),[1 1 1 nclus]),[4 2 3 1]); % switch nclus around
+    x2 = cat(3,x2,x2);
     % Distance similarity (subtract for each pair of units)
     TrajDistCompared = abs(x1-x2);%
     clear x1 x2
-    TrajDistSim = squeeze(nanmin(nansum(TrajDistCompared,2),[],3)); %and take minimum across flips
+    TrajDistSim = squeeze(nanmin(nansum(TrajDistCompared,2),[],3)); %and take minimum across flips -- FLIPS ARE ALL IDENTICAL, EXPECTED, COULD AVOID
     TrajDistSim = sqrt(TrajDistSim); % Make more normal
     TrajDistSim = 1-((TrajDistSim-nanmin(TrajDistSim(:)))./(quantile(TrajDistSim(:),0.99)-nanmin(TrajDistSim(:))));
     TrajDistSim(TrajDistSim<0 | isnan(TrajDistSim))=0;
@@ -428,6 +435,7 @@ while flag<2
     scores = [LocTrajectorySim(SameIdx(:))', LocTrajectorySim(WithinIdx(:))'];
     paramid = find(ismember(paramNames,'LocTrajectorySim'));
     [x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
+    toc
 
     %
     if flag  && drawthis
