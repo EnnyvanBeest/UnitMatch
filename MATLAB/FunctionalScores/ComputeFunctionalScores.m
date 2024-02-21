@@ -213,6 +213,8 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'ACGCorr')) || recompute %
     disp('Computing ACG, this will take some time...')
     tvec = -UMparam.ACGduration / 2:UMparam.ACGbinSize:UMparam.ACGduration / 2;
     ACGMat = nan(length(tvec), 2, nclus);
+    ISIbins = [0 5*10.^(-4:0.1:0)]; %%% Could be move to UMparam
+    ISIMat = nan(length(ISIbins)-1, 2, nclus);
     FR = nan(2, nclus);
     for clusid = 1:nclus %parfot QQ
         for cv = 1:2
@@ -228,8 +230,9 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'ACGCorr')) || recompute %
                 nspkspersec = histcounts(sp.st(idx1), [min(sp.st(idx1)):1:max(sp.st(idx1))]);
                 FR(cv, clusid) = nanmean(nspkspersec);
 
+                ISIMat(:, cv, clusid) = histcounts(diff(double(sp.st(idx1))),ISIbins);
 
-                % compute ACG
+                % compute ACG -- TO REMOVE POSSIBLY
                 [ccg, t] = CCGBz([double(sp.st(idx1)); double(sp.st(idx1))], [ones(size(sp.st(idx1), 1), 1); ...
                     ones(size(sp.st(idx1), 1), 1) * 2], 'binSize', UMparam.ACGbinSize, 'duration', UMparam.ACGduration, 'norm', 'rate'); %function
                 ACGMat(:, cv, clusid) = ccg(:, 1, 1);
@@ -239,12 +242,11 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'ACGCorr')) || recompute %
         end
     end
 
-    %% Correlation between ACG
+    %% Correlation between ACG -- TO REMOVE POSSIBLY
     ACGCorr = corr(squeeze(ACGMat(:, 1, :)), squeeze(ACGMat(:, 2, :)));
     ACGCorr = tanh(.5*atanh(ACGCorr) + .5*atanh(ACGCorr)); %%% added after biorxiv
     ACGCorr = ACGCorr'; % getRank expects different input
     [ACGRank, ACGSig] = getRank(atanh(ACGCorr),SessionSwitch);    % Normalize correlation (z-transformed)
-
 
     % Transpose
     ACGCorr = ACGCorr';
@@ -255,6 +257,22 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'ACGCorr')) || recompute %
     MatchTable.ACGCorr = ACGCorr(:);
     MatchTable.ACGRank = ACGRank(:);
     MatchTable.ACGSig = ACGSig(:);
+
+    %% Correlation between ISIs
+    ISICorr = corr(squeeze(ISIMat(:, 1, :)), squeeze(ISIMat(:, 2, :)));
+    ISICorr = tanh(.5*atanh(ISICorr) + .5*atanh(ISICorr)); %%% added after biorxiv
+    ISICorr = ISICorr'; % getRank expects different input
+    [ISIRank, ISISig] = getRank(atanh(ISICorr),SessionSwitch);    % Normalize correlation (z-transformed)
+
+    % Transpose
+    ISICorr = ISICorr';
+    ISIRank = ISIRank';
+    ISISig = ISISig';  % Saves out number of standard deviations away from mean
+
+    % Save in table
+    MatchTable.ISICorr = ISICorr(:);
+    MatchTable.ISIRank = ISIRank(:);
+    MatchTable.ISISig = ISISig(:);
 end
 
 if saveFig
