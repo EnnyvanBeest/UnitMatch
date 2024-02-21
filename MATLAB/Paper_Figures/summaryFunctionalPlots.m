@@ -30,21 +30,21 @@ function [FPSum, days, deltaDays, numMatchedUnits, maxAvailableUnits] = summaryF
     switch whichMetric
         case 'Corr'
             fprintf("Taking the correlation values!\n")
-            FPNames = {'FRDiff','ACGCorr','ISICorr','natImRespCorr','refPopCorr'};
-            stepsz = [0.05 0.05 0.05 0.05 0.05];
-            minVal = [0 -1 -1 -1 -1];
-            maxVal = [15 1 1 1 1];
-            flipROC = [0 1 1 1 1];
+            FPNames = {'FRDiff','ISICorr','natImRespCorr','refPopCorr'};
+            stepsz = [0.05 0.05 0.05 0.05];
+            minVal = [0 -1 -1 -1];
+            maxVal = [15 1 1 1];
+            flipROC = [0 1 1 1];
         case 'Rank'
             fprintf("Taking the rank!\n")
-            FPNames = {'FRRank','ACGRank','natImRespRank','refPopRank'};
+            FPNames = {'FRRank','ISIRank','natImRespRank','refPopRank'};
             stepsz = [1 1 1 1];
             minVal = [0.5 0.5 0.5 0.5];
             maxVal = [20.5 20.5 20.5 20.5];
             flipROC = [0 0 0 0];
         case 'Sig'
             fprintf("Taking the sig!\n")
-            FPNames = {'FRSig','ACGSig','natImRespSig','refPopSig'};
+            FPNames = {'FRSig','ISISig','natImRespSig','refPopSig'};
             stepsz = [0.01 0.01 0.01 0.01];
             minVal = [0 0 0 0];
             maxVal = [1 1 1 1];
