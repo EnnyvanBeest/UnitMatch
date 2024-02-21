@@ -3,7 +3,6 @@ if 1
 datapath = 'H:\MatchingUnits\Yuan\WithinDay';
 miceopt = {'AL032','AV008','CB016','EB019','JF067'};
 ProbThresh = 0.5;
-
 FPFNYuan = nan(length(miceopt),2); %FP/FN
 FPFNUM = nan(length(miceopt),2); %FP/FN
 AUCs = nan(length(miceopt),2); % UM/Yuan
@@ -106,7 +105,7 @@ offsetAxes
 subplot(3,2,2)
 hold on
 for modeid = 1:2
-    line([modeid-0.5 modeid+0.5],[nanmedian(AUCs(:,modeid),1) nanmedian(AUCs(:,modeid),1)],'color',h(modeid).FaceColor);
+    line([modeid-0.5 modeid+0.5],[nanmean(AUCs(:,modeid),1) nanmean(AUCs(:,modeid),1)],'color',h(modeid).FaceColor);
     scatter(repmat(modeid,1,length(miceopt))+(rand(1,length(miceopt))-0.5).*0.1,AUCs(:,modeid),20,cols,'filled')
 end
 set(gca,'XTick',1:2,'XTickLabel',{'UnitMatch','Yuan et al.'})
@@ -119,6 +118,7 @@ offsetAxes
 end
 %% Across days
 datapath = 'H:\MatchingUnits\Yuan\Across2Days';
+datapathUM = 'H:\MatchingUnits\Output'
 miceopt = {'AL032','AV008','CB016','EB019','JF067'};
 ProbThresh = 0.5;
 
@@ -131,9 +131,9 @@ DriftYuan = nan(1,length(miceopt));
 % units (Bombcell isolated) are found back by the two algorithms?
 for midx = 1:length(miceopt)
     % What about UnitMatch?
-    UMOutputFile = dir(fullfile(datapath,miceopt{midx},'**','UnitMatch.mat')); % Find output file
+    UMOutputFile = dir(fullfile(datapathUM,miceopt{midx},'**','UnitMatch.mat')); % Find output file
     % AssignUniqueID(UMOutputFile.folder)
-    % ComputeFunctionalScores(UMOutputFile.folder)
+    ComputeFunctionalScores(UMOutputFile.folder)
 
     tmpUM = load(fullfile(UMOutputFile.folder,UMOutputFile.name));
 
@@ -172,7 +172,136 @@ for midx = 1:length(miceopt)
     nMatches(midx,3) = nUniqueYuan/min([tmpYuan.output.KSgood_f1,tmpYuan.output.KSgood_f2]);
 
     % All refPopCorr
-    CV1idx = find(tmpUM.MatchTable.RecSes1 < tmpUM.MatchTable.RecSes2 & tmpUM.MatchTable.EucledianDistance < tmpUM.UMparam.NeighbourDist); % Only neighbours
+    CV1idx = find(tmpUM.MatchTable.RecSes1 < tmpUM.MatchTable.RecSes2 & tmpUM.MatchTable.EucledianDistance < tmpUM.UMparam.maxdist); % Only neighbours
+    % Extract functional scores
+    FunctionalScoreOverlap = tmpUM.MatchTable.refPopCorr(tblidx(OverlapIdx));
+    FunctionalScoreOther = tmpUM.MatchTable.refPopCorr(CV1idx(~ismember(CV1idx,tblidx(OverlapIdx))));
+
+    % AUC
+    scores = [FunctionalScoreOther', FunctionalScoreOverlap'];
+    labels = [zeros(1,length(FunctionalScoreOther)), ones(1,length(FunctionalScoreOverlap))];
+    [x,y,~,AUCsAcross(midx,1)] = perfcurve(labels,scores,1);
+    
+    %  UM 
+    FunctionalScoreUM = tmpUM.MatchTable.refPopCorr(tblidx);
+    FunctionalScoreOther = tmpUM.MatchTable.refPopCorr(CV1idx(~ismember(CV1idx,tblidx)));
+
+    % AUC
+    scores = [FunctionalScoreOther', FunctionalScoreUM'];
+    labels = [zeros(1,length(FunctionalScoreOther)), ones(1,length(FunctionalScoreUM))];
+    [x,y,~,AUCsAcross(midx,2)] = perfcurve(labels,scores,1);
+
+    % Functional scores Yuan
+    YuanTblIdx = nan(1,size(RealIDTable,1));
+    for pairid = 1:size(ResultTable,1)
+        YuanTblIdx(pairid) = find(ismember(tmpUM.MatchTable.ID1,RealIDTable(pairid,1)) & ismember(tmpUM.MatchTable.RecSes1,1) &...
+            ismember(tmpUM.MatchTable.ID2,RealIDTable(pairid,2)) & ismember(tmpUM.MatchTable.RecSes2,2));
+    end
+    FunctionalScoreYuan = tmpUM.MatchTable.refPopCorr(YuanTblIdx);
+    FunctionalScoreOther = tmpUM.MatchTable.refPopCorr(CV1idx(~ismember(CV1idx,YuanTblIdx)));
+    % AUC
+    scores = [FunctionalScoreOther', FunctionalScoreYuan'];
+    labels = [zeros(1,length(FunctionalScoreOther)), ones(1,length(FunctionalScoreYuan))];
+    [x,y,~,AUCsAcross(midx,3)] = perfcurve(labels,scores,1);
+      
+end
+
+%%
+subplot(3,2,3)
+CondCols = [0 0 0; 0 0 1; 1 0 0];
+hold on
+for modeid = 1:3
+    line([modeid-0.5 modeid+0.5],[nanmean(nMatches(:,modeid),1) nanmean(nMatches(:,modeid),1)],'color',CondCols(modeid,:));
+    scatter(repmat(modeid,1,length(miceopt))+(rand(1,length(miceopt))-0.5).*0.1,nMatches(:,modeid),20,cols,'filled')
+end
+set(gca,'XTick',1:3,'XTickLabel',{'Overlap','UnitMatch','Yuan et al.'})
+ylabel('nMatches')
+title('Across day matches')
+makepretty
+offsetAxes
+
+subplot(3,2,4)
+hold on
+for modeid = 1:3
+    line([modeid-0.5 modeid+0.5],[nanmean(AUCsAcross(:,modeid),1) nanmean(AUCsAcross(:,modeid),1)],'color',CondCols(modeid,:));
+    h=scatter(repmat(modeid,1,length(miceopt))+(rand(1,length(miceopt))-0.5).*0.1,AUCsAcross(:,modeid),20,cols,'filled')
+end
+set(gca,'XTick',1:3,'XTickLabel',{'Overlap','UnitMatch','Yuan et al.'})
+ylabel('AUC values')
+title('Across day AUC values - cross-correlation')
+makepretty
+offsetAxes
+
+subplot(3,2,5)
+scatter(abs(DriftUM(2,:)),abs(DriftYuan),20,cols,'filled')
+axis square
+xlims = get(gca,'xlim');
+ylims = get(gca,'ylim');
+lims = [min([xlims(1) ylims(1)]) max([xlims(2) ylims(2)])];
+set(gca,'xlim',lims,'ylim',lims)
+
+xlabel('UnitMatch')
+ylabel('Yuan et al.')
+title('Drift Estimate')
+
+%% Across many days
+keyboard
+datapath = 'H:\MatchingUnits\Yuan\AcrossMultipleDays';
+datapathUM = 'H:\MatchingUnits\OutputMonthApart'
+miceopt = {'AL032'};
+ProbThresh = 0.5;
+
+nMatches = nan(length(miceopt),3); % Both (overlap), UnitMatch only, Yuan only
+PercOverlapWithFunctional = nan(length(miceopt),3); % Shared, Unique to UM, Unique to Yuan
+AUCsAcross = nan(length(miceopt),3); % AUC values %Shared, Unique to UM, Unique to Yuan
+DriftUM = nan(3,2);
+DriftYuan = nan(1,length(miceopt));
+% Data was split up first versus second half of recording. How many of good
+% units (Bombcell isolated) are found back by the two algorithms?
+for midx = 1:length(miceopt)
+    % What about UnitMatch?
+    UMOutputFile = dir(fullfile(datapathUM,miceopt{midx},'**','UnitMatch.mat')); % Find output file
+    % AssignUniqueID(UMOutputFile.folder)
+    % ComputeFunctionalScores(UMOutputFile.folder)
+
+    tmpUM = load(fullfile(UMOutputFile.folder,UMOutputFile.name));
+
+    DriftUM = tmpUM.UMparam.drift(1:end-1,2:3,1); % Z-drift
+
+    nclus = size(tmpUM.WaveformInfo.MaxChannel,1);
+    tblidx = find((tmpUM.MatchTable.UID1 == tmpUM.MatchTable.UID2) & (tmpUM.MatchTable.RecSes1 < tmpUM.MatchTable.RecSes2));
+    Pairs = [tmpUM.MatchTable.ID1(tblidx) tmpUM.MatchTable.ID2(tblidx)];
+
+    % Yuan et al?
+    YuanOutputFile = dir(fullfile(datapath,miceopt{midx},'**','Output.mat')); % Find output file
+    tmpYuan = load(fullfile(YuanOutputFile.folder,YuanOutputFile.name));
+    DriftYuan(midx) = -tmpYuan.output.z_mode;
+    Ntotal = tmpYuan.output.KSgood_f1 + tmpYuan.output.KSgood_f2;
+    if nclus ~= Ntotal
+        disp('Not same amount of units.. Unfair comparison??')
+    end
+
+    ResultTable = tmpYuan.output.results_wth(:,[3,2]); % This is an index, 1`st session in column 3, 2nd in column 2
+
+    RealIDTable = nan(size(ResultTable));
+    for sesid = 1:2
+        ClusIDs = tmpUM.UniqueIDConversion.OriginalClusID(tmpUM.UniqueIDConversion.recsesAll'==sesid);
+        RealIDTable(:,sesid) = ClusIDs(ResultTable(:,sesid));
+    end
+
+    OverlapIdx = ismember(Pairs,RealIDTable,'rows');
+    NonOverlapIdx = ~ismember(Pairs,RealIDTable,'rows');
+    nOverlap = sum(OverlapIdx);
+    NonOverlapIdxYuan = ~ismember(RealIDTable,Pairs,'rows');
+    nUniqueUM = size(Pairs,1)-nOverlap;
+    nUniqueYuan = size(RealIDTable,1)-nOverlap;
+
+    nMatches(midx,1) = nOverlap/min([tmpYuan.output.KSgood_f1,tmpYuan.output.KSgood_f2]);
+    nMatches(midx,2) = nUniqueUM/min([tmpYuan.output.KSgood_f1,tmpYuan.output.KSgood_f2]);
+    nMatches(midx,3) = nUniqueYuan/min([tmpYuan.output.KSgood_f1,tmpYuan.output.KSgood_f2]);
+
+    % All refPopCorr
+    CV1idx = find(tmpUM.MatchTable.RecSes1 < tmpUM.MatchTable.RecSes2 & tmpUM.MatchTable.EucledianDistance < tmpUM.UMparam.maxdist); % Only neighbours
     % Extract functional scores
     FunctionalScoreOverlap = tmpUM.MatchTable.refPopCorr(tblidx(OverlapIdx));
     FunctionalScoreOther = tmpUM.MatchTable.refPopCorr(CV1idx(~ismember(CV1idx,tblidx(OverlapIdx))));
@@ -205,42 +334,3 @@ for midx = 1:length(miceopt)
     [x,y,~,AUCsAcross(midx,3)] = perfcurve(labels,scores,1);
       
 end
-
-%%
-subplot(3,2,3)
-CondCols = [0 0 0; 0 0 1; 1 0 0];
-hold on
-for modeid = 1:3
-    line([modeid-0.5 modeid+0.5],[nanmedian(nMatches(:,modeid),1) nanmedian(nMatches(:,modeid),1)],'color',CondCols(modeid,:));
-    scatter(repmat(modeid,1,length(miceopt))+(rand(1,length(miceopt))-0.5).*0.1,nMatches(:,modeid),20,cols,'filled')
-end
-set(gca,'XTick',1:3,'XTickLabel',{'Overlap','UnitMatch','Yuan et al.'})
-ylabel('nMatches')
-title('Across day matches')
-makepretty
-offsetAxes
-
-subplot(3,2,4)
-hold on
-for modeid = 1:3
-    line([modeid-0.5 modeid+0.5],[nanmedian(AUCsAcross(:,modeid),1) nanmedian(AUCsAcross(:,modeid),1)],'color',CondCols(modeid,:));
-    h=scatter(repmat(modeid,1,length(miceopt))+(rand(1,length(miceopt))-0.5).*0.1,AUCsAcross(:,modeid),20,cols,'filled')
-end
-set(gca,'XTick',1:3,'XTickLabel',{'Overlap','UnitMatch','Yuan et al.'})
-ylabel('AUC values')
-title('Across day AUC values - cross-correlation')
-makepretty
-offsetAxes
-
-subplot(3,2,5)
-scatter(abs(DriftUM(2,:)),abs(DriftYuan),20,cols,'filled')
-axis square
-xlims = get(gca,'xlim');
-ylims = get(gca,'ylim');
-lims = [min([xlims(1) ylims(1)]) max([xlims(2) ylims(2)])];
-set(gca,'xlim',lims,'ylim',lims)
-
-xlabel('UnitMatch')
-ylabel('Yuan et al.')
-title('Drift Estimate')
-

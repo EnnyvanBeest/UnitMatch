@@ -24,6 +24,9 @@ function trackWithFunctionalMetrics(UMFiles)
         end
         if any(strcmp('natImRespSig',MatchTable.Properties.VariableNames))
             pairsNatImResp = MatchTable.natImRespSig > 2;
+            if ~any(pairsNatImResp)
+                pairsNatImResp = true(size(MatchTable,1),1);
+            end
         else
             pairsNatImResp = true(size(MatchTable,1),1);
         end

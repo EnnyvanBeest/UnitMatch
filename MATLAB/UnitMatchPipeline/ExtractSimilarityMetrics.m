@@ -324,9 +324,9 @@ while flag<2
     CentroidVar = 1-((CentroidVar-nanmin(CentroidVar(:)))./(quantile(CentroidVar(:),0.99)-nanmin(CentroidVar(:)))); %Average difference
     CentroidVar(CentroidVar<0) = 0;
     CentroidVar(isnan(CentroidVar)) = 0;
-    CentroidVar = atanh(CentroidVar);
-    CentroidVar = ((CentroidVar-nanmin(CentroidVar(:)))./(quantile(CentroidVar(:),0.99)-nanmin(CentroidVar(:)))); %Average difference
-    CentroidVar(CentroidVar>1) = 1;
+    % CentroidVar = atanh(CentroidVar);
+    % CentroidVar = ((CentroidVar-nanmin(CentroidVar(:)))./(quantile(CentroidVar(:),0.99)-nanmin(CentroidVar(:)))); %Average difference
+    % CentroidVar(CentroidVar>1) = 1;
 
     scores = [CentroidVar(SameIdx(:))', CentroidVar(WithinIdx(:))'];
     paramid = find(ismember(paramNames,'CentroidVar'));
@@ -368,9 +368,9 @@ while flag<2
     CentroidDistRecentered = squeeze(nanmin(nanmean(EuclDist2,2),[],3));% minimum across flips
     CentroidDistRecentered = 1-(CentroidDistRecentered-nanmin(CentroidDistRecentered(:)))./(quantile(CentroidDistRecentered(:),0.99)-nanmin(CentroidDistRecentered(:)));
     CentroidDistRecentered(CentroidDistRecentered<0|isnan(CentroidDistRecentered))=0;
-    CentroidDistRecentered = atanh(CentroidDistRecentered);
-    CentroidDistRecentered = (CentroidDistRecentered-nanmin(CentroidDistRecentered(:)))./(quantile(CentroidDistRecentered(:),0.99)-nanmin(CentroidDistRecentered(:)));
-    CentroidDistRecentered(CentroidDistRecentered>1) = 1;
+    % CentroidDistRecentered = atanh(CentroidDistRecentered);
+    % CentroidDistRecentered = (CentroidDistRecentered-nanmin(CentroidDistRecentered(:)))./(quantile(CentroidDistRecentered(:),0.99)-nanmin(CentroidDistRecentered(:)));
+    % CentroidDistRecentered(CentroidDistRecentered>1) = 1;
     scores = [CentroidDistRecentered(SameIdx(:))', CentroidDistRecentered(WithinIdx(:))'];
     paramid = find(ismember(paramNames,'CentroidDistRecentered'));
     [x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
@@ -414,10 +414,21 @@ while flag<2
     % Add points for not having nans
     x1 = good_ang(:,:,1,1);
     x2 = good_ang(:,:,2,1)';
-    WaveformDurationPoints = (2*x1*x2)./((length(waveidx)-1))-1; % overlap in waveformduration?
-    TrajAngleSim = atanh((TrajAngleSim + WaveformDurationPoints)./2);
-
-    TrajAngleSim = ((TrajAngleSim-quantile(TrajAngleSim(:),0.01)))./(quantile(TrajAngleSim(:),0.99)-quantile(TrajAngleSim(:),0.01));
+    WaveformDurationPoints = (x1*x2); % overlap in waveformduration?
+    
+    TrajAngleSim = atanh(TrajAngleSim);
+    % Normalize per bin of waveformduration: more timepoints regress to 0
+    % correlation by chance more often
+    TrajAngleSim = TrajAngleSim(:);
+    TrajAngleSimNorm = nan(size(TrajAngleSim));
+    WaveformDurationPoints = WaveformDurationPoints(:);
+    BinEdges = [0:2:length(waveidx)-1];
+    [count,~,binidx] = histcounts(WaveformDurationPoints,BinEdges);
+    for binid = unique(binidx)'
+        TrajAngleSimNorm(binidx==binid) = (TrajAngleSim(binidx==binid)-quantile(TrajAngleSim(binidx==binid),0.01))./(quantile(TrajAngleSim(binidx==binid),0.99)-quantile(TrajAngleSim(binidx==binid),0.01));
+    end
+    TrajAngleSim = reshape(TrajAngleSimNorm,nclus,nclus);
+    WaveformDurationPoints = reshape(WaveformDurationPoints,nclus,nclus);
     TrajAngleSim(TrajAngleSim<0) = 0;
     TrajAngleSim(TrajAngleSim>1) = 1;
     clear x1 x2
@@ -701,7 +712,9 @@ while flag<2
         ScoreVector = ScoreVector';
     end
     ThrsOpt = ScoreVector(find(smoothdata(hd)>smoothdata(hnd)&ScoreVector>0.6,1,'first'));
+    % muw = nanmedian(tmp(~isnan(tmp) & tmp<ThrsOpt));
     [muw, sw] = normfit(tmp(~isnan(tmp)));
+
 
 
 
@@ -740,8 +753,8 @@ while flag<2
             tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1)=nan;
         end
     end
-    ha = histcounts(tmp(:),Bins)./sum(~isnan(tmp(:)));
-    [mua, sa] = normfit(tmp(~isnan(tmp)));   
+    % ha = histcounts(tmp(:),Bins)./sum(~isnan(tmp(:)));
+    % [mua, sa] = normfit(tmp(~isnan(tmp)));   
     if flag  && drawthis
         subplot(2,2,3)
         plot(ScoreVector,hd,'-','color',[0 0.7 0]); hold on; plot(ScoreVector,hnd,'b-')
