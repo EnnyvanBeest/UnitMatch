@@ -379,11 +379,10 @@ while flag<2
     good_ang = zeros(size(TrajDist));
     good_ang(TrajDist >= param.min_angledist) = 1;
 
-    %% Temporarily save out these AUC values (later remove the methods that are not used!!):
+    %% New method dot product
     x1 = ProjectedLocationPerTPAllFlips(:,:,waveidx(2):waveidx(end),:,:);
     x2 = ProjectedLocationPerTPAllFlips(:,:,waveidx(1):waveidx(end-1),:,:);
 
-    %% New method dot product
     % Normalize the direction vectors
     v1 = x1 ./ repmat(vecnorm(x1,2,1),[3,1,1,1,1]);
     v2 = x2 ./ repmat(vecnorm(x2,2,1),[3,1,1,1,1]);
@@ -396,25 +395,18 @@ while flag<2
     LocAngle = acos(dot_product);
     LocAngle(~good_ang) = nan; % Too little distance travelled is noisy
 
-    x1 = repmat(squeeze(LocAngle(:,:,1,:)),[1 1 1 nclus]);
-    x2 = permute(repmat(squeeze(LocAngle(:,:,2,:)),[1 1 1 nclus]),[4 2 3 1]); %switch nclus around
-
     %% Correlation:
-    % Correlate angles
-    rho = nan(nclus,size(x1,3),nclus);
-    for clusid1 = 1:nclus
-        for clusid2 = 1:nclus
-            for flipid = 1:size(x1,3)
-                rho(clusid1,flipid,clusid2) = corr(squeeze(x1(clusid1,:,flipid,clusid2))',squeeze(x2(clusid1,:,flipid,clusid2))', 'Rows' ,'Pairwise','Type','Pearson');
-            end
-        end
-    end
-    TrajAngleSim = atanh(squeeze(nanmax(rho,[],2))); % maximum across flips
+
+    x1 = reshape(permute(squeeze(LocAngle(:,:,1,:)),[2 1 3]), [size(LocAngle,2), nclus*size(LocAngle,4)]);
+    x2 = reshape(permute(squeeze(LocAngle(:,:,2,:)),[2 1 3]), [size(LocAngle,2), nclus*size(LocAngle,4)]);
+    rho = corr(x1,x2, 'Rows','Pairwise','Type','Pearson');
+    rho = reshape(rho,[nclus,nclus,size(LocAngle,4)^2]);
+
+    TrajAngleSim = atanh(squeeze(nanmax(rho,[],3))); % maximum across flips
     TrajAngleSim = ((TrajAngleSim-quantile(TrajAngleSim(:),0.01)))./(quantile(TrajAngleSim(:),0.99)-quantile(TrajAngleSim(:),0.01));
     TrajAngleSim(TrajAngleSim<0) = 0;
     TrajAngleSim(TrajAngleSim>1) = 1;
     clear x1 x2
-
 
     scores = [TrajAngleSim(SameIdx(:))', TrajAngleSim(WithinIdx(:))'];
     paramid = find(ismember(paramNames,'TrajAngleSim'));
