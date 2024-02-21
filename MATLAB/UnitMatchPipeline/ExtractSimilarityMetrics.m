@@ -684,7 +684,7 @@ while flag<2
         ScoreVector = ScoreVector';
     end
     ThrsOpt = ScoreVector(find(smoothdata(hd)>smoothdata(hnd)&ScoreVector>0.6,1,'first'));
-    [muw, sw] = normfit(tmp(~isnan(tmp) & tmp<ThrsOpt));
+    [muw, sw] = normfit(tmp(~isnan(tmp)));
 
 
 
@@ -695,12 +695,36 @@ while flag<2
     for did = 1:ndays
         tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1)=nan;
     end
-    ha = histcounts(tmp(:),Bins)./sum(~isnan(tmp(:)));
-    [mua, sa] = normfit(tmp(~isnan(tmp)  & tmp<ThrsOpt));
+    % Correct for total scores being lower for further away session in
+    % initial phase 
+    if ~flag
+        for did1 = 1:ndays
+            for did2 = 1:ndays
+                if did1==did2
+                    continue
+                end
+                tmpacross = tmp(SessionSwitch(did1):SessionSwitch(did1+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1);
 
-    if ~isnan(mua) && mua<muw && ~flag
-        ThrsOpt = ThrsOpt-abs(muw-mua); % Correct for general scores being lower across days (e.g. unresolved drift)
+                ha = histcounts(tmpacross(:),Bins)./sum(~isnan(tmpacross(:)));
+                [mua, sa] = normfit(tmp(~isnan(tmp)));
+
+                if mua<muw % Increase totalscore by this much
+                    TotalScore(SessionSwitch(did1):SessionSwitch(did1+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1) = ...
+                         TotalScore(SessionSwitch(did1):SessionSwitch(did1+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1) + (muw-mua);
+                end
+            end
+        end
+        % Redo
+        tmp = TotalScore;
+        % Take centroid dist > maxdist out
+        tmp(EuclDist>param.NeighbourDist)=nan;
+        % Take within session out
+        for did = 1:ndays
+            tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1)=nan;
+        end
     end
+    ha = histcounts(tmp(:),Bins)./sum(~isnan(tmp(:)));
+    [mua, sa] = normfit(tmp(~isnan(tmp)));   
     if flag  && drawthis
         subplot(2,2,3)
         plot(ScoreVector,hd,'-','color',[0 0.7 0]); hold on; plot(ScoreVector,hnd,'b-')

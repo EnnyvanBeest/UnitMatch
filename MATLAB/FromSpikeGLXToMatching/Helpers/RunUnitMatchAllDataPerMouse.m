@@ -54,6 +54,8 @@ for midx = 1:length(MiceOpt)
         if ~PipelineParams.RunPyKSChronicStitched %MatchUnitsAcrossDays
             disp('Unit matching in Matlab')
             AllKiloSortPaths(cell2mat(cellfun(@(X) any(strfind(X,'Chronic')),AllKiloSortPaths,'UniformOutput',0))) = []; %Use separate days and match units via matlab script
+            AllKiloSortPaths(cell2mat(cellfun(@(X) any(strfind(X,'Chrc2Sessions')),AllKiloSortPaths,'UniformOutput',0))) = []; %Use separate days and match units via matlab script
+
         else
             disp('Using chronic pyks option')
             AllKiloSortPaths = AllKiloSortPaths(cell2mat(cellfun(@(X) any(strfind(X,'Chronic')),AllKiloSortPaths,'UniformOutput',0))); %Use chronic output from pyks

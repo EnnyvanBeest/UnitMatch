@@ -75,7 +75,7 @@ if ~isempty(Pairs)
     for id = 1:size(Pairs,1)
 
         %% Liberal
-        TheseOriUids = OriUniqueID(ismember(UniqueIDLiberal,Pairs(id,:))); % Find all units that are currently having the same UniqueIDLiberal as either one of the current pairs, and their original unique ID as they are known in matchtable
+        TheseOriUids = OriUniqueID(ismember(UniqueIDLiberal,UniqueIDLiberal(Pairs(id,:)))); % Find all units that are currently having the same UniqueIDLiberal as either one of the current pairs, and their original unique ID as they are known in matchtable
         Idx = find(ismember(OriUniqueID,TheseOriUids)); % Find all units that have to be considered
         UniqueIDLiberal(Idx) = min(UniqueIDLiberal(Idx)); % Assign them all with the minimum UniqueIDLiberal
         nMatchesLiberal = nMatchesLiberal + 1;
@@ -93,8 +93,9 @@ if ~isempty(Pairs)
 
         %% Intermediate
         % Far away days can be ignored - this will be decided later
+        TheseOriUids = OriUniqueID(ismember(UniqueID,UniqueID(Pairs(id,:)))); % Find all units that are currently having the same UniqueIDLiberal as either one of the current pairs, and their original unique ID as they are known in matchtable
         TheseRecs = GoodRecSesID(Pairs(id,:));
-        OtherRecs = GoodRecSesID(ismember(UniqueIDLiberal,UniqueIDLiberal(Pairs(id,:))));
+        OtherRecs = GoodRecSesID(ismember(UniqueID,UniqueID(Pairs(id,:))));
         TheseOriUids(~ismember(OtherRecs,[TheseRecs-1; TheseRecs; TheseRecs+1;]))=[]; % Remove far days
         tblidx = find((ismember(MatchTable.UID1,TheseOriUids)&ismember(MatchTable.UID2,Pairs(id,2)) | ismember(MatchTable.UID1,TheseOriUids)&ismember(MatchTable.UID2,Pairs(id,1)) | ismember(MatchTable.UID2,TheseOriUids)&ismember(MatchTable.UID1,Pairs(id,1)) | ismember(MatchTable.UID2,TheseOriUids)&ismember(MatchTable.UID1,Pairs(id,2))) & ~(MatchTable.UID1==MatchTable.UID2)); % !
         if all(MatchTable.MatchProb(tblidx)>UMparam.UsedProbability) % All of these should survive the threshold
