@@ -128,4 +128,4 @@ if ~exist('UMFiles') || isempty(UMFiles) % When using the example pipeline this 
 end
 % summaryFunctionalPlots(UMFiles, 'Rank', groupvec)
 % summaryFunctionalPlots_Part2(UMFiles, groupvec)
-summaryMatchingPlots(UMFiles,groupvec)
+summaryMatchingPlots(UMFiles)
