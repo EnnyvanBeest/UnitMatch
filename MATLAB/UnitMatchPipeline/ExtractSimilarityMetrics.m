@@ -373,16 +373,13 @@ while flag<2
     x1 = ProjectedLocationPerTPAllFlips(:,:,waveidx(2):waveidx(end),:,:);
     x2 = ProjectedLocationPerTPAllFlips(:,:,waveidx(1):waveidx(end-1),:,:);
   
-    %% Find travel distance
+    % Find travel distance
     TrajDist = squeeze(vecnorm(x1-x2,2,1));
     %Use  TrajDist to select angle ehere there is a minimum amount movement
     good_ang = zeros(size(TrajDist));
     good_ang(TrajDist >= param.min_angledist) = 1;
 
-    %% New method dot product
-    x1 = ProjectedLocationPerTPAllFlips(:,:,waveidx(2):waveidx(end),:,:);
-    x2 = ProjectedLocationPerTPAllFlips(:,:,waveidx(1):waveidx(end-1),:,:);
-
+    % New method dot product
     % Normalize the direction vectors
     v1 = x1 ./ repmat(vecnorm(x1,2,1),[3,1,1,1,1]);
     v2 = x2 ./ repmat(vecnorm(x2,2,1),[3,1,1,1,1]);
@@ -395,12 +392,11 @@ while flag<2
     LocAngle = acos(dot_product);
     LocAngle(~good_ang) = nan; % Too little distance travelled is noisy
 
-    %% Correlation:
-
+    % Correlation
     x1 = reshape(permute(squeeze(LocAngle(:,:,1,:)),[2 1 3]), [size(LocAngle,2), nclus*size(LocAngle,4)]);
     x2 = reshape(permute(squeeze(LocAngle(:,:,2,:)),[2 1 3]), [size(LocAngle,2), nclus*size(LocAngle,4)]);
     rho = corr(x1,x2, 'Rows','Pairwise','Type','Pearson');
-    rho = reshape(rho,[nclus,nclus,size(LocAngle,4)^2]);
+    rho = reshape(permute(reshape(rho,[nclus,size(LocAngle,4),nclus,size(LocAngle,4)]),[1 3 2 4]),[nclus,nclus,size(LocAngle,4)^2]);
 
     TrajAngleSim = atanh(squeeze(nanmax(rho,[],3))); % maximum across flips
     TrajAngleSim = ((TrajAngleSim-quantile(TrajAngleSim(:),0.01)))./(quantile(TrajAngleSim(:),0.99)-quantile(TrajAngleSim(:),0.01));
