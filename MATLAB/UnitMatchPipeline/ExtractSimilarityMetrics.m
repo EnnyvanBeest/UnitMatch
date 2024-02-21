@@ -324,6 +324,10 @@ while flag<2
     CentroidVar = 1-((CentroidVar-nanmin(CentroidVar(:)))./(quantile(CentroidVar(:),0.99)-nanmin(CentroidVar(:)))); %Average difference
     CentroidVar(CentroidVar<0) = 0;
     CentroidVar(isnan(CentroidVar)) = 0;
+    CentroidVar = atanh(CentroidVar);
+    CentroidVar = ((CentroidVar-nanmin(CentroidVar(:)))./(quantile(CentroidVar(:),0.99)-nanmin(CentroidVar(:)))); %Average difference
+    CentroidVar(CentroidVar>1) = 1;
+
     scores = [CentroidVar(SameIdx(:))', CentroidVar(WithinIdx(:))'];
     paramid = find(ismember(paramNames,'CentroidVar'));
     [x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
@@ -364,11 +368,14 @@ while flag<2
     CentroidDistRecentered = squeeze(nanmin(nanmean(EuclDist2,2),[],3));% minimum across flips
     CentroidDistRecentered = 1-(CentroidDistRecentered-nanmin(CentroidDistRecentered(:)))./(quantile(CentroidDistRecentered(:),0.99)-nanmin(CentroidDistRecentered(:)));
     CentroidDistRecentered(CentroidDistRecentered<0|isnan(CentroidDistRecentered))=0;
+    CentroidDistRecentered = atanh(CentroidDistRecentered);
+    CentroidDistRecentered = (CentroidDistRecentered-nanmin(CentroidDistRecentered(:)))./(quantile(CentroidDistRecentered(:),0.99)-nanmin(CentroidDistRecentered(:)));
+    CentroidDistRecentered(CentroidDistRecentered>1) = 1;
     scores = [CentroidDistRecentered(SameIdx(:))', CentroidDistRecentered(WithinIdx(:))'];
     paramid = find(ismember(paramNames,'CentroidDistRecentered'));
     [x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
 
-    CentroidOverlord = (CentroidDistRecentered+CentroidVar)/2;
+    CentroidOverlord = ((CentroidDistRecentered+CentroidVar)/2);
     scores = [CentroidOverlord(SameIdx(:))', CentroidOverlord(WithinIdx(:))'];
     paramid = find(ismember(paramNames,'CentroidOverlord'));
     [x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
@@ -402,8 +409,14 @@ while flag<2
     x2 = reshape(permute(squeeze(LocAngle(:,:,2,:)),[2 1 3]), [size(LocAngle,2), nclus*size(LocAngle,4)]);
     rho = corr(x1,x2, 'Rows','Pairwise','Type','Pearson');
     rho = reshape(permute(reshape(rho,[nclus,size(LocAngle,4),nclus,size(LocAngle,4)]),[1 3 2 4]),[nclus,nclus,size(LocAngle,4)^2]);
+    TrajAngleSim = (squeeze(nanmax(rho,[],3))); % maximum across flips
 
-    TrajAngleSim = atanh(squeeze(nanmax(rho,[],3))); % maximum across flips
+    % Add points for not having nans
+    x1 = good_ang(:,:,1,1);
+    x2 = good_ang(:,:,2,1)';
+    WaveformDurationPoints = (2*x1*x2)./((length(waveidx)-1))-1; % overlap in waveformduration?
+    TrajAngleSim = atanh((TrajAngleSim + WaveformDurationPoints)./2);
+
     TrajAngleSim = ((TrajAngleSim-quantile(TrajAngleSim(:),0.01)))./(quantile(TrajAngleSim(:),0.99)-quantile(TrajAngleSim(:),0.01));
     TrajAngleSim(TrajAngleSim<0) = 0;
     TrajAngleSim(TrajAngleSim>1) = 1;
