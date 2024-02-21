@@ -279,11 +279,11 @@ if saveFig
     % Check these: should be z1, z2, z3, z12, z13, z23, z123
     figure(VenFig)
     subplot(2,2,2)
-    Idx = (MatchTable.ACGRank(:) == 1 | MatchTable.ACGSig(:) > SigThrs | MatchTable.MatchProb(:) > 0.5) & ~isnan(MatchTable.ACGRank(:));
-    h = venn([sum(MatchTable.ACGRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.ACGSig(Idx)< SigThrs) sum(MatchTable.ACGRank(Idx)>1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.ACGSig(Idx)> SigThrs) ...
-        sum(MatchTable.ACGRank(Idx)>1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.ACGSig(Idx)< SigThrs) sum(MatchTable.ACGRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.ACGSig(Idx)> SigThrs) ...
-        sum(MatchTable.ACGRank(Idx)==1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.ACGSig(Idx)< SigThrs) sum(MatchTable.ACGRank(Idx)>1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.ACGSig(Idx)> SigThrs) ...
-        sum(MatchTable.ACGRank(Idx)>1 & MatchTable.ACGSig(Idx) > SigThrs & MatchTable.MatchProb(Idx)>0.5)] );
+    Idx = (MatchTable.ISIRank(:) == 1 | MatchTable.ISISig(:) > SigThrs | MatchTable.MatchProb(:) > 0.5) & ~isnan(MatchTable.ISIRank(:));
+    h = venn([sum(MatchTable.ISIRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.ISISig(Idx)< SigThrs) sum(MatchTable.ISIRank(Idx)>1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.ISISig(Idx)> SigThrs) ...
+        sum(MatchTable.ISIRank(Idx)>1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.ISISig(Idx)< SigThrs) sum(MatchTable.ISIRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.ISISig(Idx)> SigThrs) ...
+        sum(MatchTable.ISIRank(Idx)==1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.ISISig(Idx)< SigThrs) sum(MatchTable.ISIRank(Idx)>1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.ISISig(Idx)> SigThrs) ...
+        sum(MatchTable.ISIRank(Idx)>1 & MatchTable.ISISig(Idx) > SigThrs & MatchTable.MatchProb(Idx)>0.5)] );
     axis square
     axis off
     makepretty
@@ -598,10 +598,10 @@ for id = 1:ntimes
 
 
     %% Plot ACG
-    ACGCor = reshape(MatchTable.ACGCorr, nclus, nclus);
+    ISICorr = reshape(MatchTable.ISICorr, nclus, nclus);
     if saveFig
         subplot(4, 3, 4)
-        imagesc(ACGCor)
+        imagesc(ISICorr)
         hold on
         colormap(flipud(gray))
         makepretty
@@ -610,7 +610,7 @@ for id = 1:ntimes
         hold on
         arrayfun(@(X) line([SessionSwitch(X), SessionSwitch(X)], get(gca, 'ylim'), 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
         arrayfun(@(X) line(get(gca, 'xlim'), [SessionSwitch(X), SessionSwitch(X)], 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
-        title('Autocorrelogram Correlation')
+        title('ISI Autocorrelogram Correlation')
         axis square
 
         freezeColors
@@ -618,11 +618,11 @@ for id = 1:ntimes
         subplot(4, 3, 5)
         % Subtr = repmat(diag(ACGCor),1,size(ACGCor,1));
         % ACGCor = ACGCor - Subtr; % Subtract diagonalcorrelations
-        bins = min(ACGCor(:)):0.1:max(ACGCor(:));
+        bins = min(ISICorr(:)):0.1:max(ISICorr(:));
         Vector = [bins(1) + 0.1 / 2:0.1:bins(end) - 0.1 / 2];
-        hw = histcounts(ACGCor(WithinIdx), bins) ./ length(WithinIdx);
-        hm = histcounts(ACGCor(MatchIdx), bins) ./ length(MatchIdx);
-        hn = histcounts(ACGCor(NonMatchIdx), bins) ./ length(NonMatchIdx);
+        hw = histcounts(ISICorr(WithinIdx), bins) ./ length(WithinIdx);
+        hm = histcounts(ISICorr(MatchIdx), bins) ./ length(MatchIdx);
+        hn = histcounts(ISICorr(NonMatchIdx), bins) ./ length(NonMatchIdx);
         plot(Vector, hw, 'color', [0.5, 0.5, 0.5])
         hold on
         plot(Vector, hm, 'color', [0, 0.5, 0])
@@ -637,17 +637,17 @@ for id = 1:ntimes
         subplot(4, 3, 6)
         if any(MatchIdx)
             labels = [ones(1, numel(MatchIdx)), zeros(1, numel(NonMatchIdx))];
-            scores = [ACGCor(MatchIdx)', ACGCor(NonMatchIdx)'];
+            scores = [ISICorr(MatchIdx)', ISICorr(NonMatchIdx)'];
             [X, Y, ~, AUC1] = perfcurve(labels, scores, 1);
             h(1) = plot(X, Y, 'color', [0, 0.25, 0]);
             hold all
             labels = [zeros(1, numel(MatchIdx)), ones(1, numel(WithinIdx))];
-            scores = [ACGCor(MatchIdx)', ACGCor(WithinIdx)'];
+            scores = [ISICorr(MatchIdx)', ISICorr(WithinIdx)'];
             [X, Y, ~, AUC2] = perfcurve(labels, scores, 1);
             h(2) = plot(X, Y, 'color', [0, 0.5, 0]);
         end
         labels = [ones(1, numel(WithinIdx)), zeros(1, numel(NonMatchIdx))];
-        scores = [ACGCor(WithinIdx)', ACGCor(NonMatchIdx)'];
+        scores = [ISICorr(WithinIdx)', ISICorr(NonMatchIdx)'];
         [X, Y, ~, AUC3] = perfcurve(labels, scores, 1);
         h(3) = plot(X, Y, 'color', [0.25, 0.25, 0.25]);
 
@@ -655,7 +655,7 @@ for id = 1:ntimes
         xlabel('False positive rate')
         ylabel('True positive rate')
         %     legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
-        title(sprintf('Autocorrelogram AUC: %.3f, %.3f, %.3f', AUC1, AUC2, AUC3))
+        title(sprintf('ISI Autocorrelogram AUC: %.3f, %.3f, %.3f', AUC1, AUC2, AUC3))
         makepretty
         axis square
 

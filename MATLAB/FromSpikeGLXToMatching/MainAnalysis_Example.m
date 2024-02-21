@@ -46,7 +46,7 @@ PipelineParams.Scores2Include = {'CentroidDist','WavformSim','CentroidOverlord',
 PipelineParams.ApplyExistingBayesModel = 0; %If 1, use probability distributions made available by us - 
 PipelineParams.AssignUniqueID = 1; % Assign UniqueID 
 PipelineParams.GoodUnitsOnly = 1; % Include only good untis in the UnitMatch analysis - faster and more sensical
-PipelineParams.MakePlotsOfPairs =1; % Plots pairs for inspection (UnitMatch)
+PipelineParams.MakePlotsOfPairs =0; % Plots pairs for inspection (UnitMatch)
 PipelineParams.GUI = 0; % Flick through and do manual curation of matching - only works if MakePlotsofPairs = 1
 
 %% Automatic from here
