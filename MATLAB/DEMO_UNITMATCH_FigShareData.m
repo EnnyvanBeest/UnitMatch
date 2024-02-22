@@ -15,6 +15,7 @@
 % recording for that cluster.
 
 %% User input: 
+clear % UMparam should be remade from scratch!
 UMparam.SaveDir = 'H:\FigShare_UnitMatch\Output'; % Recommended to use end this path with \Probe0\IMRO_1\ if more probes/IMRO tables were used or \AllProbes\AllIMRO\ otherwise
 UMparam.KSDir = {'H:\FigShare_UnitMatch\Mouse1\2019-11-21\Probe0\1','H:\FigShare_UnitMatch\Mouse1\2019-11-22\Probe0\1'};  % This is a cell array with a path, in the path there should be a subfolder called 'RawWaveforms'. 
 % UMparam.RawDataPaths = {'H:\MatchingUnits\Tmp\AL032_2019-11-21_stripe192-natIm_g0_t0.imec0.ap.bin','H:\MatchingUnits\Tmp\AL032_2019-11-22_stripe192-natIm_g0_t0.imec0.ap.bin'} % OPTIONAL, it can also be read in from params.py file (if dat-path properly points at the raw OpenEphys/SpikeGLX file)

@@ -268,6 +268,8 @@ end
 %% Get FR difference
 
 if ~any(ismember(MatchTable.Properties.VariableNames, 'FRDiff')) || recompute
+    disp('Computing FR Differences...')
+
     FR = repmat(permute(FR, [2, 1]), [1, 1, nclus]);
     FRDiff = abs(squeeze(FR(:, 2, :)-permute(FR(:, 1, :), [3, 2, 1])));
     [FRRank, FRSig] = getRank(-sqrt(FRDiff),SessionSwitch);
@@ -305,6 +307,8 @@ end
 %% Get natural images fingerprints correlations
 
 if ~any(ismember(MatchTable.Properties.VariableNames, 'natImRespCorr')) || recompute % If it already exists in table, skip this entire thing
+    disp('Computing Natural Image Responses...')
+ 
     % Param for processing
     proc.window = [-0.3 0.5 ... % around onset
         0.0 0.5]; % around offset
