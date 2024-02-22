@@ -63,8 +63,8 @@ for midx = 1:length(miceopt)
     nOverlap = sum(OverlapIdx);
     NonOverlapIdx = ~ismember(Pairs,RealIDTable,'rows');
     NonOverlapIdxYuan = ~ismember(RealIDTable,Pairs,'rows');
-    nUniqueUM = size(Pairs,1)-nOverlap;
-    nUniqueYuan = size(RealIDTable,1)-nOverlap;
+    nUniqueUM = size(Pairs,1);
+    nUniqueYuan = size(RealIDTable,1);
     
     % Functional scores Yuan
     YuanTblIdx = nan(1,size(RealIDTable,1));
@@ -90,28 +90,37 @@ hold on
 for hid = 1:length(h)
     for modeid = 1:2
         if hid == 2
-        scatter(repmat(h(hid).XEndPoints(modeid),1,length(miceopt))+(rand(1,length(miceopt))-0.5).*0.1,FPFNYuan(:,modeid)',20,cols,'filled')
+        scatter(repmat(h(hid).XEndPoints(modeid),1,length(miceopt)),FPFNYuan(:,modeid)',20,cols,'filled')
         else
-        scatter(repmat(h(hid).XEndPoints(modeid),1,length(miceopt))+(rand(1,length(miceopt))-0.5).*0.1,FPFNUM(:,modeid)',20,cols,'filled')
+        scatter(repmat(h(hid).XEndPoints(modeid),1,length(miceopt)),FPFNUM(:,modeid)',20,cols,'filled')
         end
+
     end
 end
+for modeid = 1: 2
+    for midx = 1:length(miceopt)
+        plot([h(1).XEndPoints(modeid);h(2).XEndPoints(modeid)],cat(2,FPFNUM(midx,modeid),FPFNYuan(midx,modeid))','color',cols(midx,:))
+    end
+end
+
 set(gca,'XTickLabel',{'Unexpected matches','Unexpected non-matches'})
-ylabel('Proportion (of total neurons)')
+ylabel('Within day')
 legend({'UnitMatch','Yuan et al.'})
-title('Within-day comparison')
+title('Proportion of matches')
 makepretty
 offsetAxes
 
 subplot(3,3,2)
 hold on
 for modeid = 1:2
-    line([modeid-0.5 modeid+0.5],[nanmean(AUCs(:,modeid),1) nanmean(AUCs(:,modeid),1)],'color',h(modeid).FaceColor);
-    scatter(repmat(modeid,1,length(miceopt))+(rand(1,length(miceopt))-0.5).*0.1,AUCs(:,modeid),20,cols,'filled')
+    scatter(repmat(modeid,1,length(miceopt)),AUCs(:,modeid),20,cols,'filled')
+end
+for midx = 1:length(miceopt)
+    plot([1,2],AUCs(midx,:),'color',cols(midx,:))
 end
 set(gca,'XTick',1:2,'XTickLabel',{'UnitMatch','Yuan et al.'})
 ylabel('AUCvalues')
-title('Within-day AUC values - cross-correlation')
+title('Ref pop cross-correlation')
 makepretty
 offsetAxes
 
@@ -165,8 +174,8 @@ for midx = 1:length(miceopt)
     NonOverlapIdx = ~ismember(Pairs,RealIDTable,'rows');
     nOverlap = sum(OverlapIdx);
     NonOverlapIdxYuan = ~ismember(RealIDTable,Pairs,'rows');
-    nUniqueUM = size(Pairs,1)-nOverlap;
-    nUniqueYuan = size(RealIDTable,1)-nOverlap;
+    nUniqueUM = size(Pairs,1);
+    nUniqueYuan = size(RealIDTable,1);
 
     nMatches(midx,1) = nOverlap/min([tmpYuan.output.KSgood_f1,tmpYuan.output.KSgood_f2]);
     nMatches(midx,2) = nUniqueUM/min([tmpYuan.output.KSgood_f1,tmpYuan.output.KSgood_f2]);
@@ -211,25 +220,27 @@ end
 subplot(3,3,4)
 CondCols = [0 0 0; 0 0 1; 1 0 0];
 hold on
-for modeid = 1:3
-    line([modeid-0.5 modeid+0.5],[nanmean(nMatches(:,modeid),1) nanmean(nMatches(:,modeid),1)],'color',CondCols(modeid,:));
-    scatter(repmat(modeid,1,length(miceopt))+(rand(1,length(miceopt))-0.5).*0.1,nMatches(:,modeid),20,cols,'filled')
+for modeid = 2:3
+    scatter(repmat(modeid,1,length(miceopt)),nMatches(:,modeid),20,cols,'filled')
 end
-set(gca,'XTick',1:3,'XTickLabel',{'Overlap','UnitMatch','Yuan et al.'})
-ylabel('nMatches')
-title('Across day matches')
+for midx = 1:length(miceopt)
+    plot([2:3],nMatches(midx,2:3),'color',cols(midx,:))
+end
+set(gca,'XTick',2:3,'XTickLabel',{'UnitMatch','Yuan et al.'})
+ylabel('Across two days')
 makepretty
 offsetAxes
 
 subplot(3,3,5)
 hold on
-for modeid = 1:3
-    line([modeid-0.5 modeid+0.5],[nanmean(AUCsAcross(:,modeid),1) nanmean(AUCsAcross(:,modeid),1)],'color',CondCols(modeid,:));
-    h=scatter(repmat(modeid,1,length(miceopt))+(rand(1,length(miceopt))-0.5).*0.1,AUCsAcross(:,modeid),20,cols,'filled')
+for modeid = 2:3
+    h=scatter(repmat(modeid,1,length(miceopt)),AUCsAcross(:,modeid),20,cols,'filled')
 end
-set(gca,'XTick',1:3,'XTickLabel',{'Overlap','UnitMatch','Yuan et al.'})
+for midx = 1:length(miceopt)
+    plot([2,3],AUCsAcross(midx,2:3),'color',cols(midx,:))
+end
+set(gca,'XTick',2:3,'XTickLabel',{'UnitMatch','Yuan et al.'})
 ylabel('AUC values')
-title('Across day AUC values - cross-correlation')
 makepretty
 offsetAxes
 
@@ -298,8 +309,8 @@ for midx = 1:length(miceopt)
         NonOverlapIdx = ~ismember(Pairs,RealIDTable,'rows');
         nOverlap = sum(OverlapIdx);
         NonOverlapIdxYuan = ~ismember(RealIDTable,Pairs,'rows');
-        nUniqueUM = size(Pairs,1)-nOverlap;
-        nUniqueYuan = size(RealIDTable,1)-nOverlap;
+        nUniqueUM = size(Pairs,1);
+        nUniqueYuan = size(RealIDTable,1);
 
         nMatches(did,1) = nOverlap./min([tmpYuan.output.KSgood_f1,tmpYuan.output.KSgood_f2]);
         nMatches(did,2) = nUniqueUM/min([tmpYuan.output.KSgood_f1,tmpYuan.output.KSgood_f2]);
@@ -343,24 +354,26 @@ end
 subplot(3,3,7)
 cols = [1 0 0; 0 1 0; 0 0 1];
 hold on
-for modeid = 1:3
-    line([modeid-0.5 modeid+0.5],[nanmean(nMatches(:,modeid),1) nanmean(nMatches(:,modeid),1)],'color',CondCols(modeid,:));
-    scatter(repmat(modeid,1,3)+(rand(1,3)-0.5).*0.1,nMatches(:,modeid),20,cols,'filled')
+for modeid = 2:3
+    scatter(repmat(modeid,1,3),nMatches(:,modeid),20,cols,'filled')
 end
-set(gca,'XTick',1:3,'XTickLabel',{'Overlap','UnitMatch','Yuan et al.'})
-ylabel('nMatches')
-title('Across many days matches')
+for midx = 1:3
+    plot([2,3],nMatches(midx,2:3),'color',cols(midx,:))
+end
+set(gca,'XTick',2:3,'XTickLabel',{'UnitMatch','Yuan et al.'})
+ylabel('Across 4 recordings')
 makepretty
 offsetAxes
 
 subplot(3,3,8)
 hold on
-for modeid = 1:3
-    line([modeid-0.5 modeid+0.5],[nanmean(AUCsAcrossManyDays(:,modeid),1) nanmean(AUCsAcrossManyDays(:,modeid),1)],'color',CondCols(modeid,:));
-    h=scatter(repmat(modeid,1,3)+(rand(1,3)-0.5).*0.1,AUCsAcrossManyDays(:,modeid)',20,cols(1:3,:),'filled')
+for modeid = 2:3
+    h=scatter(repmat(modeid,1,3),AUCsAcrossManyDays(:,modeid)',20,cols(1:3,:),'filled')
 end
-set(gca,'XTick',1:3,'XTickLabel',{'Overlap','UnitMatch','Yuan et al.'})
+for midx = 1:3
+    plot([2,3],AUCsAcrossManyDays(midx,2:3),'color',cols(midx,:))
+end
+set(gca,'XTick',2:3,'XTickLabel',{'UnitMatch','Yuan et al.'})
 ylabel('AUC values')
-title('Across multiple days - cross-correlation')
 makepretty
 offsetAxes

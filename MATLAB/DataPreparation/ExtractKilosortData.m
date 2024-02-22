@@ -129,9 +129,7 @@ for subsesid = 1:length(KiloSortPaths)
                 FolderParts = strsplit(KiloSortPaths{subsesid},{'pyKS','PyKS'});
                 rawD = dir(fullfile(FolderParts{1},'*bin'));
                 %                 rawD = fullfile(rawD.folder,rawD.name);
-            end
-          
-          
+            end        
         else
             if isstruct(Params.RawDataPaths)
                 rawD = Params.RawDataPaths(subsesid);
@@ -168,7 +166,6 @@ for subsesid = 1:length(KiloSortPaths)
                     end
                 end
             end
-
             disp(['Found existing data in ', KiloSortPaths{subsesid}, ', Using this...'])
 
             if isfield(tmpparam,'AllProbeSN')

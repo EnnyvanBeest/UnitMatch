@@ -65,6 +65,7 @@ MatchProbability = nanmean(cat(2,MatchProbabilityOri,MatchProbabilityFlip),2); %
 MatchProbability(MatchProbabilityOri<UMparam.UsedProbability|MatchProbabilityFlip<UMparam.UsedProbability) = []; % don't bother with these
 [~,sortidx] = sort(MatchProbability,'descend');
 Pairs = Pairs(sortidx,:); %Pairs as UID, but now sorted by match probability
+fprintf(1,'Assigning pairs. Progress: %3d%%',0)
 
 %% assigning of Unique ID
 disp('Assigning correct Unique ID values now')
@@ -73,6 +74,7 @@ if ~isempty(Pairs)
     nMatchesLiberal = 0;
     nMatches = 0;
     for id = 1:size(Pairs,1)
+    fprintf(1,'\b\b\b\b%3.0f%%',id/size(Pairs,1)*100)
 
         %% Conservative - most stringent
         % Identify the rows in the table containing TheseOriUids with
