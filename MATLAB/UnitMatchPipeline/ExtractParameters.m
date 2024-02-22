@@ -116,6 +116,9 @@ spatialdecayfit = nan(nclus,2); % Same but now exponential fit
 WaveIdx = false(nclus,spikeWidth,2);
 A0Distance = nan(nclus,2); % Distance at which amplitudes are 0
 expFun = @(p,d) p(1)*exp(-p(2)*d);%+p(3); % For spatial decay
+GoodnessofFit = nan(nclus,2); % To test the expFun
+% expFun = @(p,d) p(1).^2.*p(2)./d.^2;%+p(3); % For spatial decay
+
 
 %% Take geographically close channels (within 50 microns!), not just index!
 timercounter = tic;
@@ -204,7 +207,8 @@ for uid = 1:nclus
             continue
         end
         try
-            p = lsqcurvefit(expFun,[max(spdctmp) 0.05],double(Distance2MaxChan'),spdctmp,[],[],opts);
+            p = lsqcurvefit(expFun,[max(spdctmp) 1],double(Distance2MaxChan'),spdctmp,[],[],opts);
+            GoodnessofFit(uid,cv) = nansum((spdctmp-expFun(p,double(Distance2MaxChan'))).^2);
 
             %             p = lsqcurvefit(expFun,[max(spdctmp) 0.05 min(spdctmp)],Distance2MaxChan',spdctmp,[],[],opts);
         catch ME
@@ -326,6 +330,8 @@ AllWVBParameters.WaveIdx = WaveIdx;
 
 return
 % Images for example neuron
+
+figure; histogram(GoodnessofFit)
 if 0
 
 
@@ -339,7 +345,7 @@ if 0
     makepretty
 
 
-    uid = [198] % Example (AL032, take 10)
+    uid = [10] % Example (AL032, take 10)
     fprintf(1,'\b\b\b\b%3.0f%%',uid/nclus*100)
     % load data
     spikeMap = readNPY(Path4UnitNPY{uid});
@@ -432,8 +438,8 @@ if 0
     % Difference in amplitude from maximum amplitude
     spdctmp = abs(spikeMap(NewPeakLoc,ChanIdx,cv)); %(abs(spikeMap(NewPeakLoc,MaxChannel(uid,cv),cv))-abs(spikeMap(NewPeakLoc,ChanIdx,cv)))./abs(spikeMap(NewPeakLoc,MaxChannel(uid,cv),cv));
     % Remove zero
-%     spdctmp(Distance2MaxChan==0) = [];
-%     Distance2MaxChan(Distance2MaxChan==0) = [];
+    spdctmp(Distance2MaxChan==0) = [];
+    Distance2MaxChan(Distance2MaxChan==0) = [];
 
     % Spatial decay (average oer micron)
     scatter(Distance2MaxChan,spdctmp,20,[0 0 0],'filled')
@@ -441,9 +447,10 @@ if 0
     ylabel('Amplitude (\muV)')
 
     hold on
-    p = lsqcurvefit(expFun,[max(spdctmp) 0.05],Distance2MaxChan',spdctmp,[],[],opts);
+    p = lsqcurvefit(expFun,[max(spdctmp) 1],double(Distance2MaxChan'),spdctmp,[],[],opts);
     plot(sort(Distance2MaxChan)',expFun(p,sort(Distance2MaxChan)'))
-    text(min(Distance2MaxChan),max(expFun(p,sort(Distance2MaxChan)))*0.99,['A = ' num2str(round(p(1)*100)/100) '* exp(-' num2str(round(p(2)*100)/100) 'd'])
+    % text(min(Distance2MaxChan),max(expFun(p,sort(Distance2MaxChan)))*0.99,['A = ' num2str(round(p(1)*100)/100) '.^2 * ' num2str(p(2)) './d^2'])
+    text(min(Distance2MaxChan),max(expFun(p,sort(Distance2MaxChan)))*0.99,['A = ' num2str(round(p(1)*100)/100) '* exp(-' num2str(round(p(2)*100)/100) 'd)'])
     line([log(10)/p(2) log(10)/p(2)],get(gca,'ylim'),'color',[0.5 0.5 0.5],'LineStyle','--')
 
     makepretty
