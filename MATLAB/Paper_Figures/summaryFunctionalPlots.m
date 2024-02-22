@@ -148,7 +148,7 @@ function [FPSum, days, deltaDays, numMatchedUnits, maxAvailableUnits] = summaryF
                     [MatchTable_2sess, UniqueIDConversion_2sess] = AssignUniqueIDAlgorithm(MatchTable_2sess, UniqueIDConversion_2sess, UMparam);
 
                     % Find matched units
-                    % Should take liberal ones because only two days and easier to remove splits
+                    % % Should take liberal ones because only two days and easier to remove splits
                     matchedUnitsIdx = (MatchTable_2sess.UID1 == MatchTable_2sess.UID2) & (MatchTable_2sess.RecSes1 ~= MatchTable_2sess.RecSes2); % using Unique ID
                     % Remove splits for now
                     splitUnitsUIDs = unique(MatchTable_2sess((MatchTable_2sess.UID1 == MatchTable_2sess.UID2) ...
@@ -157,8 +157,8 @@ function [FPSum, days, deltaDays, numMatchedUnits, maxAvailableUnits] = summaryF
                     splitUnitsIdx = ismember(MatchTable_2sess.UID1,splitUnitsUIDs);
                     matchedUnitsIdx = matchedUnitsIdx & ~splitUnitsIdx;
 
-%                     matchedUnitsIdx = (MatchTable_2sess.UID1Conservative == MatchTable_2sess.UID2Conservative) & (MatchTable_2sess.RecSes1 ~= MatchTable_2sess.RecSes2); % using Unique ID
-%                     splitUnitsIdx = zeros(size(MatchTable_2sess,1),1);
+                    % matchedUnitsIdx = (MatchTable_2sess.UID1Conservative == MatchTable_2sess.UID2Conservative) & (MatchTable_2sess.RecSes1 ~= MatchTable_2sess.RecSes2); % using Unique ID
+                    % splitUnitsIdx = zeros(size(MatchTable_2sess,1),1);
 
 %                     [~,~,idx,~] = getPairsAcross2Sess(MatchTable_2sess, UMparam.ProbabilityThreshold);
 %                     matchedUnitsIdx = zeros(size(MatchTable_2sess,1),1);

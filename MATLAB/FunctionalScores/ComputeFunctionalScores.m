@@ -262,7 +262,7 @@ if saveFig
     axis square
     axis off
     makepretty
-    title('ACGCor')
+    title('ISICor')
 end
 
 %% Get FR difference
