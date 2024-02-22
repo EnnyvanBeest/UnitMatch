@@ -137,7 +137,7 @@ for midx = 1:length(miceopt)
 
     tmpUM = load(fullfile(UMOutputFile.folder,UMOutputFile.name));
 
-    DriftUM(:,midx) = tmpUM.UMparam.drift(1,2:3,1); % Z-drift
+    DriftUM(:,midx) = nansum(tmpUM.UMparam.drift(:,2:3,1),1); % total Z-drift
 
     nclus = size(tmpUM.WaveformInfo.MaxChannel,1);
     tblidx = find((tmpUM.MatchTable.UID1 == tmpUM.MatchTable.UID2) & (tmpUM.MatchTable.RecSes1 < tmpUM.MatchTable.RecSes2));
@@ -254,8 +254,6 @@ ProbThresh = 0.5;
 nMatches = nan(length(miceopt),3); % Both (overlap), UnitMatch only, Yuan only
 PercOverlapWithFunctional = nan(length(miceopt),3); % Shared, Unique to UM, Unique to Yuan
 AUCsAcross = nan(length(miceopt),3); % AUC values %Shared, Unique to UM, Unique to Yuan
-DriftUM = nan(3,2);
-DriftYuan = nan(1,length(miceopt));
 % Data was split up first versus second half of recording. How many of good
 % units (Bombcell isolated) are found back by the two algorithms?
 for midx = 1:length(miceopt)
@@ -265,15 +263,12 @@ for midx = 1:length(miceopt)
     % ComputeFunctionalScores(UMOutputFile.folder)
 
     tmpUM = load(fullfile(UMOutputFile.folder,UMOutputFile.name));
-
-    DriftUM = tmpUM.UMparam.drift(1:end-1,2:3,1); % Z-drift
-
     nclus = size(tmpUM.WaveformInfo.MaxChannel,1);
     tblidx = find((tmpUM.MatchTable.UID1 == tmpUM.MatchTable.UID2) & (tmpUM.MatchTable.RecSes1 < tmpUM.MatchTable.RecSes2));
     Pairs = [tmpUM.MatchTable.ID1(tblidx) tmpUM.MatchTable.ID2(tblidx)];
 
     % Yuan et al?
-    YuanOutputFile = dir(fullfile(datapath,miceopt{midx},'**','Output.mat')); % Find output file
+    YuanOutputFile = dir(fullfile(datapath,miceopt{midx},'**','chain_summary.mat')); % Find output file
     tmpYuan = load(fullfile(YuanOutputFile.folder,YuanOutputFile.name));
     DriftYuan(midx) = -tmpYuan.output.z_mode;
     Ntotal = tmpYuan.output.KSgood_f1 + tmpYuan.output.KSgood_f2;

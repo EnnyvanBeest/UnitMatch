@@ -341,7 +341,9 @@ while flag<2
     %     EuclDist2(w) = nan;
     disp('Computing location distances between pairs of units, per individual time point of the waveform, Recentered...')
     ProjectedLocationPerTPRecentered = permute(permute(ProjectedLocationPerTPAllFlips,[1,2,4,3,5]) - ProjectedLocation,[1,2,4,3,5]);
-    EuclDist2 = nan(nclus,length(waveidx),2*(length(FlipDim)+1),nclus);
+    % EuclDist2 = nan(nclus,length(waveidx),2*(length(FlipDim)+1),nclus);
+    EuclDist2 = nan(nclus,length(waveidx),(length(FlipDim)+1),nclus);
+
     for batchid1 = 1:nbatch
         idx = (batchid1-1)*batchsz+1:batchsz*batchid1;
         idx(idx>nclus) = [];
@@ -351,9 +353,9 @@ while flag<2
             idx2(idx2>nclus) = [];
 
             x1 = repmat(squeeze(ProjectedLocationPerTPRecentered(:,idx,waveidx,1,:)),[1 1 1 1 numel(idx2)]);
-            x1 = cat(4,x1,x1(:,:,:,end:-1:1,:));
+            % x1 = cat(4,x1,x1(:,:,:,end:-1:1,:));
             x2 = permute(repmat(squeeze(ProjectedLocationPerTPRecentered(:,idx2,waveidx,2,:)),[1 1 1 1 numel(idx)]),[1,5,3,4,2]);%Switch the two nclus around
-            x2 = cat(4,x2,x2);
+            % x2 = cat(4,x2,x2);
 
             w = squeeze(isnan(abs(x1(1,:,:,:,:)-x2(1,:,:,:,:))));
             tmpEu = squeeze(vecnorm(x1-x2,2,1)); % Distance
@@ -404,31 +406,22 @@ while flag<2
     LocAngle = acos(dot_product);
     LocAngle(~good_ang) = nan; % Too little distance travelled is noisy
 
-    % Correlation
-    x1 = reshape(permute(squeeze(LocAngle(:,:,1,:)),[2 1 3]), [size(LocAngle,2), nclus*size(LocAngle,4)]);
-    x2 = reshape(permute(squeeze(LocAngle(:,:,2,:)),[2 1 3]), [size(LocAngle,2), nclus*size(LocAngle,4)]);
-    rho = corr(x1,x2, 'Rows','Pairwise','Type','Pearson');
-    rho = reshape(permute(reshape(rho,[nclus,size(LocAngle,4),nclus,size(LocAngle,4)]),[1 3 2 4]),[nclus,nclus,size(LocAngle,4)^2]);
-    TrajAngleSim = (squeeze(nanmax(rho,[],3))); % maximum across flips
-
     % Add points for not having nans
     x1 = good_ang(:,:,1,1);
     x2 = good_ang(:,:,2,1)';
     WaveformDurationPoints = (x1*x2); % overlap in waveformduration?
     
-    TrajAngleSim = atanh(TrajAngleSim);
-    % Normalize per bin of waveformduration: more timepoints regress to 0
-    % correlation by chance more often
-    TrajAngleSim = TrajAngleSim(:);
-    TrajAngleSimNorm = nan(size(TrajAngleSim));
-    WaveformDurationPoints = WaveformDurationPoints(:);
-    BinEdges = [0:2:length(waveidx)-1];
-    [count,~,binidx] = histcounts(WaveformDurationPoints,BinEdges);
-    for binid = unique(binidx)'
-        TrajAngleSimNorm(binidx==binid) = (TrajAngleSim(binidx==binid)-quantile(TrajAngleSim(binidx==binid),0.01))./(quantile(TrajAngleSim(binidx==binid),0.99)-quantile(TrajAngleSim(binidx==binid),0.01));
-    end
-    TrajAngleSim = reshape(TrajAngleSimNorm,nclus,nclus);
-    WaveformDurationPoints = reshape(WaveformDurationPoints,nclus,nclus);
+    %% Correlation of angles     
+    % Correlation of angles
+    x1 = reshape(permute(squeeze(LocAngle(:,:,1,:)),[2 1 3]), [size(LocAngle,2), nclus*size(LocAngle,4)]);
+    x2 = reshape(permute(squeeze(LocAngle(:,:,2,:)),[2 1 3]), [size(LocAngle,2), nclus*size(LocAngle,4)]);
+    rho = corr(x1,x2, 'Rows','Pairwise','Type','Pearson'); 
+    rho = reshape(permute(reshape(rho,[nclus,size(LocAngle,4),nclus,size(LocAngle,4)]),[1 3 2 4]),[nclus,nclus,size(LocAngle,4)^2]);
+    % Take only two dimensions?
+    rho = rho(:,:,[1,4]);
+    TrajAngleSim = atanh(squeeze(nanmax(rho,[],3)));%.*sqrt(WaveformDurationPoints);% Multiply by sqrt of number time points (otherwise regression to 0)); % maximum across flips
+    % Continue here
+    TrajAngleSim = (TrajAngleSim-quantile(TrajAngleSim(:),0.01))./(quantile(TrajAngleSim(:),0.99)-quantile(TrajAngleSim(:),0.01));
     TrajAngleSim(TrajAngleSim<0) = 0;
     TrajAngleSim(TrajAngleSim>1) = 1;
     clear x1 x2
@@ -439,9 +432,9 @@ while flag<2
 
     % Continue distance traveled
     x1 = repmat(squeeze(TrajDist(:,:,1,:)),[1 1 1 nclus]);
-    x1 = cat(3,x1,x1(:,:,end:-1:1,:));
+    % x1 = cat(3,x1,x1(:,:,end:-1:1,:));
     x2 = permute(repmat(squeeze(TrajDist(:,:,2,:)),[1 1 1 nclus]),[4 2 3 1]); % switch nclus around
-    x2 = cat(3,x2,x2);
+    % x2 = cat(3,x2,x2);
     % Distance similarity (subtract for each pair of units)
     TrajDistCompared = abs(x1-x2);%
     clear x1 x2
@@ -713,9 +706,7 @@ while flag<2
     end
     ThrsOpt = ScoreVector(find(smoothdata(hd)>smoothdata(hnd)&ScoreVector>0.6,1,'first'));
     % muw = nanmedian(tmp(~isnan(tmp) & tmp<ThrsOpt));
-    [muw, sw] = normfit(tmp(~isnan(tmp)));
-
-
+    [muw, sw] = normfit(tmp(~isnan(tmp) & tmp<ThrsOpt));
 
 
     tmp = TotalScore;
@@ -724,7 +715,13 @@ while flag<2
     % Take within session out
     for did = 1:ndays
         tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1)=nan;
-    end
+    end   
+    % ha = histcounts(tmp(:),Bins)./sum(~isnan(tmp(:)));
+    % [mua, sa] = normfit(tmp(~isnan(tmp) & tmp<ThrsOpt));   
+    % if ~isnan(mua) && mua<muw && ~flag
+    %     ThrsOpt = ThrsOpt - abs(muw-mua); % Correct for general scores being lower across days (e.g. unresolved drift)
+    % end
+
     % Correct for total scores being lower for further away session in
     % initial phase 
     if ~flag
@@ -738,7 +735,7 @@ while flag<2
                 ha = histcounts(tmpacross(:),Bins)./sum(~isnan(tmpacross(:)));
                 [mua, sa] = normfit(tmp(~isnan(tmp)));
 
-                if mua<muw % Increase totalscore by this much
+                if mua<muw & ~isnan(mua)% Increase totalscore by this much
                     TotalScore(SessionSwitch(did1):SessionSwitch(did1+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1) = ...
                          TotalScore(SessionSwitch(did1):SessionSwitch(did1+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1) + (muw-mua);
                 end
@@ -753,8 +750,7 @@ while flag<2
             tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1)=nan;
         end
     end
-    % ha = histcounts(tmp(:),Bins)./sum(~isnan(tmp(:)));
-    % [mua, sa] = normfit(tmp(~isnan(tmp)));   
+
     if flag  && drawthis
         subplot(2,2,3)
         plot(ScoreVector,hd,'-','color',[0 0.7 0]); hold on; plot(ScoreVector,hnd,'b-')

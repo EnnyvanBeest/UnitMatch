@@ -98,7 +98,7 @@ RunUnitMatchAllDataPerMouse
 
 %% Across Mice Graphs
 % SummarizeAcrossMice
-
+close all
 FromDate = datetime("2024-02-15 09:00:00");
 UMFiles = cell(1,0); % Define your UMfolders here or use below:
 groupvec = nan(1,0);
@@ -126,7 +126,7 @@ if ~exist('UMFiles') || isempty(UMFiles) % When using the example pipeline this 
         end
     end
 end
-% summaryFunctionalPlots(UMFiles, 'Rank', groupvec)
+summaryFunctionalPlots(UMFiles, 'Corr', groupvec)
 % summaryFunctionalPlots_Part2(UMFiles, groupvec)
 summaryMatchingPlots(UMFiles)
 trackWithFunctionalMetrics(UMFiles)
