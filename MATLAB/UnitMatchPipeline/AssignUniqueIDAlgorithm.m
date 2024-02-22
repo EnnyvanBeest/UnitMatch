@@ -3,6 +3,7 @@ function [MatchTable, UniqueIDConversion] = AssignUniqueIDAlgorithm(MatchTable, 
 % UniqueIDConversion (struct) with at east per cluster: OriginalClusID, GoodID & recsesAll
 % A MatchTable (output table from UnitMatch)
 % UMparam (struct) with at least: ProbabilityThreshold and GoodUnitsOnly
+disp('Assigning correct Unique ID values now')
 
 %% Extract cluster information
 AllClusterIDs = UniqueIDConversion.OriginalClusID;
@@ -65,10 +66,9 @@ MatchProbability = nanmean(cat(2,MatchProbabilityOri,MatchProbabilityFlip),2); %
 MatchProbability(MatchProbabilityOri<UMparam.UsedProbability|MatchProbabilityFlip<UMparam.UsedProbability) = []; % don't bother with these
 [~,sortidx] = sort(MatchProbability,'descend');
 Pairs = Pairs(sortidx,:); %Pairs as UID, but now sorted by match probability
-fprintf(1,'Assigning pairs. Progress: %3d%%',0)
 
 %% assigning of Unique ID
-disp('Assigning correct Unique ID values now')
+fprintf(1,'Assigning pairs. Progress: %3d%%',0)
 if ~isempty(Pairs)
     nMatchesConservative = 0;
     nMatchesLiberal = 0;
@@ -131,6 +131,7 @@ if ~isempty(Pairs)
             end
         end
     end
+    disp('')
     disp([num2str(nMatchesLiberal) ' liberal matches/' num2str(length(UniqueIDLiberal))])
     disp([num2str(nMatchesConservative) ' conservative matches/' num2str(length(UniqueIDLiberal))])
     disp([num2str(nMatches) ' intermediate matches/' num2str(length(UniqueID))])
