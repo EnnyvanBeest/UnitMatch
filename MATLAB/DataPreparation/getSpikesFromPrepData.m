@@ -10,9 +10,10 @@ function spAll = getSpikesFromPrepData(AllKSDir)
                 load(fullfile(AllKSDir{did}, 'PreparedData.mat'), 'sp', 'SessionParams');
             catch % Old way of saving?
                 load(fullfile(AllKSDir{did}, 'PreparedData.mat'), 'sp', 'Params');
+                SessionParams = Params;
             end
         else
-            Params.RunPyKSChronicStitched = 0;
+            SessionParams.RunPyKSChronicStitched = 0;
             warning('No PreparedData.mat found... loading in directly from KS.. have not checked for empty clusters... Consider using ExtractKilosortData.m')
 
             %% Load Spike Data
@@ -27,7 +28,7 @@ function spAll = getSpikesFromPrepData(AllKSDir)
         spAll{did}.spikeAmps = sp.spikeAmps;
         spAll{did}.spikeDepths = sp.spikeDepths;
         % Replace recsesid with subsesid
-        if Params.RunPyKSChronicStitched
+        if SessionParams.RunPyKSChronicStitched
             spAll{did}.RecSes = sp.RecSes;
         else
             spAll{did}.RecSes = repmat(did, size(spAll{did}.st));
