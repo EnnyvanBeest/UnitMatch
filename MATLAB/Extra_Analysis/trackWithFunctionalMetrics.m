@@ -1,4 +1,4 @@
-function trackWithFunctionalMetrics(UMFiles)
+function pairsAllTable = trackWithFunctionalMetrics(UMFiles)
 
     for midx = 1:length(UMFiles)
         %% Load data
@@ -18,20 +18,23 @@ function trackWithFunctionalMetrics(UMFiles)
         %% Match units with functional measures 
 
         if any(strcmp('ISISig',MatchTable.Properties.VariableNames))
-            pairsISI = MatchTable.ISISig > 2;
+%             pairsISI = MatchTable.ISISig > 3;
+            pairsISI = MatchTable.ISIRank < 2;
         else
             pairsISI = true(size(MatchTable,1),1);
         end
         if any(strcmp('natImRespSig',MatchTable.Properties.VariableNames))
-            pairsNatImResp = MatchTable.natImRespSig > 2;
-            if ~any(pairsNatImResp)
+%             pairsNatImResp = MatchTable.natImRespSig > 3;
+            pairsNatImResp = MatchTable.natImRespRank < 2;
+             if ~any(pairsNatImResp)
                 pairsNatImResp = true(size(MatchTable,1),1);
             end
         else
             pairsNatImResp = true(size(MatchTable,1),1);
         end
         if any(strcmp('refPopSig',MatchTable.Properties.VariableNames))
-            pairsRefPop = MatchTable.refPopSig > 2;
+%             pairsRefPop = MatchTable.refPopSig > 3;
+            pairsRefPop = MatchTable.refPopRank < 2;
         else
             pairsRefPop = true(size(MatchTable,1),1);
         end
@@ -43,11 +46,20 @@ function trackWithFunctionalMetrics(UMFiles)
 
         %% Plot distributions
 
+        figure;
+        probBins = 0:0.05:1;
+        hist(pairsAllTable.MatchProb,probBins)
+        xlabel('UM proba')
+        ylabel('Count')
+        xlim([0 1])
+        title('Functionally matched')
+        
+
         failedMatch = pairsAllTable.UID1 ~= pairsAllTable.UID2;
         scoreBins = 0:0.05:1;
         scoreBinsCenter = scoreBins(1:end-1)+0.025;
 
-        figure;
+        figure('Position', [300 600 1500 200]);
         for mm = 1:numel(UMparam.Scores2Include)
             subplot(1,numel(UMparam.Scores2Include),mm); hold all
             hFailed = histcounts(pairsAllTable(failedMatch,:).(UMparam.Scores2Include{mm}),scoreBins,'Normalization','probability');
