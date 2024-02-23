@@ -152,13 +152,22 @@ for subsesid = 1:length(KiloSortPaths)
     if exist(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat')) && ~Params.RedoQM && ~Params.ReLoadAlways
         % Check if parameters are the same, of not we have to redo it
         % anyway
-        tmpparam = matfile(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat'));
-        tmpparam = tmpparam.Params;
-
+        try
+           tmpparam = load(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat'),'SessionParams');     
+           tmpparam = tmpparam.SessionParams;
+           overwrite = 0;
+        catch  % Old way of storing things, less flexible so overwrite
+            tmpparam = load(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat'),'Params');
+            tmpparam = tmpparam.Params;
+            overwrite = 1;
+        end
+        
         if tmpparam.RunQualityMetrics == Params.RunQualityMetrics && tmpparam.RunPyKSChronicStitched == Params.RunPyKSChronicStitched
             if ~isfield(tmpparam,'RecordingDuration') || tmpparam.RecordingDuration < Params.MinRecordingDuration
                 if ~isempty(rawD) & ~contains(rawD(1).name,'.dat')
                     [channelpostmpconv, probeSN, recordingduration] = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done
+                    channelmapKS = readNPY(fullfile(KiloSortPaths{subsesid},'channel_positions.npy'));
+
                     Params.RecordingDuration = recordingduration;
                     if recordingduration<Params.MinRecordingDuration
                         disp([KiloSortPaths{subsesid} ' recording too short, skip...'])
@@ -169,12 +178,43 @@ for subsesid = 1:length(KiloSortPaths)
             disp(['Found existing data in ', KiloSortPaths{subsesid}, ', Using this...'])
 
             if isfield(tmpparam,'AllProbeSN')
+                if exist('channelpostmpconv','var') && any(tmpparam.AllChannelPos{1}(:) ~= channelpostmpconv(:))
+
+                    figure; scatter(tmpparam.AllChannelPos{1}(:,1),tmpparam.AllChannelPos{1}(:,2))
+                    hold on; scatter(channelpostmpconv(:,1),channelpostmpconv(:,2))
+                    channelmapKS = readNPY(fullfile(KiloSortPaths{subsesid},'channel_positions.npy'));
+                    scatter(channelmapKS(:,1),channelmapKS(:,2))
+                    title('Blue = stored in prepared data, red = correct map, yellow = used by KS')
+
+                    SpacingsKS = max(unique(diff(channelmapKS(:,1))));
+                    SpacingsReal = max(unique(diff(channelpostmpconv(:,1))));
+                    if (SpacingsReal - SpacingsKS) == 50
+                        disp('Kilosort used different shank spacing for IMRO table. Not a big problem')
+                    else
+                        warning('Kilosort probably used wrong IMRO table. Consider reanalyzing')
+                        keyboard
+                    end
+                    tmpparam.AllChannelPos = {channelpostmpconv};
+                    tmpparam.AllProbeSN = {probeSN};
+                    overwrite = 1;
+                end
                 AllChannelPos{subsesid} = tmpparam.AllChannelPos{1};
                 AllProbeSN{subsesid} = tmpparam.AllProbeSN{1};
                 countid = countid + 1;
-                continue
+                if ~overwrite
+                    continue
+                end
             else
                 ExtractChannelMapThenContinue = 1;
+            end
+        end
+        if overwrite
+            SessionParams = tmpparam; % But only store for this specific session - otherwise confusion!
+            SessionParams.KSDir = KiloSortPaths(subsesid);
+            SessionParams.RawDataPaths = RawDataPaths(subsesid);
+            save(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat'),'SessionParams', '-append')
+            if ~ExtractChannelMapThenContinue
+                continue
             end
         end
     end
@@ -203,6 +243,17 @@ for subsesid = 1:length(KiloSortPaths)
         AllChannelPos{subsesid} = channelpostmp;
         probeSN = '000000';
         AllProbeSN{subsesid} = probeSN;
+    end
+    if any(channelpostmpconv(:)~=channelpostmp(:))
+        % Spacing:
+        SpacingsKS = max(unique(diff(channelpostmp(:,1))));
+        SpacingsReal = max(unique(diff(channelpostmpconv(:,1))));
+        if (SpacingsReal - SpacingsKS) == 50
+            disp('Kilosort used different shank spacing for IMRO table. Not a big problem')
+        else
+            warning('Kilosort probably used wrong IMRO table. Consider reanalyzing')
+            keyboard
+        end
     end
 
     if ExtractChannelMapThenContinue || ~Params.ExtractNewDataNow % Version compatibility
@@ -579,7 +630,14 @@ for subsesid = 1:length(KiloSortPaths)
     sp = rmfield(sp, 'tempsUnW');
     sp = rmfield(sp, 'templateDuration');
     sp = rmfield(sp, 'waveforms');
-    save(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat'), 'clusinfo', 'Params', '-v7.3')
+
+    keyboard % check if this is still going okay
+    SessionParams = Params; % But only store for this specific session - otherwise confusion!
+    SessionParams.KSDir = KiloSortPaths(subsesid);
+    SessionParams.RawDataPaths = RawDataPaths(subsesid);
+    SessionParams.AllChannelPos = {channelpostmpconv};
+    SessionParams.AllProbeSN = {probeSN};
+    save(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat'), 'clusinfo', 'SessionParams', '-v7.3')
     if Params.saveSp %QQ not using savePaths
         try
             save(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat'), 'sp', '-append')

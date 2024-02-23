@@ -1,6 +1,6 @@
 function param = ExtractSimilarityMetrics(Scores2Include,AllWVBParameters,clusinfo,param,drawthis)
 
-
+anglecorr = 0;
 %% Extract fields and parameters
 ExtractFields({AllWVBParameters})
 waveidx = param.waveidx;
@@ -367,6 +367,7 @@ while flag<2
     paramid = find(ismember(paramNames,'CentroidOverlord'));
     [x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
 
+
     %% Correlation of angles
 
     disp('Computing location angle (direction) differences between pairs of units, per individual time point of the waveform...')
@@ -378,41 +379,78 @@ while flag<2
     good_ang = zeros(size(TrajDist));
     good_ang(TrajDist >= param.min_angledist) = 1;
 
-    % New method dot product
-    % Normalize the direction vectors
-    v1 = x1 ./ repmat(vecnorm(x1,2,1),[3,1,1,1,1]);
-    v2 = x2 ./ repmat(vecnorm(x2,2,1),[3,1,1,1,1]);
+    if anglecorr % New method
 
-    % Compute the dot product between the normalized direction vectors
-    dot_product = squeeze(dot(v1, v2));
-    clear v1 v2
+        % New method dot product
+        % Normalize the direction vectors
+        v1 = x1 ./ repmat(vecnorm(x1,2,1),[3,1,1,1,1]);
+        v2 = x2 ./ repmat(vecnorm(x2,2,1),[3,1,1,1,1]);
 
-    % Compute the angle between the lines (in radians)
-    LocAngle = acos(dot_product);
-    LocAngle(~good_ang) = nan; % Too little distance travelled is noisy
+        % Compute the dot product between the normalized direction vectors
+        dot_product = squeeze(dot(v1, v2));
+        clear v1 v2
 
-    % Add points for not having nans
-    x1 = good_ang(:,:,1,1);
-    x2 = good_ang(:,:,2,1)';
-    WaveformDurationPoints = (x1*x2); % overlap in waveformduration?
+        % Compute the angle between the lines (in radians)
+        LocAngle = acos(dot_product);
+        LocAngle(~good_ang) = nan; % Too little distance travelled is noisy
+
+        % Add points for not having nans
+        x1 = good_ang(:,:,1,1);
+        x2 = good_ang(:,:,2,1)';
+        WaveformDurationPoints = (x1*x2); % overlap in waveformduration?
+
+        % Correlation of angles
+        x1 = reshape(permute(squeeze(LocAngle(:,:,1,:)),[2 1 3]), [size(LocAngle,2), nclus*size(LocAngle,4)]);
+        x2 = reshape(permute(squeeze(LocAngle(:,:,2,:)),[2 1 3]), [size(LocAngle,2), nclus*size(LocAngle,4)]);
+        rho = corr(x1,x2, 'Rows','Pairwise','Type','Pearson');
+        rho = reshape(permute(reshape(rho,[nclus,size(LocAngle,4),nclus,size(LocAngle,4)]),[1 3 2 4]),[nclus,nclus,size(LocAngle,4)^2]);
+        % Take only two dimensions?
+        rho = rho(:,:,[1,4]);
+        TrajAngleSim = atanh(squeeze(nanmax(rho,[],3)));%.*sqrt(WaveformDurationPoints);% Multiply by sqrt of number time points (otherwise regression to 0)); % maximum across flips
+        % Continue here
+        TrajAngleSim = (TrajAngleSim-quantile(TrajAngleSim(:),0.01))./(quantile(TrajAngleSim(:),0.99)-quantile(TrajAngleSim(:),0.01));
+        TrajAngleSim(TrajAngleSim<0) = 0;
+        TrajAngleSim(TrajAngleSim>1) = 1;
+        clear x1 x2
+
+        scores = [TrajAngleSim(SameIdx(:))', TrajAngleSim(WithinIdx(:))'];
+        paramid = find(ismember(paramNames,'TrajAngleSim'));
+        [x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
+
+    else
     
-    % Correlation of angles
-    x1 = reshape(permute(squeeze(LocAngle(:,:,1,:)),[2 1 3]), [size(LocAngle,2), nclus*size(LocAngle,4)]);
-    x2 = reshape(permute(squeeze(LocAngle(:,:,2,:)),[2 1 3]), [size(LocAngle,2), nclus*size(LocAngle,4)]);
-    rho = corr(x1,x2, 'Rows','Pairwise','Type','Pearson'); 
-    rho = reshape(permute(reshape(rho,[nclus,size(LocAngle,4),nclus,size(LocAngle,4)]),[1 3 2 4]),[nclus,nclus,size(LocAngle,4)^2]);
-    % Take only two dimensions?
-    rho = rho(:,:,[1,4]);
-    TrajAngleSim = atanh(squeeze(nanmax(rho,[],3)));%.*sqrt(WaveformDurationPoints);% Multiply by sqrt of number time points (otherwise regression to 0)); % maximum across flips
-    % Continue here
-    TrajAngleSim = (TrajAngleSim-quantile(TrajAngleSim(:),0.01))./(quantile(TrajAngleSim(:),0.99)-quantile(TrajAngleSim(:),0.01));
-    TrajAngleSim(TrajAngleSim<0) = 0;
-    TrajAngleSim(TrajAngleSim>1) = 1;
-    clear x1 x2
+        % Difference in angle between two time points
+        LocAngle = nan(size(TrajDist,1),size(TrajDist,2),size(TrajDist,3),size(TrajDist,4),0);
+        countid=1;
+        for dimid1=1:size(ProjectedLocationPerTPAllFlips,1)
+            for dimid2=2:size(ProjectedLocationPerTPAllFlips,1)
+                if dimid2<=dimid1
+                    continue
+                end
+                LocAngle(:,:,:,:,countid) = squeeze(atan(abs(x1(dimid1,:,:,:,:)-x2(dimid1,:,:,:,:))./abs(x1(dimid2,:,:,:,:)-x2(dimid2,:,:,:,:)))) .* good_ang;
+                countid = countid + 1;
+            end
+        end
 
-    scores = [TrajAngleSim(SameIdx(:))', TrajAngleSim(WithinIdx(:))'];
-    paramid = find(ismember(paramNames,'TrajAngleSim'));
-    [x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
+        % Sum the angles across dimensions
+        LocAngle = nansum(LocAngle,5);
+
+        clear x1 x2
+
+        % Actually just taking the weighted sum of angles is better
+        x1 = repmat(squeeze(LocAngle(:,:,1,:)),[1 1 1 nclus]);
+        x2 = permute(repmat(squeeze(LocAngle(:,:,2,1)),[1 1 1 nclus]),[4 2 3 1]); %switch nclus around
+        AngleSubtraction = abs(x1-x2);
+        AngleSubtraction(isnan(abs(x1-x2))) = 2*pi; %punish points with nan
+        clear x1 x2
+        TrajAngleSim = squeeze(nanmin(nansum(AngleSubtraction,2),[],3)); % sum of angles, minimum across flips
+        TrajAngleSim = 1-((TrajAngleSim-nanmin(TrajAngleSim(:)))./(quantile(TrajAngleSim(:),0.99)-nanmin(TrajAngleSim(:))));
+        TrajAngleSim(TrajAngleSim<0 | isnan(TrajAngleSim))=0;
+        scores = [TrajAngleSim(SameIdx(:))', TrajAngleSim(WithinIdx(:))'];
+        paramid = find(ismember(paramNames,'TrajAngleSim'));
+        [x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
+
+    end
 
     %% Continue distance traveled
     x1 = repmat(squeeze(TrajDist(:,:,1,:)),[1 1 1 nclus]);
