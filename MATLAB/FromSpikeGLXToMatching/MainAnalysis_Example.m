@@ -22,7 +22,7 @@ PipelineParams.DecompressLocal = 1; % If 1, uncompress data first if it's curren
 
 % Storing preprocessed data?
 PipelineParams.ExtractNewDataNow = 0; % If data is not (yet) extracted, don't bother for now if 0
-PipelineParams.ReLoadAlways = 1; % If 1, SP & Clusinfo are always loaded from KS output
+PipelineParams.ReLoadAlways = 0; % If 1, SP & Clusinfo are always loaded from KS output
 PipelineParams.saveSp = 1; % Save SP struct for easy loading of preprocessed data
 PipelineParams.binsz = 0.01; %Bin size for PSTHs in seconds
 
