@@ -5,8 +5,22 @@ function spAll = getSpikesFromPrepData(AllKSDir)
     spAll = cell(1, nKSFiles);
     for did = 1:nKSFiles
         % Load prepared data
-        load(fullfile(AllKSDir{did}, 'PreparedData.mat'), 'sp', 'Params');
-    
+        if exist(fullfile(AllKSDir{did}, 'PreparedData.mat'))
+            try
+                load(fullfile(AllKSDir{did}, 'PreparedData.mat'), 'sp', 'SessionParams');
+            catch % Old way of saving?
+                load(fullfile(AllKSDir{did}, 'PreparedData.mat'), 'sp', 'Params');
+            end
+        else
+            Params.RunPyKSChronicStitched = 0;
+            warning('No PreparedData.mat found... loading in directly from KS.. have not checked for empty clusters... Consider using ExtractKilosortData.m')
+
+            %% Load Spike Data
+            sp = loadKSdir(AllKSDir{did}); % Load Spikes with PCs
+            [sp.spikeAmps, sp.spikeDepths, sp.templateDepths, sp.templateXpos, sp.tempAmps, sp.tempsUnW, sp.templateDuration, sp.waveforms] = ...
+                templatePositionsAmplitudes(sp.temps, sp.winv, sp.ycoords, sp.xcoords, sp.spikeTemplates, sp.tempScalingAmps); %from the spikes toolbox
+        end
+
         % Only keep parameters used
         spAll{did}.st = sp.st;
         spAll{did}.spikeTemplates = sp.spikeTemplates;

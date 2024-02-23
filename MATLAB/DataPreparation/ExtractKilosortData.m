@@ -113,7 +113,7 @@ for subsesid = 1:length(KiloSortPaths)
             spikeStruct = loadParamsPy(fullfile(KiloSortPaths{subsesid}, 'params.py'));
             rawD = spikeStruct.dat_path;
             if any(strfind(rawD, '"'))
-                rawD = rawD(strfind(rawD, '"')+1:end);
+                rawD = rawD(strfind(rawD(1:10), '"')+1:end);
                 rawD = rawD(1:strfind(rawD, '"')-1);
             end
             if any(strfind(rawD,'../'))
@@ -256,7 +256,7 @@ for subsesid = 1:length(KiloSortPaths)
         end
     end
 
-    if ExtractChannelMapThenContinue || ~Params.ExtractNewDataNow % Version compatibility
+    if ExtractChannelMapThenContinue % Version compatibility
         countid = countid + 1;
         ExtractChannelMapThenContinue = 0;
         continue
@@ -271,7 +271,7 @@ for subsesid = 1:length(KiloSortPaths)
     end
 
     %% Load Spike Data
-    sp = loadKSdir(fullfile(KiloSortPaths{subsesid}), Params); % Load Spikes with PCs
+    sp = loadKSdir(KiloSortPaths{subsesid}, Params); % Load Spikes with PCs
     [sp.spikeAmps, sp.spikeDepths, sp.templateDepths, sp.templateXpos, sp.tempAmps, sp.tempsUnW, sp.templateDuration, sp.waveforms] = ...
         templatePositionsAmplitudes(sp.temps, sp.winv, sp.ycoords, sp.xcoords, sp.spikeTemplates, sp.tempScalingAmps); %from the spikes toolbox
     templateWaveforms = sp.temps;
@@ -631,7 +631,6 @@ for subsesid = 1:length(KiloSortPaths)
     sp = rmfield(sp, 'templateDuration');
     sp = rmfield(sp, 'waveforms');
 
-    keyboard % check if this is still going okay
     SessionParams = Params; % But only store for this specific session - otherwise confusion!
     SessionParams.KSDir = KiloSortPaths(subsesid);
     SessionParams.RawDataPaths = RawDataPaths(subsesid);

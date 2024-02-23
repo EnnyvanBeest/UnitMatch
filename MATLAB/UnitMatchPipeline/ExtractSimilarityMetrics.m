@@ -1,6 +1,6 @@
 function param = ExtractSimilarityMetrics(Scores2Include,AllWVBParameters,clusinfo,param,drawthis)
 
-anglecorr = 0;
+anglecorr = 1;
 %% Extract fields and parameters
 ExtractFields({AllWVBParameters})
 waveidx = param.waveidx;
