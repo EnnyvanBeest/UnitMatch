@@ -208,7 +208,7 @@ end
 %% Get ISI fingerprints correlations
 
 if ~any(ismember(MatchTable.Properties.VariableNames, 'ISICorr')) || recompute % If it already exists in table, skip this entire thing
-    %% Compute ACG and correlate them between units
+    %% Compute ISI and correlate them between units
     % This is very time consuming
     disp('Computing ISI, this will take some time...')
     ISIbins = [0 5*10.^(-4:0.1:0)]; %%% Could be moved to UMparam
