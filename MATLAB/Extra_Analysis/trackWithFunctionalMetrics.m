@@ -1,5 +1,8 @@
-function pairsAllTable = trackWithFunctionalMetrics(UMFiles)
+function [nFailedMatches, nTotalMatches, tableMatch] = trackWithFunctionalMetrics(UMFiles)
 
+    nFailedMatches = cell(1,length(UMFiles));
+    nTotalMatches = cell(1,length(UMFiles));
+    tableMatch = cell(1,length(UMFiles));
     for midx = 1:length(UMFiles)
         %% Load data
     
@@ -18,33 +21,39 @@ function pairsAllTable = trackWithFunctionalMetrics(UMFiles)
         %% Match units with functional measures 
 
         if any(strcmp('ISISig',MatchTable.Properties.VariableNames))
-%             pairsISI = MatchTable.ISISig > 3;
-            pairsISI = MatchTable.ISIRank < 2;
+            pairsISI = MatchTable.ISISig > 3;
+%             pairsISI = MatchTable.ISIRank < 2;
         else
             pairsISI = true(size(MatchTable,1),1);
         end
         if any(strcmp('natImRespSig',MatchTable.Properties.VariableNames))
-%             pairsNatImResp = MatchTable.natImRespSig > 3;
-            pairsNatImResp = MatchTable.natImRespRank < 2;
+            pairsNatImResp = MatchTable.natImRespSig > 3;
+%             pairsNatImResp = MatchTable.natImRespRank < 2;
              if ~any(pairsNatImResp)
                 pairsNatImResp = true(size(MatchTable,1),1);
-            end
+             end
+             pairsNatImResp(isnan(MatchTable.natImRespRank)) = true;
         else
             pairsNatImResp = true(size(MatchTable,1),1);
         end
         if any(strcmp('refPopSig',MatchTable.Properties.VariableNames))
-%             pairsRefPop = MatchTable.refPopSig > 3;
-            pairsRefPop = MatchTable.refPopRank < 2;
+            pairsRefPop = MatchTable.refPopSig > 3;
+%             pairsRefPop = MatchTable.refPopRank < 2;
         else
             pairsRefPop = true(size(MatchTable,1),1);
         end
 
         pairsAll = pairsISI & pairsNatImResp & pairsRefPop;
 
-        funcMatchIdx = pairsAll & (MatchTable.RecSes1 ~= MatchTable.RecSes2) & MatchTable.CentroidDist > 0.5;
+        funcMatchIdx = pairsAll & (MatchTable.RecSes1 ~= MatchTable.RecSes2);
         pairsAllTable = MatchTable(funcMatchIdx,:);
 
         %% Plot distributions
+
+
+        failedMatch = pairsAllTable.UID1 ~= pairsAllTable.UID2;
+        nFailedMatches{midx} = sum(failedMatch);
+        nTotalMatches{midx} = size(pairsAllTable,1);
 
         figure;
         probBins = 0:0.05:1;
@@ -52,10 +61,8 @@ function pairsAllTable = trackWithFunctionalMetrics(UMFiles)
         xlabel('UM proba')
         ylabel('Count')
         xlim([0 1])
-        title('Functionally matched')
-        
-
-        failedMatch = pairsAllTable.UID1 ~= pairsAllTable.UID2;
+        title(sprintf('UID: Matched %d/%d (pairs can be double counted); Proba: %d/%d',nTotalMatches{midx}-nFailedMatches{midx}, nTotalMatches{midx}, sum(pairsAllTable.MatchProb>0.5), nTotalMatches{midx}))
+            
         scoreBins = 0:0.05:1;
         scoreBinsCenter = scoreBins(1:end-1)+0.025;
 
@@ -73,5 +80,6 @@ function pairsAllTable = trackWithFunctionalMetrics(UMFiles)
             ylabel('Proportion')
         end
 
+        tableMatch{midx} = pairsAllTable;
     end
 
