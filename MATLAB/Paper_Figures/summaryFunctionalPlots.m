@@ -1,4 +1,4 @@
-function [FPSum, days, deltaDays, numMatchedUnits, maxAvailableUnits] = summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels, pltDayPairFig)
+function res = summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLabels, pltDayPairFig)
     %% Will plot summary plots: distribution, ROC and AUC. 
     % UMFiles: list cells contains path to UnitMatch.m files
     % whichMetric: will compute distributions/ROC/AUC on either 'Corr', 'Rank', or 'Sig'. 
@@ -513,4 +513,12 @@ function [FPSum, days, deltaDays, numMatchedUnits, maxAvailableUnits] = summaryF
             hline(0.5)
         end
     end
+
+    %% Save results in structure
+
+    res.FPSum = FPSum;
+    res.days = days;
+    res.deltaDays = deltaDays;
+    res.numMatchedUnits = numMatchedUnits;
+    res.maxAvailableUnits = maxAvailableUnits;
 end
