@@ -21,14 +21,14 @@ function [nFailedMatches, nTotalMatches, tableMatch] = trackWithFunctionalMetric
         %% Match units with functional measures 
 
         if any(strcmp('ISISig',MatchTable.Properties.VariableNames))
-            pairsISI = MatchTable.ISISig > 3;
-%             pairsISI = MatchTable.ISIRank < 2;
+%             pairsISI = MatchTable.ISISig > 3;
+            pairsISI = MatchTable.ISIRank < 2;
         else
             pairsISI = true(size(MatchTable,1),1);
         end
         if any(strcmp('natImRespSig',MatchTable.Properties.VariableNames))
-            pairsNatImResp = MatchTable.natImRespSig > 3;
-%             pairsNatImResp = MatchTable.natImRespRank < 2;
+%             pairsNatImResp = MatchTable.natImRespSig > 3;
+            pairsNatImResp = MatchTable.natImRespRank < 2;
              if ~any(pairsNatImResp)
                 pairsNatImResp = true(size(MatchTable,1),1);
              end
@@ -37,8 +37,8 @@ function [nFailedMatches, nTotalMatches, tableMatch] = trackWithFunctionalMetric
             pairsNatImResp = true(size(MatchTable,1),1);
         end
         if any(strcmp('refPopSig',MatchTable.Properties.VariableNames))
-            pairsRefPop = MatchTable.refPopSig > 3;
-%             pairsRefPop = MatchTable.refPopRank < 2;
+%             pairsRefPop = MatchTable.refPopSig > 3;
+            pairsRefPop = MatchTable.refPopRank < 2;
         else
             pairsRefPop = true(size(MatchTable,1),1);
         end
