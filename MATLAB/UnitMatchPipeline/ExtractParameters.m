@@ -1,7 +1,8 @@
 function [AllWVBParameters,param] = ExtractParameters(Path4UnitNPY,clusinfo,param)
 % Prepare fitting
-opts = optimset('Display','off');
 Interpolate = 0;
+
+opts = optimset('Display','off');
 %% Extract relevant information
 nclus = length(Path4UnitNPY);
 spikeWidth = param.spikeWidth;
@@ -105,8 +106,11 @@ end
 recsesGood = recsesAll(Good_Idx);
 
 %% Initialize
-
-upsampling = 0.1;
+if Interpolate
+    upsampling = 0.1;
+else
+    upsampling = 1;
+end
 spikeWidth_up = ((spikeWidth-1)/upsampling)+1;
 NewPeakLoc_up = NewPeakLoc/upsampling;
 
