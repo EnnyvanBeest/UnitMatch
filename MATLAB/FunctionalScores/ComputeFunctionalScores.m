@@ -777,7 +777,7 @@ for id = 1:ntimes
             ylabel('True positive rate')
             %         legend([h(:)], 'Match vs No Match', 'Match vs Within', 'Within vs No Match', 'Location', 'best')
             title(sprintf('natIm Fingerprint AUC: %.3f, %.3f, %.3f', AUC1, AUC2, AUC3))
-            makepretty
+            makepretty;
             drawnow %Something to look at while ISI calculations are ongoing
         end
     end

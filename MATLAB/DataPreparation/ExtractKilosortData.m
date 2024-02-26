@@ -1,4 +1,5 @@
-function Params = ExtractKilosortData(KiloSortPaths, Params, RawDataPathsInput)
+function [Params, KilosortPaths] = ExtractKilosortData(KiloSortPaths, Params, RawDataPathsInput)
+
 % Prepares cluster information for subsequent analysis
 
 %% Inputs:
@@ -60,6 +61,7 @@ countid = 1;
 cols = jet(length(KiloSortPaths));
 for subsesid = 1:length(KiloSortPaths)
     if isempty(dir(fullfile(KiloSortPaths{subsesid},'*.npy')))
+        IncludeThese(subsesid) = false;
         continue
     end
 
@@ -117,7 +119,7 @@ for subsesid = 1:length(KiloSortPaths)
                 rawD = rawD(1:strfind(rawD, '"')-1);
             end
             if any(strfind(rawD,'../'))
-                rawD = rawD(strfind(rawD,'../')+3:end)
+                rawD = rawD(strfind(rawD,'../')+3:end);
             end
             tmpdr = rawD;
             rawD = dir(rawD);
@@ -245,7 +247,13 @@ for subsesid = 1:length(KiloSortPaths)
         probeSN = '000000';
         AllProbeSN{subsesid} = probeSN;
     end
-    if size(channelpostmp,1) == size(channelpostmpconv,1) && any(channelpostmpconv(:)~=channelpostmp(:))
+
+    % JF overwrite for now. 
+    if size(channelpostmp) ~= size(channelpostmpconv)
+        warning('Different number of channels in kilosort and metafile''s IMRO. Using metaFile''s version')
+        channelpostmp = channelpostmpconv;
+    end
+    if any(channelpostmpconv(:)~=channelpostmp(:))
         % Spacing:
         SpacingsKS = max(unique(diff(channelpostmp(:,1))));
         SpacingsReal = max(unique(diff(channelpostmpconv(:,1))));
@@ -442,9 +450,11 @@ for subsesid = 1:length(KiloSortPaths)
 
             if length(rawD) > 1 % DO NOT DELETE!
                 savePath = fullfile(myClusFile(1).folder, num2str(id));
+                kilosortPath = myClusFile(1).folder;
                 idx = sp.SessionID == id;
             else
                 savePath = fullfile(KiloSortPaths{subsesid});
+                kilosortPath = savePath;
                 idx = sp.SessionID == 1;
             end
 
@@ -523,8 +533,10 @@ for subsesid = 1:length(KiloSortPaths)
                 unitType = bc_getQualityUnitType(paramBC, qMetric);
                 %                 unitType(:) = 1; ???
 
-                % Commmented by CB for now
-                spike_templates_0idx = readNPY([myClusFile(1).folder filesep 'spike_templates.npy']); % changed back 20230920 JF
+
+                % Commmented by CB for now    
+                spike_templates_0idx = readNPY([kilosortPath filesep 'spike_templates.npy']); % changed back 20230920 JF 
+
                 spikeTemplates = spike_templates_0idx + 1;
                 uniqueTemplates = unique(spikeTemplates);
                 % need to load forGUI.tempWv??
@@ -669,6 +681,7 @@ for subsesid = 1:length(KiloSortPaths)
     countid = countid + 1;
 end
 
+KiloSortPaths = KiloSortPaths(NonEmptyDays);
 Params.KSDir = AllKiloSortPaths(IncludeThese);
 Params.AllChannelPos = AllChannelPos(IncludeThese);
 Params.AllProbeSN = AllProbeSN(IncludeThese);

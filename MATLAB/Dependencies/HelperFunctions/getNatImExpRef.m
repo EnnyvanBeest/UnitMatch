@@ -89,7 +89,9 @@ function exp2keep = getNatImExpRef(binFile)
                         tags = {[]};
                         if numel(dEphys)>=1
                             for q = 1:numel(dEphys)
-                                tags{q} = dEphys(q).name(numel(subject)+2:end);
+                                if ~isempty(dir(fullfile(dEphys(q).folder, dEphys(q).name, '**', '*bin')))
+                                    tags{q} = dEphys(q).name(numel(subject)+2:end);
+                                end
                             end
                         end
                         tags = tags(cellfun(@(x) ~isempty(x), tags));

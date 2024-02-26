@@ -197,7 +197,11 @@ for uid = 1:nclus
 
     % Extract channel positions that are relevant and extract mean location
     [~,MaxChanneltmp] = nanmax(nanmax(abs(nanmean(spikeMap(waveidx_up,:,:),3)),[],1));
+    try
     OriChanIdx = find(cell2mat(arrayfun(@(Y) vecnorm(channelpos(MaxChanneltmp,:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius); %Averaging over 10 channels helps with drift
+    catch
+        keyboard;
+    end
     OriLocs = channelpos(OriChanIdx,:);
 
     % Extract unit parameters -
