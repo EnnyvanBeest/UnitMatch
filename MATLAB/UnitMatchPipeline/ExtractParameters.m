@@ -1,6 +1,7 @@
 function [AllWVBParameters,param] = ExtractParameters(Path4UnitNPY,clusinfo,param)
 % Prepare fitting
 opts = optimset('Display','off');
+Interpolate = 0;
 %% Extract relevant information
 nclus = length(Path4UnitNPY);
 spikeWidth = param.spikeWidth;
@@ -139,16 +140,20 @@ for uid = 1:nclus
     spikeMap = permute(spikeMap,[2,1,3]);  % Put back in order
 
     % Interpolate
-    s = size(spikeMap);
-    spikeMap_up = nan(numel(1:upsampling:s(1)), s(2),s(3));
-    time_up = 1:upsampling:s(1);
-    for ii = 1:s(2)
-        for jj = 1:s(3)
-            spikeMap_up(:,ii,jj) = interp1(1:s(1),spikeMap(:,ii,jj),1:upsampling:s(1),'spline');
+    if Interpolate
+        s = size(spikeMap);
+        spikeMap_up = nan(numel(1:upsampling:s(1)), s(2),s(3));
+        time_up = 1:upsampling:s(1);
+        for ii = 1:s(2)
+            for jj = 1:s(3)
+                spikeMap_up(:,ii,jj) = interp1(1:s(1),spikeMap(:,ii,jj),1:upsampling:s(1),'spline');
+            end
         end
+        spikeMap = spikeMap_up;
+        waveidx_up = find(time_up > waveidx(1) & time_up < waveidx(end));
+    else
+        waveidx_up = waveidx;
     end
-    spikeMap = spikeMap_up;
-    waveidx_up = find(time_up > waveidx(1) & time_up < waveidx(end));
 
     tmp1 = spikeMap(:,:,1);
     tmp2 = spikeMap(:,:,2);
