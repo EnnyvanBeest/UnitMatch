@@ -249,11 +249,11 @@ for subsesid = 1:length(KiloSortPaths)
     end
 
     % JF overwrite for now. 
-    if size(channelpostmp,1) ~= size(channelpostmpconv,1)
-        warning('Different number of channels in kilosort and metafile''s IMRO. Using metaFile''s version')
-        channelpostmp = channelpostmpconv;
-    end
-    if any(channelpostmpconv(:)~=channelpostmp(:))
+    % if size(channelpostmp,1) ~= size(channelpostmpconv,1)
+    %     warning('Different number of channels in kilosort and metafile''s IMRO. Using metaFile''s version')
+    %     channelpostmp = channelpostmpconv;
+    % end
+    if size(channelpostmp,1) == size(channelpostmpconv,1) && any(channelpostmpconv(:)~=channelpostmp(:))
         % Spacing:
         SpacingsKS = max(unique(diff(channelpostmp(:,1))));
         SpacingsReal = max(unique(diff(channelpostmpconv(:,1))));
@@ -274,11 +274,7 @@ for subsesid = 1:length(KiloSortPaths)
         ExtractChannelMapThenContinue = 0;
         continue
     end
-
-    if  ~Params.ExtractNewDataNow
-        IncludeThese(subsesid) = false;
-        continue
-    end
+  
     
     %% Load histology if available
     tmphisto = dir(fullfile(KiloSortPaths{subsesid}, 'HistoEphysAlignment.mat'));
