@@ -5,6 +5,7 @@ function [unitPresence, unitProbaMatch, days] = summaryMatchingPlots(UMFiles)
     deltaDaysUni = cell(1, length(UMFiles));
     unitPresence = cell(1, length(UMFiles));
     unitProbaMatch = cell(1, length(UMFiles));
+    popProbaMatch = cell(1, length(UMFiles));
     for midx = 1:length(UMFiles)
         %% Load data
     
@@ -49,6 +50,31 @@ function [unitPresence, unitProbaMatch, days] = summaryMatchingPlots(UMFiles)
                 histcounts(deltaDays{midx}(ismember(tmp, [0 1])),deltaDaysUniBins);
         end
 
+        % unitProbaMatch will contain the units only once, which means that
+        % can't be used to compute the "average" proba.
+        % Will have to do it day by day until I find something smarter...
+        % Takes way too long! :(
+        tic
+        fprintf('Computing probabilities.')
+        popProbaMatch{midx} = nan(size(deltaDays{midx}));
+        idxMatched = MatchTable.UID1 == MatchTable.UID2;
+        UID = MatchTable.UID1;
+        for dd1 = 1:numel(days{midx})
+            for dd2 = 1:numel(days{midx})
+                sessIdx = MatchTable.RecSes1 == dd1 & MatchTable.RecSes2 == dd2;
+                nMatched = numel(unique(UID(idxMatched & sessIdx))); % number of matched units from day 1
+                nTot = numel(unique(UID(sessIdx))); % total number of units on day 1
+                popProbaMatch{midx}(dd1,dd2) = nMatched/nTot; 
+            end
+        end
+        popProbaMatch{midx}(eye(size(popProbaMatch{midx}))==1) = nan; % remove diagonal
+
+        popProbaMatch_Uni = nan(1,numel(deltaDaysUni{midx}));
+        for dd = 1:numel(deltaDaysUni{midx})
+            popProbaMatch_Uni(dd) = nanmean(popProbaMatch{midx}(deltaDays{midx} == deltaDaysUni{midx}(dd)));
+        end
+        toc 
+
         %% Plots
 
         % Units lifetime 
@@ -63,7 +89,7 @@ function [unitPresence, unitProbaMatch, days] = summaryMatchingPlots(UMFiles)
 
         % Probe of matching a unit 
         figure;
-        plot(deltaDaysUni{midx},nanmean(unitProbaMatch{midx},2),'k')
+        plot(deltaDaysUni{midx},popProbaMatch_Uni,'k')
         ylabel('P(match)')
         xlabel('Delta days')
         
@@ -79,19 +105,19 @@ function [unitPresence, unitProbaMatch, days] = summaryMatchingPlots(UMFiles)
 
     %% Summary plots
     deltaDaysBins = [0.1 1 2 5 10 20 50 100 inf];
-    deltaDaysBins = [-deltaDaysBins(end:-1:1)-0.1, deltaDaysBins];
+    deltaDaysBins = [-deltaDaysBins(end:-1:1)-0.1, deltaDaysBins(1:end)];
 
     probaBinned = nan(numel(deltaDaysBins)-1, length(UMFiles));
     for midx = 1:length(UMFiles)
         for bb = 1:numel(deltaDaysBins)-1
-            idx = deltaDaysUni{midx} > deltaDaysBins(bb) & deltaDaysUni{midx} <= deltaDaysBins(bb+1);
-            if any(idx)
-                probaBinned(bb,midx) = nanmean(unitProbaMatch{midx}(idx,:),[1 2]);
+            idx = deltaDays{midx} > deltaDaysBins(bb) & deltaDays{midx} <= deltaDaysBins(bb+1);
+            if any(idx(:))
+                probaBinned(bb,midx) = nanmean(popProbaMatch{midx}(idx));
             end
         end
     end
-
     figure;
+    hold all
     x = (1:numel(deltaDaysBins)-1)';
     y = nanmean(probaBinned,2);
     err = 2*nanstd(probaBinned,[],2)./sqrt(sum(~isnan(probaBinned),2));
