@@ -104,11 +104,7 @@ SessionSwitch = [cell2mat(SessionSwitch); nclus+1];
 Path4UnitNPY = ExtractAndSaveAverageWaveforms(clusinfo,param);
 
 %% Extract parameters used in UnitMatch
-if param.Interp == 1
-    [AllWVBParameters,param] = ExtractParameters_interp(Path4UnitNPY,clusinfo,param);
-else
-    [AllWVBParameters,param] = ExtractParameters(Path4UnitNPY,clusinfo,param);
-end
+[AllWVBParameters,param] = ExtractParameters(Path4UnitNPY,clusinfo,param);
 
 %% Metrics
 param = ExtractSimilarityMetrics(Scores2Include,AllWVBParameters,clusinfo,param);% All Scores2Include are pushed to the workspace
