@@ -6,7 +6,7 @@ clear DateOpt
 DateOpt = arrayfun(@(X) dir(fullfile(DataDir{DataDir2Use(X)},MiceOpt{X},'*-*')),1:length(MiceOpt),'UniformOutput',0); % DataDir2Use = server
 DateOpt = cellfun(@(X) X([X.isdir]),DateOpt,'UniformOutput',0);
 DateOpt = cellfun(@(X) {X.name},DateOpt,'UniformOutput',0);
-FromDate = datetime("2024-02-16 09:00:00");
+FromDate = datetime("2024-02-26 09:00:00");
 
 LogError = {}; % Keep track of which runs didn't work
 if ~exist('PipelineParamsOri','var')
@@ -37,10 +37,16 @@ for midx = 1:length(MiceOpt)
         AllKiloSortPaths = [];
         for did = 1:length(DateOpt{midx})
             disp(['Finding all pyKS directories in ' myKsDir ', ' DateOpt{midx}{did}])
-            tmpfiles = dir(fullfile(myKsDir,DateOpt{midx}{did},'**','pyKS'));
+            tmpfiles = dir(fullfile(myKsDir,DateOpt{midx}{did},'**','pyKS'));         
             tmpfiles(cellfun(@(X) ismember(X,{'.','..'}),{tmpfiles(:).name})) = [];
             % Conver to string
             tmpfiles = arrayfun(@(X) fullfile(tmpfiles(X).folder,tmpfiles(X).name),1:length(tmpfiles),'uni',0);
+
+            if isempty(tmpfiles)
+                tmpfiles = dir(fullfile(myKsDir,DateOpt{midx}{did},'**','kilosort*','**','spike_clusters.npy'));
+                tmpfiles = arrayfun(@(X) fullfile(tmpfiles(X).folder),1:length(tmpfiles),'uni',0);
+
+            end
             AllKiloSortPaths = [AllKiloSortPaths, tmpfiles];
         end
     end
@@ -170,10 +176,10 @@ for midx = 1:length(MiceOpt)
                 end
 
                 %% Visualization
-                PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
+                % PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
 
                 %% Evaluate (within unit ID cross-validation)
-                EvaluatingUnitMatch(UMparam.SaveDir);
+                % EvaluatingUnitMatch(UMparam.SaveDir);
     
                 %% Function analysis
                 ComputeFunctionalScores(UMparam.SaveDir,1)
@@ -197,14 +203,14 @@ for midx = 1:length(MiceOpt)
             
             else
                   %% Get clusinfo
-                clusinfo = getClusinfo(UMparam.KSDir);
-                if ~any(clusinfo.Good_ID) || sum(clusinfo.Good_ID)<UMparam.minGoodUnits
-                    disp('No good units, continue')
-                    continue
-                end
-                load(fullfile(UMparam.SaveDir,'UnitMatch.mat'),'UMparam','UniqueIDConversion','WaveformInfo')
-                %% Visualization
-                PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
+                % clusinfo = getClusinfo(UMparam.KSDir);
+                % if ~any(clusinfo.Good_ID) || sum(clusinfo.Good_ID)<UMparam.minGoodUnits
+                %     disp('No good units, continue')
+                %     continue
+                % end
+                % load(fullfile(UMparam.SaveDir,'UnitMatch.mat'),'UMparam','UniqueIDConversion','WaveformInfo')
+                % %% Visualization
+                % % PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
 
             end
            

@@ -53,12 +53,13 @@ AllKiloSortPaths = cell(1, length(KiloSortPaths));
 AllChannelPos = cell(1, length(KiloSortPaths));
 AllProbeSN = cell(1, length(KiloSortPaths));
 RawDataPaths = cell(1, length(KiloSortPaths));
+IncludeThese = true(1,length(KiloSortPaths));
 
 countid = 1;
 % figure;
 cols = jet(length(KiloSortPaths));
 for subsesid = 1:length(KiloSortPaths)
-    if isempty(dir(fullfile(KiloSortPaths{subsesid}, '*.npy')))
+    if isempty(dir(fullfile(KiloSortPaths{subsesid},'*.npy')))
         continue
     end
 
@@ -103,7 +104,6 @@ for subsesid = 1:length(KiloSortPaths)
             else
                 rawD = dir(fullfile(RawDataPathsInput{subsesid}));
             end
-
         end
 
         RawDataPaths{subsesid} = rawD; % Definitely save as cell
@@ -126,8 +126,11 @@ for subsesid = 1:length(KiloSortPaths)
             end
             % Try another way
             if isempty(rawD)
-                FolderParts = strsplit(KiloSortPaths{subsesid},{'pyKS','PyKS'});
-                rawD = dir(fullfile(FolderParts{1},'*bin'));
+                FolderParts = strsplit(KiloSortPaths{subsesid},{'pyKS','PyKS','kilosort2'});
+                rawD = dir(fullfile(FolderParts{1},'**','*bin'));
+                if length(rawD)>1
+                    rawD = rawD(1);
+                end
                 %                 rawD = fullfile(rawD.folder,rawD.name);
             end        
         else
@@ -147,7 +150,6 @@ for subsesid = 1:length(KiloSortPaths)
     end
     Params.DecompressionFlag = 0;
   
-
     %% Load existing?
     if exist(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat')) && ~Params.RedoQM && ~Params.ReLoadAlways
         % Check if parameters are the same, of not we have to redo it
@@ -192,7 +194,6 @@ for subsesid = 1:length(KiloSortPaths)
                         disp('Kilosort used different shank spacing for IMRO table. Not a big problem')
                     else
                         warning('Kilosort probably used wrong IMRO table. Consider reanalyzing')
-                        keyboard
                     end
                     tmpparam.AllChannelPos = {channelpostmpconv};
                     tmpparam.AllProbeSN = {probeSN};
@@ -244,21 +245,30 @@ for subsesid = 1:length(KiloSortPaths)
         probeSN = '000000';
         AllProbeSN{subsesid} = probeSN;
     end
-    if any(channelpostmpconv(:)~=channelpostmp(:))
+    if size(channelpostmp,1) == size(channelpostmpconv,1) && any(channelpostmpconv(:)~=channelpostmp(:))
         % Spacing:
         SpacingsKS = max(unique(diff(channelpostmp(:,1))));
         SpacingsReal = max(unique(diff(channelpostmpconv(:,1))));
-        if (SpacingsReal - SpacingsKS) == 50
+        if ismember((SpacingsReal - SpacingsKS),[50,100,150])
             disp('Kilosort used different shank spacing for IMRO table. Not a big problem')
         else
+
+            figure;
+            hold on; scatter(channelpostmpconv(:,1),channelpostmpconv(:,2))
+            scatter(channelpostmp(:,1),channelpostmp(:,2))
+            title('Blue = correct map, red = used by KS')
             warning('Kilosort probably used wrong IMRO table. Consider reanalyzing')
-            keyboard
         end
     end
 
     if ExtractChannelMapThenContinue % Version compatibility
         countid = countid + 1;
         ExtractChannelMapThenContinue = 0;
+        continue
+    end
+
+    if  ~Params.ExtractNewDataNow
+        IncludeThese(subsesid) = false;
         continue
     end
     
@@ -420,6 +430,7 @@ for subsesid = 1:length(KiloSortPaths)
     %     drawnow
 
     if Params.RunQualityMetrics
+        Donotinclude = 0;
         theseuniqueTemplates = [];
         unitTypeAcrossRec = [];
 
@@ -439,6 +450,13 @@ for subsesid = 1:length(KiloSortPaths)
 
             qMetricsExist = ~isempty(dir(fullfile(savePath, '**', 'templates._bc_qMetrics.parquet'))); % ~isempty(dir(fullfile(savePath, 'qMetric*.mat'))) not used anymore?
 
+            if ~qMetricsExist & ~Params.ExtractNewDataNow 
+                disp('No new extractions now... continue')
+                Donotinclude = 1;
+                IncludeThese(subsesid) = false;
+
+                break
+            end
 
             InspectionFlag = 0;
             rerunEx = false;
@@ -563,6 +581,9 @@ for subsesid = 1:length(KiloSortPaths)
 
         end
 
+        if Donotinclude
+            continue
+        end
         AllUniqueTemplates = cat(1, AllUniqueTemplates(:), cat(1, theseuniqueTemplates{:}));
 
     else
@@ -648,9 +669,10 @@ for subsesid = 1:length(KiloSortPaths)
     countid = countid + 1;
 end
 
-Params.AllChannelPos = AllChannelPos;
-Params.AllProbeSN = AllProbeSN;
-Params.RawDataPaths = RawDataPaths;
+Params.KSDir = AllKiloSortPaths(IncludeThese);
+Params.AllChannelPos = AllChannelPos(IncludeThese);
+Params.AllProbeSN = AllProbeSN(IncludeThese);
+Params.RawDataPaths = RawDataPaths(IncludeThese);
 
 %% Remove temporary files
 if isstruct(RawDataPaths)
