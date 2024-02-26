@@ -1,4 +1,4 @@
-function [Params, KilosortPaths] = ExtractKilosortData(KiloSortPaths, Params, RawDataPathsInput)
+function Params = ExtractKilosortData(KiloSortPaths, Params, RawDataPathsInput)
 
 % Prepares cluster information for subsequent analysis
 
@@ -249,7 +249,7 @@ for subsesid = 1:length(KiloSortPaths)
     end
 
     % JF overwrite for now. 
-    if size(channelpostmp) ~= size(channelpostmpconv)
+    if size(channelpostmp,1) ~= size(channelpostmpconv,1)
         warning('Different number of channels in kilosort and metafile''s IMRO. Using metaFile''s version')
         channelpostmp = channelpostmpconv;
     end
@@ -681,8 +681,7 @@ for subsesid = 1:length(KiloSortPaths)
     countid = countid + 1;
 end
 
-KiloSortPaths = KiloSortPaths(NonEmptyDays);
-Params.KSDir = AllKiloSortPaths(IncludeThese);
+Params.KSDir = KiloSortPaths(IncludeThese);
 Params.AllChannelPos = AllChannelPos(IncludeThese);
 Params.AllProbeSN = AllProbeSN(IncludeThese);
 Params.RawDataPaths = RawDataPaths(IncludeThese);

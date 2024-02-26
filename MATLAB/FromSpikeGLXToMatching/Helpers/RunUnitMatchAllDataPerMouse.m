@@ -85,11 +85,11 @@ for midx = 1:length(MiceOpt)
 
     % Remove empty ones
     EmptyFolders = find(cellfun(@isempty,PipelineParams.AllChannelPos));
-    AllKiloSortPaths(EmptyFolders) = [];
     PipelineParams.AllChannelPos(EmptyFolders) = [];
     PipelineParams.AllProbeSN(EmptyFolders) = [];
     PipelineParams.RawDataPaths(EmptyFolders) = [];
-    PipelineParams.KSDir = AllKiloSortPaths;
+    PipelineParams.KSDir(EmptyFolders) = [];
+    AllKiloSortPaths = PipelineParams.KSDir;
 
     %% Might want to run UM for separate IMRO tables & Probes (although UM can handle running all at the same time and takes position into account)
     if ~PipelineParams.separateIMRO
