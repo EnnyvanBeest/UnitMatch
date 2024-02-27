@@ -98,7 +98,7 @@ end
 saveJF = 1;
 
 %% Pre-process: quality metrics
-PrepareClusInfoparams = PrepareClusInfo(subsesopt, PrepareClusInfoparams, ephys_dirs);
+[PrepareClusInfoparams, subsesopt] = PrepareClusInfo(subsesopt, PrepareClusInfoparams, ephys_dirs);
 
 %% Run unit match
 [UMparam, UniqueIDConversion, MatchTable, WaveformInfo] = RunUnitMatch(subsesopt, PrepareClusInfoparams, ephys_dirs);

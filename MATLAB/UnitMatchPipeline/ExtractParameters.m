@@ -1,5 +1,7 @@
 function [AllWVBParameters,param] = ExtractParameters(Path4UnitNPY,clusinfo,param)
 % Prepare fitting
+Interpolate = 0;
+
 opts = optimset('Display','off');
 %% Extract relevant information
 nclus = length(Path4UnitNPY);
@@ -104,8 +106,11 @@ end
 recsesGood = recsesAll(Good_Idx);
 
 %% Initialize
-
-upsampling = 0.1;
+if Interpolate
+    upsampling = 0.1;
+else
+    upsampling = 1;
+end
 spikeWidth_up = ((spikeWidth-1)/upsampling)+1;
 NewPeakLoc_up = NewPeakLoc/upsampling;
 
@@ -139,16 +144,20 @@ for uid = 1:nclus
     spikeMap = permute(spikeMap,[2,1,3]);  % Put back in order
 
     % Interpolate
-    s = size(spikeMap);
-    spikeMap_up = nan(numel(1:upsampling:s(1)), s(2),s(3));
-    time_up = 1:upsampling:s(1);
-    for ii = 1:s(2)
-        for jj = 1:s(3)
-            spikeMap_up(:,ii,jj) = interp1(1:s(1),spikeMap(:,ii,jj),1:upsampling:s(1),'spline');
+    if Interpolate
+        s = size(spikeMap);
+        spikeMap_up = nan(numel(1:upsampling:s(1)), s(2),s(3));
+        time_up = 1:upsampling:s(1);
+        for ii = 1:s(2)
+            for jj = 1:s(3)
+                spikeMap_up(:,ii,jj) = interp1(1:s(1),spikeMap(:,ii,jj),1:upsampling:s(1),'spline');
+            end
         end
+        spikeMap = spikeMap_up;
+        waveidx_up = find(time_up > waveidx(1) & time_up < waveidx(end));
+    else
+        waveidx_up = waveidx;
     end
-    spikeMap = spikeMap_up;
-    waveidx_up = find(time_up > waveidx(1) & time_up < waveidx(end));
 
     tmp1 = spikeMap(:,:,1);
     tmp2 = spikeMap(:,:,2);
@@ -197,7 +206,11 @@ for uid = 1:nclus
 
     % Extract channel positions that are relevant and extract mean location
     [~,MaxChanneltmp] = nanmax(nanmax(abs(nanmean(spikeMap(waveidx_up,:,:),3)),[],1));
+    try
     OriChanIdx = find(cell2mat(arrayfun(@(Y) vecnorm(channelpos(MaxChanneltmp,:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius); %Averaging over 10 channels helps with drift
+    catch
+        keyboard;
+    end
     OriLocs = channelpos(OriChanIdx,:);
 
     % Extract unit parameters -

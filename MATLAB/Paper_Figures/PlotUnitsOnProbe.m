@@ -19,8 +19,29 @@ ExampleFig = figure('name',['Projection locations example units, DriftCorrected 
 
 % Extract DeltaDays
 try
-    days = cellfun(@(y) datenum(y), cellfun(@(x) regexp(x.folder,'\\\d*-\d*-\d*\\','match'), UMparam.RawDataPaths, 'uni', 0), 'uni', 0);
+
+    if isunix
+       % Adjusted regexp pattern for Unix-style paths with forward slashes
+        datePattern = '/\d+-\d+-\d+/';
+        
+        % Extract 'folder' field values into a cell array
+        folderPaths = cellfun(@(s) s.folder, UMparam.RawDataPaths, 'UniformOutput', false);
+        
+        % Use the adjusted regexp to find date strings in each folder path
+        dateStrings = cellfun(@(path) regexp(path, datePattern, 'match'), folderPaths, 'UniformOutput', false);
+        
+        % Flatten the nested cell arrays produced by regexp (if necessary)
+        dateStrings = cellfun(@(x) x{1}, dateStrings, 'UniformOutput', false);
+        
+        % Convert date strings to datenum format
+        days = cellfun(@(dateStr) datenum(dateStr), dateStrings, 'UniformOutput', false);
+    else
+        days = cellfun(@(y) datenum(y), cellfun(@(x) regexp(x.folder,'\\\d*-\d*-\d*\\','match'), UMparam.RawDataPaths, 'uni', 0), 'uni', 0);
+    end
     days = cell2mat(days) - days{1};
+
+
+
 catch ME
     disp('Can''t read in days')
 end
@@ -159,3 +180,5 @@ for modethis = 1:3
     linkaxes
 
 end
+
+
