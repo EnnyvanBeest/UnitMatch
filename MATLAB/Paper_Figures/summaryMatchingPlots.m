@@ -19,8 +19,11 @@ popProbaMatch = cell(1, length(UMFiles));
 
 deltaDaysBinsOri = [0.1 2 5 10 20 50 100 inf];
 deltaDaysBins = [-deltaDaysBinsOri(end:-1:1)-0.1, deltaDaysBinsOri(1:end)];
-pSinceAppearance = nan(length(deltaDaysBins),length(UMFiles));
-
+pSinceAppearance = nan(length(deltaDaysBins)-1,length(UMFiles));
+yTickLabels = cell(1,numel(deltaDaysBins)-1);
+for bb = 1:numel(deltaDaysBins)-1
+    yTickLabels{bb} = sprintf('%.0f< %cdays < %.0f',deltaDaysBins(bb), 916, deltaDaysBins(bb+1));
+end
 
 for midx = 1:length(UMFiles)
     %% Load data
@@ -82,30 +85,30 @@ for midx = 1:length(UMFiles)
     end
 
 
-    % % unitProbaMatch will contain the units only once, which means that
-    % % can't be used to compute the "average" proba.
-    % % Will have to do it day by day until I find something smarter...
-    % % Takes way too long! :(
-    % tic
-    % fprintf('Computing probabilities.')
-    % popProbaMatch{midx} = nan(size(deltaDays{midx}));
-    % idxMatched = MatchTable.UID1 == MatchTable.UID2;
-    % UID = MatchTable.UID1;
-    % for dd1 = 1:numel(days{midx})
-    %     for dd2 = 1:numel(days{midx})
-    %         sessIdx = MatchTable.RecSes1 == dd1 & MatchTable.RecSes2 == dd2;
-    %         nMatched = numel(unique(UID(idxMatched & sessIdx))); % number of matched units from day 1
-    %         nTot = numel(unique(UID(sessIdx))); % total number of units on day 1
-    %         popProbaMatch{midx}(dd1,dd2) = nMatched/nTot;
-    %     end
-    % end
-    % popProbaMatch{midx}(eye(size(popProbaMatch{midx}))==1) = nan; % remove diagonal
-    % 
-    % popProbaMatch_Uni = nan(1,numel(deltaDaysUni{midx}));
-    % for dd = 1:numel(deltaDaysUni{midx})
-    %     popProbaMatch_Uni(dd) = nanmean(popProbaMatch{midx}(deltaDays{midx} == deltaDaysUni{midx}(dd)));
-    % end
-    % toc
+    % unitProbaMatch will contain the units only once, which means that
+    % can't be used to compute the "average" proba.
+    % Will have to do it day by day until I find something smarter...
+    % Takes way too long! :(
+    tic
+    fprintf('Computing probabilities.')
+    popProbaMatch{midx} = nan(size(deltaDays{midx}));
+    idxMatched = MatchTable.UID1 == MatchTable.UID2;
+    UID = MatchTable.UID1;
+    for dd1 = 1:numel(days{midx})
+        for dd2 = 1:numel(days{midx})
+            sessIdx = MatchTable.RecSes1 == dd1 & MatchTable.RecSes2 == dd2;
+            nMatched = numel(unique(UID(idxMatched & sessIdx))); % number of matched units from day 1
+            nTot = numel(unique(UID(sessIdx))); % total number of units on day 1
+            popProbaMatch{midx}(dd1,dd2) = nMatched/nTot;
+        end
+    end
+    popProbaMatch{midx}(eye(size(popProbaMatch{midx}))==1) = nan; % remove diagonal
+
+    popProbaMatch_Uni = nan(1,numel(deltaDaysUni{midx}));
+    for dd = 1:numel(deltaDaysUni{midx})
+        popProbaMatch_Uni(dd) = nanmean(popProbaMatch{midx}(deltaDays{midx} == deltaDaysUni{midx}(dd)));
+    end
+    toc
 
     %% Plots
     if PlotIndividualMice
@@ -119,11 +122,11 @@ for midx = 1:length(UMFiles)
         xticks(1:numel(days{midx}));
         xticklabels(num2str(days{midx}'))
         % 
-        % % Probe of matching a unit
-        % figure;
-        % plot(deltaDaysUni{midx},popProbaMatch_Uni,'k')
-        % ylabel('P(match)')
-        % xlabel('Delta days')
+        % Probe of matching a unit
+        figure;
+        plot(deltaDaysUni{midx},popProbaMatch_Uni,'k')
+        ylabel('P(match)')
+        xlabel('Delta days')
 
         figure;
         [~,sortIdx] = sort(nanmean(unitProbaMatch{midx},1),'descend');
@@ -136,7 +139,8 @@ for midx = 1:length(UMFiles)
 
         figure;
         subplot(1,2,1)
-        imagesc(days{midx},days{midx},UPres)
+        imagesc(UPres)
+        set(gca,'XTick',1:length(days{midx}),'XTickLabel',days{midx},'yTick',1:length(days{midx}),'yTickLabel',days{midx})
         c = colormap('gray'); c = flipud(c); colormap(c)
         hcb = colorbar; hcb.Title.String = 'P(match)';
         caxis([0 1])
@@ -145,8 +149,10 @@ for midx = 1:length(UMFiles)
         makepretty
 
         subplot(1,2,2)
-        plot(deltaDaysBins,pSinceAppearance(:,midx),'k')
+        plot(pSinceAppearance(:,midx),'k')
         xlabel('delta Days')
+        ylabel('P(match)')
+        set(gca,'XTick',1:numel(deltaDaysBins)-1,'XTickLabel',yTickLabels)
         ylabel('P(match)')
         makepretty
 
@@ -157,16 +163,18 @@ figure;
 subplot(1,2,1)
 hold on
 for midx = 1:length(UMFiles)
-    plot(deltaDaysBins,pSinceAppearance(:,midx),'color',groupColor(groupVector(midx),:))
+    plot(pSinceAppearance(:,midx),'color',groupColor(groupVector(midx),:))
 end
 xlabel('delta Days')
+set(gca,'XTick',1:numel(deltaDaysBins)-1,'XTickLabel',yTickLabels)
 ylabel('P(match)')
 makepretty
 offsetAxes
 
 subplot(1,2,2)
 hold on
-shadedErrorBar(deltaDaysBins,nanmean(pSinceAppearance,2),nanstd(pSinceAppearance,[],2),'transparent',1)
+shadedErrorBar(nanmean(pSinceAppearance,2),nanstd(pSinceAppearance,[],2),'transparent',1)
+set(gca,'XTick',1:numel(deltaDaysBins)-1,'XTickLabel',yTickLabels)
 xlabel('delta Days')
 ylabel('P(match)')
 makepretty
@@ -174,26 +182,26 @@ offsetAxes
 
 
 %% Summary plots
-% probaBinned = nan(numel(deltaDaysBins)-1, length(UMFiles));
-% for midx = 1:length(UMFiles)
-%     for bb = 1:numel(deltaDaysBins)-1
-%         idx = deltaDays{midx} > deltaDaysBins(bb) & deltaDays{midx} <= deltaDaysBins(bb+1);
-%         if any(idx(:))
-%             probaBinned(bb,midx) = nanmean(popProbaMatch{midx}(idx));
-%         end
-%     end
-% end
-% figure;
-% hold all
-% x = (1:numel(deltaDaysBins)-1)';
-% y = nanmean(probaBinned,2);
-% err = 2*nanstd(probaBinned,[],2)./sqrt(sum(~isnan(probaBinned),2));
-% plot(x,y,'k')
-% patch([x; flip(x)], [y-err; flip(y+err)], 'k', 'FaceAlpha',0.25, 'EdgeColor','none')
-% xticks(1:numel(deltaDaysBins)-1)
-% yTickLabels = cell(1,numel(deltaDaysBins)-1);
-% for bb = 1:numel(deltaDaysBins)-1
-%     yTickLabels{bb} = sprintf('%.0f< %cdays < %.0f',deltaDaysBins(bb), 916, deltaDaysBins(bb+1));
-% end
-% xticklabels(yTickLabels)
-% ylabel('P(match)')
+probaBinned = nan(numel(deltaDaysBins)-1, length(UMFiles));
+for midx = 1:length(UMFiles)
+    for bb = 1:numel(deltaDaysBins)-1
+        idx = deltaDays{midx} > deltaDaysBins(bb) & deltaDays{midx} <= deltaDaysBins(bb+1);
+        if any(idx(:))
+            probaBinned(bb,midx) = nanmean(popProbaMatch{midx}(idx));
+        end
+    end
+end
+figure;
+hold all
+x = (1:numel(deltaDaysBins)-1)';
+y = nanmean(probaBinned,2);
+err = 2*nanstd(probaBinned,[],2)./sqrt(sum(~isnan(probaBinned),2));
+plot(x,y,'k')
+patch([x; flip(x)], [y-err; flip(y+err)], 'k', 'FaceAlpha',0.25, 'EdgeColor','none')
+xticks(1:numel(deltaDaysBins)-1)
+yTickLabels = cell(1,numel(deltaDaysBins)-1);
+for bb = 1:numel(deltaDaysBins)-1
+    yTickLabels{bb} = sprintf('%.0f< %cdays < %.0f',deltaDaysBins(bb), 916, deltaDaysBins(bb+1));
+end
+xticklabels(yTickLabels)
+ylabel('P(match)')
