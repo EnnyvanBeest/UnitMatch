@@ -173,7 +173,7 @@ offsetAxes
 
 subplot(1,2,2)
 hold on
-shadedErrorBar(nanmean(pSinceAppearance,2),nanstd(pSinceAppearance,[],2),'transparent',1)
+shadedErrorBar(1:size(pSinceAppearance,1),nanmean(pSinceAppearance,2),nanstd(pSinceAppearance,[],2),'transparent',1)
 set(gca,'XTick',1:numel(deltaDaysBins)-1,'XTickLabel',yTickLabels)
 xlabel('delta Days')
 ylabel('P(match)')
