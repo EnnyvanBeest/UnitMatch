@@ -156,6 +156,12 @@ for subsesid = 1:length(KiloSortPaths)
     if exist(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat')) && ~Params.RedoQM && ~Params.ReLoadAlways
         % Check if parameters are the same, of not we have to redo it
         % anyway
+        dateViolationflag = 0;
+        FileInfo = dir(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat'));
+        if isfield(Params,'FromDate') && datetime(FileInfo(1).date) < Params.FromDate
+            dateViolationflag = 1;
+        end
+
         try
            tmpparam = load(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat'),'SessionParams');     
            tmpparam = tmpparam.SessionParams;
@@ -166,7 +172,7 @@ for subsesid = 1:length(KiloSortPaths)
             overwrite = 1;
         end
         
-        if tmpparam.RunQualityMetrics == Params.RunQualityMetrics && tmpparam.RunPyKSChronicStitched == Params.RunPyKSChronicStitched
+        if tmpparam.RunQualityMetrics == Params.RunQualityMetrics && tmpparam.RunPyKSChronicStitched == Params.RunPyKSChronicStitched && ~dateViolationflag
             if ~isfield(tmpparam,'RecordingDuration') || tmpparam.RecordingDuration < Params.MinRecordingDuration
                 if ~isempty(rawD) & ~contains(rawD(1).name,'.dat')
                     [channelpostmpconv, probeSN, recordingduration] = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done

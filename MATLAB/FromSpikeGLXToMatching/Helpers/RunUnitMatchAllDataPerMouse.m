@@ -79,6 +79,7 @@ for midx = 1:length(MiceOpt)
     end
 
     %% Prepare cluster information
+    PipelineParams.FromDate = FromDate;
     PipelineParams = ExtractKilosortData(AllKiloSortPaths,PipelineParams);
      
     PipelineParams.RecType = RecordingType{midx};%
@@ -166,6 +167,7 @@ for midx = 1:length(MiceOpt)
                 clusinfo = getClusinfo(UMparam.KSDir);
                 if ~any(clusinfo.Good_ID) || sum(clusinfo.Good_ID)<UMparam.minGoodUnits
                     disp('No good units, continue')
+                    continue
                 end
            
 
