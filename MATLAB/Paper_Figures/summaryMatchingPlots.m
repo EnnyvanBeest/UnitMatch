@@ -76,7 +76,7 @@ for midx = 1:length(UMFiles)
     % Compute number of minimum units between each pair of recordings
     nUnits = diag(UPres);   
     [nUnits,y] = meshgrid(nUnits);
-     UPres = UPres./nUnits;
+     UPres = UPres./nUnits';
     UPres(logical(eye(size(UPres)))) = nan;
     % Compute probability of a unit returning since it's appearance
     for binid = 1:length(deltaDaysBins)-1
