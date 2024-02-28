@@ -1,12 +1,18 @@
 function [AllWVBParameters,param] = ExtractParameters(Path4UnitNPY,clusinfo,param)
 % Prepare fitting
+Interpolate = 0;
+
 opts = optimset('Display','off');
 %% Extract relevant information
 nclus = length(Path4UnitNPY);
 spikeWidth = param.spikeWidth;
 Allchannelpos = param.AllChannelPos;
 RecSes = clusinfo.RecSesID;
-
+if isfield(param,'ImposeDrift') % To test against artifical drift
+    ImposeDrift = param.ImposeDrift;
+else
+    ImposeDrift = 0;
+end
 if isfield(clusinfo,'Coordinates') && param.UseHistology% Allow for real coordinates
     for recid = 1:max(RecSes)
         % Cluster
@@ -35,7 +41,7 @@ if isfield(clusinfo,'Coordinates') && param.UseHistology% Allow for real coordin
             tmpchanidx = find(xpostmp == ShankOpt(shid));
             newchan2 = newchan(tmpchanidx,:);
 
-            % Interpollate in case of missing channels
+            % Interpolate in case of missing channels
             newchan2 = fillmissing(newchan2,'linear',1);
             % Fit line
             polymodel = polyfitn(cat(2,newchan2(:,3),newchan2(:,2)),newchan2(:,1),1);
@@ -100,18 +106,29 @@ end
 recsesGood = recsesAll(Good_Idx);
 
 %% Initialize
+if Interpolate
+    upsampling = 0.1;
+else
+    upsampling = 1;
+end
+spikeWidth_up = ((spikeWidth-1)/upsampling)+1;
+NewPeakLoc_up = NewPeakLoc/upsampling;
+
 ProjectedLocation = nan(3,nclus,2);
-ProjectedLocationPerTP = nan(3,nclus,spikeWidth,2);
-ProjectedWaveform = nan(spikeWidth,nclus,2); % Just take waveform on maximal channel
+ProjectedLocationPerTP = nan(3,nclus,spikeWidth_up,2);
+ProjectedWaveform = nan(spikeWidth_up,nclus,2); % Just take waveform on maximal channel
 PeakTime = nan(nclus,2); % Peak time first versus second half
 MaxChannel = nan(nclus,2); % Max channel first versus second half
 waveformduration = nan(nclus,2); % Waveformduration first versus second half
 Amplitude = nan(nclus,2); % Maximum (weighted) amplitude, first versus second half
 spatialdecay = nan(nclus,2); % how fast does the unit decay across space, first versus second halfs
 spatialdecayfit = nan(nclus,2); % Same but now exponential fit
-WaveIdx = false(nclus,spikeWidth,2);
+WaveIdx = false(nclus,spikeWidth_up,2);
 A0Distance = nan(nclus,2); % Distance at which amplitudes are 0
 expFun = @(p,d) p(1)*exp(-p(2)*d);%+p(3); % For spatial decay
+GoodnessofFit = nan(nclus,2); % To test the expFun
+% expFun = @(p,d) p(1).^2.*p(2)./d.^2;%+p(3); % For spatial decay
+
 
 %% Take geographically close channels (within 50 microns!), not just index!
 timercounter = tic;
@@ -126,6 +143,22 @@ for uid = 1:nclus
     spikeMap = detrend(spikeMap,1); % Detrend (linearly) to be on the safe side. OVER TIME!
     spikeMap = permute(spikeMap,[2,1,3]);  % Put back in order
 
+    % Interpolate
+    if Interpolate
+        s = size(spikeMap);
+        spikeMap_up = nan(numel(1:upsampling:s(1)), s(2),s(3));
+        time_up = 1:upsampling:s(1);
+        for ii = 1:s(2)
+            for jj = 1:s(3)
+                spikeMap_up(:,ii,jj) = interp1(1:s(1),spikeMap(:,ii,jj),1:upsampling:s(1),'spline');
+            end
+        end
+        spikeMap = spikeMap_up;
+        waveidx_up = find(time_up > waveidx(1) & time_up < waveidx(end));
+    else
+        waveidx_up = waveidx;
+    end
+
     tmp1 = spikeMap(:,:,1);
     tmp2 = spikeMap(:,:,2);
     if all(isnan(tmp1(:))) || all(isnan(tmp2(:)))
@@ -138,10 +171,46 @@ for uid = 1:nclus
         % assume they all have the same configuration
         channelpos = Allchannelpos{1};
     end
+    % Figure out drift (by number of channels)
+    if ImposeDrift~=0
+        [val,id1,id2] = unique(diff(channelpos(:,3)));
+        id1(val==0)=[];
+        val(val==0) = [];
+        [~,id3] = max(arrayfun(@(X) (sum(id2==X)),1:length(val)));
+        Channelspacing = val(id3);
+
+        % Apply this drift to data
+        ShiftDataBy = ImposeDrift./Channelspacing;
+        [UniqueXPos, id1, id2] = unique(channelpos(:,2));
+        for xid = 1:length(UniqueXPos)
+            tmp3 = tmp2(:,id2==xid); % All channels on this xpos
+            % figure; subplot(2,2,1); imagesc(1:size(tmp3,1),channelpos(id2==xid,3),tmp3'); xlabel('time'); ylabel('Depth'); title('Original')
+            % Upsample
+            tmp4 = nan(size(tmp3,1),size(tmp3,2)*10);
+            for tp = 1:size(tmp3,1)
+                tmp4(tp,:) = interp(tmp3(tp,:),10);
+            end         
+            % subplot(2,2,3); imagesc(1:size(tmp4,1),channelpos(id2==xid,3),tmp4'); xlabel('time'); ylabel('Depth'); title('Upsampled')
+         
+            tmp4 = circshift(tmp4,round(ShiftDataBy*10),2);
+            % subplot(2,2,4); imagesc(1:size(tmp4,1),channelpos(id2==xid,3),tmp4'); xlabel('time'); ylabel('Depth'); title([num2str(ImposeDrift) ' Drift added'])
+
+            for tp = 1:size(tmp3,1)
+                tmp3(tp,:) = downsample(tmp4(tp,:),10);
+            end
+                % subplot(2,2,2); imagesc(1:size(tmp3,1),channelpos(id2==xid,3),tmp3'); xlabel('time'); ylabel('Depth'); title([num2str(ImposeDrift) ' Drift added'])
+            tmp2(:,id2==xid) = tmp3;
+        end
+        spikeMap(:,:,2) = tmp2;
+    end
 
     % Extract channel positions that are relevant and extract mean location
-    [~,MaxChanneltmp] = nanmax(nanmax(abs(nanmean(spikeMap(waveidx,:,:),3)),[],1));
+    [~,MaxChanneltmp] = nanmax(nanmax(abs(nanmean(spikeMap(waveidx_up,:,:),3)),[],1));
+    try
     OriChanIdx = find(cell2mat(arrayfun(@(Y) vecnorm(channelpos(MaxChanneltmp,:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius); %Averaging over 10 channels helps with drift
+    catch
+        keyboard;
+    end
     OriLocs = channelpos(OriChanIdx,:);
 
     % Extract unit parameters -
@@ -150,7 +219,7 @@ for uid = 1:nclus
         ChanIdx = OriChanIdx;
         Locs = OriLocs;
         % Find maximum channels:
-        [~,MaxChannel(uid,cv)] = nanmax(nanmax(abs(spikeMap(waveidx,ChanIdx,cv)),[],1)); %Only over relevant channels, in case there's other spikes happening elsewhere simultaneously
+        [~,MaxChannel(uid,cv)] = nanmax(nanmax(abs(spikeMap(waveidx_up,ChanIdx,cv)),[],1)); %Only over relevant channels, in case there's other spikes happening elsewhere simultaneously
         MaxChannel(uid,cv) = ChanIdx(MaxChannel(uid,cv));
 
 
@@ -159,7 +228,7 @@ for uid = 1:nclus
         Distance2MaxChan = vecnorm(Locs-channelpos(MaxChannel(uid,cv),:),2,2);
 
         % Difference in amplitude from maximum amplitude
-        spdctmp = abs(spikeMap(NewPeakLoc,ChanIdx,cv)); %(abs(spikeMap(NewPeakLoc,MaxChannel(uid,cv),cv))-abs(spikeMap(NewPeakLoc,ChanIdx,cv)))./abs(spikeMap(NewPeakLoc,MaxChannel(uid,cv),cv));
+        spdctmp = abs(spikeMap(NewPeakLoc_up,ChanIdx,cv)); %(abs(spikeMap(NewPeakLoc_up,MaxChannel(uid,cv),cv))-abs(spikeMap(NewPeakLoc_up,ChanIdx,cv)))./abs(spikeMap(NewPeakLoc_up,MaxChannel(uid,cv),cv));
         % Remove zero
         spdctmp(Distance2MaxChan==0) = [];
         Distance2MaxChan(Distance2MaxChan==0) = [];
@@ -168,7 +237,8 @@ for uid = 1:nclus
             continue
         end
         try
-            p = lsqcurvefit(expFun,[max(spdctmp) 0.05],double(Distance2MaxChan'),spdctmp,[],[],opts);
+            p = lsqcurvefit(expFun,[max(spdctmp) 1],double(Distance2MaxChan'),spdctmp,[],[],opts);
+            GoodnessofFit(uid,cv) = nansum((spdctmp-expFun(p,double(Distance2MaxChan'))).^2);
 
             %             p = lsqcurvefit(expFun,[max(spdctmp) 0.05 min(spdctmp)],Distance2MaxChan',spdctmp,[],[],opts);
         catch ME
@@ -195,14 +265,14 @@ for uid = 1:nclus
         weight = (A0Distance(uid,cv)-Distance2MaxProj)./A0Distance(uid,cv);
         ProjectedWaveform(:,uid,cv) = nansum(spikeMap(:,ChanIdx,cv).*repmat(weight,1,size(spikeMap,1))',2)./sum(weight);
         % Find significant timepoints
-        wvdurtmp = find(abs(ProjectedWaveform(:,uid,cv) - nanmean(ProjectedWaveform(1:20,uid,cv)))>2.5*nanstd(ProjectedWaveform(1:20,uid,cv))); % More than 2. std from baseline
+        wvdurtmp = find(abs(ProjectedWaveform(:,uid,cv) - nanmean(ProjectedWaveform(1:20/upsampling,uid,cv)))>2.5*nanstd(ProjectedWaveform(1:20/upsampling,uid,cv))); % More than 2. std from baseline
         if isempty(wvdurtmp)
-            wvdurtmp = waveidx;
+            wvdurtmp = waveidx_up;
         end
-        wvdurtmp(~ismember(wvdurtmp,waveidx)) = []; %okay over achiever, gonna cut you off there
+        wvdurtmp(~ismember(wvdurtmp,waveidx_up)) = []; %okay over achiever, gonna cut you off there
         if isempty(wvdurtmp)
             % May again be empty
-            wvdurtmp = waveidx;
+            wvdurtmp = waveidx_up;
         end
 
         % Peak Time - to be safe take a bit of smoothing
@@ -221,35 +291,35 @@ for uid = 1:nclus
         ProjectedWaveform(1:lags(maxid),uid,2) = nan;
         spikeMap(1:lags(maxid),:,2) = nan;
     elseif lags(maxid)<0
-        ProjectedWaveform(spikeWidth+lags(maxid):spikeWidth,uid,2) = nan;
-        spikeMap(spikeWidth+lags(maxid):spikeWidth,:,2) = nan;
+        ProjectedWaveform(spikeWidth_up+lags(maxid):spikeWidth_up,uid,2) = nan;
+        spikeMap(spikeWidth_up+lags(maxid):spikeWidth_up,:,2) = nan;
     end
   
     for cv = 1:2
         ChanIdx = OriChanIdx;
         Locs = channelpos(ChanIdx,:);
         % Shift data so that peak is at timepoint x
-        if PeakTime(uid,1)~=NewPeakLoc % Yes, take the 1st CV on purpose!
-            ProjectedWaveform(:,uid,cv) = circshift(ProjectedWaveform(:,uid,cv),-(PeakTime(uid,1)-NewPeakLoc));
-            spikeMap(:,:,cv) = circshift(spikeMap(:,:,cv),-(PeakTime(uid,1)-NewPeakLoc),1);
-            if PeakTime(uid,1)-NewPeakLoc<0
-                ProjectedWaveform(1:-(PeakTime(uid,1)-NewPeakLoc),uid,cv) = nan;
-                spikeMap(1:-(PeakTime(uid,1)-NewPeakLoc),:,cv) = nan;
+        if PeakTime(uid,1)~=NewPeakLoc_up % Yes, take the 1st CV on purpose!
+            ProjectedWaveform(:,uid,cv) = circshift(ProjectedWaveform(:,uid,cv),-(PeakTime(uid,1)-NewPeakLoc_up));
+            spikeMap(:,:,cv) = circshift(spikeMap(:,:,cv),-(PeakTime(uid,1)-NewPeakLoc_up),1);
+            if PeakTime(uid,1)-NewPeakLoc_up<0
+                ProjectedWaveform(1:-(PeakTime(uid,1)-NewPeakLoc_up),uid,cv) = nan;
+                spikeMap(1:-(PeakTime(uid,1)-NewPeakLoc_up),:,cv) = nan;
             else
-                ProjectedWaveform(spikeWidth-(PeakTime(uid,1)-NewPeakLoc):spikeWidth,uid,cv) = nan;
-                spikeMap(spikeWidth-(PeakTime(uid,1)-NewPeakLoc):spikeWidth,:,cv) = nan;
+                ProjectedWaveform(spikeWidth_up-(PeakTime(uid,1)-NewPeakLoc_up):spikeWidth_up,uid,cv) = nan;
+                spikeMap(spikeWidth_up-(PeakTime(uid,1)-NewPeakLoc_up):spikeWidth_up,:,cv) = nan;
             end
         end
 
-        Peakval = ProjectedWaveform(NewPeakLoc,uid,cv);
+        Peakval = ProjectedWaveform(NewPeakLoc_up,uid,cv);
         Amplitude(uid,cv) = Peakval;
 
         ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChanneltmp,:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))< A0Distance(uid,cv)); %Averaging over 10 channels helps with drift
         Locs = channelpos(ChanIdx,:);
         % Full width half maximum
-        wvdurtmp = find(abs(sign(Peakval)*ProjectedWaveform(waveidx,uid,cv))>0.25*sign(Peakval)*Peakval);
+        wvdurtmp = find(abs(sign(Peakval)*ProjectedWaveform(waveidx_up,uid,cv))>0.25*sign(Peakval)*Peakval);
         if ~isempty(wvdurtmp)
-            wvdurtmp = [wvdurtmp(1):wvdurtmp(end)]+waveidx(1)-1;
+            wvdurtmp = [wvdurtmp(1):wvdurtmp(end)]+waveidx_up(1)-1;
             waveformduration(uid,cv) = length(wvdurtmp);
         else
             waveformduration(uid,cv) = nan;
@@ -261,7 +331,7 @@ for uid = 1:nclus
         for dim = 1:size(tmp,1)
             tmp(dim,:) = smoothdata(tmp(dim,:),'gaussian',5);
         end
-        ProjectedLocationPerTP(:,uid,wvdurtmp,cv) = cell2mat(arrayfun(@(tp) sum(repmat(abs(spikeMap(tp,ChanIdx,cv)),size(Locs,2),1).*Locs',2)./sum(repmat(abs(spikeMap(tp,ChanIdx,cv)),size(Locs,2),1),2),wvdurtmp,'Uni',0));
+        ProjectedLocationPerTP(:,uid,wvdurtmp,cv) = tmp;
         WaveIdx(uid,wvdurtmp,cv) = 1;
         % Save spikes for these channels
         %         MultiDimMatrix(wvdurtmp,1:length(ChanIdx),uid,cv) = nanmean(spikeMap(wvdurtmp,ChanIdx,wavidx),3);
@@ -271,6 +341,14 @@ for uid = 1:nclus
         % keyboard
     end
 end
+
+% Downsample
+PeakTime = PeakTime * upsampling;
+waveformduration = waveformduration * upsampling;
+ProjectedWaveform = ProjectedWaveform(1:1/upsampling:end,:,:);
+ProjectedLocationPerTP = ProjectedLocationPerTP(:,:,1:1/upsampling:end,:);
+WaveIdx = WaveIdx(:,1:1/upsampling:end,:);
+
 fprintf('\n')
 disp(['Extracting raw waveforms and parameters took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])
 if nanmedian(A0Distance(:))>0.75*param.TakeChannelRadius
@@ -290,6 +368,8 @@ AllWVBParameters.WaveIdx = WaveIdx;
 
 return
 % Images for example neuron
+
+figure; histogram(GoodnessofFit)
 if 0
 
 
@@ -303,7 +383,7 @@ if 0
     makepretty
 
 
-    uid = [198] % Example (AL032, take 10)
+    uid = [10] % Example (AL032, take 10)
     fprintf(1,'\b\b\b\b%3.0f%%',uid/nclus*100)
     % load data
     spikeMap = readNPY(Path4UnitNPY{uid});
@@ -312,6 +392,8 @@ if 0
     spikeMap = permute(spikeMap,[2,1,3]); %detrend works over columns
     spikeMap = detrend(spikeMap,1); % Detrend (linearly) to be on the safe side. OVER TIME!
     spikeMap = permute(spikeMap,[2,1,3]);  % Put back in order
+
+    %%% NOT UPSAMPLED FOR PLOTTING
 
     try
         channelpos = Allchannelpos{recsesGood(uid)};
@@ -396,8 +478,8 @@ if 0
     % Difference in amplitude from maximum amplitude
     spdctmp = abs(spikeMap(NewPeakLoc,ChanIdx,cv)); %(abs(spikeMap(NewPeakLoc,MaxChannel(uid,cv),cv))-abs(spikeMap(NewPeakLoc,ChanIdx,cv)))./abs(spikeMap(NewPeakLoc,MaxChannel(uid,cv),cv));
     % Remove zero
-%     spdctmp(Distance2MaxChan==0) = [];
-%     Distance2MaxChan(Distance2MaxChan==0) = [];
+    spdctmp(Distance2MaxChan==0) = [];
+    Distance2MaxChan(Distance2MaxChan==0) = [];
 
     % Spatial decay (average oer micron)
     scatter(Distance2MaxChan,spdctmp,20,[0 0 0],'filled')
@@ -405,9 +487,10 @@ if 0
     ylabel('Amplitude (\muV)')
 
     hold on
-    p = lsqcurvefit(expFun,[max(spdctmp) 0.05],Distance2MaxChan',spdctmp,[],[],opts);
+    p = lsqcurvefit(expFun,[max(spdctmp) 1],double(Distance2MaxChan'),spdctmp,[],[],opts);
     plot(sort(Distance2MaxChan)',expFun(p,sort(Distance2MaxChan)'))
-    text(min(Distance2MaxChan),max(expFun(p,sort(Distance2MaxChan)))*0.99,['A = ' num2str(round(p(1)*100)/100) '* exp(-' num2str(round(p(2)*100)/100) 'd'])
+    % text(min(Distance2MaxChan),max(expFun(p,sort(Distance2MaxChan)))*0.99,['A = ' num2str(round(p(1)*100)/100) '.^2 * ' num2str(p(2)) './d^2'])
+    text(min(Distance2MaxChan),max(expFun(p,sort(Distance2MaxChan)))*0.99,['A = ' num2str(round(p(1)*100)/100) '* exp(-' num2str(round(p(2)*100)/100) 'd)'])
     line([log(10)/p(2) log(10)/p(2)],get(gca,'ylim'),'color',[0.5 0.5 0.5],'LineStyle','--')
 
     makepretty

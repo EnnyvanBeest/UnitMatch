@@ -6,13 +6,13 @@ clear DateOpt
 DateOpt = arrayfun(@(X) dir(fullfile(DataDir{DataDir2Use(X)},MiceOpt{X},'*-*')),1:length(MiceOpt),'UniformOutput',0); % DataDir2Use = server
 DateOpt = cellfun(@(X) X([X.isdir]),DateOpt,'UniformOutput',0);
 DateOpt = cellfun(@(X) {X.name},DateOpt,'UniformOutput',0);
-FromDate = datetime("2023-10-03 09:00:00");
+FromDate = datetime("2024-02-26 09:00:00");
 
 LogError = {}; % Keep track of which runs didn't work
 if ~exist('PipelineParamsOri','var')
 PipelineParamsOri = PipelineParams;
 end
-for midx = 3:length(MiceOpt)
+for midx = 1:length(MiceOpt)
     close all % to not overcrowd the graphics card
     PipelineParams = PipelineParamsOri; % Reset
     %% Loading data from kilosort/phy easily
@@ -37,10 +37,16 @@ for midx = 3:length(MiceOpt)
         AllKiloSortPaths = [];
         for did = 1:length(DateOpt{midx})
             disp(['Finding all pyKS directories in ' myKsDir ', ' DateOpt{midx}{did}])
-            tmpfiles = dir(fullfile(myKsDir,DateOpt{midx}{did},'**','pyKS'));
+            tmpfiles = dir(fullfile(myKsDir,DateOpt{midx}{did},'**','pyKS'));         
             tmpfiles(cellfun(@(X) ismember(X,{'.','..'}),{tmpfiles(:).name})) = [];
             % Conver to string
             tmpfiles = arrayfun(@(X) fullfile(tmpfiles(X).folder,tmpfiles(X).name),1:length(tmpfiles),'uni',0);
+
+            if isempty(tmpfiles)
+                tmpfiles = dir(fullfile(myKsDir,DateOpt{midx}{did},'**','kilosort*','**','spike_clusters.npy'));
+                tmpfiles = arrayfun(@(X) fullfile(tmpfiles(X).folder),1:length(tmpfiles),'uni',0);
+
+            end
             AllKiloSortPaths = [AllKiloSortPaths, tmpfiles];
         end
     end
@@ -54,6 +60,8 @@ for midx = 3:length(MiceOpt)
         if ~PipelineParams.RunPyKSChronicStitched %MatchUnitsAcrossDays
             disp('Unit matching in Matlab')
             AllKiloSortPaths(cell2mat(cellfun(@(X) any(strfind(X,'Chronic')),AllKiloSortPaths,'UniformOutput',0))) = []; %Use separate days and match units via matlab script
+            AllKiloSortPaths(cell2mat(cellfun(@(X) any(strfind(X,'Chrc2Sessions')),AllKiloSortPaths,'UniformOutput',0))) = []; %Use separate days and match units via matlab script
+
         else
             disp('Using chronic pyks option')
             AllKiloSortPaths = AllKiloSortPaths(cell2mat(cellfun(@(X) any(strfind(X,'Chronic')),AllKiloSortPaths,'UniformOutput',0))); %Use chronic output from pyks
@@ -71,17 +79,18 @@ for midx = 3:length(MiceOpt)
     end
 
     %% Prepare cluster information
+    PipelineParams.FromDate = FromDate;
     PipelineParams = ExtractKilosortData(AllKiloSortPaths,PipelineParams);
      
     PipelineParams.RecType = RecordingType{midx};%
 
     % Remove empty ones
     EmptyFolders = find(cellfun(@isempty,PipelineParams.AllChannelPos));
-    AllKiloSortPaths(EmptyFolders) = [];
     PipelineParams.AllChannelPos(EmptyFolders) = [];
     PipelineParams.AllProbeSN(EmptyFolders) = [];
     PipelineParams.RawDataPaths(EmptyFolders) = [];
-    PipelineParams.KSDir = AllKiloSortPaths;
+    PipelineParams.KSDir(EmptyFolders) = [];
+    AllKiloSortPaths = PipelineParams.KSDir;
 
     %% Might want to run UM for separate IMRO tables & Probes (although UM can handle running all at the same time and takes position into account)
     if ~PipelineParams.separateIMRO
@@ -158,6 +167,7 @@ for midx = 3:length(MiceOpt)
                 clusinfo = getClusinfo(UMparam.KSDir);
                 if ~any(clusinfo.Good_ID) || sum(clusinfo.Good_ID)<UMparam.minGoodUnits
                     disp('No good units, continue')
+                    continue
                 end
            
 
@@ -168,13 +178,13 @@ for midx = 3:length(MiceOpt)
                 end
 
                 %% Visualization
-                PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
+                % PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
 
                 %% Evaluate (within unit ID cross-validation)
-                EvaluatingUnitMatch(UMparam.SaveDir);
+                % EvaluatingUnitMatch(UMparam.SaveDir);
     
                 %% Function analysis
-                ComputeFunctionalScores(UMparam.SaveDir)
+                ComputeFunctionalScores(UMparam.SaveDir,1)
                 
                 %% Figures
                 if UMparam.MakePlotsOfPairs
@@ -195,14 +205,14 @@ for midx = 3:length(MiceOpt)
             
             else
                   %% Get clusinfo
-                clusinfo = getClusinfo(UMparam.KSDir);
-                if ~any(clusinfo.Good_ID) || sum(clusinfo.Good_ID)<UMparam.minGoodUnits
-                    disp('No good units, continue')
-                    continue
-                end
-                load(fullfile(UMparam.SaveDir,'UnitMatch.mat'),'UMparam','UniqueIDConversion','WaveformInfo')
-                %% Visualization
-                PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
+                % clusinfo = getClusinfo(UMparam.KSDir);
+                % if ~any(clusinfo.Good_ID) || sum(clusinfo.Good_ID)<UMparam.minGoodUnits
+                %     disp('No good units, continue')
+                %     continue
+                % end
+                % load(fullfile(UMparam.SaveDir,'UnitMatch.mat'),'UMparam','UniqueIDConversion','WaveformInfo')
+                % %% Visualization
+                % % PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
 
             end
            

@@ -1,7 +1,6 @@
 function [UMparam, UniqueIDConversion, MatchTable, WaveformInfo] = RunUnitMatch(Params)
 
 
-
 %% UnitMatch Parameters
 % Use some bombcell parameters
 if Params.RunQualityMetrics
@@ -26,11 +25,7 @@ UMparam.channelpos = Params.AllChannelPos;
 UMparam.AllRawPaths = Params.RawDataPaths;
 UMparam.UseHistology = Params.UseHistology;
 if isstruct(Params.RawDataPaths{1})
-    if length(Params.RawDataPaths)==1
-        UMparam.AllDecompPaths = arrayfun(@(X) fullfile(Params.tmpdatafolder, strrep(X.name, 'cbin', 'bin')), Params.RawDataPaths{1}, 'Uni', 0);;
-    else
-        UMparam.AllDecompPaths = cellfun(@(X) fullfile(Params.tmpdatafolder, strrep(X.name, 'cbin', 'bin')), Params.RawDataPaths, 'Uni', 0);
-    end
+        UMparam.AllDecompPaths = cellfun(@(X) fullfile(Params.tmpdatafolder, strrep(X.name, 'cbin', 'bin')), Params.RawDataPaths, 'UniformOutput', false);
 else
     allDecompPaths_dirs = arrayfun(@(X) dir(Params.RawDataPaths{X}), 1:length(Params.RawDataPaths), 'Uni', 0);
     UMparam.AllDecompPaths = arrayfun(@(X) fullfile(Params.tmpdatafolder, strrep(allDecompPaths_dirs{X}.name, 'cbin', 'bin')), 1:length(allDecompPaths_dirs), 'Uni', 0);
@@ -41,7 +36,7 @@ UMparam.binsize = Params.binsz;
 UMparam.Scores2Include = Params.Scores2Include; %
 UMparam.ApplyExistingBayesModel = Params.ApplyExistingBayesModel; %If 1, use probability distributions made available by us
 UMparam.MakePlotsOfPairs = Params.MakePlotsOfPairs; % Plot all pairs
-if isfield(Params,'GUI')
+if isfield(Params, 'GUI')
     UMparam.GUI = Params.GUI; % Open GUI for manual curation of pairs
 else
     UMparam.GUI = 0;
@@ -91,11 +86,23 @@ if Params.UnitMatch
         end
 
         %% Run UnitMatch
+<<<<<<< HEAD:Dependencies/UnitMatchPipeline/RunUnitMatch.m
+        GlobalUnitMatchClock = tic;
+        if numel(UMparam.KSDir) > numel(UMparam.AllDecompPaths)
+            UMparam.KSDir = UMparam.KSDir(UMparam.N)
+        end
+        [UniqueIDConversion, MatchTable, WaveformInfo, UMparam] = UnitMatch(clusinfo, UMparam);
+        UMrunTime = toc(GlobalUnitMatchClock);
+        save(fullfile(UMparam.SaveDir, 'UnitMatch.mat'), 'UniqueIDConversion', 'MatchTable', 'WaveformInfo', 'UMparam', 'UMrunTime', '-v7.3')
+        DataSizeParam = CalculateDuration(UMparam.SaveDir, ephys_dirs);
+        disp(['UnitMatch took ', num2str(round(UMrunTime/60*10)/10), ' minute(s) to run'])
+=======
         [UniqueIDConversion, MatchTable, WaveformInfo, UMparam] = UnitMatch(clusinfo, UMparam);
         tmpfile = dir(fullfile(UMparam.SaveDir,'UnitMatch.mat'));
         if UMparam.AssignUniqueID
             AssignUniqueID(fullfile(tmpfile.folder,tmpfile.name));
         end
+>>>>>>> dca7e71cf759b2d5e95a9e84c1d1007e1c35336d:MATLAB/FromSpikeGLXToMatching/Helpers/RunUnitMatch.m
 
     end
 elseif Params.DecompressionFlag % You might want to at least save out averaged waveforms for every session to get back to later, if they were saved out by bomcell

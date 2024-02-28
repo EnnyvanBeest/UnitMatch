@@ -157,11 +157,15 @@ for pairid=1:length(Pairs)
     addforamplitude=0;
     addforspace = 0;
     for uidx = 1:length(Pairs{pairid})
-        if cv==2 %Alternate between CVs
-            cv=1;
+        if length(unique(Pairs{pairid})) == 1 % pick a cv for same pair
+            cv = uidx;
+            if cv>2
+                cv = round(rand(1,1)*2);
+            end
         else
-            cv=2;
+            cv = 1:2;
         end
+      
         uid = Pairs{pairid}(uidx);
         try
             channelpos = Allchannelpos{recsesGood(uid)};
@@ -191,35 +195,35 @@ for pairid=1:length(Pairs)
         hold on
         scatter(Locs(:,1)*10,Locs(:,2)*20,20,[0.5 0.5 0.5],'filled') % Indicate sites
         for id = 1:size(Locs,1)
-            plot(Locs(id,1)*10+[1:size(spikeMap,1)],Locs(id,2)*20+spikeMap(:,ChanIdx(id),cv),'-','color',cols(uidx,:),'LineWidth',1)
+            plot(Locs(id,1)*10+[1:size(spikeMap,1)],Locs(id,2)*20+nanmean(spikeMap(:,ChanIdx(id),cv),3),'-','color',cols(uidx,:),'LineWidth',1)
         end
-        scatter(WaveformInfo.ProjectedLocation(sortdims(1),uid,cv)*10,WaveformInfo.ProjectedLocation(sortdims(2),uid,cv)*20,20,[0 0 0],'filled') %Indicate Centroid
-        hleg(uidx) = plot(WaveformInfo.ProjectedLocation(sortdims(1),uid,cv)*10+[1:size(spikeMap,1)],WaveformInfo.ProjectedLocation(sortdims(2),uid,cv)*20+WaveformInfo.ProjectedWaveform(:,uid,cv),'-','color',cols(uidx,:),'LineWidth',2);
+        scatter(nanmean(WaveformInfo.ProjectedLocation(sortdims(1),uid,cv),3)*10,nanmean(WaveformInfo.ProjectedLocation(sortdims(2),uid,cv),3)*20,20,[0 0 0],'filled') %Indicate Centroid
+        hleg(uidx) = plot(nanmean(WaveformInfo.ProjectedLocation(sortdims(1),uid,cv),3)*10+[1:size(spikeMap,1)],nanmean(WaveformInfo.ProjectedLocation(sortdims(2),uid,cv),3)*20+nanmean(WaveformInfo.ProjectedWaveform(:,uid,cv),3),'-','color',cols(uidx,:),'LineWidth',2);
 
         subplot(3,6,3)
         if uidx==1
             plot(channelpos(:,sortdims(1)),channelpos(:,sortdims(2)),'k.')
             hold on
         end
-        h(1)=plot(channelpos(WaveformInfo.MaxChannel(uid,cv),sortdims(1)),channelpos(WaveformInfo.MaxChannel(uid,cv),sortdims(2)),'.','color',cols(uidx,:),'MarkerSize',15);
+        h(1)=plot(channelpos(round(nanmean(WaveformInfo.MaxChannel(uid,cv),2)),sortdims(1)),channelpos(round(nanmean(WaveformInfo.MaxChannel(uid,cv),2)),sortdims(2)),'.','color',cols(uidx,:),'MarkerSize',15);
 
         subplot(3,6,4)
         hold on
         scatter(Locs(:,1),Locs(:,2),20,[0.5 0.5 0.5],'filled')
-        scatter(WaveformInfo.ProjectedLocation(sortdims(1),uid,cv),WaveformInfo.ProjectedLocation(sortdims(2),uid,cv),20,[0 0 0],'filled')
+        scatter(nanmean(WaveformInfo.ProjectedLocation(sortdims(1),uid,cv),3),nanmean(WaveformInfo.ProjectedLocation(sortdims(2),uid,cv),3),20,[0 0 0],'filled')
 
         takesamples = param.waveidx;
         takesamples = unique(takesamples(~isnan(takesamples)));
         if uidx > 1 % To flip or not to flip?
-            tmptr = squeeze(ProjectedLocationPerTPAllFlips(:,uid,takesamples,cv,:));
+            tmptr = squeeze(nanmean(ProjectedLocationPerTPAllFlips(:,uid,takesamples,cv,:),4));
             [~,flipidx] = nanmin(nanmean(sqrt(nansum((tmptr-repmat(tmptmpl,1,1,size(tmptr,3))).^2,1)),2),[],3);
 
         else
-            tmptmpl = squeeze(ProjectedLocationPerTPAllFlips(:,uid,takesamples,cv,1));
+            tmptmpl = squeeze(nanmean(ProjectedLocationPerTPAllFlips(:,uid,takesamples,cv,1),4));
             flipidx = 1;
         end
 
-        h(1) = plot(squeeze(ProjectedLocationPerTPAllFlips(sortdims(1),uid,takesamples,cv,flipidx)),squeeze(ProjectedLocationPerTPAllFlips(sortdims(2),uid,takesamples,cv,flipidx)),'-','color',cols(uidx,:));
+        h(1) = plot(squeeze(nanmean(ProjectedLocationPerTPAllFlips(sortdims(1),uid,takesamples,cv,flipidx),4)),squeeze(nanmean(ProjectedLocationPerTPAllFlips(sortdims(2),uid,takesamples,cv,flipidx),4)),'-','color',cols(uidx,:));
 %         scatter(squeeze(ProjectedLocationPerTPAllFlips(sortdims(1),uid,takesamples,cv,flipidx)),squeeze(ProjectedLocationPerTPAllFlips(sortdims(2),uid,takesamples,cv,flipidx)),30,takesamples,'filled')
         colormap(hot)
 
@@ -227,21 +231,21 @@ for pairid=1:length(Pairs)
         subplot(3,6,[9,10])
         hold on
         scatter(Locs(:,1)+addforspace,Locs(:,2),20,[0.5 0.5 0.5],'filled')
-        scatter(WaveformInfo.ProjectedLocation(sortdims(1),uid,cv)+addforspace,WaveformInfo.ProjectedLocation(sortdims(2),uid,cv),20,[0 0 0],'filled')
+        scatter(nanmean(WaveformInfo.ProjectedLocation(sortdims(1),uid,cv),3)+addforspace,nanmean(WaveformInfo.ProjectedLocation(sortdims(2),uid,cv),3),20,[0 0 0],'filled')
 
         takesamples = param.waveidx;
         takesamples = unique(takesamples(~isnan(takesamples)));
         if uidx > 1 % To flip or not to flip?
-            tmptr = squeeze(ProjectedLocationPerTPAllFlips(:,uid,takesamples,cv,:));
+            tmptr = squeeze(nanmean(ProjectedLocationPerTPAllFlips(:,uid,takesamples,cv,:),4));
             [~,flipidx] = nanmin(nanmean(sqrt(nansum((tmptr-repmat(tmptmpl,1,1,size(tmptr,3))).^2,1)),2),[],3);
 
         else
-            tmptmpl = squeeze(ProjectedLocationPerTPAllFlips(:,uid,takesamples,cv,1));
+            tmptmpl = squeeze(nanmean(ProjectedLocationPerTPAllFlips(:,uid,takesamples,cv,1),4));
             flipidx = 1;
         end
 
-        h(1) = plot(squeeze(ProjectedLocationPerTPAllFlips(sortdims(1),uid,takesamples,cv,flipidx))+addforspace,squeeze(ProjectedLocationPerTPAllFlips(sortdims(2),uid,takesamples,cv,flipidx)),'-','color',cols(uidx,:));
-        scatter(squeeze(ProjectedLocationPerTPAllFlips(sortdims(1),uid,takesamples,cv,flipidx))+addforspace,squeeze(ProjectedLocationPerTPAllFlips(sortdims(2),uid,takesamples,cv,flipidx)),30,takesamples,'filled')
+        h(1) = plot(squeeze(nanmean(ProjectedLocationPerTPAllFlips(sortdims(1),uid,takesamples,cv,flipidx),4))+addforspace,squeeze(nanmean(ProjectedLocationPerTPAllFlips(sortdims(2),uid,takesamples,cv,flipidx),4)),'-','color',cols(uidx,:));
+        scatter(squeeze(nanmean(ProjectedLocationPerTPAllFlips(sortdims(1),uid,takesamples,cv,flipidx),4))+addforspace,squeeze(nanmean(ProjectedLocationPerTPAllFlips(sortdims(2),uid,takesamples,cv,flipidx),4)),30,takesamples,'filled')
         colormap(hot)
         addforspace = addforspace+2*max(diff(Locs(:,1)));
 
@@ -249,7 +253,7 @@ for pairid=1:length(Pairs)
         % Waveforms
         subplot(3,6,5)
         hold on
-        ProjectedWaveform = spikeMap(:,WaveformInfo.MaxChannel(uid,cv),cv);
+        ProjectedWaveform = nanmean(spikeMap(:,round(nanmean(WaveformInfo.MaxChannel(uid,cv))),cv),3);
         h(1)=plot(ProjectedWaveform,'-','color',cols(uidx,:));
         subplot(3,6,6)
         hold on
@@ -265,7 +269,7 @@ for pairid=1:length(Pairs)
             if length(unique(Pairs{pairid}))==1
                 if cv==1
                     idx1 = idx1(1:floor(length(idx1)/2));
-                else
+                elseif cv == 2
                     idx1 = idx1(ceil(length(idx1)/2):end);
                 end
             end
@@ -308,7 +312,8 @@ for pairid=1:length(Pairs)
     set(gca,'xtick',get(gca,'xtick'),'xticklabel',arrayfun(@(X) num2str(X./10),cellfun(@(X) str2num(X),get(gca,'xticklabel')),'UniformOutput',0))
 
     legend(hleg,arrayfun(@(X) ['ID' num2str(OriClusID(X)) ', Rec' num2str(recsesGood(X))],Pairs{pairid},'Uni',0),'Location','best')
-    Probs = cell2mat(arrayfun(@(X) [num2str(round(MatchProbability(Pairs{pairid}(X),Pairs{pairid}(X+1)).*100)) ','],1:length(Pairs{pairid})-1,'Uni',0));
+    Probs = cell2mat(arrayfun(@(X) [num2str(round(mean([MatchProbability(Pairs{pairid}(X),Pairs{pairid}(X+1)),MatchProbability(Pairs{pairid}(X+1),Pairs{pairid}(X))]).*100)) ','],1:length(Pairs{pairid})-1,'Uni',0));
+
     Probs(end)=[];
     title(['Probability=' Probs '%'])
 
@@ -316,8 +321,8 @@ for pairid=1:length(Pairs)
     subplot(3,6,4)
     xlabel('Xpos (um)')
     ylabel('Ypos (um)')
-    xlims = [min(WaveformInfo.ProjectedLocation(sortdims(1),Pairs{pairid},cv))-25 max(WaveformInfo.ProjectedLocation(sortdims(1),Pairs{pairid},cv))+25];
-    ylims = [min(WaveformInfo.ProjectedLocation(sortdims(2),Pairs{pairid},cv))-25 max(WaveformInfo.ProjectedLocation(sortdims(2),Pairs{pairid},cv))+25];
+    xlims = [min(nanmean(WaveformInfo.ProjectedLocation(sortdims(1),Pairs{pairid},cv),3))-25 max(nanmean(WaveformInfo.ProjectedLocation(sortdims(1),Pairs{pairid},cv),3))+25];
+    ylims = [min(nanmean(WaveformInfo.ProjectedLocation(sortdims(2),Pairs{pairid},cv),3))-25 max(nanmean(WaveformInfo.ProjectedLocation(sortdims(2),Pairs{pairid},cv),3))+25];
     set(gca,'xlim',xlims,'ylim',ylims)
     axis square
     %     legend([h(1),h(2)],{['Unit ' num2str(uid)],['Unit ' num2str(uid2)]})
@@ -330,13 +335,13 @@ for pairid=1:length(Pairs)
     end
     makepretty
     if exist('TrajDistSim')
-        tmp = cell2mat(arrayfun(@(X) [num2str(round(TrajDistSim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp = cell2mat(arrayfun(@(X) [num2str(round(mean([TrajDistSim(Pairs{pairid}(X),Pairs{pairid}(X+1)) TrajDistSim(Pairs{pairid}(X+1),Pairs{pairid}(X))]).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
         tmp(end)=[];
     else
         tmp = 'nan';
     end
     if exist('TrajAngleSim')
-        tmp2 = cell2mat(arrayfun(@(X) [num2str(round(TrajAngleSim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp2 = cell2mat(arrayfun(@(X) [num2str(round(mean([TrajAngleSim(Pairs{pairid}(X),Pairs{pairid}(X+1)) TrajAngleSim(Pairs{pairid}(X+1),Pairs{pairid}(X))]).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
         tmp2(end)=[];
     else
         tmp2 = 'nan';
@@ -345,7 +350,7 @@ for pairid=1:length(Pairs)
         title(['Trajectory length: ' tmp ', angle: ' tmp2])
     end
     if exist('LocTrajectorySim')
-        tmp = cell2mat(arrayfun(@(X) [num2str(round(LocTrajectorySim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp = cell2mat(arrayfun(@(X) [num2str(round(mean([LocTrajectorySim(Pairs{pairid}(X),Pairs{pairid}(X+1)) LocTrajectorySim(Pairs{pairid}(X+1),Pairs{pairid}(X))]).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
         tmp(end)=[];
     else
         tmp = 'nan';
@@ -366,19 +371,19 @@ for pairid=1:length(Pairs)
     makepretty
 
     if exist('CentroidDist')
-        tmp = cell2mat(arrayfun(@(X) [num2str(round(CentroidDist(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp = cell2mat(arrayfun(@(X) [num2str(round(mean([CentroidDist(Pairs{pairid}(X),Pairs{pairid}(X+1)) CentroidDist(Pairs{pairid}(X+1),Pairs{pairid}(X))]).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
         tmp(end)=[];
     else
         tmp = 'nan';
     end
     if exist('CentroidVar')
-        tmp2 = cell2mat(arrayfun(@(X) [num2str(round(CentroidVar(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp2 = cell2mat(arrayfun(@(X) [num2str(round(mean([CentroidVar(Pairs{pairid}(X),Pairs{pairid}(X+1)) CentroidVar(Pairs{pairid}(X+1),Pairs{pairid}(X))]).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
         tmp2(end)=[];
     elseif exist('CentroidDistRecentered')
-        tmp2 = cell2mat(arrayfun(@(X) [num2str(round(CentroidDistRecentered(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp2 = cell2mat(arrayfun(@(X) [num2str(round(mean([CentroidDistRecentered(Pairs{pairid}(X),Pairs{pairid}(X+1)) CentroidDistRecentered(Pairs{pairid}(X+1),Pairs{pairid}(X))]).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
         tmp2(end)=[];
     elseif exist('CentroidOverlord')
-        tmp2 = cell2mat(arrayfun(@(X) [num2str(round(CentroidOverlord(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp2 = cell2mat(arrayfun(@(X) [num2str(round(mean([CentroidOverlord(Pairs{pairid}(X),Pairs{pairid}(X+1)) CentroidOverlord(Pairs{pairid}(X+1),Pairs{pairid}(X))]).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
         tmp2(end)=[];
     else
         tmp2 = 'nan';
@@ -392,31 +397,31 @@ for pairid=1:length(Pairs)
 
     makepretty
     if exist('WavformMSE')
-        tmp = cell2mat(arrayfun(@(X) [num2str(round(WavformMSE(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp = cell2mat(arrayfun(@(X) [num2str(round(mean([WavformMSE(Pairs{pairid}(X),Pairs{pairid}(X+1)) WavformMSE(Pairs{pairid}(X+1),Pairs{pairid}(X))]).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
         tmp(end)=[];
     else
         tmp = 'nan';
     end
     if exist('WVCorr')
-        tmp2 = cell2mat(arrayfun(@(X) [num2str(round(WVCorr(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp2 = cell2mat(arrayfun(@(X) [num2str(round(mean([WVCorr(Pairs{pairid}(X),Pairs{pairid}(X+1)) WVCorr(Pairs{pairid}(X+1),Pairs{pairid}(X))]).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
         tmp2(end)=[];
     else
         tmp2 = 'nan';
     end
     if exist('WavformSim')
-        tmp5 = cell2mat(arrayfun(@(X) [num2str(round(WavformSim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp5 = cell2mat(arrayfun(@(X) [num2str(round(mean([WavformSim(Pairs{pairid}(X),Pairs{pairid}(X+1)) WavformSim(Pairs{pairid}(X+1),Pairs{pairid}(X))]).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
         tmp5(end)=[];
     else
         tmp5 = 'nan';
     end
     if exist('AmplitudeSim')
-        tmp3 = cell2mat(arrayfun(@(X) [num2str(round(AmplitudeSim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp3 = cell2mat(arrayfun(@(X) [num2str(round(mean([AmplitudeSim(Pairs{pairid}(X),Pairs{pairid}(X+1)) AmplitudeSim(Pairs{pairid}(X+1),Pairs{pairid}(X))]).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
         tmp3(end)=[];
     else
         tmp3 = 'nan';
     end
     if exist('spatialdecayfitSim')
-        tmp4 = cell2mat(arrayfun(@(X) [num2str(round(spatialdecayfitSim(Pairs{pairid}(X),Pairs{pairid}(X+1)).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
+        tmp4 = cell2mat(arrayfun(@(X) [num2str(round(mean([spatialdecayfitSim(Pairs{pairid}(X),Pairs{pairid}(X+1)) spatialdecayfitSim(Pairs{pairid}(X+1),Pairs{pairid}(X))]).*10)./10) ','],1:length(Pairs{pairid})-1,'Uni',0));
         tmp4(end)=[];
     else
         tmp4 = 'nan';

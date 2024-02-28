@@ -21,9 +21,11 @@ function [rank, sig] = getRank(M,SessionSwitch)
                 end
 
                 % Find sig
-                M_cut = M(clusIdxD1All,clusIdxD2All);
-                sig(clusIdxD1All,clusIdxD2All) = M_cut >= nanmean(M_cut,1) + 2*nanstd(M_cut,[],1) & ...
-                    M_cut >= nanmean(M_cut,2) + 2*nanstd(M_cut,[],2); % Needs to be okay in both dimensions
+                M_cut = M(clusIdxD1All,clusIdxD2All);               
+                sig(clusIdxD1All,clusIdxD2All) = (M_cut-nanmean(M_cut,2))./nanstd(M_cut,[],2);
+                
+                % >= nanmean(M_cut,1) + 3*nanstd(M_cut,[],1) & ...
+                    % M_cut >= nanmean(M_cut,2) + 3*nanstd(M_cut,[],2); % Needs to be okay in both dimensions
 
             end
         end

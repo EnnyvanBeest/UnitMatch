@@ -1,4 +1,4 @@
-%% DEMO UNIT MATCH 
+%% DEMO UNIT MATCH - multiplesessions
 % This is a demo using the FigShareData on 10.6084/m9.figshare.24305758
 
 %% READ ME
@@ -16,11 +16,15 @@
 
 %% User input: 
 clear % UMparam should be remade from scratch!
-UMparam.SaveDir = 'H:\FigShare_UnitMatch\Output'; % Recommended to use end this path with \Probe0\IMRO_1\ if more probes/IMRO tables were used or \AllProbes\AllIMRO\ otherwise
-UMparam.KSDir = {'H:\FigShare_UnitMatch\Mouse1\2019-11-21\Probe0\1','H:\FigShare_UnitMatch\Mouse1\2019-11-22\Probe0\1'};  % This is a cell array with a path, in the path there should be a subfolder called 'RawWaveforms'. 
-% UMparam.RawDataPaths = {'H:\MatchingUnits\Tmp\AL032_2019-11-21_stripe192-natIm_g0_t0.imec0.ap.bin','H:\MatchingUnits\Tmp\AL032_2019-11-22_stripe192-natIm_g0_t0.imec0.ap.bin'} % OPTIONAL, it can also be read in from params.py file (if dat-path properly points at the raw OpenEphys/SpikeGLX file)
-% N.B. if you want to use the functional score evaluation of UnitMatch, 'KSDir' should also contain typical 'Kilosort output', (e.g. spike times etc.)
-
+UMparam.SaveDir = 'H:\FigShare_UnitMatch\4AL032'; % Recommended to use end this path with \Probe0\IMRO_1\ if more probes/IMRO tables were used or \AllProbes\AllIMRO\ otherwise
+UMparam.KSDir = {'\\znas.cortexlab.net\Subjects\AL032\2019-11-21\ephys_K1\pyKS\output'; ...
+    '\\znas.cortexlab.net\Subjects\AL032\2019-11-22\ephys_K1\pyKS\output';
+    '\\znas.cortexlab.net\Subjects\AL032\2019-12-03\ephys_K1\pyKS\output';
+    '\\znas.cortexlab.net\Subjects\AL032\2019-12-13\ephys_K1\pyKS\output'};
+% UMparam.RawDataPaths = {{'\\znas.cortexlab.net\Subjects\AL032\2019-11-21\ephys_K1\AL032_2019-11-21_stripe192-natIm_g0_t0.imec0.ap.cbin'; ...
+%     '\\znas.cortexlab.net\Subjects\AL032\2019-11-22\ephys_K1\AL032_2019-11-22_stripe192-natIm_g0_t0.imec0.ap.cbin';
+%     '\\znas.cortexlab.net\Subjects\AL032\2019-12-03\ephys_K1\AL032_2019-12-03_stripe192_natIm_g0_t0.imec0.ap.cbin';
+%     '\\znas.cortexlab.net\Subjects\AL032\2019-12-13\ephys_K1\AL032_2019-12-13_stripe192_NatIm_g0_t0.imec0.ap.cbin'}};
 %% N.B. the following user input can also be automatically extracted and prepared/cleaned up using UMparam = ExtractKilosortData(KiloSortPaths, UMparam) for Kilosorted data of SpikeGLX recorded data (see next section);
 % UMparam.RawDataPaths = {'\\path\to\firstrecording','\\path\to\secondrecording','\\path\to\nthrecording'};  % This is a cell array with info on where to find the decompressed recording (.cbin files) --> Necessary when you want UnitMatch to do waveform extraction
 % UMparam.AllDecompPaths = {'\\path\to\firstrecording','\\path\to\secondrecording','\\path\to\nthrecording'};  % This is a cell array with info on where to find the decompressed recording (.bin files) --> Necessary when you want UnitMatch to do waveform extraction
@@ -80,3 +84,9 @@ end
 
 %% Further evaluation - only works in combination with Bombcell
 QualityMetricsROCs(UMparam.SaveDir); % Only works in combination with BOMBCELL (and is added to path!!)
+
+%% Summary plot
+UMFiles = fullfile(UMparam.SaveDir,'UnitMatch.mat');
+summaryFunctionalPlots(UMFiles, 'Corr', groupvec)
+% summaryFunctionalPlots_Part2(UMFiles, groupvec)
+summaryMatchingPlots(UMFiles)

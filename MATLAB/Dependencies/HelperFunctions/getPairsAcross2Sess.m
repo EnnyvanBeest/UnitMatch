@@ -11,11 +11,16 @@ function [pairs,sessions,tableIdx,proba] = getPairsAcross2Sess(MatchTable, match
     
 
     %% Will extract the proper pairs
-    matchedPairsIdx = MatchTable.MatchProb > matchCriterion & ...
+    n = sqrt(size(MatchTable.MatchProb,1));
+    ProbaAll = reshape(MatchTable.MatchProb, [n n]);
+    ProbaAll = .5*ProbaAll+.5*ProbaAll'; % take average proba
+    ProbaAll = ProbaAll(:);
+
+    matchedPairsIdx = ProbaAll > matchCriterion & ...
         MatchTable.RecSes1 ~= MatchTable.RecSes2; % 
     pairs = [MatchTable(matchedPairsIdx,:).ID1, MatchTable(matchedPairsIdx,:).ID2];
     sessions = [MatchTable(matchedPairsIdx,:).RecSes1, MatchTable(matchedPairsIdx,:).RecSes2];
-    proba = MatchTable(matchedPairsIdx,:).MatchProb;
+    proba = ProbaAll(matchedPairsIdx,:);
     tableIdx = find(matchedPairsIdx);
 
     [pairs,sessions,tableIdx,proba] = removeDoublets(pairs,sessions,tableIdx,proba);
