@@ -239,7 +239,7 @@ def load_output_seperate_CV(SaveDir, LoadMatchTable = False):
     with open(ParamPath, 'rb') as fp:
         param = pickle.load(fp)
 
-    #Load output nUnit*nUnits probabilite array
+    #Load output nUnit*nUnits probabilites array
     MatchProbPathCV12 = os.path.join(SaveDir, 'MatchProb CV12.npy')
     MatchProbCV12 = np.load(MatchProbPathCV12)
     MatchProbPathCV21 = os.path.join(SaveDir, 'MatchProb CV21.npy')
@@ -249,7 +249,7 @@ def load_output_seperate_CV(SaveDir, LoadMatchTable = False):
     WavefromInfoPath = os.path.join(SaveDir, 'WaveformInfo.npz')
     WavefromInfo =dict(np.load(WavefromInfoPath))
 
-    #save autimatuc matches
+    #save autimatic matches
     MatchesPathCV12 = os.path.join(SaveDir, 'Matches CV12.npy')
     MatchesCV12 = np.load(MatchesPathCV12)
     MatchesPathCV21 = os.path.join(SaveDir, 'Matches CV21.npy')

@@ -6,13 +6,6 @@ from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg,
 NavigationToolbar2Tk) 
 import numpy as np
 from matplotlib import rcParams
-rcParams.update({'figure.autolayout': True})
-rcParams.update({'font.size': 10})
-Color = 'white'
-rcParams['text.color'] = Color
-rcParams['axes.labelcolor'] = Color
-rcParams['xtick.color'] = Color
-rcParams['ytick.color'] = Color
 
 def run_GUI():
     global CVtkinter
@@ -37,6 +30,15 @@ def run_GUI():
     global EntryFrame
     global ToggleRawVal
     global ToggleUMScoreVal
+
+    rcParams.update({'figure.autolayout': True})
+    rcParams.update({'font.size': 10})
+    Color = 'white'
+    rcParams['text.color'] = Color
+    rcParams['axes.labelcolor'] = Color
+    rcParams['xtick.color'] = Color
+    rcParams['ytick.color'] = Color
+
     
     np.set_printoptions(suppress = True)
     IsMatch = []
