@@ -30,7 +30,7 @@ SessionSwitch(cellfun(@isempty,SessionSwitch))=[];
 SessionSwitch = [cell2mat(SessionSwitch); nclus+1];
 drift = nan;
 % Do in batches
-batchsz = 1000;
+batchsz = 2000;
 nbatch = ceil(nclus./batchsz);
 SaveDrifts = nan(ndays,3,0);
 if nargin<5
@@ -155,7 +155,7 @@ ProjectedWaveformNorm = (ProjectedWaveformNorm-nanmin(ProjectedWaveformNorm,[],1
 x1 = repmat(ProjectedWaveformNorm(:,:,1),[1 1 size(ProjectedWaveformNorm,2)]);
 x2 = permute(repmat(ProjectedWaveformNorm(:,:,2),[1 1 size(ProjectedWaveformNorm,2)]),[1 3 2]);
 RawWVMSE = squeeze(nanmean((x1 - x2).^2));
-clear x1 x2
+clear x1 x2 ProjectedWaveformNorm
 
 % sort of Normalize distribution
 RawWVMSENorm = sqrt(RawWVMSE);
@@ -310,7 +310,7 @@ while flag<2
     end
 
 
-    clear x1 x2
+    clear x1 x2 tmpEu
     % Average location
     CentroidDist = squeeze(nanmin(squeeze(EuclDist(:,param.NewPeakLoc-param.waveidx==0,:,:)),[],2));%
 
@@ -368,6 +368,7 @@ while flag<2
             EuclDist2(idx,:,:,idx2) = tmpEu; % Euclidean distance
         end
     end
+    clear ProjectedLocationPerTPRecentered tmpEu w
 
 
     clear x1 x2
@@ -450,25 +451,40 @@ while flag<2
                 countid = countid + 1;
             end
         end
+        clear good_ang
 
         % Sum the angles across dimensions
         LocAngle = nansum(LocAngle,5);
 
         clear x1 x2
+        if UseFlipCombis
+            AngleSubtraction = nan(nclus,length(waveidx)-1,2*(length(FlipDim)+1),nclus);
+        else
+            AngleSubtraction = nan(nclus,length(waveidx)-1,(length(FlipDim)+1),nclus);
+        end
+        for batchid1 = 1:nbatch
+            idx = (batchid1-1)*batchsz+1:batchsz*batchid1;
+            idx(idx>nclus) = [];
+            for batchid2 = 1:nbatch
 
-        % Actually just taking the weighted sum of angles is better
-        x1 = repmat(squeeze(LocAngle(:,:,1,:)),[1 1 1 nclus]);
-        if UseFlipCombis
-            x1 = cat(3,x1,x1(:,:,end:-1:1,:));
+                idx2 = (batchid2-1)*batchsz+1:batchsz*batchid2;
+                idx2(idx2>nclus) = [];
+                % Actually just taking the weighted sum of angles is better
+                x1 = repmat(squeeze(LocAngle(idx,:,1,:)),[1 1 1 length(idx2)]);
+                x2 = permute(repmat(squeeze(LocAngle(idx2,:,2,:)),[1 1 1 length(idx)]),[4 2 3 1]); %switch nclus around
+                if UseFlipCombis
+                    x1 = cat(3,x1,x1(:,:,end:-1:1,:));
+                end
+                if UseFlipCombis
+                    x2 = cat(3,x2,x2);
+                end
+                AngleSubtraction(idx,:,:,idx2) = abs(x1-x2);
+            end
         end
-        x2 = permute(repmat(squeeze(LocAngle(:,:,2,:)),[1 1 1 nclus]),[4 2 3 1]); %switch nclus around
-        if UseFlipCombis
-            x2 = cat(3,x2,x2);
-        end
-        AngleSubtraction = abs(x1-x2);
         AngleSubtraction(isnan(abs(x1-x2))) = 2*pi; %punish points with nan
         clear x1 x2
         TrajAngleSim = squeeze(nanmin(nansum(AngleSubtraction,2),[],3)); % sum of angles, minimum across flips
+        clear AngleSubtraction
         TrajAngleSim = 1-((TrajAngleSim-nanmin(TrajAngleSim(:)))./(quantile(TrajAngleSim(:),0.99)-nanmin(TrajAngleSim(:))));
         TrajAngleSim(TrajAngleSim<0 | isnan(TrajAngleSim))=0;
         scores = [TrajAngleSim(SameIdx(:))', TrajAngleSim(WithinIdx(:))'];
@@ -478,12 +494,29 @@ while flag<2
     end
 
     %% Continue distance traveled
-    x1 = repmat(squeeze(TrajDist(:,:,1,:)),[1 1 1 nclus]);
-    x2 = permute(repmat(squeeze(TrajDist(:,:,2,:)),[1 1 1 nclus]),[4 2 3 1]); % switch nclus around
+    if UseFlipCombis
+        TrajDistSim = nan(nclus,length(waveidx)-1,2*(length(FlipDim)+1),nclus);
+    else
+        TrajDistSim = nan(nclus,length(waveidx)-1,(length(FlipDim)+1),nclus);
+    end
+    for batchid1 = 1:nbatch
+        idx = (batchid1-1)*batchsz+1:batchsz*batchid1;
+        idx(idx>nclus) = [];
+        for batchid2 = 1:nbatch
+
+            idx2 = (batchid2-1)*batchsz+1:batchsz*batchid2;
+            idx2(idx2>nclus) = [];
+
+            x1 = repmat(squeeze(TrajDist(idx,:,1,:)),[1 1 1 length(idx2)]);
+            x2 = permute(repmat(squeeze(TrajDist(idx2,:,2,:)),[1 1 1 length(idx)]),[4 2 3 1]); % switch nclus around
+
+            TrajDistSim(idx,:,:,idx2) = abs(x1-x2);%
+        end
+    end
+
     % Distance similarity (subtract for each pair of units)
-    TrajDistCompared = abs(x1-x2);%
     clear x1 x2
-    TrajDistSim = squeeze(nanmin(nansum(TrajDistCompared,2),[],3)); %and take minimum across flips
+    TrajDistSim = squeeze(nanmin(nansum(TrajDistSim,2),[],3)); %and take minimum across flips
     TrajDistSim = sqrt(TrajDistSim); % Make more normal
     TrajDistSim = 1-((TrajDistSim-nanmin(TrajDistSim(:)))./(quantile(TrajDistSim(:),0.99)-nanmin(TrajDistSim(:))));
     TrajDistSim(TrajDistSim<0 | isnan(TrajDistSim))=0;

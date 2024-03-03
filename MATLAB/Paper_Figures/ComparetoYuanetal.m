@@ -257,8 +257,8 @@ ylabel('Yuan et al.')
 title('Drift Estimate')
 
 %% Across many days
-datapath = 'H:\MatchingUnits\Yuan\AcrossMultipleDays';
-datapathUM = 'H:\MatchingUnits\OutputMonthApart'
+datapath = 'H:\MatchingUnits\Yuan\AcrossManyDays';
+datapathUM = 'H:\UnitMatch\AL032\Probe0\IMRO_2\UnitMatch';% 'H:\MatchingUnits\OutputMonthApart'
 miceopt = {'AL032'};
 ProbThresh = 0.5;
 
@@ -268,7 +268,7 @@ AUCsAcrossManyDays = nan(3,3); % AUC values %Shared, Unique to UM, Unique to Yua
 % units (Bombcell isolated) are found back by the two algorithms?
 for midx = 1:length(miceopt)
     % What about UnitMatch?
-    UMOutputFile = dir(fullfile(datapathUM,miceopt{midx},'**','UnitMatch.mat')); % Find output file
+    UMOutputFile = dir(fullfile(datapathUM,'**','UnitMatch.mat')); % Find output file
     % AssignUniqueID(UMOutputFile.folder)
     % ComputeFunctionalScores(UMOutputFile.folder)
 
@@ -377,3 +377,4 @@ set(gca,'XTick',2:3,'XTickLabel',{'UnitMatch','Yuan et al.'})
 ylabel('AUC values')
 makepretty
 offsetAxes
+%% 
