@@ -263,7 +263,7 @@ for subsesid = 1:length(KiloSortPaths)
         % Spacing:
         SpacingsKS = max(unique(diff(channelpostmp(:,1))));
         SpacingsReal = max(unique(diff(channelpostmpconv(:,1))));
-        if ismember((SpacingsReal - SpacingsKS),[50,100,150])
+        if ismember((SpacingsReal - SpacingsKS),[0,50,100,150])
             disp('Kilosort used different shank spacing for IMRO table. Not a big problem')
         else
 
