@@ -30,7 +30,7 @@ SessionSwitch(cellfun(@isempty,SessionSwitch))=[];
 SessionSwitch = [cell2mat(SessionSwitch); nclus+1];
 drift = nan;
 % Do in batches
-batchsz = 2000;
+batchsz = 1000;
 nbatch = ceil(nclus./batchsz);
 SaveDrifts = nan(ndays,3,0);
 if nargin<5

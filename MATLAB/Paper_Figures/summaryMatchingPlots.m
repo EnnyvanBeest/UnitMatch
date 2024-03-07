@@ -1,4 +1,4 @@
-function [unitPresence, unitProbaMatch, days] = summaryMatchingPlots(UMFiles,groupVector)
+function [unitPresence, unitProbaMatch, days] = summaryMatchingPlots(UMFiles,groupVector,computeFuncScores)
 
 %% Settings
 PlotIndividualMice = 0;
@@ -6,6 +6,10 @@ PlotIndividualMice = 0;
 %% Initialize
 if nargin<2 || ~exist('groupVector','var') || isempty(groupVector)
     groupVector = 1:length(UMFiles);
+end
+
+if nargin<3
+    computeFuncScores = 0;
 end
 groups = unique(groupVector);
 groupColor = gray(length(groups)+1);
@@ -25,6 +29,10 @@ yTickLabels = cell(1,numel(deltaDaysBins)-1);
 for bb = 1:numel(deltaDaysBins)-1
     yTickLabels{bb} = sprintf('%.0f< %cdays < %.0f',deltaDaysBins(bb), 916, deltaDaysBins(bb+1));
 end
+
+popCorr_Uni.ISI = nan(length(deltaDaysBins)-1,length(UMFiles));
+popCorr_Uni.natImResp = nan(length(deltaDaysBins)-1,length(UMFiles));
+popCorr_Uni.refPop = nan(length(deltaDaysBins)-1,length(UMFiles));
 
 for midx = 1:length(UMFiles)
     %% Load data
@@ -81,35 +89,46 @@ for midx = 1:length(UMFiles)
     UPres(logical(eye(size(UPres)))) = nan;
     % Compute probability of a unit returning since it's appearance
     for binid = 1:length(deltaDaysBins)-1
-        Idx = deltaDays{midx}>deltaDaysBins(binid)&deltaDays{midx}<=deltaDaysBins(binid+1);
+        Idx = deltaDays{midx} > deltaDaysBins(binid) & deltaDays{midx} <= deltaDaysBins(binid+1);
         pSinceAppearance(binid,midx) = nanmean(UPres(Idx));
     end
 
 
-%     % unitProbaMatch will contain the units only once, which means that
-%     % can't be used to compute the "average" proba.
-%     % Will have to do it day by day until I find something smarter...
-%     % Takes way too long! :(
-%     tic
-%     fprintf('Computing probabilities.')
-%     popProbaMatch{midx} = nan(size(deltaDays{midx}));
-%     idxMatched = MatchTable.UID1 == MatchTable.UID2;
-%     UID = MatchTable.UID1;
-%     for dd1 = 1:numel(days{midx})
-%         for dd2 = 1:numel(days{midx})
-%             sessIdx = MatchTable.RecSes1 == dd1 & MatchTable.RecSes2 == dd2;
-%             nMatched = numel(unique(UID(idxMatched & sessIdx))); % number of matched units from day 1
-%             nTot = numel(unique(UID(sessIdx))); % total number of units on day 1
-%             popProbaMatch{midx}(dd1,dd2) = nMatched/nTot;
-%         end
-%     end
-%     popProbaMatch{midx}(eye(size(popProbaMatch{midx}))==1) = nan; % remove diagonal
-% 
-%     popProbaMatch_Uni = nan(1,numel(deltaDaysUni{midx}));
-%     for dd = 1:numel(deltaDaysUni{midx})
-%         popProbaMatch_Uni(dd) = nanmean(popProbaMatch{midx}(deltaDays{midx} == deltaDaysUni{midx}(dd)));
-%     end
-%     toc
+    % Takes way too long! :(
+    if computeFuncScores
+        tic
+        fprintf('Computing probabilities. ')
+        %     popProbaMatch{midx} = nan(size(deltaDays{midx}));
+        popCorr.ISI{midx} = nan(size(deltaDays{midx}));
+        popCorr.natImResp{midx} = nan(size(deltaDays{midx}));
+        popCorr.refPop{midx} = nan(size(deltaDays{midx}));
+        idxMatched = MatchTable.UID1 == MatchTable.UID2;
+        UID = MatchTable.UID1;
+        for dd1 = 1:numel(days{midx})
+            fprintf('Day %d.\n', dd1)
+            for dd2 = 1:numel(days{midx})
+                sessIdx = MatchTable.RecSes1 == dd1 & MatchTable.RecSes2 == dd2;
+                unitIdx = sessIdx & ismember(MatchTable.UID1, unique(UID(sessIdx)))& idxMatched;
+                popCorr.ISI{midx}(dd1,dd2) = nanmedian(MatchTable(unitIdx, :).ISICorr);
+                popCorr.natImResp{midx}(dd1,dd2) = nanmedian(MatchTable(unitIdx, :).natImRespCorr);
+                popCorr.refPop{midx}(dd1,dd2) = nanmedian(MatchTable(unitIdx, :).refPopCorr);
+                %             nMatched = numel(unique(UID(idxMatched & sessIdx))); % number of matched units from day 1
+                %             nTot = numel(unique(UID(sessIdx))); % total number of units on day 1
+                %             popProbaMatch{midx}(dd1,dd2) = nMatched/nTot;
+            end
+        end
+        %     popProbaMatch{midx}(eye(size(popProbaMatch{midx}))==1) = nan; % remove diagonal
+
+        %     popProbaMatch_Uni = nan(1,numel(deltaDaysUni{midx}));
+        for binid = 1:length(deltaDaysBins)-1
+            Idx = deltaDays{midx} > deltaDaysBins(binid) & deltaDays{midx} <= deltaDaysBins(binid+1);
+            popCorr_Uni.ISI(binid,midx) = nanmean(popCorr.ISI{midx}(Idx));
+            popCorr_Uni.natImResp(binid,midx) = nanmean(popCorr.natImResp{midx}(Idx));
+            popCorr_Uni.refPop(binid,midx) = nanmean(popCorr.refPop{midx}(Idx));
+            %         popProbaMatch_Uni(dd) = nanmean(popProbaMatch{midx}(Idx));
+        end
+        toc
+    end
 
     %% Plots
     if PlotIndividualMice
@@ -124,10 +143,10 @@ for midx = 1:length(UMFiles)
         xticklabels(num2str(days{midx}'))
         % 
         % Probe of matching a unit
-        figure;
-        plot(deltaDaysUni{midx},popProbaMatch_Uni,'k')
-        ylabel('P(match)')
-        xlabel('Delta days')
+%         figure;
+%         plot(deltaDaysUni{midx},popProbaMatch_Uni,'k')
+%         ylabel('P(match)')
+%         xlabel('Delta days')
 
         figure;
         [~,sortIdx] = sort(nanmean(unitProbaMatch{midx},1),'descend');
@@ -139,7 +158,7 @@ for midx = 1:length(UMFiles)
         xlabel('Delta days')
 
         figure;
-        subplot(1,2,1)
+        subplot(1,3,1)
         imagesc(UPres)
         set(gca,'XTick',1:length(days{midx}),'XTickLabel',days{midx},'yTick',1:length(days{midx}),'yTickLabel',days{midx})
         c = colormap('gray'); c = flipud(c); colormap(c)
@@ -149,7 +168,7 @@ for midx = 1:length(UMFiles)
         xlabel('Delta days')
         makepretty
 
-        subplot(1,2,2)
+        subplot(1,3,2)
         plot(pSinceAppearance(:,midx),'k')
         xlabel('delta Days')
         ylabel('P(match)')
@@ -157,9 +176,20 @@ for midx = 1:length(UMFiles)
         ylabel('P(match)')
         makepretty
 
+        subplot(1,3,3); hold all
+        plot(popCorr_Uni.ISI(:,midx),'k')
+        plot(popCorr_Uni.natImResp(:,midx),'r')
+        plot(popCorr_Uni.refPop(:,midx),'b')
+        xlabel('delta Days')
+        ylabel('Functional score')
+        set(gca,'XTick',1:numel(deltaDaysBins)-1,'XTickLabel',yTickLabels)
+        ylabel('P(match)')
+        makepretty
+
     end
 end
 
+%%
 figure;
 subplot(1,2,1)
 hold on
@@ -180,6 +210,33 @@ xlabel('delta Days')
 ylabel('P(match)')
 makepretty
 offsetAxes
+
+figure
+fnames = fieldnames(popCorr_Uni);
+for ff = 1:numel(fnames)
+    subplot(1,numel(fnames)+1,ff)
+    hold on
+    for midx = 1:length(UMFiles)
+        plot(popCorr_Uni.(fnames{ff})(:,midx),'color',groupColor(groupVector(midx),:))
+    end
+    xlabel('delta Days')
+    set(gca,'XTick',1:numel(deltaDaysBins)-1,'XTickLabel',yTickLabels)
+    ylabel('Functional score')
+    makepretty
+    offsetAxes
+end
+
+subplot(1,numel(fnames)+1,numel(fnames)+1)
+hold on
+shadedErrorBar(1:size(popCorr_Uni.ISI,1),nanmean(popCorr_Uni.ISI,2),nanstd(popCorr_Uni.ISI,[],2),'transparent',1)
+shadedErrorBar(1:size(popCorr_Uni.natImResp,1),nanmean(popCorr_Uni.natImResp,2),nanstd(popCorr_Uni.natImResp,[],2),'transparent',1)
+shadedErrorBar(1:size(popCorr_Uni.refPop,1),nanmean(popCorr_Uni.refPop,2),nanstd(popCorr_Uni.refPop,[],2),'transparent',1)
+set(gca,'XTick',1:numel(deltaDaysBins)-1,'XTickLabel',yTickLabels)
+xlabel('delta Days')
+ylabel('Functional score')
+makepretty
+offsetAxes
+
 
 
 % %% Summary plots
