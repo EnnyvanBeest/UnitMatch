@@ -357,17 +357,17 @@ while ~flag
             [UniqueAreas{shid},IA{shid},IC{shid}] = unique((histinfo.RegionAcronym(histinfo.shank==shid)),'stable');
         end
     elseif isstruct(histinfo)&& isfield(histinfo,'probe_ccf')
-        Error('Not yet adapted for multiple shanks')
+        warning('Not yet adapted for multiple shanks')
         if ~surfacefirst
-            areapoints = (linspace(startpoint,endpoint,length(histinfo.probe_ccf.trajectory_coords)));
+            areapoints{shid} = (linspace(startpoint,endpoint,length(histinfo.probe_ccf.trajectory_coords)));
         else
-            areapoints = (linspace(endpoint,startpoint,length(histinfo.probe_ccf.trajectory_coords)));
+            areapoints{shid} = (linspace(endpoint,startpoint,length(histinfo.probe_ccf.trajectory_coords)));
         end
         histinfo.probe_ccf.trajectory_acronyms = acronyms(histinfo.probe_ccf.trajectory_areas);
-        [UniqueAreas,IA,IC] = unique(histinfo.probe_ccf.trajectory_acronyms,'stable');
+        [UniqueAreas{shid},IA{shid},IC{shid}] = unique(histinfo.probe_ccf.trajectory_acronyms,'stable');
         histinfo.RegionAcronym = histinfo.probe_ccf.trajectory_acronyms;
     else
-        Error('Not yet adapted for multiple shanks')
+        error('Not yet adapted for multiple shanks')
         areapoints = nan(1,max(channel)+1);
         histinfo.RegionAcronym  = cell(1,max(channel)+1);
         for chid = 1:max(channel)+1
@@ -381,7 +381,7 @@ while ~flag
         end
         histinfo.RegionAcronym(ismember(histinfo.RegionAcronym,'void')) = {'root'};
         
-        [UniqueAreas,IA,IC] = unique(fliplr(histinfo.RegionAcronym),'stable');
+        [UniqueAreas{shid},IA{shid},IC{shid}] = unique(fliplr(histinfo.RegionAcronym),'stable');
     end
     UniqueAreas = cellfun(@(X) lower(X),UniqueAreas,'UniformOutput',0); % case insensitive
     switchpoints = cellfun(@(X) [1; find(diff(X)~=0)+1],IC,'UniformOutput',0); %Find points where region changes

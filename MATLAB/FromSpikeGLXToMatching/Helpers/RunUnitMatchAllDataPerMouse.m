@@ -142,6 +142,11 @@ for midx = 1:length(MiceOpt)
                 PipelineParams.AllProbeSN = PipelineParams.AllProbeSN(idx);
                 PipelineParams.RawDataPaths = PipelineParams.RawDataPaths(idx);
                 PipelineParams.KSDir = AllKiloSortPaths(idx);
+
+                % Convert2Yuanetal(PipelineParams.KSDir,fullfile('H:\MatchingUnits\Yuan\AcrossManyDays\',MiceOpt{midx}))
+                % % to compare to Yuan (makes the data according to their
+                % format, then you need to download their pipeline to run
+                % it)
             end
 
             %% Prepare personal save/directory and decompressed data paths
@@ -163,6 +168,7 @@ for midx = 1:length(MiceOpt)
 
             if isempty(UnitMatchExist) || PipelineParams.RedoUnitMatch || UnitMatchExist.date<FromDate
 
+                UMtime = tic;
                 %% Get clusinfo
                 clusinfo = getClusinfo(UMparam.KSDir);
                 if ~any(clusinfo.Good_ID) || sum(clusinfo.Good_ID)<UMparam.minGoodUnits
@@ -176,6 +182,7 @@ for midx = 1:length(MiceOpt)
                 if UMparam.AssignUniqueID
                     [UniqueIDConversion, MatchTable] = AssignUniqueID(UMparam.SaveDir);
                 end
+                UMtime = toc(UMtime)
 
                 %% Visualization
                 % PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)

@@ -266,6 +266,29 @@ def currate_matches(MatchesGUI, IsMatch, NotMatch, Mode = 'And'):
 
     return Matches
 
+def paths_fromKS(KSdirs):
+    nSessions = len(KSdirs)
+
+    #Load ChannelPos
+    ChannelPos = []
+    for i in range(nSessions):
+        PathTmp = os.path.join(KSdirs[i], 'channel_positions.npy')
+        PosTmp = np.load(PathTmp)
+        #  Want 3-D posiotns, however at the moment code only needs 2-D so add 1's to 0 axis position
+        PosTmp = np.insert(PosTmp, 0, np.ones(PosTmp.shape[0]), axis = 1)
+        ChannelPos.append(PosTmp)
+
+    UnitLabelPaths = []
+    # load Good unit Paths
+    for i in range(nSessions):
+        UnitLabelPaths.append( os.path.join(KSdirs[i], 'cluster_group.tsv'))
+
+    WavePaths = []
+    for i in range(nSessions):
+        WavePaths.append( os.path.join(KSdirs[i], 'RawWaveforms'))
+    
+    return WavePaths, UnitLabelPaths, ChannelPos
+
 ##########################################################################################################################
 #The folowing functions are the old way of reading in units, is slower and will not work if unit are missing e.g 1,2,4
 

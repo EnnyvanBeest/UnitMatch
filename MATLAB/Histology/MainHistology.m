@@ -239,11 +239,23 @@ for midx = 1:length(MiceOpt)
                 
                 
                 %% Get cluster information
-                clear params
-                params.loadPCs=true;
-                params.thisdate = thisdate;
-                PrepareClusInfo
-                
+                  PipelineParams.thisdate = thisdate;
+                PipelineParams.SaveDir = fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe);
+                 try
+                     [clusinfo, sp, Params]  = LoadPreparedClusInfo(subsesopt,PipelineParams);
+                catch ME
+                    disp(ME)
+                    PipelineParams = ExtractKilosortData(subsesopt,PipelineParams);
+                     [clusinfo, sp, Params]  = LoadPreparedClusInfo(subsesopt,PipelineParams);
+                end
+                % This extracts the parameters within clusinfo and sp
+                % struct for further analysis
+                % ExtractFields({sp,clusinfo})
+                % clear params
+                % params.loadPCs=true;
+                % params.thisdate = thisdate;
+                % PrepareClusInfo
+                % 
                 %% Get LFP?
                 myLFDir = fullfile(DataDir{DataDir2Use(midx)},MiceOpt{midx},thisdate,'ephys');
                 lfpD = dir(fullfile([myLFDir '*'], '**\*.lf.*bin')); % lf file from spikeGLX specifically
