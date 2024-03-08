@@ -2,10 +2,10 @@
 
 %% User Input
 %% Path information
-DataDir = {'H:\MatchingUnits\RawData'};% ;%Raw data folders, typically servers were e.g. *.cbin files are stored
-SaveDir = 'H:\MatchingUnits\ArtificialDriftOutput'; %'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\2ConsecutiveDays\Stitched';%'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\MonthApart\Stitched';%%'H:\MatchingUnits\Output\MonthApartStitched'% 'H:\MatchingUnits\Output\NotConcatenated';%'\\znas.cortexlab.net\Lab\Share\Celian\UnitMatch\MatchTables\NewSep27\MonthApart\Stitched'% %%;% %'H:\MatchingUnits\Output\ManyRecordings'%Folder where to store the results
+DataDir = {'H:\MatchingUnits\RawData'};% {'H:\MatchingUnits\RawDataMonthApart'};% ;%Raw data folders, typically servers were e.g. *.cbin files are stored
+SaveDir = 'H:\MatchingUnits\Output';%'H:\MatchingUnits\OutputMonthApart'; %'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\2ConsecutiveDays\Stitched';%'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\MonthApart\Stitched';%%'H:\MatchingUnits\Output\MonthApartStitched'% 'H:\MatchingUnits\Output\NotConcatenated';%'\\znas.cortexlab.net\Lab\Share\Celian\UnitMatch\MatchTables\NewSep27\MonthApart\Stitched'% %%;% %'H:\MatchingUnits\Output\ManyRecordings'%Folder where to store the results
 tmpdatafolder = 'H:\OpenEphys_Example\Tmp'; % temporary folder for temporary decompression of data 
-KilosortDir = 'H:\MatchingUnits\KilosortOutput'; % '\\znas.cortexlab.net\Lab\Share\Enny\UnitMatch\KSComparisonSubset';%'\\znas.cortexlab.net\Lab\Share\Enny\UnitMatch\KilosortOutputMonthApart';%'H:\MatchingUnits\KilosortOutputMonthApart';%'\\znas.cortexlab.net\Lab\Share\Celian\UnitMatch\KilosortOutputMonthApart';% Kilosort output folder
+KilosortDir = 'H:\MatchingUnits\KilosortOutput';%'H:\MatchingUnits\KilosortOutputMonthApart';%'\\znas.cortexlab.net\Lab\Share\Enny\UnitMatch\KSComparisonSubset';%'\\znas.cortexlab.net\Lab\Share\Enny\UnitMatch\KilosortOutputMonthApart';%'H:\MatchingUnits\KilosortOutputMonthApart';%'\\znas.cortexlab.net\Lab\Share\Celian\UnitMatch\KilosortOutputMonthApart';% Kilosort output folder
 GithubDir = 'C:\Users\EnnyB\Documents\GitHub'; % Github directory
 PythonEXE = 'C:\Users\EnnyB\anaconda3\envs\pyks2_debug\pythonw.exe' % Python version to run python code in:
 
@@ -16,12 +16,13 @@ RecordingType = repmat({'Chronic'},1,length(MiceOpt)); % And whether recordings 
 RecordingType(ismember(MiceOpt,{''}))={'Acute'}; %EB014', % Or maybe acute?
 
 %% Parameters on how to prepare units/data for analysis
-PipelineParams.RunPyKSChronicStitched = 1; % Default 0. if 1, run PyKS chronic recordings stitched when same IMRO table was used
+PipelineParams.RunPyKSChronicStitched = 0; % Default 0. if 1, run PyKS chronic recordings stitched when same IMRO table was used
 PipelineParams.CopyToTmpFirst = 1; % If 1, copy data to local first, don't run from server (= advised!)
 PipelineParams.DecompressLocal = 1; % If 1, uncompress data first if it's currently compressed (= necessary for unitmatch and faster for QualityMetrics)
 
 % Storing preprocessed data?
-PipelineParams.ReLoadAlways = 0; % If 1, SP & Clusinfo are always loaded from KS output
+PipelineParams.ExtractNewDataNow = 0; % If data is not (yet) extracted, don't bother for now if 0
+PipelineParams.ReLoadAlways = 1; % If 1, SP & Clusinfo are always loaded from KS output
 PipelineParams.saveSp = 1; % Save SP struct for easy loading of preprocessed data
 PipelineParams.binsz = 0.01; %Bin size for PSTHs in seconds
 
@@ -46,8 +47,8 @@ PipelineParams.Scores2Include = {'CentroidDist','WavformSim','CentroidOverlord',
 PipelineParams.ApplyExistingBayesModel = 0; %If 1, use probability distributions made available by us - 
 PipelineParams.AssignUniqueID = 1; % Assign UniqueID 
 PipelineParams.GoodUnitsOnly = 1; % Include only good untis in the UnitMatch analysis - faster and more sensical
-PipelineParams.MakePlotsOfPairs = 0; % Plots pairs for inspection (UnitMatch)
-PipelineParams.GUI = 1; % Flick through and do manual curation of matching - only works if MakePlotsofPairs = 1
+PipelineParams.MakePlotsOfPairs =0; % Plots pairs for inspection (UnitMatch)
+PipelineParams.GUI = 0; % Flick through and do manual curation of matching - only works if MakePlotsofPairs = 1
 
 %% Automatic from here
 PipelineParams.SaveDir = SaveDir; % Save results here
@@ -91,18 +92,20 @@ end
 
 %% Actual pipeline
 %% PyKS - run pykilosort from Matlab/Python integration
-RunPyKS2_FromMatlab
+if PipelineParams.ExtractNewDataNow
+    RunPyKS2_FromMatlab
+end
 
 %% Runs unitmatch across all data from a mouse to generate a table
 RunUnitMatchAllDataPerMouse
 
 %% Across Mice Graphs
 % SummarizeAcrossMice
-
-FromDate = datetime("2023-10-02 13:00:00");
+FromDate = datetime("2024-02-26 09:00:00");
 UMFiles = cell(1,0); % Define your UMfolders here or use below:
 groupvec = nan(1,0);
 if ~exist('UMFiles') || isempty(UMFiles) % When using the example pipeline this may be useful:
+    countid = 0;
     for midx = 1:length(MiceOpt)
         fprintf('Reference %s...\n', MiceOpt{midx})
         % Identify all UM tables
@@ -110,16 +113,22 @@ if ~exist('UMFiles') || isempty(UMFiles) % When using the example pipeline this 
         if isempty(tmpfile) 
             continue
         end
-        for id = 1:length(tmpfile)
-            if datetime(tmpfile(id).date) >FromDate 
-%                AssignUniqueID(fullfile(tmpfile(id).folder,tmpfile(id).name));
+        countid = countid+1;
 
+        for id = 1:length(tmpfile)
+            if datetime(tmpfile(id).date) > FromDate % && any(cell2mat(cellfun(@(X) any(strfind(fullfile(tmpfile(id).folder,tmpfile(id).name),X)),UMFiles2Take,'Uni',0)))
                 %             FolderParts = strsplit(tmpfile(id).folder,filesep);
                 %             idx = find(ismember(FolderParts,MiceOpt{midx}));
                 UMFiles = cat(2,UMFiles,fullfile(tmpfile(id).folder,tmpfile(id).name));
-                groupvec = cat(2,groupvec,midx);
+                groupvec = cat(2,groupvec,countid);
+%             elseif datetime(tmpfile(id).date)<FromDate
+%                 rmdir(tmpfile(id).folder,'s')
+
             end
         end
     end
 end
-summaryFunctionalPlots(UMFiles, 1, groupvec)
+summaryFunctionalPlots(UMFiles, 'Corr', groupvec)
+% summaryFunctionalPlots_Part2(UMFiles, groupvec)
+summaryMatchingPlots(UMFiles)
+trackWithFunctionalMetrics(UMFiles)

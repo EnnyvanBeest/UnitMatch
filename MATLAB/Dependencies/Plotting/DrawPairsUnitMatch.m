@@ -81,6 +81,41 @@ if UMparam.RunPyKSChronicStitched
     Pairs = cat(2, Pairs, arrayfun(@(X) PairsPKS(X, :), 1:length(PairsPKS), 'Uni', 0)); % Add these for plotting - inspection
 end
 
+% Functional scores?
+if all(ismember({'refPopRank','ISIRank'},MatchTable.Properties.VariableNames))
+    FunctionalLabel = reshape(MatchTable.refPopRank,nclus,nclus)==1 & reshape(MatchTable.ISIRank,nclus,nclus)==1;
+    [r, c] = find(label == 0 & FunctionalLabel == 1);
+    PairsFunc = cat(2, r, c);
+    PairsFunc(r == c, :) = [];
+    PairsFunc = sort(PairsFunc, 2, 'ascend');
+    PairsFunc = unique(PairsFunc, 'stable', 'rows');
+    Pairs = cat(2, Pairs, arrayfun(@(X) PairsFunc(X, :), 1:length(PairsFunc), 'Uni', 0)); % Add these for plotting - inspection
+end
+% 
+% % Results from Yuan et al.?
+% if exist(fullfile(UMparam.SaveDir,'Yuan_Output.mat'))
+%     tmp = load(fullfile(UMparam.SaveDir,'Yuan_Output.mat'));
+%     all_matches = tmp.output.all_results_post;
+%     thresh_match_ind = all_matches(:,7) < 10;
+%     thresh_matches = all_matches(thresh_match_ind,:);
+%     d2label = thresh_matches(:,2);
+%     d1label = thresh_matches(:,3);
+% 
+%     PairsYuan = [];
+%     for id = 1:length(d1label)
+%         try
+%             PairsYuan = cat(1,PairsYuan,[find(OriID == d1label(id) & recses == 1) find(OriID == d2label(id) & recses == 2)])
+%         catch
+% 
+%         end
+%     end
+%     PairsYuan = arrayfun(@(X) {PairsYuan(X,:)},1:size(PairsYuan,1));
+%     Pairs = cat(2,PairsYuan,Pairs);
+% 
+% end
+
+
+
 if DrawBlind
     % Keep length 2 for each pair
     tmptbl = dir(fullfile(UMparam.SaveDir, 'BlindFigures', 'BlindTable.mat'));

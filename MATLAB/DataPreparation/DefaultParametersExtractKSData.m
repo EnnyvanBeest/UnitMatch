@@ -27,6 +27,9 @@ end
 if ~isfield(Params,'ReLoadAlways')
     Params.ReLoadAlways = 0; % Always reprep data, even if we already have a saved set?
 end
+if ~isfield(Params,'ExtractNewDataNow')
+    Params.ExtractNewDataNow = 1; % If data is not (yet) extracted, don't bother for now if 0
+end
 if ~isfield(Params,'deNoise')
     Params.deNoise = 1; % Calls RemoveNoiseAmplitudeBased for average channel based removal of noise
 end
@@ -69,7 +72,7 @@ if ~isfield(Params,'RunPyKSChronicStitched')
 end
 %% Paramseters only used for compute functional scores
 if ~isfield(Params,'ACGbinSize')
-    Params.ACGbinSize = 1E-03; %
+    Params.ACGbinSize = 1E-4; %
 end
 if ~isfield(Params,'ACGduration')
     Params.ACGduration = 1; % in seconds

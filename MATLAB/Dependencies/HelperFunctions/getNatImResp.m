@@ -1,4 +1,4 @@
-function [spikeData,proc] = getNatImResp(spikesAll,expFolders,binFileRef,proc)
+function [spikeData,proc,imageOnsetTimesAll,imageOffsetTimesAll,imageIDsAll] = getNatImResp(spikesAll,expFolders,binFileRef,proc)
     %%% Load natural images responses
     % spikesAll.times: spike times
     % spikesAll.clusters: cluster ID for each spike
@@ -14,7 +14,7 @@ function [spikeData,proc] = getNatImResp(spikesAll,expFolders,binFileRef,proc)
         gw = gausswin(proc.smoothSize,3);
         proc.smWin = gw./sum(gw);
     end
-    nBins = int64((proc.window(2) - proc.window(1) + proc.window(4) - proc.window(3))/proc.binSize);
+    nBins = int64(floor((proc.window(2) - proc.window(1) + proc.window(4) - proc.window(3))/proc.binSize));
 
     clusters.IDs = spikesAll.clusterIDs;
 
@@ -22,7 +22,7 @@ function [spikeData,proc] = getNatImResp(spikesAll,expFolders,binFileRef,proc)
     for ee = 1:numel(expFolders)
         expFolder = expFolders{ee};
         blockFile = dir(fullfile(expFolder,'*Block*'));
-        load(fullfile(blockFile.folder,blockFile.name));
+        load(fullfile(blockFile.folder,blockFile.name),'block');
         
         if contains(block.rigName,'zelda')
             % Zelda exp -- already aligned.
@@ -61,21 +61,29 @@ function [spikeData,proc] = getNatImResp(spikesAll,expFolders,binFileRef,proc)
                 error('Problem with ephys ref, cannot find its alignment')
             end
 
-            % Get spikes time -- in timeline time
-            spikes.times = interp1(alignment.ephys(probeNum).originTimes, alignment.ephys(probeNum).timelineTimes, spikesAll.times, 'linear', nan);
-            nanIdx = isnan(spikes.times);
-
-            if any(nanIdx)
-                refOffsets = alignment.ephys(probeNum).timelineTimes(:)-alignment.ephys(probeNum).originTimes(:);
-                offSetsPerPoint = interp1(alignment.ephys(probeNum).originTimes, refOffsets, spikesAll.times, 'nearest', 'extrap');
-
-                spikes.times(nanIdx) = spikesAll.times(nanIdx)+offSetsPerPoint(nanIdx);
-            end
-            
-            expLength = block.duration;
-            spk2keep = (spikes.times>0) & (spikes.times<expLength);
+            % Get image onsets / offsets in spike time
+            imageOnsetTimes = interp1(alignment.ephys(probeNum).timelineTimes, alignment.ephys(probeNum).originTimes, imageOnsetTimes, 'linear', nan);
+            imageOffsetTimes = interp1(alignment.ephys(probeNum).timelineTimes, alignment.ephys(probeNum).originTimes, imageOffsetTimes, 'linear', nan);
+            spikes = spikesAll;
+            spk2keep = (spikes.times>imageOnsetTimes(1)-10) & (spikes.times<max(imageOnsetTimes)+10);
             spikes.times = spikes.times(spk2keep);
             spikes.clusters = spikesAll.clusters(spk2keep);
+% 
+%             % Get spikes time -- in timeline time
+%             spikes.times = interp1(alignment.ephys(probeNum).originTimes, alignment.ephys(probeNum).timelineTimes, spikesAll.times, 'linear', nan);
+%             nanIdx = isnan(spikes.times);
+% 
+%             if any(nanIdx)
+%                 refOffsets = alignment.ephys(probeNum).timelineTimes(:)-alignment.ephys(probeNum).originTimes(:);
+%                 offSetsPerPoint = interp1(alignment.ephys(probeNum).originTimes, refOffsets, spikesAll.times, 'nearest', 'extrap');
+% 
+%                 spikes.times(nanIdx) = spikesAll.times(nanIdx)+offSetsPerPoint(nanIdx);
+%             end
+%             
+%             expLength = block.duration;
+%             spk2keep = (spikes.times>0) & (spikes.times<expLength);
+%             spikes.times = spikes.times(spk2keep);
+%             spikes.clusters = spikesAll.clusters(spk2keep);
         
         elseif contains(block.rigName,'zgood')
             % Kilotrode
@@ -110,6 +118,10 @@ function [spikeData,proc] = getNatImResp(spikesAll,expFolders,binFileRef,proc)
             imageIDs = block.events.numValues;
         end
 
+        nanIdx = isnan(imageOnsetTimes) | isnan(imageOffsetTimes);
+        imageOnsetTimes(nanIdx) = [];
+        imageOffsetTimes(nanIdx) = [];
+
         nClusters = numel(clusters.IDs);
         nTrials = numel(imageOnsetTimes);
         baSmtmp = zeros(nTrials, nBins, nClusters);
@@ -139,12 +151,20 @@ function [spikeData,proc] = getNatImResp(spikesAll,expFolders,binFileRef,proc)
         % not optimal here?
         trials = imageIDs(1:nTrials);
         trialid = unique(trials);
-        baSm{ee} = nan(numel(trialid), nBins, nClusters, ceil(nTrials/numel(trialid)));
+        baSm{ee} = nan(112, nBins, nClusters, ceil(nTrials/numel(trialid)));
         for tt = 1:numel(trialid)
             idxrep = trials == trialid(tt);
-            baSm{ee}(tt,:,:,1:sum(idxrep)) = permute(baSmtmp(idxrep,:,:),[2 3 1]);
+            baSm{ee}(trialid(tt),:,:,1:sum(idxrep)) = permute(baSmtmp(idxrep,:,:),[2 3 1]);
         end
+
+        % save onset/offset times
+        imageOnsetTimesAll{ee} = imageOnsetTimes;
+        imageOffsetTimesAll{ee} = imageOffsetTimes;
+        imageIDsAll{ee} = trials;
     end
     spikeData = cat(4,baSm{:});
+    imageOnsetTimesAll = cat(1,imageOnsetTimesAll{:});
+    imageOffsetTimesAll = cat(1,imageOffsetTimesAll{:});
+    imageIDsAll = cat(1,imageIDsAll{:});
 end
    

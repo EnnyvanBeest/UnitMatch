@@ -1,6 +1,7 @@
 function param = ExtractSimilarityMetrics(Scores2Include,AllWVBParameters,clusinfo,param,drawthis)
 
-
+anglecorr = 0;  % Cross tested, 0 seems best
+UseFlipCombis = 0; % Cross tested, 0 seems best
 %% Extract fields and parameters
 ExtractFields({AllWVBParameters})
 waveidx = param.waveidx;
@@ -154,7 +155,7 @@ ProjectedWaveformNorm = (ProjectedWaveformNorm-nanmin(ProjectedWaveformNorm,[],1
 x1 = repmat(ProjectedWaveformNorm(:,:,1),[1 1 size(ProjectedWaveformNorm,2)]);
 x2 = permute(repmat(ProjectedWaveformNorm(:,:,2),[1 1 size(ProjectedWaveformNorm,2)]),[1 3 2]);
 RawWVMSE = squeeze(nanmean((x1 - x2).^2));
-clear x1 x2
+clear x1 x2 ProjectedWaveformNorm
 
 % sort of Normalize distribution
 RawWVMSENorm = sqrt(RawWVMSE);
@@ -279,7 +280,11 @@ while flag<2
     clear y
 
     % memory efficient?
-    EuclDist = nan(nclus,length(waveidx),length(FlipDim)+1,nclus);
+    if UseFlipCombis
+        EuclDist = nan(nclus,length(waveidx),2*(length(FlipDim)+1),nclus);
+    else
+        EuclDist = nan(nclus,length(waveidx),(length(FlipDim)+1),nclus);
+    end
     for batchid1 = 1:nbatch
         idx = (batchid1-1)*batchsz+1:batchsz*batchid1;
         idx(idx>nclus) = [];
@@ -289,7 +294,13 @@ while flag<2
             idx2(idx2>nclus) = [];
 
             x1 = repmat(squeeze(ProjectedLocationPerTPAllFlips(:,idx,waveidx,1,:)),[1 1 1 1 numel(idx2)]);
+            if UseFlipCombis
+                x1 = cat(4,x1,x1(:,:,:,end:-1:1,:));
+            end
             x2 = permute(repmat(squeeze(ProjectedLocationPerTPAllFlips(:,idx2,waveidx,2,:)),[1 1 1 1 numel(idx)]),[1,5,3,4,2]);%Switch the two nclus around
+            if UseFlipCombis
+                x2 = cat(4,x2,x2);
+            end
 
             w = squeeze(isnan(abs(x1(1,:,:,:,:)-x2(1,:,:,:,:))));
             tmpEu = squeeze(vecnorm(x1-x2,2,1)); % Distance
@@ -299,7 +310,7 @@ while flag<2
     end
 
 
-    clear x1 x2
+    clear x1 x2 tmpEu
     % Average location
     CentroidDist = squeeze(nanmin(squeeze(EuclDist(:,param.NewPeakLoc-param.waveidx==0,:,:)),[],2));%
 
@@ -325,17 +336,14 @@ while flag<2
     scores = [CentroidVar(SameIdx(:))', CentroidVar(WithinIdx(:))'];
     paramid = find(ismember(paramNames,'CentroidVar'));
     [x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
-    % @Célian suggestion: recenter to 0 first, then calculate the
-    % difference in distance (to account for uncorrected drift)
-    %     ProjectedLocationPerTPRecentered = permute(permute(ProjectedLocationPerTP,[1,2,4,3]) - ProjectedLocation,[1,2,4,3]);
-    %     x1 = repmat(squeeze(ProjectedLocationPerTPRecentered(:,:,waveidx,1)),[1 1 1 size(ProjectedLocationPerTPRecentered,2)]);
-    %     x2 = permute(repmat(squeeze(ProjectedLocationPerTPRecentered(:,:,waveidx,2)),[1 1 1 size(ProjectedLocationPerTPRecentered,2)]),[1 4 3 2]);
-    %     EuclDist2 = squeeze(sqrt(nansum((x1-x2).^2,1))); % Euclidean distance
-    %     w = squeeze(isnan(abs(x1(1,:,:,:)-x2(1,:,:,:))));
-    %     EuclDist2(w) = nan;
+
     disp('Computing location distances between pairs of units, per individual time point of the waveform, Recentered...')
     ProjectedLocationPerTPRecentered = permute(permute(ProjectedLocationPerTPAllFlips,[1,2,4,3,5]) - ProjectedLocation,[1,2,4,3,5]);
-    EuclDist2 = nan(nclus,length(waveidx),length(FlipDim)+1,nclus);
+    if UseFlipCombis
+        EuclDist2 = nan(nclus,length(waveidx),2*(length(FlipDim)+1),nclus);
+    else
+        EuclDist2 = nan(nclus,length(waveidx),(length(FlipDim)+1),nclus);
+    end
     for batchid1 = 1:nbatch
         idx = (batchid1-1)*batchsz+1:batchsz*batchid1;
         idx(idx>nclus) = [];
@@ -345,7 +353,14 @@ while flag<2
             idx2(idx2>nclus) = [];
 
             x1 = repmat(squeeze(ProjectedLocationPerTPRecentered(:,idx,waveidx,1,:)),[1 1 1 1 numel(idx2)]);
+            if UseFlipCombis
+                x1 = cat(4,x1,x1(:,:,:,end:-1:1,:));
+            end
             x2 = permute(repmat(squeeze(ProjectedLocationPerTPRecentered(:,idx2,waveidx,2,:)),[1 1 1 1 numel(idx)]),[1,5,3,4,2]);%Switch the two nclus around
+            if UseFlipCombis
+                x2 = cat(4,x2,x2);
+            end
+
 
             w = squeeze(isnan(abs(x1(1,:,:,:,:)-x2(1,:,:,:,:))));
             tmpEu = squeeze(vecnorm(x1-x2,2,1)); % Distance
@@ -353,6 +368,7 @@ while flag<2
             EuclDist2(idx,:,:,idx2) = tmpEu; % Euclidean distance
         end
     end
+    clear ProjectedLocationPerTPRecentered tmpEu w
 
 
     clear x1 x2
@@ -364,12 +380,13 @@ while flag<2
     paramid = find(ismember(paramNames,'CentroidDistRecentered'));
     [x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
 
-
-
     CentroidOverlord = (CentroidDistRecentered+CentroidVar)/2;
     scores = [CentroidOverlord(SameIdx(:))', CentroidOverlord(WithinIdx(:))'];
     paramid = find(ismember(paramNames,'CentroidOverlord'));
     [x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
+
+
+    %% Correlation of angles
 
     disp('Computing location angle (direction) differences between pairs of units, per individual time point of the waveform...')
     x1 = ProjectedLocationPerTPAllFlips(:,:,waveidx(2):waveidx(end),:,:);
@@ -379,44 +396,127 @@ while flag<2
     %Use  TrajDist to select angle ehere there is a minimum amount movement
     good_ang = zeros(size(TrajDist));
     good_ang(TrajDist >= param.min_angledist) = 1;
-    % Difference in angle between two time points
-    LocAngle = nan(size(TrajDist,1),size(TrajDist,2),size(TrajDist,3),size(TrajDist,4),0);
-    countid=1;
-    for dimid1=1:size(ProjectedLocationPerTPAllFlips,1)
-        for dimid2=2:size(ProjectedLocationPerTPAllFlips,1)
-            if dimid2<=dimid1
-                continue
+
+    if anglecorr % New method
+
+        % New method dot product
+        % Normalize the direction vectors
+        v1 = x1 ./ repmat(vecnorm(x1,2,1),[3,1,1,1,1]);
+        v2 = x2 ./ repmat(vecnorm(x2,2,1),[3,1,1,1,1]);
+
+        % Compute the dot product between the normalized direction vectors
+        dot_product = squeeze(dot(v1, v2));
+        clear v1 v2
+
+        % Compute the angle between the lines (in radians)
+        LocAngle = acos(dot_product);
+        LocAngle(~good_ang) = nan; % Too little distance travelled is noisy
+
+        % Add points for not having nans
+        x1 = good_ang(:,:,1,1);
+        x2 = good_ang(:,:,2,1)';
+        WaveformDurationPoints = (x1*x2); % overlap in waveformduration?
+
+        % Correlation of angles
+        x1 = reshape(permute(squeeze(LocAngle(:,:,1,:)),[2 1 3]), [size(LocAngle,2), nclus*size(LocAngle,4)]);
+        x2 = reshape(permute(squeeze(LocAngle(:,:,2,:)),[2 1 3]), [size(LocAngle,2), nclus*size(LocAngle,4)]);
+        rho = corr(x1,x2, 'Rows','Pairwise','Type','Pearson');
+        rho = reshape(permute(reshape(rho,[nclus,size(LocAngle,4),nclus,size(LocAngle,4)]),[1 3 2 4]),[nclus,nclus,size(LocAngle,4)^2]);
+        % Take only two dimensions?
+        if ~UseFlipCombis
+            rho = rho(:,:,[1,3]);
+        end
+        TrajAngleSim = atanh(squeeze(nanmax(rho,[],3))).*sqrt(WaveformDurationPoints);% Multiply by sqrt of number time points (otherwise regression to 0)); % maximum across flips
+        % Continue here
+        TrajAngleSim = (TrajAngleSim-quantile(TrajAngleSim(:),0.01))./(quantile(TrajAngleSim(:),0.99)-quantile(TrajAngleSim(:),0.01));
+        TrajAngleSim(TrajAngleSim<0) = 0;
+        TrajAngleSim(TrajAngleSim>1) = 1;
+        clear x1 x2
+
+        scores = [TrajAngleSim(SameIdx(:))', TrajAngleSim(WithinIdx(:))'];
+        paramid = find(ismember(paramNames,'TrajAngleSim'));
+        [x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
+
+    else
+
+        % Difference in angle between two time points
+        LocAngle = nan(size(TrajDist,1),size(TrajDist,2),size(TrajDist,3),size(TrajDist,4),0);
+        countid=1;
+        for dimid1=1:size(ProjectedLocationPerTPAllFlips,1)
+            for dimid2=2:size(ProjectedLocationPerTPAllFlips,1)
+                if dimid2<=dimid1
+                    continue
+                end
+                LocAngle(:,:,:,:,countid) = squeeze(atan(abs(x1(dimid1,:,:,:,:)-x2(dimid1,:,:,:,:))./abs(x1(dimid2,:,:,:,:)-x2(dimid2,:,:,:,:)))) .* good_ang;
+                countid = countid + 1;
             end
-            LocAngle(:,:,:,:,countid) = squeeze(atan(abs(x1(dimid1,:,:,:,:)-x2(dimid1,:,:,:,:))./abs(x1(dimid2,:,:,:,:)-x2(dimid2,:,:,:,:)))) .* good_ang;
-            countid = countid + 1;
+        end
+        clear good_ang
+
+        % Sum the angles across dimensions
+        LocAngle = nansum(LocAngle,5);
+
+        clear x1 x2
+        if UseFlipCombis
+            AngleSubtraction = nan(nclus,length(waveidx)-1,2*(length(FlipDim)+1),nclus);
+        else
+            AngleSubtraction = nan(nclus,length(waveidx)-1,(length(FlipDim)+1),nclus);
+        end
+        for batchid1 = 1:nbatch
+            idx = (batchid1-1)*batchsz+1:batchsz*batchid1;
+            idx(idx>nclus) = [];
+            for batchid2 = 1:nbatch
+
+                idx2 = (batchid2-1)*batchsz+1:batchsz*batchid2;
+                idx2(idx2>nclus) = [];
+                % Actually just taking the weighted sum of angles is better
+                x1 = repmat(squeeze(LocAngle(idx,:,1,:)),[1 1 1 length(idx2)]);
+                x2 = permute(repmat(squeeze(LocAngle(idx2,:,2,:)),[1 1 1 length(idx)]),[4 2 3 1]); %switch nclus around
+                if UseFlipCombis
+                    x1 = cat(3,x1,x1(:,:,end:-1:1,:));
+                end
+                if UseFlipCombis
+                    x2 = cat(3,x2,x2);
+                end
+                AngleSubtraction(idx,:,:,idx2) = abs(x1-x2);
+            end
+        end
+        AngleSubtraction(isnan(abs(x1-x2))) = 2*pi; %punish points with nan
+        clear x1 x2
+        TrajAngleSim = squeeze(nanmin(nansum(AngleSubtraction,2),[],3)); % sum of angles, minimum across flips
+        clear AngleSubtraction
+        TrajAngleSim = 1-((TrajAngleSim-nanmin(TrajAngleSim(:)))./(quantile(TrajAngleSim(:),0.99)-nanmin(TrajAngleSim(:))));
+        TrajAngleSim(TrajAngleSim<0 | isnan(TrajAngleSim))=0;
+        scores = [TrajAngleSim(SameIdx(:))', TrajAngleSim(WithinIdx(:))'];
+        paramid = find(ismember(paramNames,'TrajAngleSim'));
+        [x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
+
+    end
+
+    %% Continue distance traveled
+    if UseFlipCombis
+        TrajDistSim = nan(nclus,length(waveidx)-1,2*(length(FlipDim)+1),nclus);
+    else
+        TrajDistSim = nan(nclus,length(waveidx)-1,(length(FlipDim)+1),nclus);
+    end
+    for batchid1 = 1:nbatch
+        idx = (batchid1-1)*batchsz+1:batchsz*batchid1;
+        idx(idx>nclus) = [];
+        for batchid2 = 1:nbatch
+
+            idx2 = (batchid2-1)*batchsz+1:batchsz*batchid2;
+            idx2(idx2>nclus) = [];
+
+            x1 = repmat(squeeze(TrajDist(idx,:,1,:)),[1 1 1 length(idx2)]);
+            x2 = permute(repmat(squeeze(TrajDist(idx2,:,2,:)),[1 1 1 length(idx)]),[4 2 3 1]); % switch nclus around
+
+            TrajDistSim(idx,:,:,idx2) = abs(x1-x2);%
         end
     end
 
-    % Sum the angles across dimensions
-    LocAngle = nansum(LocAngle,5);
-
-    clear x1 x2
-
-    % Actually just taking the weighted sum of angles is better
-    x1 = repmat(squeeze(LocAngle(:,:,1,:)),[1 1 1 nclus]);
-    x2 = permute(repmat(squeeze(LocAngle(:,:,2,1)),[1 1 1 nclus]),[4 2 3 1]); %switch nclus around
-    AngleSubtraction = abs(x1-x2);
-    AngleSubtraction(isnan(abs(x1-x2))) = 2*pi; %punish points with nan
-    clear x1 x2
-    TrajAngleSim = squeeze(nanmin(nansum(AngleSubtraction,2),[],3)); % sum of angles, minimum across flips
-    TrajAngleSim = 1-((TrajAngleSim-nanmin(TrajAngleSim(:)))./(quantile(TrajAngleSim(:),0.99)-nanmin(TrajAngleSim(:))));
-    TrajAngleSim(TrajAngleSim<0 | isnan(TrajAngleSim))=0;
-    scores = [TrajAngleSim(SameIdx(:))', TrajAngleSim(WithinIdx(:))'];
-    paramid = find(ismember(paramNames,'TrajAngleSim'));
-    [x,y,~,AUC(paramid)] = perfcurve(labels,scores,1);
-
-    % Continue distance traveled
-    x1 = repmat(squeeze(TrajDist(:,:,1,:)),[1 1 1 nclus]);
-    x2 = permute(repmat(squeeze(TrajDist(:,:,2,:)),[1 1 1 nclus]),[4 2 3 1]); % switch nclus around
     % Distance similarity (subtract for each pair of units)
-    TrajDistCompared = abs(x1-x2);%
     clear x1 x2
-    TrajDistSim = squeeze(nanmin(nansum(TrajDistCompared,2),[],3)); %and take minimum across flips
+    TrajDistSim = squeeze(nanmin(nansum(TrajDistSim,2),[],3)); %and take minimum across flips
     TrajDistSim = sqrt(TrajDistSim); % Make more normal
     TrajDistSim = 1-((TrajDistSim-nanmin(TrajDistSim(:)))./(quantile(TrajDistSim(:),0.99)-nanmin(TrajDistSim(:))));
     TrajDistSim(TrajDistSim<0 | isnan(TrajDistSim))=0;
@@ -693,12 +793,41 @@ while flag<2
     for did = 1:ndays
         tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1)=nan;
     end
-    ha = histcounts(tmp(:),Bins)./sum(~isnan(tmp(:)));
-    [mua, sa] = normfit(tmp(~isnan(tmp)  & tmp<ThrsOpt));
+    % ha = histcounts(tmp(:),Bins)./sum(~isnan(tmp(:)));
+    % [mua, sa] = normfit(tmp(~isnan(tmp)  & tmp<ThrsOpt));
+    % if ~isnan(mua) && mua<muw && ~flag
+    %     ThrsOpt = ThrsOpt-abs(muw-mua); % Correct for general scores being lower across days (e.g. unresolved drift)
+    % end
 
-    if ~isnan(mua) && mua<muw && ~flag
-        ThrsOpt = ThrsOpt-abs(muw-mua); % Correct for general scores being lower across days (e.g. unresolved drift)
+    % Correct for total scores being lower for further away session in
+    % initial phase
+    if ~flag
+        for did1 = 1:ndays
+            for did2 = 1:ndays
+                if did1==did2
+                    continue
+                end
+                tmpacross = tmp(SessionSwitch(did1):SessionSwitch(did1+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1);
+
+                ha = histcounts(tmpacross(:),Bins)./sum(~isnan(tmpacross(:)));
+                [mua, sa] = normfit(tmp(~isnan(tmp)));
+
+                if mua<muw & ~isnan(mua)% Increase totalscore by this much
+                    TotalScore(SessionSwitch(did1):SessionSwitch(did1+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1) = ...
+                        TotalScore(SessionSwitch(did1):SessionSwitch(did1+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1) + (muw-mua);
+                end
+            end
+        end
+        % Redo
+        tmp = TotalScore;
+        % Take centroid dist > maxdist out
+        tmp(EuclDist>param.NeighbourDist)=nan;
+        % Take within session out
+        for did = 1:ndays
+            tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1)=nan;
+        end
     end
+
     if flag  && drawthis
         subplot(2,2,3)
         plot(ScoreVector,hd,'-','color',[0 0.7 0]); hold on; plot(ScoreVector,hnd,'b-')
