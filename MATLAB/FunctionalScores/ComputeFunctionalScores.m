@@ -192,6 +192,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'refPopCorr')) || recomput
         % Check these: should be z1, z2, z3, z12, z13, z23, z123
         VenFig = figure('name','Venn, r=Rank, b=sig, g=Match');
         subplot(2,2,1)
+        try
         Idx = (MatchTable.refPopRank(:) == 1 | MatchTable.refPopSig(:) > SigThrs | MatchTable.MatchProb(:) > 0.5) & ~isnan(MatchTable.refPopRank(:));
         h = venn([sum(MatchTable.refPopRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.refPopSig(Idx)< SigThrs) sum(MatchTable.refPopRank(Idx)>1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.refPopSig(Idx) > SigThrs) ...
             sum(MatchTable.refPopRank(Idx)>1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.refPopSig(Idx)< SigThrs) sum(MatchTable.refPopRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.refPopSig(Idx) > SigThrs) ...
@@ -201,6 +202,8 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'refPopCorr')) || recomput
         axis off
         makepretty
         title('RefPopCor')
+        catch
+        end
 
     end
 end
@@ -255,14 +258,18 @@ if saveFig
     figure(VenFig)
     subplot(2,2,2)
     Idx = (MatchTable.ISIRank(:) == 1 | MatchTable.ISISig(:) > SigThrs | MatchTable.MatchProb(:) > 0.5) & ~isnan(MatchTable.ISIRank(:));
-    h = venn([sum(MatchTable.ISIRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.ISISig(Idx)< SigThrs) sum(MatchTable.ISIRank(Idx)>1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.ISISig(Idx)> SigThrs) ...
-        sum(MatchTable.ISIRank(Idx)>1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.ISISig(Idx)< SigThrs) sum(MatchTable.ISIRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.ISISig(Idx)> SigThrs) ...
-        sum(MatchTable.ISIRank(Idx)==1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.ISISig(Idx)< SigThrs) sum(MatchTable.ISIRank(Idx)>1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.ISISig(Idx)> SigThrs) ...
-        sum(MatchTable.ISIRank(Idx)>1 & MatchTable.ISISig(Idx) > SigThrs & MatchTable.MatchProb(Idx)>0.5)] );
-    axis square
-    axis off
-    makepretty
-    title('ISICor')
+   try
+
+       h = venn([sum(MatchTable.ISIRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.ISISig(Idx)< SigThrs) sum(MatchTable.ISIRank(Idx)>1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.ISISig(Idx)> SigThrs) ...
+           sum(MatchTable.ISIRank(Idx)>1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.ISISig(Idx)< SigThrs) sum(MatchTable.ISIRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.ISISig(Idx)> SigThrs) ...
+           sum(MatchTable.ISIRank(Idx)==1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.ISISig(Idx)< SigThrs) sum(MatchTable.ISIRank(Idx)>1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.ISISig(Idx)> SigThrs) ...
+           sum(MatchTable.ISIRank(Idx)>1 & MatchTable.ISISig(Idx) > SigThrs & MatchTable.MatchProb(Idx)>0.5)] );
+       axis square
+       axis off
+       makepretty
+       title('ISICor')
+       catcy
+   end
 end
 
 %% Get FR difference
@@ -407,6 +414,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'natImRespCorr')) || recom
         % Check these: should be z1, z2, z3, z12, z13, z23, z123
         figure(VenFig)
         subplot(2,2,4)
+        try
         Idx = MatchTable.natImRespRank(:) == 1 | MatchTable.natImRespSig(:) > SigThrs | MatchTable.MatchProb(:) > 0.5;
         h = venn([sum(MatchTable.natImRespRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.natImRespSig(Idx) < SigThrs) sum(MatchTable.natImRespRank(Idx)>1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.natImRespSig(Idx)> SigThrs) ...
             sum(MatchTable.natImRespRank(Idx)>1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.natImRespSig(Idx)< SigThrs) sum(MatchTable.natImRespRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.natImRespSig(Idx)> SigThrs) ...
@@ -416,6 +424,8 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'natImRespCorr')) || recom
         axis off
         makepretty
         title('NatImg')
+        catch
+        end
     end
 
 
