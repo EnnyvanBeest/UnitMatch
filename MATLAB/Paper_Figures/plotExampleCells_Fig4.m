@@ -221,11 +221,11 @@ idx1_2 = sp.spikeTemplates == clu1 & sp.RecSes == sess1 & sp.st > max(sp.st)/2;
 % plot(tClu1_1(tClu1_1>0), CCGClu1_1(tClu1_1>0,1),'k');
 ISI1_1 = histcounts(diff(double(sp.st(idx1_1))),ISIbins, 'Normalization','probability');
 ISI1_2 = histcounts(diff(double(sp.st(idx1_2))),ISIbins, 'Normalization','probability');
-plot(ISIbins(1:end-1), ISI1_2,'color',[0.5 0.5 0.5]);
-plot(ISIbins(1:end-1), ISI1_1,'k');
-xticks([0 0.01 UMparam.ACGduration/2])
-yticks([0 0.2])
-xlabel('Time (s)')
+stairs(ISIbins(1:end-1)*1000, ISI1_2,'color',[0.5 0.5 0.5], 'LineWidth', 2.0);
+stairs(ISIbins(1:end-1)*1000, ISI1_1,'k', 'LineWidth', 2.0);
+xticks([5 50 500])
+yticks([0 0.07])
+xlabel('Time (ms)')
 ylabel('Firing rate (sp/s)')
 set(gca,'XScale','log')
 makepretty
@@ -239,11 +239,11 @@ idx3 = sp.spikeTemplates == clu3 & sp.RecSes == sess1;
 %     ones(size(sp.st(idx3), 1), 1) * 2], 'binSize', UMparam.ACGbinSize, 'duration', UMparam.ACGduration, 'norm', 'rate'); %function
 % plot(tClu3(tClu3>0), CCGClu3(tClu3>0,1),'color',colNonMatches);
 ISI3 = histcounts(diff(double(sp.st(idx3))),ISIbins, 'Normalization','probability');
-plot(ISIbins(1:end-1), ISI1_1,'k');
-plot(ISIbins(1:end-1), ISI3,'color',colNonMatches);
-xticks([0 0.01 UMparam.ACGduration/2])
-yticks([0 0.2])
-xlabel('Time (s)')
+stairs(ISIbins(1:end-1)*1000, ISI1_1,'k', 'LineWidth', 2.0);
+stairs(ISIbins(1:end-1)*1000, ISI3,'color',colNonMatches, 'LineWidth', 2.0);
+xticks([5 50 500])
+yticks([0 0.07])
+xlabel('Time (ms)')
 ylabel('Firing rate (sp/s)')
 set(gca,'XScale','log')
 makepretty
@@ -257,11 +257,11 @@ idx2 = sp.spikeTemplates == clu2 & sp.RecSes == sess2;
 %     ones(size(sp.st(idx2), 1), 1) * 2], 'binSize', UMparam.ACGbinSize, 'duration', UMparam.ACGduration, 'norm', 'rate'); %function
 % plot(tClu2(tClu2>0), CCGClu2(tClu2>0,1),'color',colMatches);
 ISI2 = histcounts(diff(double(sp.st(idx2))),ISIbins, 'Normalization','probability');
-plot(ISIbins(1:end-1), ISI1_1,'k');
-plot(ISIbins(1:end-1), ISI2,'color',colMatches);
-xticks([0 0.01 UMparam.ACGduration/2])
-yticks([0 0.2])
-xlabel('Time (s)')
+stairs(ISIbins(1:end-1)*1000, ISI1_1,'k', 'LineWidth', 2.0);
+stairs(ISIbins(1:end-1)*1000, ISI2,'color',colMatches, 'LineWidth', 2.0);
+xticks([5 50 500])
+yticks([0 0.07])
+xlabel('Time (ms)')
 ylabel('Firing rate (sp/s)')
 set(gca,'XScale','log')
 makepretty
