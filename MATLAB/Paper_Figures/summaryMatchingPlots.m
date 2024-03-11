@@ -56,7 +56,9 @@ for midx = 1:length(UMFiles)
 
     %% For each cluster, find presence and proba of being matched in subsequent recordings
 
-    UIDuni = unique([MatchTable.UID1]);
+    UDtoUse = 'UID1';
+
+    UIDuni = unique([MatchTable.(UDtoUse)]);
     days{midx} = cellfun(@(y) datenum(y), cellfun(@(x) regexp(x.folder,'\\\d*-\d*-\d*\\','match'), UMparam.RawDataPaths, 'uni', 0), 'uni', 0);
     days{midx} = cell2mat(days{midx}) - days{midx}{1};
     deltaDays{midx} = days{midx} - days{midx}';
@@ -66,7 +68,7 @@ for midx = 1:length(UMFiles)
     deltaDaysUniBins = [deltaDaysUni{midx}-0.5; deltaDaysUni{midx}(end)+0.5];
     unitProbaMatch{midx} = zeros(numel(deltaDaysUni{midx}), numel(UIDuni));
     for uidx = 1:numel(UIDuni)
-        sessUnitPresent = unique(MatchTable(find(MatchTable.UID1 == UIDuni(uidx)),:).RecSes1);
+        sessUnitPresent = unique(MatchTable(find(MatchTable.(UDtoUse) == UIDuni(uidx)),:).RecSes1);
 
         % Get unit presence
         unitPresence{midx}(sessUnitPresent,uidx) = 1;
@@ -108,7 +110,7 @@ for midx = 1:length(UMFiles)
             fprintf('Day %d.\n', dd1)
             for dd2 = 1:numel(days{midx})
                 sessIdx = MatchTable.RecSes1 == dd1 & MatchTable.RecSes2 == dd2;
-                unitIdx = sessIdx & ismember(MatchTable.UID1, unique(UID(sessIdx)))& idxMatched;
+                unitIdx = sessIdx & ismember(MatchTable.(UDtoUse), unique(UID(sessIdx)))& idxMatched;
                 popCorr.ISI{midx}(dd1,dd2) = nanmedian(MatchTable(unitIdx, :).ISICorr);
                 popCorr.natImResp{midx}(dd1,dd2) = nanmedian(MatchTable(unitIdx, :).natImRespCorr);
                 popCorr.refPop{midx}(dd1,dd2) = nanmedian(MatchTable(unitIdx, :).refPopCorr);
