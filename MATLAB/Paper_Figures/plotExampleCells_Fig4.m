@@ -231,7 +231,7 @@ set(gca,'XScale','log')
 makepretty
 offsetAxes
 
-p(1) = subplot(4,4,6); % non-match
+p(2) = subplot(4,4,6); % non-match
 hold all
 idx3 = sp.spikeTemplates == clu3 & sp.RecSes == sess1;
 % plot(tClu1_1(tClu1_1>0), CCGClu1_1(tClu1_1>0,1),'k');
@@ -249,7 +249,7 @@ set(gca,'XScale','log')
 makepretty
 offsetAxes
 
-p(2) = subplot(4,4,10); % match
+p(3) = subplot(4,4,10); % match
 hold all
 idx2 = sp.spikeTemplates == clu2 & sp.RecSes == sess2;
 % plot(tClu1_1(tClu1_1>0), CCGClu1_1(tClu1_1>0,1),'k');
@@ -308,8 +308,7 @@ ylabel('Firing rate (sp/s)')
 makepretty
 offsetAxes
 
-% NatImCorr 
-p(1) = subplot(4,4,7); % non-match
+p(2) = subplot(4,4,7); % non-match
 hold all
 resp3 = nanmean(spikeData{recSesUni == sess1}(:,:,clusterIDs{recSesUni == sess1} == clu3,:),4);
 % plot timecourse
@@ -327,7 +326,7 @@ ylabel('Firing rate (sp/s)')
 makepretty
 offsetAxes
 
-p(2) = subplot(4,4,11); % non-match
+p(3) = subplot(4,4,11); % non-match
 hold all
 resp2 = nanmean(spikeData{recSesUni == sess2}(:,:,clusterIDs{recSesUni == sess2} == clu2,:),4);
 % plot timecourse
@@ -378,7 +377,7 @@ xticks([1 numel(neurOrd)])
 makepretty
 offsetAxes
 
-p(1) = subplot(4,4,8); % match
+p(2) = subplot(4,4,8); % match
 hold all
 clu3Idx = find(cluList1 == clu3);
 corrVec3 = corr(sr{sess1}(clu3Idx,:)', sr{sess1}(refPopIdx{sess1},:)');
@@ -391,7 +390,7 @@ xticks([1 numel(neurOrd)])
 makepretty
 offsetAxes
 
-p(2) = subplot(4,4,12); % non-match
+p(3) = subplot(4,4,12); % non-match
 hold all
 clu2Idx = find(cluList2 == clu2);
 corrVec2 = corr(sr{sess2}(clu2Idx,:)', sr{sess2}(refPopIdx{sess2},:)');
