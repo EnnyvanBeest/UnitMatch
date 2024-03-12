@@ -77,7 +77,7 @@ for midx = 1:length(UMFiles)
 
     %% For each cluster, find presence and proba of being matched in subsequent recordings
     UDtoUse = 'UID1';
-    UIDuni = unique([MatchTable.(UDtoUse)]);
+    [UIDuni,indx,~] = unique([MatchTable.(UDtoUse)]);
     RecSes = MatchTable.RecSes1(indx);
     RecSesOpt = unique(RecSes);
     days{midx} = cellfun(@(y) datenum(y), cellfun(@(x) regexp(x.folder,'\\\d*-\d*-\d*\\','match'), UMparam.RawDataPaths, 'uni', 0), 'uni', 0);
