@@ -2,7 +2,9 @@ function [unitPresence, unitProbaMatch, days] = summaryMatchingPlots(UMFiles,gro
 
 %% Settings
 PlotIndividualMice = 0;
-
+% Drifts2Exclude = 50; % more than 50 micron, expected to lose neurons. This has nothing to do with software but with quality of recordings
+MinNumsUnit = -inf; % should have at least this amount of neurons, otherwise not a good session
+% 
 %% Initialize
 if nargin<2 || ~exist('groupVector','var') || isempty(groupVector)
     groupVector = 1:length(UMFiles);
@@ -12,7 +14,7 @@ if nargin<3
     computeFuncScores = 0;
 end
 groups = unique(groupVector);
-groupColor = gray(length(groups)+1);
+groupColor = distinguishable_colors(max(groups)+1);
 
 days = cell(1, length(UMFiles));
 deltaDays = cell(1, length(UMFiles));
@@ -44,19 +46,40 @@ for midx = 1:length(UMFiles)
         continue
     end
 
+    %% Get some baseline information:   
     fprintf('Loading the data...\n')
     tic
     load(fullfile(tmpfile.folder, tmpfile.name), 'MatchTable', 'UMparam', 'UniqueIDConversion');
     toc
-  
 
-    %% Clean up data
+    % 
+    % if any(nansum(UMparam.drift,3)>Drifts2Exclude)
+    %     keyboard
+    % end
 
     % Remove the splits?
+    %   UMparam = load(fullfile(tmpfile(id).folder,tmpfile(id).name),'UMparam','UniqueIDConversion');
+    %             UniqueIDConversion = UMparam.UniqueIDConversion;
+    %             UMparam = UMparam.UMparam;
+    % 
+    %             % Check for enough good units per session
+    %             [nums,id1,id2] = unique(UniqueIDConversion.recsesAll(logical(UniqueIDConversion.GoodID)));
+    %             numsperSes = diff([id1; length(id2)]);
+    %             if any(numsperSes<MinNumsUnit)
+    %                  continue
+    %             end
+    % 
+    %             if any(nansum(UMparam.drift,3)>Drifts2Exclude)
+    %                 continue
+    %             end
+
+
 
     %% For each cluster, find presence and proba of being matched in subsequent recordings
 
-    UIDuni = unique([MatchTable.UID1]);
+    [UIDuni,indx,~] = unique([MatchTable.UID1]);
+    RecSes = MatchTable.RecSes1(indx);
+    RecSesOpt = unique(RecSes);
     days{midx} = cellfun(@(y) datenum(y), cellfun(@(x) regexp(x.folder,'\\\d*-\d*-\d*\\','match'), UMparam.RawDataPaths, 'uni', 0), 'uni', 0);
     days{midx} = cell2mat(days{midx}) - days{midx}{1};
     deltaDays{midx} = days{midx} - days{midx}';
@@ -84,6 +107,14 @@ for midx = 1:length(UMFiles)
     UPres = (unitPresence{midx}*unitPresence{midx}');
     % Compute number of minimum units between each pair of recordings
     nUnits = diag(UPres);   
+    % excludesession = false(1,numel(UIDuni));
+    % if any(nUnits<MinNumsUnit)
+    %     excludesession(ismember(RecSes,RecSesOpt(nUnits<MinNumsUnit))) = 1;
+    %     unitProbaMatch{midx}(:,excludesession)
+    % end
+
+
+
     [nUnits,~] = meshgrid(nUnits);
     UPres = UPres./nUnits';
     UPres(logical(eye(size(UPres)))) = nan;
@@ -158,25 +189,37 @@ for midx = 1:length(UMFiles)
         xlabel('Delta days')
 
         figure;
-        subplot(1,3,1)
+        subplot(2,2,1)
         imagesc(UPres)
-        set(gca,'XTick',1:length(days{midx}),'XTickLabel',days{midx},'yTick',1:length(days{midx}),'yTickLabel',days{midx})
-        c = colormap('gray'); c = flipud(c); colormap(c)
+        set(gca,'XTick',1:length(days{midx}),'XTickLabel',days{midx},'yTick',1:length(days{midx}),'yTickLabel',days{midx}','ydir','normal')
+        c = colormap(flipud(gray)); 
         hcb = colorbar; hcb.Title.String = 'P(match)';
         caxis([0 1])
         ylabel('Delta days')
         xlabel('Delta days')
         makepretty
+        freezeColors
 
-        subplot(1,3,2)
-        plot(pSinceAppearance(:,midx),'k')
+        subplot(2,2,3)
+        imagesc(nUnits)
+        set(gca,'XTick',1:length(days{midx}),'XTickLabel',days{midx},'yTick',1:length(days{midx}),'yTickLabel',days{midx},'ydir','normal')
+        c = colormap('summer'); 
+        ylabel('Delta days')
+        xlabel('Delta days')
+        makepretty
+        freezeColors
+        c = colormap(flipud(gray));
+
+
+        subplot(2,2,2)
+        plot(nanmean(unitProbaMatch{midx},2),'k')
         xlabel('delta Days')
         ylabel('P(match)')
-        set(gca,'XTick',1:numel(deltaDaysBins)-1,'XTickLabel',yTickLabels)
+        set(gca,'XTick',1:numel(deltaDaysUniBins)-1,'XTickLabel',arrayfun(@(X) num2str(X),deltaDaysUniBins(1:end-1)+0.5,'Uni',0))
         ylabel('P(match)')
         makepretty
 
-        subplot(1,3,3); hold all
+        subplot(2,2,4); hold all
         plot(popCorr_Uni.ISI(:,midx),'k')
         plot(popCorr_Uni.natImResp(:,midx),'r')
         plot(popCorr_Uni.refPop(:,midx),'b')

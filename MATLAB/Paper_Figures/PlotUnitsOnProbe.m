@@ -3,6 +3,8 @@ if nargin<5
     AddDriftBack = 1;
 end
 
+PlotMaxRecSes = []; 
+
 [~,id1,id2] = unique(UniqueIDConversion.UniqueID(UniqueIDConversion.GoodID==1));
 
 % Draw findings on probe
@@ -94,6 +96,19 @@ for modethis = 1:3
     % Extract good rec ses id
     recsesGood = clusinfo.RecSesID(logical(clusinfo.Good_ID));
     nrec = unique(recsesGood);
+    if ~isempty(PlotMaxRecSes)
+        if modethis==1
+            SesIdx = sort(datasample(nrec,PlotMaxRecSes,'Replace',false));
+        end
+        recsesGood(~ismember(recsesGood,SesIdx)) = [];
+        nrec = unique(recsesGood);
+        if modethis == 1
+        days = days(nrec);
+        end
+
+        recsesGood = clusinfo.RecSesID(logical(clusinfo.Good_ID));
+    end
+
     figure('name',['Projection locations all units, ' Modes{modethis} ', DriftCorrected = ' num2str(~AddDriftBack)])
     for recid = 1:length(nrec)
 
@@ -134,7 +149,6 @@ for modethis = 1:3
 
     figure(ExampleFig)
     driftprobe = [0 0 0];
-
     for recid = 1:length(nrec)
         if AddDriftBack && recid > 1 && ~ any(isnan(UMparam.drift(recid-1,:,1)))
             driftprobe = [0 0 0] + UMparam.drift(recid-1,:,1); % Initial drift only, is not cumulative across days

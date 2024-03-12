@@ -1,7 +1,6 @@
 function Params = ExtractKilosortData(KiloSortPaths, Params, RawDataPathsInput)
 
 % Prepares cluster information for subsequent analysis
-
 %% Inputs:
 % KiloSortPaths = List of directories pointing at kilosort output (same format as what you get when
 % calling 'dir') for all sessions you want to analyze as one session (e.g.

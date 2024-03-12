@@ -185,7 +185,7 @@ for midx = 1:length(MiceOpt)
                 UMtime = toc(UMtime)
 
                 %% Visualization
-                % PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
+                PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
 
                 %% Evaluate (within unit ID cross-validation)
                 % EvaluatingUnitMatch(UMparam.SaveDir);
@@ -211,7 +211,7 @@ for midx = 1:length(MiceOpt)
                 end
             
             else
-                  %% Get clusinfo
+                  % Get clusinfo
                 % clusinfo = getClusinfo(UMparam.KSDir);
                 % if ~any(clusinfo.Good_ID) || sum(clusinfo.Good_ID)<UMparam.minGoodUnits
                 %     disp('No good units, continue')
@@ -219,7 +219,7 @@ for midx = 1:length(MiceOpt)
                 % end
                 % load(fullfile(UMparam.SaveDir,'UnitMatch.mat'),'UMparam','UniqueIDConversion','WaveformInfo')
                 % %% Visualization
-                % % PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
+                % PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
 
             end
            
