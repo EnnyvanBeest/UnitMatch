@@ -176,7 +176,6 @@ for midx = 1:length(MiceOpt)
                     continue
                 end
            
-
                 %% Actual UnitMatch & Unique UnitID assignment
                 [UniqueIDConversion, MatchTable, WaveformInfo, UMparam] = UnitMatch(clusinfo, UMparam);
                 if UMparam.AssignUniqueID
@@ -211,15 +210,15 @@ for midx = 1:length(MiceOpt)
                 end
             
             else
-                  % Get clusinfo
-                % clusinfo = getClusinfo(UMparam.KSDir);
-                % if ~any(clusinfo.Good_ID) || sum(clusinfo.Good_ID)<UMparam.minGoodUnits
-                %     disp('No good units, continue')
-                %     continue
-                % end
-                % load(fullfile(UMparam.SaveDir,'UnitMatch.mat'),'UMparam','UniqueIDConversion','WaveformInfo')
-                % %% Visualization
-                % PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
+                % Get clusinfo
+                clusinfo = getClusinfo(UMparam.KSDir);
+                if ~any(clusinfo.Good_ID) || sum(clusinfo.Good_ID)<UMparam.minGoodUnits
+                    disp('No good units, continue')
+                    continue
+                end
+                load(fullfile(UMparam.SaveDir,'UnitMatch.mat'),'UMparam','UniqueIDConversion','WaveformInfo')
+                %% Visualization
+                PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
 
             end
            

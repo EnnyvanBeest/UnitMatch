@@ -1,8 +1,9 @@
 function PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo,AddDriftBack)
 if nargin<5
-    AddDriftBack = 1;
+    AddDriftBack = 0;
 end
 
+PlotAll = 1;
 PlotMaxRecSes = []; 
 
 [~,id1,id2] = unique(UniqueIDConversion.UniqueID(UniqueIDConversion.GoodID==1));
@@ -19,6 +20,24 @@ id1ori = id1;
 neuroncolsori = neuroncols;
 ExampleFig = figure('name',['Projection locations example units, DriftCorrected = ' num2str(~AddDriftBack)]');
 
+recsesGood = clusinfo.RecSesID(logical(clusinfo.Good_ID));
+nrec = unique(recsesGood);
+if isempty(PlotMaxRecSes)
+    PlotMaxRecSes = nrec;
+end
+SesIdx = sort(datasample(nrec,PlotMaxRecSes,'Replace',false));
+takethesenot = ~ismember(recsesGood,SesIdx);
+WaveformInfo.ProjectedLocation(:,takethesenot,:) = [];
+recsesGood(takethesenot) = [];
+id2(takethesenot) = [];
+nrec = unique(recsesGood);
+if PlotAll
+    TrackedNeuronPop = ones(numel(id2),1);
+else
+nRecPerUnit = arrayfun(@(X) length(unique(recsesGood(id2==X))) >= 0.8*length(nrec) & sum(id2==X)<2*length(nrec),id1);
+TrackedNeuronPop = id1(nRecPerUnit);
+TrackedNeuronPop = ismember(id2,TrackedNeuronPop);
+end
 % Extract DeltaDays
 try
 
@@ -53,9 +72,10 @@ for modethis = 1:3
     neuroncols = neuroncolsori;
 
     if modethis==3 % Conservative
-        SaveSplitUnitsCons = false(length(id2),1);
 
         [~,id1,id2] = unique(UniqueIDConversion.UniqueIDConservative(UniqueIDConversion.GoodID==1));
+        SaveSplitUnitsCons = false(length(id2),1);
+
         % 
         splitUnit = find(arrayfun(@(X) length(unique(id2(id2ori==X))),id1ori)>1); % also unique in this one or two different ones?
         for Xid = 1:length(splitUnit)
@@ -69,9 +89,10 @@ for modethis = 1:3
             end
         end
     elseif modethis == 2 % Intermediate
-        SaveSplitUnitsInterm = false(length(id2),1);
 
         [~,id1,id2] = unique(UniqueIDConversion.UniqueID(UniqueIDConversion.GoodID==1));
+        SaveSplitUnitsInterm = false(length(id2),1);
+
         %
         splitUnit = find(arrayfun(@(X) length(unique(id2(id2ori==X))),id1ori)>1); % also unique in this one or two different ones?
         for Xid = 1:length(splitUnit)
@@ -97,16 +118,19 @@ for modethis = 1:3
     recsesGood = clusinfo.RecSesID(logical(clusinfo.Good_ID));
     nrec = unique(recsesGood);
     if ~isempty(PlotMaxRecSes)
-        if modethis==1
-            SesIdx = sort(datasample(nrec,PlotMaxRecSes,'Replace',false));
-        end
-        recsesGood(~ismember(recsesGood,SesIdx)) = [];
-        nrec = unique(recsesGood);
-        if modethis == 1
-        days = days(nrec);
+        if modethis == 2
+            SaveSplitUnitsInterm(takethesenot) = [];
+        elseif modethis == 3
+            SaveSplitUnitsCons(takethesenot) = [];
         end
 
-        recsesGood = clusinfo.RecSesID(logical(clusinfo.Good_ID));
+        neuroncols(takethesenot,:) = [];
+        id2(takethesenot) = [];
+        recsesGood(takethesenot) = [];
+        nrec = unique(recsesGood);
+        if modethis == 1
+            days = days(nrec);
+        end
     end
 
     figure('name',['Projection locations all units, ' Modes{modethis} ', DriftCorrected = ' num2str(~AddDriftBack)])
@@ -141,11 +165,7 @@ for modethis = 1:3
 
 
     %% Show example neurons that was tracked across most recordings
-    if modethis==1
-        nRecPerUnit = arrayfun(@(X) sum(id2==X),id1);
-        TrackedNeuronPop = id1(find(nRecPerUnit>0.9*length(nrec)));
-        TrackedNeuronPop = ismember(id2,TrackedNeuronPop);
-    end
+
 
     figure(ExampleFig)
     driftprobe = [0 0 0];
@@ -155,14 +175,14 @@ for modethis = 1:3
         end
 
         subplot(length(nrec),3,(recid-1)*3+modethis)
-        scatter(UMparam.Coordinates{nrec(recid)}(:,2)-driftprobe(2),UMparam.Coordinates{nrec(recid)}(:,3)-driftprobe(3),30,[0 0 0],'square','filled');
+        scatter(UMparam.Coordinates{nrec(recid)}(:,2)-driftprobe(2),UMparam.Coordinates{nrec(recid)}(:,3)-driftprobe(3),10,[0.2 0.2 0.2],'square','filled');
         hold on
         if modethis == 3
             scatter(nanmean(WaveformInfo.ProjectedLocation(2,recsesGood==nrec(recid) & TrackedNeuronPop & ~SaveSplitUnitsCons,:),3),nanmean(WaveformInfo.ProjectedLocation(3,recsesGood==nrec(recid)& TrackedNeuronPop & ~SaveSplitUnitsCons,:),3),30,neuroncols(recsesGood==nrec(recid)& TrackedNeuronPop & ~SaveSplitUnitsCons,:),'filled');
-            scatter(nanmean(WaveformInfo.ProjectedLocation(2,recsesGood==nrec(recid) & TrackedNeuronPop & SaveSplitUnitsCons,:),3),nanmean(WaveformInfo.ProjectedLocation(3,recsesGood==nrec(recid)& TrackedNeuronPop & SaveSplitUnitsCons,:),3),70,neuroncols(recsesGood==nrec(recid)& TrackedNeuronPop & SaveSplitUnitsCons,:),'filled');
+            scatter(nanmean(WaveformInfo.ProjectedLocation(2,recsesGood==nrec(recid) & TrackedNeuronPop & SaveSplitUnitsCons,:),3),nanmean(WaveformInfo.ProjectedLocation(3,recsesGood==nrec(recid)& TrackedNeuronPop & SaveSplitUnitsCons,:),3),30,neuroncols(recsesGood==nrec(recid)& TrackedNeuronPop & SaveSplitUnitsCons,:),'filled');
         elseif modethis == 2   
             scatter(nanmean(WaveformInfo.ProjectedLocation(2,recsesGood==nrec(recid) & TrackedNeuronPop & ~SaveSplitUnitsInterm,:),3),nanmean(WaveformInfo.ProjectedLocation(3,recsesGood==nrec(recid)& TrackedNeuronPop & ~SaveSplitUnitsInterm,:),3),30,neuroncols(recsesGood==nrec(recid)& TrackedNeuronPop & ~SaveSplitUnitsInterm,:),'filled');
-            scatter(nanmean(WaveformInfo.ProjectedLocation(2,recsesGood==nrec(recid) & TrackedNeuronPop & SaveSplitUnitsInterm,:),3),nanmean(WaveformInfo.ProjectedLocation(3,recsesGood==nrec(recid)& TrackedNeuronPop & SaveSplitUnitsInterm,:),3),70,neuroncols(recsesGood==nrec(recid)& TrackedNeuronPop & SaveSplitUnitsInterm,:),'filled');
+            scatter(nanmean(WaveformInfo.ProjectedLocation(2,recsesGood==nrec(recid) & TrackedNeuronPop & SaveSplitUnitsInterm,:),3),nanmean(WaveformInfo.ProjectedLocation(3,recsesGood==nrec(recid)& TrackedNeuronPop & SaveSplitUnitsInterm,:),3),30,neuroncols(recsesGood==nrec(recid)& TrackedNeuronPop & SaveSplitUnitsInterm,:),'filled');
          else
             scatter(nanmean(WaveformInfo.ProjectedLocation(2,recsesGood==nrec(recid) & TrackedNeuronPop,:),3),nanmean(WaveformInfo.ProjectedLocation(3,recsesGood==nrec(recid)& TrackedNeuronPop,:),3),30,neuroncols(recsesGood==nrec(recid)& TrackedNeuronPop,:),'filled');
         end
@@ -180,7 +200,7 @@ for modethis = 1:3
             set(gca,'YTickLabel',[])
         else
             if exist('days','var')
-                ylabel(['\DeltaDays ' num2str(days(recid))])
+                ylabel(['Day ' num2str(days(recid))])
             else
                 ylabel(['R=' num2str(recid)])
             end

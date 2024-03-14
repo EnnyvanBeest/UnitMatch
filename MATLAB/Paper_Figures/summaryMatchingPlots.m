@@ -4,7 +4,8 @@ function [unitPresence, unitProbaMatch, days] = summaryMatchingPlots(UMFiles,gro
 PlotIndividualMice = 0;
 % Drifts2Exclude = 50; % more than 50 micron, expected to lose neurons. This has nothing to do with software but with quality of recordings
 MinNumsUnit = -inf; % should have at least this amount of neurons, otherwise not a good session
-% 
+savedir = UMFiles{1}(1:find(UMFiles{1}~=UMFiles{end},1,'first')-1);
+
 %% Initialize
 if nargin<2 || ~exist('groupVector','var') || isempty(groupVector)
     groupVector = 1:length(UMFiles);
@@ -76,7 +77,7 @@ for midx = 1:length(UMFiles)
 
 
     %% For each cluster, find presence and proba of being matched in subsequent recordings
-    UDtoUse = 'UID1';
+    UDtoUse = 'UID1Liberal';
     [UIDuni,indx,~] = unique([MatchTable.(UDtoUse)]);
     RecSes = MatchTable.RecSes1(indx);
     RecSesOpt = unique(RecSes);
@@ -100,24 +101,18 @@ for midx = 1:length(UMFiles)
         tmp(1 + (1+size(tmp,1))*[0:size(tmp,2)-1]) = nan; % remove diagonal
         unitProbaMatch{midx}(:,uidx) = histcounts(deltaDays{midx}(tmp == 1),deltaDaysUniBins)./ ...
             histcounts(deltaDays{midx}(ismember(tmp, [0 1])),deltaDaysUniBins);
+
     end
 
     % Probability of finding a unit back as a function of minimum number of
     % units available
     UPres = (unitPresence{midx}*unitPresence{midx}');
     % Compute number of minimum units between each pair of recordings
-    nUnits = diag(UPres);   
-    % excludesession = false(1,numel(UIDuni));
-    % if any(nUnits<MinNumsUnit)
-    %     excludesession(ismember(RecSes,RecSesOpt(nUnits<MinNumsUnit))) = 1;
-    %     unitProbaMatch{midx}(:,excludesession)
-    % end
-
-
-
+    nUnits = diag(UPres);      
     [nUnits,~] = meshgrid(nUnits);
+    % Repeat with ExclFirst   
     UPres = UPres./nUnits';
-    UPres(logical(eye(size(UPres)))) = nan;
+    UPres(logical(eye(size(UPres)))) = nan; % Exclude within
     % Compute probability of a unit returning since it's appearance
     for binid = 1:length(deltaDaysBins)-1
         Idx = deltaDays{midx} > deltaDaysBins(binid) & deltaDays{midx} <= deltaDaysBins(binid+1);
@@ -191,18 +186,18 @@ for midx = 1:length(UMFiles)
         figure;
         subplot(2,2,1)
         imagesc(UPres)
-        set(gca,'XTick',1:length(days{midx}),'XTickLabel',days{midx},'yTick',1:length(days{midx}),'yTickLabel',days{midx}','ydir','normal')
+        set(gca,'ydir','normal')
         c = colormap(flipud(gray)); 
         hcb = colorbar; hcb.Title.String = 'P(match)';
         caxis([0 1])
-        ylabel('Delta days')
-        xlabel('Delta days')
+        ylabel('Recording')
+        xlabel('Recording')
         makepretty
         freezeColors
 
         subplot(2,2,3)
-        imagesc(nUnits)
-        set(gca,'XTick',1:length(days{midx}),'XTickLabel',days{midx},'yTick',1:length(days{midx}),'yTickLabel',days{midx},'ydir','normal')
+        imagesc(cat(1,nUnits(1,:),days{midx}))
+        set(gca,'ydir','normal','YTick',1:2,'YTickLabel',{'nUnits','nDays'})
         c = colormap('summer'); 
         ylabel('Delta days')
         xlabel('Delta days')
@@ -212,10 +207,10 @@ for midx = 1:length(UMFiles)
 
 
         subplot(2,2,2)
-        plot(nanmean(unitProbaMatch{midx},2),'k')
+        plot(pSinceAppearance(:,midx),'k')
         xlabel('delta Days')
         ylabel('P(match)')
-        set(gca,'XTick',1:numel(deltaDaysUniBins)-1,'XTickLabel',arrayfun(@(X) num2str(X),deltaDaysUniBins(1:end-1)+0.5,'Uni',0))
+        set(gca,'XTick',1:numel(yTickLabels),'XTickLabel',yTickLabels)
         ylabel('P(match)')
         makepretty
 
@@ -253,6 +248,8 @@ xlabel('delta Days')
 ylabel('P(match)')
 makepretty
 offsetAxes
+saveas(gcf,fullfile(savedir,[UDtoUse '_TrackingProbabilities.fig']))
+saveas(gcf,fullfile(savedir,[UDtoUse '_TrackingProbabilities.bmp']))
 
 figure
 fnames = fieldnames(popCorr_Uni);
@@ -271,16 +268,17 @@ end
 
 subplot(1,numel(fnames)+1,numel(fnames)+1)
 hold on
-shadedErrorBar(1:size(popCorr_Uni.ISI,1),nanmean(popCorr_Uni.ISI,2),nanstd(popCorr_Uni.ISI,[],2),'transparent',1)
-shadedErrorBar(1:size(popCorr_Uni.natImResp,1),nanmean(popCorr_Uni.natImResp,2),nanstd(popCorr_Uni.natImResp,[],2),'transparent',1)
-shadedErrorBar(1:size(popCorr_Uni.refPop,1),nanmean(popCorr_Uni.refPop,2),nanstd(popCorr_Uni.refPop,[],2),'transparent',1)
+h(1) = shadedErrorBar(1:size(popCorr_Uni.ISI,1),nanmean(popCorr_Uni.ISI,2),nanstd(popCorr_Uni.ISI,[],2),'transparent',1,'lineProps',{'markerfacecolor',[1 0 0]});
+h(2) = shadedErrorBar(1:size(popCorr_Uni.natImResp,1),nanmean(popCorr_Uni.natImResp,2),nanstd(popCorr_Uni.natImResp,[],2),'transparent',1,'lineProps',{'markerfacecolor',[0 1 0]});
+h(3) = shadedErrorBar(1:size(popCorr_Uni.refPop,1),nanmean(popCorr_Uni.refPop,2),nanstd(popCorr_Uni.refPop,[],2),'transparent',1,'lineProps',{'markerfacecolor',[0 0 1]});
 set(gca,'XTick',1:numel(deltaDaysBins)-1,'XTickLabel',yTickLabels)
 xlabel('delta Days')
 ylabel('Functional score')
+legend([h(:).mainLine],{'ISI','NatIm','RefPop'})
 makepretty
 offsetAxes
-
-
+saveas(gcf,fullfile(savedir,[UDtoUse '_FunctionalScores.fig']))
+saveas(gcf,fullfile(savedir,[UDtoUse '_FunctionalScores.bmp']))
 
 % %% Summary plots
 % probaBinned = nan(numel(deltaDaysBins)-1, length(UMFiles));
