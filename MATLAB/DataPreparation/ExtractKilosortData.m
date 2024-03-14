@@ -173,7 +173,7 @@ for subsesid = 1:length(KiloSortPaths)
         
         if tmpparam.RunQualityMetrics == Params.RunQualityMetrics && tmpparam.RunPyKSChronicStitched == Params.RunPyKSChronicStitched && ~dateViolationflag
             if ~isfield(tmpparam,'RecordingDuration') || tmpparam.RecordingDuration < Params.MinRecordingDuration
-                if ~isempty(rawD) & (~contains(rawD(1).name,'.dat') || ~contains(rawD(1).name,'.raw'))
+                if ~isempty(rawD) & ~contains(rawD(1).name,'.dat') & ~contains(rawD(1).name,'.raw')
                     [channelpostmpconv, probeSN, recordingduration] = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done
                     channelmapKS = readNPY(fullfile(KiloSortPaths{subsesid},'channel_positions.npy'));
 
@@ -238,7 +238,7 @@ for subsesid = 1:length(KiloSortPaths)
     end
 
     %% Is it correct channelpos though...? Check using raw data. While reading this information, also extract recording duration and Serial number of probe
-    if ~isempty(rawD) & (~contains(rawD(1).name,'.dat') || ~contains(rawD(1).name,'.raw'))
+    if ~isempty(rawD) & (~contains(rawD(1).name,'.dat') & ~contains(rawD(1).name,'.raw'))
         [channelpostmpconv, probeSN, recordingduration] = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done
         if recordingduration<Params.MinRecordingDuration
             disp([KiloSortPaths{subsesid} ' recording too short, skip...'])
