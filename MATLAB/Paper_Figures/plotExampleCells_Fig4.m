@@ -1,6 +1,6 @@
 %% Load and format data
 
-UMFile = {'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\2ConsecutiveDays\Non_Stitched\AL032\AllProbes\AllIMRO\UnitMatch\UnitMatch.mat'};
+UMFile = {'D:\MatchingUnits\Output\ToRun\AL032\AL032_2019-11-21_stripe192-natIm_g0_t0.imec0.ap__AL032_2019-11-22_stripe192-natIm_g0_t0.imec0.ap\UnitMatch\UnitMatch.mat'};
 summaryFunctionalPlots(UMFile, 'Corr', 1)
 load(UMFile{1})
 
@@ -47,17 +47,17 @@ binsOn = (proc.window(1)+proc.binSize/2):proc.binSize:proc.window(2);
 binsOff =  proc.window(2)+((proc.binSize/2):proc.binSize:(proc.window(4)-proc.window(3)));
 bins = [binsOn binsOff];
 
-nRec = numel(UMparam.AllRawPaths);
+nRec = numel(UMparam.RawDataPaths);
 nClu = nan(1,nRec); for ss = 1:nRec; nClu(ss) = numel(unique(MatchTable.ID1(MatchTable.RecSes1 == ss))); end
 spikeData_cv = cell(1,2*nRec);
 clusterIDs = cell(1,nRec);
 spikeData = cell(1,nRec);
 for ss = 1:nRec
     % Get the original binFile (also for stitched?)
-    if iscell(UMparam.AllRawPaths{ss})
-        binFileRef = fullfile(UMparam.AllRawPaths{ss});
+    if iscell(UMparam.RawDataPaths{ss})
+        binFileRef = fullfile(UMparam.RawDataPaths{ss});
     else
-        binFileRef = fullfile(UMparam.AllRawPaths{ss}.folder,UMparam.AllRawPaths{ss}.name);
+        binFileRef = fullfile(UMparam.RawDataPaths{ss}.folder,UMparam.RawDataPaths{ss}.name);
     end
 
     % Find the associated experiments
@@ -157,8 +157,8 @@ sess2 = 2;
 
 % Find matches
 MatchTable_matches = MatchTable(MatchTable.UID1 == MatchTable.UID2 & MatchTable.RecSes1 == sess1 & MatchTable.RecSes2 == sess2, :);
-MatchTable_bestMatches = MatchTable_matches(MatchTable_matches.ACGCorr > 0.6 & MatchTable_matches.refPopCorr > 0.8 & MatchTable_matches.natImRespCorr > 0.8,:);
-matches2plt = 4; % 3
+MatchTable_bestMatches = MatchTable_matches(MatchTable_matches.ISICorr > 0.6 & MatchTable_matches.refPopCorr > 0.8 & MatchTable_matches.natImRespCorr > 0.8,:);
+matches2plt = 4UMF; % 3
 clu1 = MatchTable_bestMatches(matches2plt,:).ID1; % 98
 clu2 = MatchTable_bestMatches(matches2plt,:).ID2; % 99
 colMatches = [1 0 0]; 
@@ -166,7 +166,7 @@ colMatches = [1 0 0];
 % Find non-matches
 MatchTable_nonMatches = MatchTable(MatchTable.ID1 == clu1 & MatchTable.UID1 ~= MatchTable.UID2 & MatchTable.RecSes1 == sess1 & MatchTable.RecSes2 == sess1, :);
 MatchTable_worstNonMatches = MatchTable_nonMatches(MatchTable_nonMatches.CentroidDist > 0 & ...
-    MatchTable_nonMatches.ACGCorr < 0.6 | MatchTable_nonMatches.refPopCorr < 0.7 | MatchTable_nonMatches.natImRespCorr < 0.7,:);
+    MatchTable_nonMatches.ISICorr < 0.6 | MatchTable_nonMatches.refPopCorr < 0.7 | MatchTable_nonMatches.natImRespCorr < 0.7,:);
 nonMatches2plt = 6; % 6?
 clu3 = MatchTable_worstNonMatches(nonMatches2plt,:).ID2;
 colNonMatches = [0 0 0.7];
@@ -269,9 +269,9 @@ offsetAxes
 linkaxes(p,'y')
 
 subplot(4,4,14) % matrix
-ACGCorrMat = reshape(MatchTable.ACGCorr, nclus, nclus);
-ACGCorrMat(ACGCorrMat<0.7) = 0.7;
-imagesc(ACGCorrMat(sortCluIdx,sortCluIdx))
+ISICorrMat = reshape(MatchTable.ISICorr, nclus, nclus);
+ISICorrMat(ISICorrMat<0.7) = 0.7;
+imagesc(ISICorrMat(sortCluIdx,sortCluIdx))
 hold on
 colormap('RedBlue')
 clim([0.45 0.95])
