@@ -38,10 +38,10 @@ if ~isfield(UMparam,'AllRawPaths') % For now no to disturb Célian
     UMparam.AllRawPaths = UMparam.RawDataPaths;
 end
 
-
-if length(UMparam.AllRawPaths{1}) > 1 %Reshape for Stitched
-    UMparam.AllRawPaths = arrayfun(@(X) UMparam.AllRawPaths{1}(X),1:length(UMparam.AllRawPaths{1}),'uni',0);
-end
+% 
+% if length(UMparam.AllRawPaths{1}) > 1 %Reshape for Stitched
+%     UMparam.AllRawPaths = arrayfun(@(X) UMparam.AllRawPaths{1}(X),1:length(UMparam.AllRawPaths{1}),'uni',0);
+% end
 
 % Load SP
 disp('Loading spike information...')
@@ -337,6 +337,8 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'natImRespCorr')) || recom
         if ~isempty(UMparam.AllRawPaths{RecOpt(ss)}) % When no raw data is available
             if iscell(UMparam.AllRawPaths{RecOpt(ss)})
                 binFileRef = fullfile(UMparam.AllRawPaths{RecOpt(ss)});
+            elseif isstr(UMparam.AllRawPaths{RecOpt(ss)})
+                binFileRef = UMparam.AllRawPaths{RecOpt(ss)};
             else
                 binFileRef = fullfile(UMparam.AllRawPaths{RecOpt(ss)}.folder,UMparam.AllRawPaths{RecOpt(ss)}.name);
             end

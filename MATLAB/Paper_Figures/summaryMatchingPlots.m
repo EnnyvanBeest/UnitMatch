@@ -1,4 +1,4 @@
-function [unitPresence, unitProbaMatch, days] = summaryMatchingPlots(UMFiles,groupVector,computeFuncScores)
+function [unitPresence, unitProbaMatch, days, FalsePositives] = summaryMatchingPlots(UMFiles,groupVector,computeFuncScores)
 
 %% Settings
 PlotIndividualMice = 0;
@@ -24,14 +24,35 @@ unitPresence = cell(1, length(UMFiles));
 unitProbaMatch = cell(1, length(UMFiles));
 popProbaMatch = cell(1, length(UMFiles));
 
+% WIthin session check
+FalsePositives = nan(3,length(UMFiles)); % Liberal/intermedi/conserv
+FalseNegatives = nan(3,length(UMFiles));
+
 % deltaDaysBinsOri = [0.1 1 2 3 4 5 10 20 50 100 inf];
-deltaDaysBinsOri = [0.1 1 2 3 4 5 10 15 20 30 40 50 75 100 125 150 inf];
-deltaDaysBins = [-deltaDaysBinsOri(end:-1:1)-0.1, deltaDaysBinsOri(1:end)];
+% deltaDaysBinsOri = [0.1 1 2 3 4 5 10 15 20 30 40 50 75 100 125 150 inf];
+deltaDaysBinsOri = 2.^(-1:8);
+deltaDaysBins = [-deltaDaysBinsOri(end:-1:1)-0.1,deltaDaysBinsOri(1:end)];
+
+deltaBinsVec =[-deltaDaysBinsOri(end:-1:1),deltaDaysBinsOri];
 pSinceAppearance = nan(length(deltaDaysBins)-1,length(UMFiles));
-yTickLabels = cell(1,numel(deltaDaysBins)-1);
-for bb = 1:numel(deltaDaysBins)-1
-    yTickLabels{bb} = sprintf('%.0f< %cdays < %.0f',deltaDaysBins(bb), 916, deltaDaysBins(bb+1));
-end
+yTickLabels = arrayfun(@(X) num2str(round(X*10)/10),deltaBinsVec(1:end-1),'Uni',0);
+
+% yTickLabels = cell(1,numel(deltaDaysBins)-1);
+% for bb = 1:numel(deltaDaysBins)-1
+%     if deltaDaysBins(bb)<0
+%         yTickLabels{bb} = sprintf('%.0f',deltaDaysBins(bb+1));
+%     elseif deltaDaysBins(bb)==0
+%         yTickLabels{bb} = sprintf('%.0f',deltaDaysBins(bb));
+%     else 
+%         yTickLabels{bb} = sprintf('%.0f',deltaDaysBins(bb));
+%     end
+%     % if deltaDaysBins(bb+1)<0
+%     %     yTickLabels{bb} = sprintf('< %.0f',deltaDaysBins(bb+1));
+%     % else
+%     %     yTickLabels{bb} = sprintf('> %.0f',deltaDaysBins(bb));
+%     % end
+% end
+% yTickLabels{ismember(yTickLabels,'> -0')} = '0';
 
 popCorr_Uni.ISI = nan(length(deltaDaysBins)-1,length(UMFiles));
 popCorr_Uni.natImResp = nan(length(deltaDaysBins)-1,length(UMFiles));
@@ -53,6 +74,18 @@ for midx = 1:length(UMFiles)
     load(fullfile(tmpfile.folder, tmpfile.name), 'MatchTable', 'UMparam', 'UniqueIDConversion');
     toc
 
+    %% Within session noise levels?
+    % FalsePositives = nan(3,length(UMFiles));
+    % FalseNegatives = nan(3,length(UMFiles));
+    FalsePositives(1,midx) = sum(MatchTable.UID1Liberal == MatchTable.UID2Liberal & MatchTable.ID1 ~= MatchTable.ID2 & MatchTable.RecSes1 == MatchTable.RecSes2)./ sum(MatchTable.RecSes1 == MatchTable.RecSes2);
+    FalsePositives(2,midx) = sum(MatchTable.UID1 == MatchTable.UID2 & MatchTable.ID1 ~= MatchTable.ID2 & MatchTable.RecSes1 == MatchTable.RecSes2)./ sum(MatchTable.RecSes1 == MatchTable.RecSes2);
+    FalsePositives(3,midx) = sum(MatchTable.UID1Conservative == MatchTable.UID2Conservative & MatchTable.ID1 ~= MatchTable.ID2 & MatchTable.RecSes1 == MatchTable.RecSes2)./ sum(MatchTable.RecSes1 == MatchTable.RecSes2);
+
+    FalseNegatives(1,midx) = sum(MatchTable.UID1Liberal ~= MatchTable.UID2Liberal & MatchTable.ID1 == MatchTable.ID2 & MatchTable.RecSes1 == MatchTable.RecSes2)./ sum(MatchTable.RecSes1 == MatchTable.RecSes2);
+    FalseNegatives(2,midx) = sum(MatchTable.UID1 ~= MatchTable.UID2 & MatchTable.ID1 == MatchTable.ID2 & MatchTable.RecSes1 == MatchTable.RecSes2)./ sum(MatchTable.RecSes1 == MatchTable.RecSes2);
+    FalseNegatives(3,midx) = sum(MatchTable.UID1Conservative ~= MatchTable.UID2Conservative & MatchTable.ID1 == MatchTable.ID2 & MatchTable.RecSes1 == MatchTable.RecSes2)./ sum(MatchTable.RecSes1 == MatchTable.RecSes2);
+
+
     % 
     % if any(nansum(UMparam.drift,3)>Drifts2Exclude)
     %     keyboard
@@ -73,17 +106,44 @@ for midx = 1:length(UMFiles)
     %             if any(nansum(UMparam.drift,3)>Drifts2Exclude)
     %                 continue
     %             end
-
-
+    nclusPerSess = arrayfun(@(X) numel(unique(MatchTable.ID1(MatchTable.RecSes1 == X))),unique(MatchTable.RecSes1));
+    if all(nclusPerSess<UMparam.minGoodUnits)
+        continue
+    end
+    
+  
 
     %% For each cluster, find presence and proba of being matched in subsequent recordings
-    UDtoUse = 'UID1Liberal';
+    UDtoUse = 'UID1';
+
     [UIDuni,indx,~] = unique([MatchTable.(UDtoUse)]);
     RecSes = MatchTable.RecSes1(indx);
     RecSesOpt = unique(RecSes);
+    nMatches = sum(MatchTable.UID1 == MatchTable.UID2 & MatchTable.RecSes2>MatchTable.RecSes1);
+    if nMatches < 20*numel(RecSesOpt)
+        durationflag = 0;
+        for recid = 1:length(UMparam.AllRawPaths)
+            meta = ReadMeta2(UMparam.AllRawPaths{recid}.folder)
+            Dur = str2num(meta.fileTimeSecs)./60;
+            if Dur<UMparam.MinRecordingDuration
+                durationflag = 1;
+            end
+        end
+        if durationflag == 1
+            continue
+        end
+    end
+
     days{midx} = cellfun(@(y) datenum(y), cellfun(@(x) regexp(x.folder,'\\\d*-\d*-\d*\\','match'), UMparam.RawDataPaths, 'uni', 0), 'uni', 0);
     days{midx} = cell2mat(days{midx}) - days{midx}{1};
     deltaDays{midx} = days{midx} - days{midx}';
+
+    % Remove data for days that are having too little neurons
+    if any(nclusPerSess<UMparam.minGoodUnits)
+        if median(nclusPerSess)<UMparam.minGoodUnits
+            continue    
+        end
+    end
 
     unitPresence{midx} = zeros(numel(days{midx}), numel(UIDuni));
     deltaDaysUni{midx} = unique(deltaDays{midx});
@@ -101,7 +161,6 @@ for midx = 1:length(UMFiles)
         tmp(1 + (1+size(tmp,1))*[0:size(tmp,2)-1]) = nan; % remove diagonal
         unitProbaMatch{midx}(:,uidx) = histcounts(deltaDays{midx}(tmp == 1),deltaDaysUniBins)./ ...
             histcounts(deltaDays{midx}(ismember(tmp, [0 1])),deltaDaysUniBins);
-
     end
 
     % Probability of finding a unit back as a function of minimum number of
@@ -178,38 +237,36 @@ for midx = 1:length(UMFiles)
         [~,sortIdx] = sort(nanmean(unitProbaMatch{midx},1),'descend');
         imagesc(deltaDaysUni{midx},1:numel(sortIdx),unitProbaMatch{midx}(:,sortIdx)')
         colormap(c)
-        hcb = colorbar; hcb.Title.String = 'P(match)';
+        hcb = colorbar; hcb.Title.String = 'P(track)';
         caxis([0 1])
         ylabel('Unit')
         xlabel('Delta days')
 
         figure;
         subplot(2,2,1)
-        imagesc(UPres)
-        set(gca,'ydir','normal')
+        h=imagesc(UPres,'AlphaData',~isnan(UPres));
+        % set(gca,'ydir','normal')
         c = colormap(flipud(gray)); 
-        hcb = colorbar; hcb.Title.String = 'P(match)';
-        caxis([0 1])
+        hcb = colorbar; hcb.Title.String = 'P(track)';
+        caxis([0 0.6])
         ylabel('Recording')
         xlabel('Recording')
         makepretty
-        freezeColors
 
         subplot(2,2,3)
-        imagesc(cat(1,nUnits(1,:),days{midx}))
-        set(gca,'ydir','normal','YTick',1:2,'YTickLabel',{'nUnits','nDays'})
-        c = colormap('summer'); 
-        ylabel('Delta days')
-        xlabel('Delta days')
+        yyaxis left
+        plot(nUnits(1,:),'k-');
+        ylabel('total number Units')
+        yyaxis right
+        plot(days{midx},'r-');
+        ylabel('Days')
         makepretty
-        freezeColors
-        c = colormap(flipud(gray));
-
-
+        offsetAxes
+  
         subplot(2,2,2)
         plot(pSinceAppearance(:,midx),'k')
         xlabel('delta Days')
-        ylabel('P(match)')
+        ylabel('P(track)')
         set(gca,'XTick',1:numel(yTickLabels),'XTickLabel',yTickLabels)
         ylabel('P(match)')
         makepretty
@@ -221,7 +278,7 @@ for midx = 1:length(UMFiles)
         xlabel('delta Days')
         ylabel('Functional score')
         set(gca,'XTick',1:numel(deltaDaysBins)-1,'XTickLabel',yTickLabels)
-        ylabel('P(match)')
+        ylabel('P(track)')
         makepretty
 
     end
@@ -229,28 +286,37 @@ end
 
 %%
 figure;
-subplot(1,2,1)
+subplot(3,2,[1,3,5])
 hold on
 for midx = 1:length(UMFiles)
     plot(pSinceAppearance(:,midx),'color',groupColor(groupVector(midx),:))
 end
 xlabel('delta Days')
 set(gca,'XTick',1:numel(deltaDaysBins)-1,'XTickLabel',yTickLabels)
-ylabel('P(match)')
+ylabel('P(track)')
 makepretty
 offsetAxes
 
-subplot(1,2,2)
+nonnanNr = sum(~isnan(pSinceAppearance),2);
+subplot(3,2,[4,6])
 hold on
-shadedErrorBar(1:size(pSinceAppearance,1),nanmean(pSinceAppearance,2),nanstd(pSinceAppearance,[],2),'transparent',1)
+errorbar(1:size(pSinceAppearance,1),nanmean(pSinceAppearance,2),nanstd(pSinceAppearance,[],2)./sqrt(nonnanNr-1),'linestyle','-')
+
+% shadedErrorBar(1:size(pSinceAppearance,1),nanmean(pSinceAppearance,2),nanstd(pSinceAppearance,[],2)./sqrt(nonnanNr-1),'transparent',1)
 set(gca,'XTick',1:numel(deltaDaysBins)-1,'XTickLabel',yTickLabels)
-xlabel('delta Days')
-ylabel('P(match)')
+xlabel('delta Days (>)')
+ylabel('P(track)')
 makepretty
 offsetAxes
+
+
+subplot(3,2,[2])
+plot(1:size(pSinceAppearance,1),nonnanNr,'.')
+makepretty
+offsetAxes
+
 saveas(gcf,fullfile(savedir,[UDtoUse '_TrackingProbabilities.fig']))
 saveas(gcf,fullfile(savedir,[UDtoUse '_TrackingProbabilities.bmp']))
-
 figure
 fnames = fieldnames(popCorr_Uni);
 for ff = 1:numel(fnames)
@@ -262,24 +328,34 @@ for ff = 1:numel(fnames)
     xlabel('delta Days')
     set(gca,'XTick',1:numel(deltaDaysBins)-1,'XTickLabel',yTickLabels)
     ylabel('Functional score')
+    title(fnames{ff})
     makepretty
     offsetAxes
 end
 
 subplot(1,numel(fnames)+1,numel(fnames)+1)
 hold on
-h(1) = shadedErrorBar(1:size(popCorr_Uni.ISI,1),nanmean(popCorr_Uni.ISI,2),nanstd(popCorr_Uni.ISI,[],2),'transparent',1,'lineProps',{'markerfacecolor',[1 0 0]});
-h(2) = shadedErrorBar(1:size(popCorr_Uni.natImResp,1),nanmean(popCorr_Uni.natImResp,2),nanstd(popCorr_Uni.natImResp,[],2),'transparent',1,'lineProps',{'markerfacecolor',[0 1 0]});
-h(3) = shadedErrorBar(1:size(popCorr_Uni.refPop,1),nanmean(popCorr_Uni.refPop,2),nanstd(popCorr_Uni.refPop,[],2),'transparent',1,'lineProps',{'markerfacecolor',[0 0 1]});
+h(1) = errorbar(1:size(popCorr_Uni.ISI,1),nanmean(popCorr_Uni.ISI,2),nanstd(popCorr_Uni.ISI,[],2)./sqrt(nonnanNr-1),'linestyle','-','markerfacecolor',[1 0 0]);
+h(2) = errorbar(1:size(popCorr_Uni.natImResp,1),nanmean(popCorr_Uni.natImResp,2),nanstd(popCorr_Uni.natImResp,[],2)./sqrt(nonnanNr-1),'linestyle','-','markerfacecolor',[0 1 0]);
+h(3) = errorbar(1:size(popCorr_Uni.refPop,1),nanmean(popCorr_Uni.refPop,2),nanstd(popCorr_Uni.refPop,[],2)./sqrt(nonnanNr-1),'linestyle','-','markerfacecolor',[0 0 1]);
 set(gca,'XTick',1:numel(deltaDaysBins)-1,'XTickLabel',yTickLabels)
-xlabel('delta Days')
+xlabel('delta Days (>)')
 ylabel('Functional score')
-legend([h(:).mainLine],{'ISI','NatIm','RefPop'})
+legend([h(:)],{'ISI','NatIm','RefPop'})
 makepretty
 offsetAxes
 saveas(gcf,fullfile(savedir,[UDtoUse '_FunctionalScores.fig']))
 saveas(gcf,fullfile(savedir,[UDtoUse '_FunctionalScores.bmp']))
 
+%% 
+figure('name','FalsePositives')
+boxplot(FalsePositives'.*100,'boxstyle','filled','extrememode','clip')
+set(gca,'XTick',1:3,'XTickLabel',{'Liberal','Intermediate','Conservative'})
+makepretty
+offsetAxes
+ylim([0 10])
+ylabel('FP (%)')
+% h=barwitherr(nanstd(FalsePositives,[],2),nanmean(FalsePositives,2));
 % %% Summary plots
 % probaBinned = nan(numel(deltaDaysBins)-1, length(UMFiles));
 % for midx = 1:length(UMFiles)

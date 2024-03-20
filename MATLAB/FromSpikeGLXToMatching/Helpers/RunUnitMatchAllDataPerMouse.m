@@ -151,9 +151,12 @@ for midx = 1:length(MiceOpt)
 
             %% Prepare personal save/directory and decompressed data paths
             PipelineParams.SaveDir = fullfile(PipelineParams.SaveDir ,'UnitMatch');
+
             if isstruct(PipelineParams.RawDataPaths{1})
+               
                 if length(PipelineParams.RawDataPaths)==1
                     PipelineParams.AllDecompPaths = arrayfun(@(X) fullfile(PipelineParams.tmpdatafolder, strrep(X.name, 'cbin', 'bin')), PipelineParams.RawDataPaths{1}, 'Uni', 0);
+                    PipelineParams.RawDataPaths = arrayfun(@(X) fullfile(X.folder,X.name), PipelineParams.RawDataPaths{1}, 'Uni', 0);
                 else
                     PipelineParams.AllDecompPaths = cellfun(@(X) fullfile(PipelineParams.tmpdatafolder, strrep(X.name, 'cbin', 'bin')), PipelineParams.RawDataPaths, 'Uni', 0);
                 end
@@ -184,7 +187,7 @@ for midx = 1:length(MiceOpt)
                 UMtime = toc(UMtime)
 
                 %% Visualization
-                PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
+                % PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
 
                 %% Evaluate (within unit ID cross-validation)
                 % EvaluatingUnitMatch(UMparam.SaveDir);

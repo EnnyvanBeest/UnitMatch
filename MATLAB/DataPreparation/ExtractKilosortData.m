@@ -718,7 +718,7 @@ if isstruct(RawDataPaths)
     end
 end
 
-CleanUpCheckFlag = nan; % Put to 1 is own responsibility! Make sure not to delete stuff from the server directly!
+CleanUpCheckFlag = 1; % Put to 1 is own responsibility! Make sure not to delete stuff from the server directly!
 if Params.DecompressLocal && Params.CleanUpTemporary
     try
         if isnan(CleanUpCheckFlag) && any(cellfun(@(X) exist(fullfile(Params.tmpdatafolder, strrep(X.name, 'cbin', 'bin'))),RawDataPaths(find(~cellfun(@isempty,RawDataPaths)))))

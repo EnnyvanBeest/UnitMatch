@@ -2,7 +2,7 @@
 
 %% User Input
 %% Path information
-DataDir = {'H:\MatchingUnits\RawData'};% {'H:\MatchingUnits\RawDataMonthApart'};% ;%Raw data folders, typically servers were e.g. *.cbin files are stored
+DataDir = {'H:\MatchingUnits\RawData'};%{'H:\MatchingUnits\RawDataMonthApart'};%  ;%Raw data folders, typically servers were e.g. *.cbin files are stored
 SaveDir = 'H:\MatchingUnits\Output';%'H:\MatchingUnits\OutputMonthApart'; %'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\2ConsecutiveDays\Stitched';%'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\MonthApart\Stitched';%%'H:\MatchingUnits\Output\MonthApartStitched'% 'H:\MatchingUnits\Output\NotConcatenated';%'\\znas.cortexlab.net\Lab\Share\Celian\UnitMatch\MatchTables\NewSep27\MonthApart\Stitched'% %%;% %'H:\MatchingUnits\Output\ManyRecordings'%Folder where to store the results
 tmpdatafolder = 'H:\OpenEphys_Example\Tmp'; % temporary folder for temporary decompression of data 
 KilosortDir = 'H:\MatchingUnits\KilosortOutput';%'H:\MatchingUnits\KilosortOutputMonthApart';%'\\znas.cortexlab.net\Lab\Share\Enny\UnitMatch\KSComparisonSubset';%'\\znas.cortexlab.net\Lab\Share\Enny\UnitMatch\KilosortOutputMonthApart';%'H:\MatchingUnits\KilosortOutputMonthApart';%'\\znas.cortexlab.net\Lab\Share\Celian\UnitMatch\KilosortOutputMonthApart';% Kilosort output folder
@@ -22,7 +22,7 @@ PipelineParams.DecompressLocal = 1; % If 1, uncompress data first if it's curren
 
 % Storing preprocessed data?
 PipelineParams.ExtractNewDataNow = 0; % If data is not (yet) extracted, don't bother for now if 0
-PipelineParams.ReLoadAlways = 1; % If 1, SP & Clusinfo are always loaded from KS output
+PipelineParams.ReLoadAlways = 0; % If 1, SP & Clusinfo are always loaded from KS output
 PipelineParams.saveSp = 1; % Save SP struct for easy loading of preprocessed data
 PipelineParams.binsz = 0.01; %Bin size for PSTHs in seconds
 
@@ -35,7 +35,7 @@ PipelineParams.loadPCs = 0; % Only necessary when computiong isoluation metrics/
 % UnitMatch
 PipelineParams.UnitMatch = 1; % If 1, find identical units across sessions or oversplits in a fast and flexible way
 PipelineParams.RedoUnitMatch = 1; % if 1, Redo unitmatch
-PipelineParams.separateIMRO = 0; % Run for every IMRO separately (for memory reasons or when having multiple probes this might be a good idea)
+PipelineParams.separateIMRO = 1; % Run for every IMRO separately (for memory reasons or when having multiple probes this might be a good idea)
 PipelineParams.UseHistology = 0; % Use real coordinates (3D space of tracked probes if available)
 
 % UnitMatch Parameters:

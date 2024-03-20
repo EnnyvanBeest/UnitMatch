@@ -1,15 +1,15 @@
-function PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo,AddDriftBack)
+function PlotUnitsOnProbe_2(clusinfo,UMparam,UniqueIDConversion,WaveformInfo,AddDriftBack)
 if nargin<5
-    AddDriftBack = 1;
+    AddDriftBack = 0;
 end
 
-PlotAll = 1;
-PlotMaxRecSes = []; 
+PlotAll = 0;
+PlotMaxRecSes = 7; 
 
 [~,id1,id2] = unique(UniqueIDConversion.UniqueID(UniqueIDConversion.GoodID==1));
 
 % Draw findings on probe
-neuroncols = jet(length(id1))+rand(length(id1),3)*2-1; % Colours per unit
+neuroncols = distinguishable_colors(length(id1))-rand(length(id1),3).*0.25; % Colours per unit
 neuroncols(neuroncols<0)=0;
 neuroncols(neuroncols>1)=1;
 neuroncols = datasample(neuroncols,length(id1),1,'replace',false);
@@ -23,21 +23,21 @@ ExampleFig = figure('name',['Projection locations example units, DriftCorrected 
 recsesGood = clusinfo.RecSesID(logical(clusinfo.Good_ID));
 nrec = unique(recsesGood);
 if isempty(PlotMaxRecSes)
-    PlotMaxRecSes = numel(nrec);
+    PlotMaxRecSes = nrec;
 end
-SesIdx = sort(datasample(nrec,PlotMaxRecSes,'Replace',false));
+SesIdx = [4, 6, 9, 12, 15, 18, 20]; 
+% SesIdx = sort(datasample(nrec,PlotMaxRecSes,'Replace',false));
 takethesenot = ~ismember(recsesGood,SesIdx);
 WaveformInfo.ProjectedLocation(:,takethesenot,:) = [];
 recsesGood(takethesenot) = [];
 id2(takethesenot) = [];
 nrec = unique(recsesGood);
-if PlotAll
-    TrackedNeuronPop = ones(numel(id2),1);
-else
-nRecPerUnit = arrayfun(@(X) length(unique(recsesGood(id2==X))) >= 0.8*length(nrec) & sum(id2==X)<2*length(nrec),id1);
-TrackedNeuronPop = id1(nRecPerUnit);
-TrackedNeuronPop = ismember(id2,TrackedNeuronPop);
-end
+nRecPerUnit = arrayfun(@(X) sum(id2==X),id2);
+UnitstoConsider = id2(recsesGood==median(SesIdx) & nRecPerUnit>4);% All neurons tracked in median session
+% TrackedNeuronPop = ismember(id2,UnitstoConsider);
+
+
+
 % Extract DeltaDays
 try
     if isunix
@@ -131,41 +131,12 @@ for modethis = 1:3
             days = days(nrec);
         end
     end
+    UnitstoConsider = id2(recsesGood==median(SesIdx) & nRecPerUnit>4);% All neurons tracked in median session
 
-    figure('name',['Projection locations all units, ' Modes{modethis} ', DriftCorrected = ' num2str(~AddDriftBack)])
-    for recid = 1:length(nrec)
-
-        if AddDriftBack && recid > 1 && ~ any(isnan(UMparam.drift(recid-1,:,1)))
-            drift = [0 0 0] +  + UMparam.drift(recid-1,:,1); % Initial drift only, is not cumulative across days
-        end
-        scatter3(UMparam.Coordinates{nrec(recid)}(:,1),UMparam.Coordinates{nrec(recid)}(:,2),UMparam.Coordinates{nrec(recid)}(:,3),30,[0 0 0],'square','filled')
-        hold on
-        scatter3(nanmean(WaveformInfo.ProjectedLocation(1,recsesGood==nrec(recid),:),3)+drift(1),nanmean(WaveformInfo.ProjectedLocation(2,recsesGood==nrec(recid),:),3)+drift(2),nanmean(WaveformInfo.ProjectedLocation(3,recsesGood==nrec(recid),:),3)+drift(3),30,neuroncols(recsesGood==nrec(recid),:),'filled')
-    end
-    makepretty
-    offsetAxes
-
-    drift = [0 0 0];
-    % In separate plots
-    figure('name',['Projection locations all units,' Modes{modethis}  ', DriftCorrected = ' num2str(~AddDriftBack)]')
-    for recid = 1:length(nrec)
-        if AddDriftBack && recid > 1 && ~ any(isnan(UMparam.drift(recid-1,:,1)))
-            drift = [0 0 0] + UMparam.drift(recid-1,:,1); % Initial drift only, is not cumulative across days
-        end
-        subplot(ceil(sqrt(length(nrec))),round(sqrt(length(nrec))),recid)
-        scatter3(UMparam.Coordinates{nrec(recid)}(:,1)-drift(1),UMparam.Coordinates{nrec(recid)}(:,2)-drift(2),UMparam.Coordinates{nrec(recid)}(:,3)-drift(3),30,[0 0 0],'square','filled')
-        hold on
-        scatter3(nanmean(WaveformInfo.ProjectedLocation(1,recsesGood==nrec(recid),:),3),nanmean(WaveformInfo.ProjectedLocation(2,recsesGood==nrec(recid),:),3),nanmean(WaveformInfo.ProjectedLocation(3,recsesGood==nrec(recid),:),3),30,neuroncols(recsesGood==nrec(recid),:),'filled')
-        makepretty
-        offsetAxes
-        title(['Recording ' num2str(recid)])
-    end
-    linkaxes
+    TrackedNeuronPop = ismember(id2,UnitstoConsider);
 
 
     %% Show example neurons that was tracked across most recordings
-
-
     figure(ExampleFig)
     driftprobe = [0 0 0];
     for recid = 1:length(nrec)
