@@ -284,7 +284,7 @@ saveas(gcf,fullfile(SaveDir,'ProbabilitiesMatches.bmp'))
 
 %% TotalScore Pair versus no pair
 figure('name','TotalScore vs Probability');
-Stepsz = 0.05;
+Stepsz = 0.025;
 for id = 1:2
     Edges = [0:Stepsz:1];
     Vector = [Stepsz/2:Stepsz:1-Stepsz/2];
@@ -292,11 +292,11 @@ for id = 1:2
     if id == 2
         SelfScore = MatchProbability(logical(eye(size(MatchProbability))));
         OtherScores = MatchProbability; %First being TotalScore, second being TemplateMatch
-        ThrsScore = min(MatchProbability(label==1));
+        ThrsScore = param.ProbabilityThreshold;
+
      else % TotalScore
         SelfScore = TotalScore(logical(eye(size(MatchProbability))));
         OtherScores = TotalScore; %First being TotalScore, second being TemplateMatch
-        ThrsScore = min(TotalScore(label==1));
         %  Edges = [0:0.01:1];
         % Vector = [0.005:0.01:1-0.005];
     end
@@ -320,10 +320,15 @@ for id = 1:2
     hw = histcounts(WithinScores(~isnan(WithinScores)),Edges);
     ha = histcounts(AcrossScores(~isnan(AcrossScores)),Edges);
 
-    plot(Vector,hs./sum(hs),'-','color',[0 0.75 0.25]) %
+    if id == 1
+        ThrsScore = Vector(find((hs./sum(hs))>(hw./sum(hw))&Vector>0.6,1,'first'));
+    end
     hold on
-    plot(Vector,ha./sum(ha),'-','color',[1 0 0]) %
-    plot(Vector,hw./sum(hw),'-','color',[0 0.25 0.75]) %
+
+    plot(Vector,ha,'-','color',[1 0 0]) %./sum(ha)
+    plot(Vector,hw,'-','color',[0 0.25 0.75]) %./sum(hw)
+       area(Vector(Vector>=ThrsScore),ha(Vector>=ThrsScore),'FaceColor',[0.8 0.1 0])
+ plot(Vector,hs,'-','color',[0 0.75 0.25]) %./sum(hs)
 
     line([ThrsScore ThrsScore],get(gca,'ylim'),'color',[0.5 0.5 0.5]); %,'LineStyle','--')
 
@@ -335,7 +340,7 @@ for id = 1:2
         xlabel('Total Score')
         title('Using total score')
     end
-    ylabel('Proportion|Group')
+    ylabel('Number of pairs')
     legend('Self Score',['Across C_i_j<' num2str(param.NeighbourDist)],['Within C_i_j<' num2str(param.NeighbourDist)],'Location','best')
     makepretty
     offsetAxes
