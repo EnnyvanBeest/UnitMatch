@@ -89,9 +89,10 @@ def flip_dim(AvgWaveformPerTP, param):
     where the average position tends to wards the center of the x coords when the wave is decaying
     """
     nUnits = param['nUnits']
+    SpikeWidth = param['SpikeWidth']
 
     FlipDim = np.array((1,)) # BE CAREFUL HERE, Which dimension is the x-axis  
-    AvgWaveformPerTPFlip = np.full((3, nUnits,82,2, len(FlipDim)+1), np.nan)
+    AvgWaveformPerTPFlip = np.full((3, nUnits,SpikeWidth ,2 , len(FlipDim)+1), np.nan)
 
     for i in range(len(FlipDim)):
         tmpdat = AvgWaveformPerTP[FlipDim[i]  ,:,:,:]
@@ -108,7 +109,7 @@ def get_Euclidean_dist(AvgWaveformPerTPFlip,param):
     """
     Calculated the Euclidean distance between the units at each time point and for the flipped axis case
     """
-    # This can get to LARGE arrays 3*566*82*2*2*566 ~ Billions...
+    # This can get to LARGE arrays e.g 3*566*82*2*2*566 ~ Billions...
     #if this is slow dask may be a good idea..
     # all function have dask version so *should be simple to use dask* 
 
@@ -160,9 +161,10 @@ def get_recentered_Euclidean_dist(AvgWaveformPerTPFlip, AvgCentroid, param):
 
     waveidx = param['waveidx']
     nUnits = param['nUnits']
+    SpikeWidth = param['SpikeWidth']
 
     # Recented projected location , aka subtract the avg location, the we can unique info
-    AvgCentroidBroadcast = np.tile(np.expand_dims(AvgCentroid, axis= (3,4)), (1,1,1,82,2))
+    AvgCentroidBroadcast = np.tile(np.expand_dims(AvgCentroid, axis= (3,4)), (1,1,1,SpikeWidth,2))
     AvgWaveformPerTPFlipRecentered = np.swapaxes( np.swapaxes(AvgWaveformPerTPFlip, 2,3) - AvgCentroidBroadcast,2,3)
     x1 = np.tile( np.expand_dims(AvgWaveformPerTPFlipRecentered[:,:,waveidx,0,:], axis = -1), (1,1,1,1,nUnits)).squeeze()
     x2 = np.swapaxes(np.tile( np.expand_dims(AvgWaveformPerTPFlipRecentered[:,:,waveidx,1,:], axis = -1), (1,1,1,1,nUnits)).squeeze(), 1, 4)

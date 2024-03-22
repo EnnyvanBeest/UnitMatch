@@ -78,8 +78,11 @@ def run_GUI():
     SessionsList = np.arange(1,param['nSessions']+1).tolist()
     SessionEntryA = ttk.Combobox(EntryFrame, value = SessionsList, width = 2)
     SessionEntryB = ttk.Combobox(EntryFrame, value = SessionsList, width = 2)
-    SessionEntryA.set(1) #Start wiht session1,2
-    SessionEntryB.set(2)
+    SessionEntryA.set(1) #Start wiht session 1,2 if more than 1 session given
+    if len(SessionsList) == 1:
+        SessionEntryB.set(1)
+    else:
+        SessionEntryB.set(2)
     LabelSessionA = ttk.Label(EntryFrame, text = 'Session No.')
     LabelSessionB = ttk.Label(EntryFrame, text = 'Session No.')
 
@@ -220,7 +223,7 @@ def run_GUI():
     rcParams['xtick.color'] = Color
     rcParams['ytick.color'] = Color
 
-    return IsMatch, NotMatch
+    return IsMatch, NotMatch, MatchesGUI
 
 def process_info_for_GUI(Output, MatchThresholdIn, Scores2Include, TotalScore, AmplitudeIn, SpatialDecayIn,
                          AvgCentroidIn, AvgWaveformIn, AvgWaveformPerTPIn, WaveIdxIn, MaxSiteIn, MaxSiteMeanIn, 
