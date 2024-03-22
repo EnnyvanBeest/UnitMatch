@@ -364,7 +364,7 @@ for uidtype = 1:numel(UIDtoUse)
         end
         xlabel('delta Days')
         set(gca,'XTick',1:numel(deltaDaysBins)-1,'XTickLabel',yTickLabels)
-        ylabel('corr')
+        ylabel('AUC')
         title(fnames{ff})
         makepretty
         offsetAxes

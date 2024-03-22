@@ -324,11 +324,11 @@ for id = 1:2
         ThrsScore = Vector(find((hs./sum(hs))>(hw./sum(hw))&Vector>0.6,1,'first'));
     end
     hold on
+ plot(Vector,hs,'-','color',[0 0.75 0.25]) %./sum(hs)
 
     plot(Vector,ha,'-','color',[1 0 0]) %./sum(ha)
     plot(Vector,hw,'-','color',[0 0.25 0.75]) %./sum(hw)
        area(Vector(Vector>=ThrsScore),ha(Vector>=ThrsScore),'FaceColor',[0.8 0.1 0])
- plot(Vector,hs,'-','color',[0 0.75 0.25]) %./sum(hs)
 
     line([ThrsScore ThrsScore],get(gca,'ylim'),'color',[0.5 0.5 0.5]); %,'LineStyle','--')
 
