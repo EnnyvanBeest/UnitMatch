@@ -41,5 +41,5 @@ if ~exist('UMFiles') || isempty(UMFiles) % When using the example pipeline this 
     close all
 end
 % summaryFunctionalPlots_Part2(UMFiles, groupvec)
-summaryMatchingPlots(UMFiles,groupvec,1)
+summaryMatchingPlots(UMFiles,{'UID1Liberal','UID1','UID1Conservative'},groupvec,1)
 summaryFunctionalPlots(UMFiles, 'Corr', groupvec)
