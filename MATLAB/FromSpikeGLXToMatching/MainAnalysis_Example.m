@@ -2,15 +2,15 @@
 
 %% User Input
 %% Path information
-DataDir = {'H:\MatchingUnits\RawDataMonthApart'};% {'H:\MatchingUnits\RawData'};% ;%Raw data folders, typically servers were e.g. *.cbin files are stored
-SaveDir = 'H:\MatchingUnits\OutputMonthApart'; %'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\2ConsecutiveDays\Stitched';%'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\MonthApart\Stitched';%%'H:\MatchingUnits\Output\MonthApartStitched'% 'H:\MatchingUnits\Output\NotConcatenated';%'\\znas.cortexlab.net\Lab\Share\Celian\UnitMatch\MatchTables\NewSep27\MonthApart\Stitched'% %%;% %'H:\MatchingUnits\Output\ManyRecordings'%Folder where to store the results
+DataDir = {'H:\MatchingUnits\RawData'};%{'H:\MatchingUnits\RawDataMonthApart'};%  ;%Raw data folders, typically servers were e.g. *.cbin files are stored
+SaveDir = 'H:\MatchingUnits\Output';%'H:\MatchingUnits\OutputMonthApart'; %'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\2ConsecutiveDays\Stitched';%'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\MonthApart\Stitched';%%'H:\MatchingUnits\Output\MonthApartStitched'% 'H:\MatchingUnits\Output\NotConcatenated';%'\\znas.cortexlab.net\Lab\Share\Celian\UnitMatch\MatchTables\NewSep27\MonthApart\Stitched'% %%;% %'H:\MatchingUnits\Output\ManyRecordings'%Folder where to store the results
 tmpdatafolder = 'H:\OpenEphys_Example\Tmp'; % temporary folder for temporary decompression of data 
-KilosortDir = 'H:\MatchingUnits\KilosortOutputMonthApart';%'H:\MatchingUnits\KilosortOutput';'\\znas.cortexlab.net\Lab\Share\Enny\UnitMatch\KSComparisonSubset';%'\\znas.cortexlab.net\Lab\Share\Enny\UnitMatch\KilosortOutputMonthApart';%'H:\MatchingUnits\KilosortOutputMonthApart';%'\\znas.cortexlab.net\Lab\Share\Celian\UnitMatch\KilosortOutputMonthApart';% Kilosort output folder
+KilosortDir = 'H:\MatchingUnits\KilosortOutput';%'H:\MatchingUnits\KilosortOutputMonthApart';%'\\znas.cortexlab.net\Lab\Share\Enny\UnitMatch\KSComparisonSubset';%'\\znas.cortexlab.net\Lab\Share\Enny\UnitMatch\KilosortOutputMonthApart';%'H:\MatchingUnits\KilosortOutputMonthApart';%'\\znas.cortexlab.net\Lab\Share\Celian\UnitMatch\KilosortOutputMonthApart';% Kilosort output folder
 GithubDir = 'C:\Users\EnnyB\Documents\GitHub'; % Github directory
 PythonEXE = 'C:\Users\EnnyB\anaconda3\envs\pyks2_debug\pythonw.exe' % Python version to run python code in:
 
 %% Information on experiments
-MiceOpt = {'AL032'};%,'AV008','CB016','EB019','JF067'}; %'AL032', Add all mice you want to analyze
+MiceOpt = {'AL032'};%{'AL032','AV008','CB016','EB019','JF067'}; %'AL032', Add all mice you want to analyze
 DataDir2Use = repmat(1,[1,length(MiceOpt)]); % In case you have multiple DataDir, index which directory is used for each mouse
 RecordingType = repmat({'Chronic'},1,length(MiceOpt)); % And whether recordings were Chronic (default)
 RecordingType(ismember(MiceOpt,{''}))={'Acute'}; %EB014', % Or maybe acute?
@@ -35,7 +35,7 @@ PipelineParams.loadPCs = 0; % Only necessary when computiong isoluation metrics/
 % UnitMatch
 PipelineParams.UnitMatch = 1; % If 1, find identical units across sessions or oversplits in a fast and flexible way
 PipelineParams.RedoUnitMatch = 1; % if 1, Redo unitmatch
-PipelineParams.separateIMRO = 0; % Run for every IMRO separately (for memory reasons or when having multiple probes this might be a good idea)
+PipelineParams.separateIMRO = 1; % Run for every IMRO separately (for memory reasons or when having multiple probes this might be a good idea)
 PipelineParams.UseHistology = 0; % Use real coordinates (3D space of tracked probes if available)
 
 % UnitMatch Parameters:
@@ -101,7 +101,7 @@ RunUnitMatchAllDataPerMouse
 
 %% Across Mice Graphs
 % SummarizeAcrossMice
-FromDate = datetime("2024-02-15 09:00:00");
+FromDate = datetime("2024-02-26 09:00:00");
 UMFiles = cell(1,0); % Define your UMfolders here or use below:
 groupvec = nan(1,0);
 if ~exist('UMFiles') || isempty(UMFiles) % When using the example pipeline this may be useful:

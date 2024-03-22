@@ -44,7 +44,7 @@ for midx = 1:length(miceopt)
     FPFNUM(midx,1) = sum(Pairs(:,1)~=Pairs(:,2))./nclus;
 
     % All refPopCorr
-    CV1idx = find(tmpUM.MatchTable.ID1 < tmpUM.MatchTable.ID2 & tmpUM.MatchTable.EucledianDistance < tmpUM.UMparam.NeighbourDist); % Only neighbours
+    CV1idx = find(tmpUM.MatchTable.ID1 < tmpUM.MatchTable.ID2);% & tmpUM.MatchTable.EucledianDistance < tmpUM.UMparam.NeighbourDist); % Only neighbours
     % Extract functional scores
     FunctionalScoreUM = tmpUM.MatchTable.refPopCorr(tblidx);
     FunctionalScoreOther = tmpUM.MatchTable.refPopCorr(CV1idx(~ismember(CV1idx,tblidx)));
@@ -82,48 +82,40 @@ for midx = 1:length(miceopt)
 end
 
 %% Histogram
-cols = hsv(length(miceopt));
+cols = distinguishable_colors(length(miceopt));
 figure; 
-subplot(3,3,1)
-h = bar(squeeze(nanmean(cat(3,FPFNUM,FPFNYuan),1)));
+subplot(2,2,1)
+scatter(FPFNUM(:,1),1-FPFNUM(:,2),50,cols,'filled');
 hold on
-for hid = 1:length(h)
-    for modeid = 1:2
-        if hid == 2
-        scatter(repmat(h(hid).XEndPoints(modeid),1,length(miceopt)),FPFNYuan(:,modeid)',20,cols,'filled')
-        else
-        scatter(repmat(h(hid).XEndPoints(modeid),1,length(miceopt)),FPFNUM(:,modeid)',20,cols,'filled')
-        end
-
-    end
-end
-for modeid = 1: 2
-    for midx = 1:length(miceopt)
-        plot([h(1).XEndPoints(modeid);h(2).XEndPoints(modeid)],cat(2,FPFNUM(midx,modeid),FPFNYuan(midx,modeid))','color',cols(midx,:))
-    end
-end
-
-set(gca,'XTickLabel',{'Unexpected matches','Unexpected non-matches'})
-ylabel('Within day')
-legend({'UnitMatch','Yuan et al.'})
-title('Proportion of matches')
-makepretty
-offsetAxes
-
-subplot(3,3,2)
-hold on
-for modeid = 1:2
-    scatter(repmat(modeid,1,length(miceopt)),AUCs(:,modeid),20,cols,'filled')
-end
+scatter(FPFNYuan(:,1),1-FPFNYuan(:,2),50,cols);
 for midx = 1:length(miceopt)
-    plot([1,2],AUCs(midx,:),'color',cols(midx,:))
+    line([FPFNUM(midx,1) FPFNYuan(midx,1)],1-[FPFNUM(midx,2) FPFNYuan(midx,2)],'color',cols(midx,:))
 end
-set(gca,'XTick',1:2,'XTickLabel',{'UnitMatch','Yuan et al.'})
-ylabel('AUCvalues')
-title('Ref pop cross-correlation')
+
+xlabel('False Positives')
+ylabel('Hits')
+legend({'UnitMatch','Yuan et al.'})
+title('Within day - Kilosort')
+xlim([0 0.5])
+ylim([0.5 1])
+axis square
 makepretty
 offsetAxes
 
+% subplot(3,3,2)
+% hold on
+% for modeid = 1:2
+%     scatter(repmat(modeid,1,length(miceopt)),AUCs(:,modeid),20,cols,'filled')
+% end
+% for midx = 1:length(miceopt)
+%     plot([1,2],AUCs(midx,:),'color',cols(midx,:))
+% end
+% set(gca,'XTick',1:2,'XTickLabel',{'UnitMatch','Yuan et al.'})
+% ylabel('AUCvalues')
+% title('Ref pop cross-correlation')
+% makepretty
+% offsetAxes
+% 
 
 end
 %% Across days
@@ -133,7 +125,7 @@ miceopt = {'AL032','AV008','CB016','EB019','JF067'};
 ProbThresh = 0.5;
 
 nMatches = nan(length(miceopt),3); % Both (overlap), UnitMatch only, Yuan only
-PercOverlapWithFunctional = nan(length(miceopt),3); % Shared, Unique to UM, Unique to Yuan
+FPFNWithFunct = nan(length(miceopt),2,3); % mice,FP/FN, UM/Yuan/both
 AUCsAcross = nan(length(miceopt),3); % AUC values %Shared, Unique to UM, Unique to Yuan
 DriftUM = nan(2,length(miceopt));
 DriftYuan = nan(1,length(miceopt));
@@ -143,7 +135,7 @@ for midx = 1:length(miceopt)
     % What about UnitMatch?
     UMOutputFile = dir(fullfile(datapathUM,miceopt{midx},'**','UnitMatch.mat')); % Find output file
     % AssignUniqueID(UMOutputFile.folder)
-    ComputeFunctionalScores(UMOutputFile.folder)
+    % ComputeFunctionalScores(UMOutputFile.folder)
 
     tmpUM = load(fullfile(UMOutputFile.folder,UMOutputFile.name));
 
@@ -182,7 +174,13 @@ for midx = 1:length(miceopt)
     nMatches(midx,3) = nUniqueYuan/min([tmpYuan.output.KSgood_f1,tmpYuan.output.KSgood_f2]);
 
     % All refPopCorr
-    CV1idx = find(tmpUM.MatchTable.RecSes1 < tmpUM.MatchTable.RecSes2 & tmpUM.MatchTable.EucledianDistance < tmpUM.UMparam.maxdist); % Only neighbours
+    CV1idx = find(tmpUM.MatchTable.RecSes1 < tmpUM.MatchTable.RecSes2);% & tmpUM.MatchTable.EucledianDistance < tmpUM.UMparam.maxdist); % Only neighbours
+    
+    % 'Ground truth' functional scores
+    FunctionalTruth = find((tmpUM.MatchTable.ISIRank < 3 & tmpUM.MatchTable.refPopRank < 3) & tmpUM.MatchTable.RecSes1 < tmpUM.MatchTable.RecSes2);
+    FPFNWithFunct(midx,1,1) = sum(~ismember(tblidx,FunctionalTruth))./numel(FunctionalTruth);
+    FPFNWithFunct(midx,2,1) = sum(ismember(FunctionalTruth,tblidx))./numel(FunctionalTruth); 
+    
     % Extract functional scores
     FunctionalScoreOverlap = tmpUM.MatchTable.refPopCorr(tblidx(OverlapIdx));
     FunctionalScoreOther = tmpUM.MatchTable.refPopCorr(CV1idx(~ismember(CV1idx,tblidx(OverlapIdx))));
@@ -207,6 +205,12 @@ for midx = 1:length(miceopt)
         YuanTblIdx(pairid) = find(ismember(tmpUM.MatchTable.ID1,RealIDTable(pairid,1)) & ismember(tmpUM.MatchTable.RecSes1,1) &...
             ismember(tmpUM.MatchTable.ID2,RealIDTable(pairid,2)) & ismember(tmpUM.MatchTable.RecSes2,2));
     end
+    FPFNWithFunct(midx,1,2) = sum(~ismember(YuanTblIdx,FunctionalTruth))./numel(FunctionalTruth);
+    FPFNWithFunct(midx,2,2) = sum(ismember(FunctionalTruth,YuanTblIdx))./numel(FunctionalTruth);
+
+    FPFNWithFunct(midx,1,3) = sum(~ismember(tblidx(OverlapIdx),FunctionalTruth))./numel(FunctionalTruth);
+    FPFNWithFunct(midx,2,3) = sum(ismember(FunctionalTruth,tblidx(OverlapIdx)))./numel(FunctionalTruth); 
+  
     FunctionalScoreYuan = tmpUM.MatchTable.refPopCorr(YuanTblIdx);
     FunctionalScoreOther = tmpUM.MatchTable.refPopCorr(CV1idx(~ismember(CV1idx,YuanTblIdx)));
     % AUC
@@ -217,39 +221,36 @@ for midx = 1:length(miceopt)
 end
 
 %%
-subplot(3,3,4)
-CondCols = [0 0 0; 0 0 1; 1 0 0];
+%
+subplot(2,2,3)
 hold on
-for modeid = 2:3
-    scatter(repmat(modeid,1,length(miceopt)),nMatches(:,modeid),20,cols,'filled')
-end
-for midx = 1:length(miceopt)
-    plot([2:3],nMatches(midx,2:3),'color',cols(midx,:))
-end
-set(gca,'XTick',2:3,'XTickLabel',{'UnitMatch','Yuan et al.'})
-ylabel('Across two days')
+scatter(AUCsAcross(:,2),AUCsAcross(:,3),35,cols,'filled')
+axis square
+xlims = get(gca,'xlim');
+ylims = get(gca,'ylim');
+lims = [min([xlims(1) ylims(1)]) max([xlims(2) ylims(2)])];
+set(gca,'xlim',lims,'ylim',lims)
+line([lims(1) lims(2)],[lims(1) lims(2)],'color',[0 0 0])
+xlabel('UnitMatch')
+ylabel('Yuan et al.')
+% for modeid = 2:3
+%     h=scatter(repmat(modeid,1,length(miceopt)),AUCsAcross(:,modeid),20,cols,'filled')
+% end
+% for midx = 1:length(miceopt)
+%     plot([2,3],AUCsAcross(midx,2:3),'color',cols(midx,:))
+% end
+title('AUC values across 2 days')
 makepretty
 offsetAxes
 
-subplot(3,3,5)
-hold on
-for modeid = 2:3
-    h=scatter(repmat(modeid,1,length(miceopt)),AUCsAcross(:,modeid),20,cols,'filled')
-end
-for midx = 1:length(miceopt)
-    plot([2,3],AUCsAcross(midx,2:3),'color',cols(midx,:))
-end
-set(gca,'XTick',2:3,'XTickLabel',{'UnitMatch','Yuan et al.'})
-ylabel('AUC values')
-makepretty
-offsetAxes
-
-subplot(3,3,6)
+subplot(2,2,4)
 scatter(abs(DriftUM(2,:)),abs(DriftYuan),20,cols,'filled')
 axis square
 xlims = get(gca,'xlim');
 ylims = get(gca,'ylim');
 lims = [min([xlims(1) ylims(1)]) max([xlims(2) ylims(2)])];
+line([lims(1) lims(2)],[lims(1) lims(2)],'color',[0 0 0])
+
 set(gca,'xlim',lims,'ylim',lims)
 
 xlabel('UnitMatch')
@@ -257,18 +258,19 @@ ylabel('Yuan et al.')
 title('Drift Estimate')
 
 %% Across many days
-datapath = 'H:\MatchingUnits\Yuan\AcrossMultipleDays';
-datapathUM = 'H:\MatchingUnits\OutputMonthApart'
+datapath = 'H:\MatchingUnits\Yuan\AcrossManyDays';
+datapathUM = 'H:\UnitMatch\AL032\Probe0\IMRO_2\UnitMatch';% 'H:\MatchingUnits\OutputMonthApart'
 miceopt = {'AL032'};
 ProbThresh = 0.5;
+nRec = 22;
 
-nMatches = nan(3,3); % Both (overlap), UnitMatch only, Yuan only
-AUCsAcrossManyDays = nan(3,3); % AUC values %Shared, Unique to UM, Unique to Yuan
+nMatches = nan(nRec,3); % Both (overlap), UnitMatch only, Yuan only
+AUCsAcrossManyDays = nan(nRec,3); % AUC values %Shared, Unique to UM, Unique to Yuan
 % Data was split up first versus second half of recording. How many of good
 % units (Bombcell isolated) are found back by the two algorithms?
 for midx = 1:length(miceopt)
     % What about UnitMatch?
-    UMOutputFile = dir(fullfile(datapathUM,miceopt{midx},'**','UnitMatch.mat')); % Find output file
+    UMOutputFile = dir(fullfile(datapathUM,'**','UnitMatch.mat')); % Find output file
     % AssignUniqueID(UMOutputFile.folder)
     % ComputeFunctionalScores(UMOutputFile.folder)
 
@@ -279,7 +281,7 @@ for midx = 1:length(miceopt)
     YuanOutputFile = dir(fullfile(datapath,miceopt{midx},'**','chain_summary.mat')); % Find output file
     tmpYuan = load(fullfile(YuanOutputFile.folder,YuanOutputFile.name));
 
-    for did = 1:3 % Loop over days to find the matches Yuan found
+    for did = 1:nRec-1 % Loop over days to find the matches Yuan found
         tmpYuan = load(fullfile(YuanOutputFile.folder,['result_' num2str(did) '_' num2str(did+1)],'Output.mat'));
         if did ==1
             Ntotal = tmpYuan.output.KSgood_f1 + tmpYuan.output.KSgood_f2;
@@ -317,19 +319,20 @@ for midx = 1:length(miceopt)
         nMatches(did,3) = nUniqueYuan/min([tmpYuan.output.KSgood_f1,tmpYuan.output.KSgood_f2]);
 
         % All refPopCorr
-        CV1idx = find(tmpUM.MatchTable.RecSes1 == did & tmpUM.MatchTable.RecSes2 == did+1 & tmpUM.MatchTable.EucledianDistance < tmpUM.UMparam.maxdist); % Only neighbours
+        CV1idx = find(tmpUM.MatchTable.RecSes1 == did & tmpUM.MatchTable.RecSes2 == did+1);% & tmpUM.MatchTable.EucledianDistance < tmpUM.UMparam.maxdist); % Only neighbours
         % Extract functional scores
         FunctionalScoreOverlap = tmpUM.MatchTable.refPopCorr(tblidx(OverlapIdx));
         FunctionalScoreOther = tmpUM.MatchTable.refPopCorr(CV1idx(~ismember(CV1idx,tblidx(OverlapIdx))));
 
         % AUC
-        scores = [FunctionalScoreOther', FunctionalScoreOverlap'];
-        labels = [zeros(1,length(FunctionalScoreOther)), ones(1,length(FunctionalScoreOverlap))];
-        [x,y,~,AUCsAcrossManyDays(did,1)] = perfcurve(labels,scores,1);
-
-        %  UM Only
-        FunctionalScoreUM = tmpUM.MatchTable.refPopCorr(tblidx(NonOverlapIdx));
-        FunctionalScoreOther = tmpUM.MatchTable.refPopCorr(CV1idx(~ismember(CV1idx,tblidx(NonOverlapIdx))));
+        if any(FunctionalScoreOverlap)
+            scores = [FunctionalScoreOther', FunctionalScoreOverlap'];
+            labels = [zeros(1,length(FunctionalScoreOther)), ones(1,length(FunctionalScoreOverlap))];
+            [x,y,~,AUCsAcrossManyDays(did,1)] = perfcurve(labels,scores,1);
+        end
+        %  UM 
+        FunctionalScoreUM = tmpUM.MatchTable.refPopCorr(tblidx);
+        FunctionalScoreOther = tmpUM.MatchTable.refPopCorr(CV1idx(~ismember(CV1idx,tblidx)));
 
         % AUC
         scores = [FunctionalScoreOther', FunctionalScoreUM'];
@@ -337,8 +340,8 @@ for midx = 1:length(miceopt)
         [x,y,~,AUCsAcrossManyDays(did,2)] = perfcurve(labels,scores,1);
 
 
-        FunctionalScoreYuan = tmpUM.MatchTable.refPopCorr(YuanTblIdx(NonOverlapIdxYuan));
-        FunctionalScoreOther = tmpUM.MatchTable.refPopCorr(CV1idx(~ismember(CV1idx,YuanTblIdx(NonOverlapIdxYuan))));
+        FunctionalScoreYuan = tmpUM.MatchTable.refPopCorr(YuanTblIdx);
+        FunctionalScoreOther = tmpUM.MatchTable.refPopCorr(CV1idx(~ismember(CV1idx,YuanTblIdx)));
         % AUC
         scores = [FunctionalScoreOther', FunctionalScoreYuan'];
         labels = [zeros(1,length(FunctionalScoreOther)), ones(1,length(FunctionalScoreYuan))];
@@ -350,30 +353,50 @@ for midx = 1:length(miceopt)
 
 end
 
+%
+subplot(2,2,2)
+cols = copper(nRec);
+% hold on
+% for modeid = 2:3
+%     scatter(repmat(modeid,1,nRec),nMatches(:,modeid),20,cols,'filled')
+% end
+% for midx = 1:nRec
+%     plot([2,3],nMatches(midx,2:3),'color',cols(midx,:))
+% end
+% set(gca,'XTick',2:3,'XTickLabel',{'UnitMatch','Yuan et al.'})
+% ylabel(['Across ' num2str(nRec) ' recordings'])
+% makepretty
+% offsetAxes
 
-subplot(3,3,7)
-cols = [1 0 0; 0 1 0; 0 0 1];
-hold on
-for modeid = 2:3
-    scatter(repmat(modeid,1,3),nMatches(:,modeid),20,cols,'filled')
-end
-for midx = 1:3
-    plot([2,3],nMatches(midx,2:3),'color',cols(midx,:))
-end
-set(gca,'XTick',2:3,'XTickLabel',{'UnitMatch','Yuan et al.'})
-ylabel('Across 4 recordings')
+% subplot(3,3,8)
+scatter(AUCsAcrossManyDays(:,2),AUCsAcrossManyDays(:,3),30,cols(1:nRec,:),'filled')
+axis square
+xlims = get(gca,'xlim');
+ylims = get(gca,'ylim');
+lims = [min([xlims(1) ylims(1)]) max([xlims(2) ylims(2)])];
+set(gca,'xlim',lims,'ylim',lims)
+line([lims(1) lims(2)],[lims(1) lims(2)],'color',[0 0 0])
+xlabel('UnitMatch')
+ylabel('Yuan et al.')
+title('AUC value across many successive days')
 makepretty
 offsetAxes
 
-subplot(3,3,8)
-hold on
-for modeid = 2:3
-    h=scatter(repmat(modeid,1,3),AUCsAcrossManyDays(:,modeid)',20,cols(1:3,:),'filled')
-end
-for midx = 1:3
-    plot([2,3],AUCsAcrossManyDays(midx,2:3),'color',cols(midx,:))
-end
-set(gca,'XTick',2:3,'XTickLabel',{'UnitMatch','Yuan et al.'})
-ylabel('AUC values')
-makepretty
-offsetAxes
+% hold on
+% for modeid = 2:3
+%     h=scatter(repmat(modeid,1,nRec),AUCsAcrossManyDays(:,modeid)',20,cols(1:nRec,:),'filled')
+% end
+% for midx = 1:nRec
+%     plot([2,3],AUCsAcrossManyDays(midx,2:3),'color',cols(midx,:))
+% end
+% set(gca,'XTick',2:3,'XTickLabel',{'UnitMatch','Yuan et al.'})
+% ylabel('AUC values')
+% makepretty
+% offsetAxes
+% 
+% figure; imagesc(1:nRec)
+% colormap(cols)
+% xlabel('Recording day')
+% title('Color map')
+
+%% 

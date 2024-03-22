@@ -142,13 +142,21 @@ for midx = 1:length(MiceOpt)
                 PipelineParams.AllProbeSN = PipelineParams.AllProbeSN(idx);
                 PipelineParams.RawDataPaths = PipelineParams.RawDataPaths(idx);
                 PipelineParams.KSDir = AllKiloSortPaths(idx);
+
+                % Convert2Yuanetal(PipelineParams.KSDir,fullfile('H:\MatchingUnits\Yuan\AcrossManyDays\',MiceOpt{midx}))
+                % % to compare to Yuan (makes the data according to their
+                % format, then you need to download their pipeline to run
+                % it)
             end
 
             %% Prepare personal save/directory and decompressed data paths
             PipelineParams.SaveDir = fullfile(PipelineParams.SaveDir ,'UnitMatch');
+
             if isstruct(PipelineParams.RawDataPaths{1})
+               
                 if length(PipelineParams.RawDataPaths)==1
                     PipelineParams.AllDecompPaths = arrayfun(@(X) fullfile(PipelineParams.tmpdatafolder, strrep(X.name, 'cbin', 'bin')), PipelineParams.RawDataPaths{1}, 'Uni', 0);
+                    PipelineParams.RawDataPaths = arrayfun(@(X) fullfile(X.folder,X.name), PipelineParams.RawDataPaths{1}, 'Uni', 0);
                 else
                     PipelineParams.AllDecompPaths = cellfun(@(X) fullfile(PipelineParams.tmpdatafolder, strrep(X.name, 'cbin', 'bin')), PipelineParams.RawDataPaths, 'Uni', 0);
                 end
@@ -163,6 +171,7 @@ for midx = 1:length(MiceOpt)
 
             if isempty(UnitMatchExist) || PipelineParams.RedoUnitMatch || UnitMatchExist.date<FromDate
 
+                UMtime = tic;
                 %% Get clusinfo
                 clusinfo = getClusinfo(UMparam.KSDir);
                 if ~any(clusinfo.Good_ID) || sum(clusinfo.Good_ID)<UMparam.minGoodUnits
@@ -170,12 +179,12 @@ for midx = 1:length(MiceOpt)
                     continue
                 end
            
-
                 %% Actual UnitMatch & Unique UnitID assignment
                 [UniqueIDConversion, MatchTable, WaveformInfo, UMparam] = UnitMatch(clusinfo, UMparam);
                 if UMparam.AssignUniqueID
                     [UniqueIDConversion, MatchTable] = AssignUniqueID(UMparam.SaveDir);
                 end
+                UMtime = toc(UMtime)
 
                 %% Visualization
                 % PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
@@ -204,15 +213,15 @@ for midx = 1:length(MiceOpt)
                 end
             
             else
-                  %% Get clusinfo
-                % clusinfo = getClusinfo(UMparam.KSDir);
-                % if ~any(clusinfo.Good_ID) || sum(clusinfo.Good_ID)<UMparam.minGoodUnits
-                %     disp('No good units, continue')
-                %     continue
-                % end
-                % load(fullfile(UMparam.SaveDir,'UnitMatch.mat'),'UMparam','UniqueIDConversion','WaveformInfo')
-                % %% Visualization
-                % % PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
+                % Get clusinfo
+                clusinfo = getClusinfo(UMparam.KSDir);
+                if ~any(clusinfo.Good_ID) || sum(clusinfo.Good_ID)<UMparam.minGoodUnits
+                    disp('No good units, continue')
+                    continue
+                end
+                load(fullfile(UMparam.SaveDir,'UnitMatch.mat'),'UMparam','UniqueIDConversion','WaveformInfo')
+                %% Visualization
+                PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
 
             end
            

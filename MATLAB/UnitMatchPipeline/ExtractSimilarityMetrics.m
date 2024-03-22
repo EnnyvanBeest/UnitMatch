@@ -155,7 +155,7 @@ ProjectedWaveformNorm = (ProjectedWaveformNorm-nanmin(ProjectedWaveformNorm,[],1
 x1 = repmat(ProjectedWaveformNorm(:,:,1),[1 1 size(ProjectedWaveformNorm,2)]);
 x2 = permute(repmat(ProjectedWaveformNorm(:,:,2),[1 1 size(ProjectedWaveformNorm,2)]),[1 3 2]);
 RawWVMSE = squeeze(nanmean((x1 - x2).^2));
-clear x1 x2
+clear x1 x2 ProjectedWaveformNorm
 
 % sort of Normalize distribution
 RawWVMSENorm = sqrt(RawWVMSE);
@@ -310,7 +310,7 @@ while flag<2
     end
 
 
-    clear x1 x2
+    clear x1 x2 tmpEu
     % Average location
     CentroidDist = squeeze(nanmin(squeeze(EuclDist(:,param.NewPeakLoc-param.waveidx==0,:,:)),[],2));%
 
@@ -368,6 +368,7 @@ while flag<2
             EuclDist2(idx,:,:,idx2) = tmpEu; % Euclidean distance
         end
     end
+    clear ProjectedLocationPerTPRecentered tmpEu w
 
 
     clear x1 x2
@@ -450,25 +451,40 @@ while flag<2
                 countid = countid + 1;
             end
         end
+        clear good_ang
 
         % Sum the angles across dimensions
         LocAngle = nansum(LocAngle,5);
 
         clear x1 x2
+        if UseFlipCombis
+            AngleSubtraction = nan(nclus,length(waveidx)-1,2*(length(FlipDim)+1),nclus);
+        else
+            AngleSubtraction = nan(nclus,length(waveidx)-1,(length(FlipDim)+1),nclus);
+        end
+        for batchid1 = 1:nbatch
+            idx = (batchid1-1)*batchsz+1:batchsz*batchid1;
+            idx(idx>nclus) = [];
+            for batchid2 = 1:nbatch
 
-        % Actually just taking the weighted sum of angles is better
-        x1 = repmat(squeeze(LocAngle(:,:,1,:)),[1 1 1 nclus]);
-        if UseFlipCombis
-            x1 = cat(3,x1,x1(:,:,end:-1:1,:));
+                idx2 = (batchid2-1)*batchsz+1:batchsz*batchid2;
+                idx2(idx2>nclus) = [];
+                % Actually just taking the weighted sum of angles is better
+                x1 = repmat(squeeze(LocAngle(idx,:,1,:)),[1 1 1 length(idx2)]);
+                x2 = permute(repmat(squeeze(LocAngle(idx2,:,2,:)),[1 1 1 length(idx)]),[4 2 3 1]); %switch nclus around
+                if UseFlipCombis
+                    x1 = cat(3,x1,x1(:,:,end:-1:1,:));
+                end
+                if UseFlipCombis
+                    x2 = cat(3,x2,x2);
+                end
+                AngleSubtraction(idx,:,:,idx2) = abs(x1-x2);
+            end
         end
-        x2 = permute(repmat(squeeze(LocAngle(:,:,2,:)),[1 1 1 nclus]),[4 2 3 1]); %switch nclus around
-        if UseFlipCombis
-            x2 = cat(3,x2,x2);
-        end
-        AngleSubtraction = abs(x1-x2);
         AngleSubtraction(isnan(abs(x1-x2))) = 2*pi; %punish points with nan
         clear x1 x2
         TrajAngleSim = squeeze(nanmin(nansum(AngleSubtraction,2),[],3)); % sum of angles, minimum across flips
+        clear AngleSubtraction
         TrajAngleSim = 1-((TrajAngleSim-nanmin(TrajAngleSim(:)))./(quantile(TrajAngleSim(:),0.99)-nanmin(TrajAngleSim(:))));
         TrajAngleSim(TrajAngleSim<0 | isnan(TrajAngleSim))=0;
         scores = [TrajAngleSim(SameIdx(:))', TrajAngleSim(WithinIdx(:))'];
@@ -478,12 +494,29 @@ while flag<2
     end
 
     %% Continue distance traveled
-    x1 = repmat(squeeze(TrajDist(:,:,1,:)),[1 1 1 nclus]);
-    x2 = permute(repmat(squeeze(TrajDist(:,:,2,:)),[1 1 1 nclus]),[4 2 3 1]); % switch nclus around
+    if UseFlipCombis
+        TrajDistSim = nan(nclus,length(waveidx)-1,2*(length(FlipDim)+1),nclus);
+    else
+        TrajDistSim = nan(nclus,length(waveidx)-1,(length(FlipDim)+1),nclus);
+    end
+    for batchid1 = 1:nbatch
+        idx = (batchid1-1)*batchsz+1:batchsz*batchid1;
+        idx(idx>nclus) = [];
+        for batchid2 = 1:nbatch
+
+            idx2 = (batchid2-1)*batchsz+1:batchsz*batchid2;
+            idx2(idx2>nclus) = [];
+
+            x1 = repmat(squeeze(TrajDist(idx,:,1,:)),[1 1 1 length(idx2)]);
+            x2 = permute(repmat(squeeze(TrajDist(idx2,:,2,:)),[1 1 1 length(idx)]),[4 2 3 1]); % switch nclus around
+
+            TrajDistSim(idx,:,:,idx2) = abs(x1-x2);%
+        end
+    end
+
     % Distance similarity (subtract for each pair of units)
-    TrajDistCompared = abs(x1-x2);%
     clear x1 x2
-    TrajDistSim = squeeze(nanmin(nansum(TrajDistCompared,2),[],3)); %and take minimum across flips
+    TrajDistSim = squeeze(nanmin(nansum(TrajDistSim,2),[],3)); %and take minimum across flips
     TrajDistSim = sqrt(TrajDistSim); % Make more normal
     TrajDistSim = 1-((TrajDistSim-nanmin(TrajDistSim(:)))./(quantile(TrajDistSim(:),0.99)-nanmin(TrajDistSim(:))));
     TrajDistSim(TrajDistSim<0 | isnan(TrajDistSim))=0;
@@ -742,6 +775,7 @@ while flag<2
             tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1)=nan;
         end
     end
+  
     hd = histcounts(diag(tmp),Bins)./nclus;
     hnd = histcounts(tmp(~eye(size(tmp))),Bins)./sum(~isnan(tmp(~eye(size(tmp)))));
     hp = histcounts(tmp(:),Bins)./sum(~isnan(tmp(:)));
@@ -750,8 +784,21 @@ while flag<2
     end
     ThrsOpt = ScoreVector(find(smoothdata(hd)>smoothdata(hnd)&ScoreVector>0.6,1,'first'));
     [muw, sw] = normfit(tmp(~isnan(tmp) & tmp<ThrsOpt));
-
-
+   % % 
+   % % Paper figures 3
+    % figure;
+    % hd = histcounts(diag(tmp),Bins);
+    % hnd = histcounts(tmp(~eye(size(tmp))),Bins);
+    % 
+    % subplot(2,1,1)
+    % plot(ScoreVector,hd,'-','color',[0 0.7 0])
+    % hold on;
+    % plot(ScoreVector,hnd,'-','color','b')
+    % ylims = get(gca,'ylim');
+    % line([ThrsOpt ThrsOpt],ylims,'color',[0.2 0.2 0.2])
+    % ylim(ylims)
+    % makepretty
+    % offsetAxes
 
     tmp = TotalScore;
     % Take centroid dist > maxdist out
@@ -760,11 +807,18 @@ while flag<2
     for did = 1:ndays
         tmp(SessionSwitch(did):SessionSwitch(did+1)-1,SessionSwitch(did):SessionSwitch(did+1)-1)=nan;
     end
-    % ha = histcounts(tmp(:),Bins)./sum(~isnan(tmp(:)));
-    % [mua, sa] = normfit(tmp(~isnan(tmp)  & tmp<ThrsOpt));
-    % if ~isnan(mua) && mua<muw && ~flag
-    %     ThrsOpt = ThrsOpt-abs(muw-mua); % Correct for general scores being lower across days (e.g. unresolved drift)
-    % end
+    % % continue for figure 3
+    % subplot(2,1,2)
+    % ha = histcounts(tmp(:),Bins);
+    % 
+    % plot(ScoreVector,ha,'-','color',[1 0 0])
+    % hold on;  
+    % line([ThrsOpt ThrsOpt],ylims,'color',[0.2 0.2 0.2])
+    % ylim(ylims)
+    % makepretty
+    % offsetAxes
+
+
 
     % Correct for total scores being lower for further away session in
     % initial phase
@@ -795,7 +849,10 @@ while flag<2
         end
     end
 
+
     if flag  && drawthis
+        ha = histcounts(tmp(:),Bins)./sum(~isnan(tmp(:)));
+
         subplot(2,2,3)
         plot(ScoreVector,hd,'-','color',[0 0.7 0]); hold on; plot(ScoreVector,hnd,'b-')
         plot(ScoreVector,ha,'-','color',[1 0 0]);
@@ -808,7 +865,7 @@ while flag<2
         title('Total score distributions')
         legend('Same Unit','Neighbors','Across','Threshold','Location', 'best')
 
-
+      
         subplot(2,2,2)
         imagesc(TotalScore(SortingOrder,SortingOrder)>ThrsOpt)
         hold on
@@ -1002,9 +1059,9 @@ if 0 % THis can be used to look at some example projections
     Pairs = unique(Pairs,'rows');
     Pairs(Pairs(:,1) == Pairs(:,2),:)=[];
     %% Plot
-    Pairs = [198, 469, 47] % Example (AL032, take 10)
+    % Pairs = [198, 469, 47] % Example (AL032, take 10)
 
-    %     Pairs = [10,450,11] % Example
+    Pairs = [10,450,12] % Example
     cols =  [0 0 0; 1 0 0; 0 0 0.7];
 
     figure
@@ -1127,7 +1184,7 @@ if 0 % THis can be used to look at some example projections
         spikeMap = detrend(spikeMap,1); % Detrend (linearly) to be on the safe side. OVER TIME!
         spikeMap = permute(spikeMap,[2,1,3]);  % Put back in order
         %Load channels
-        ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChannel(uid,1),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius.*2.5); %Averaging over 10 channels helps with drift
+        ChanIdx = find(cell2mat(arrayfun(@(Y) norm(channelpos(MaxChannel(uid,1),:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius); %Averaging over 10 channels helps with drift
         Locs = channelpos(ChanIdx,:);
 
         scatter(Locs(:,1),Locs(:,2),20,[0.5 0.5 0.5],'filled','marker','s')
@@ -1181,13 +1238,13 @@ if 0 % THis can be used to look at some example projections
     %% Similarity scores for the two pairs
     figure('name','Similarity scores')
     subplot(1,2,1)
-    bar(cat(1,squeeze(Predictors(Pairs(1),Pairs(3),:)),squeeze(TotalScore(Pairs(1),Pairs(3))./6)),'FaceColor',cols(3,:),'EdgeColor','none')
+    bar(cat(1,squeeze(Predictors(Pairs(1),Pairs(3),:)),squeeze(TotalScore(Pairs(1),Pairs(3)))),'EdgeColor',cols(3,:),'FaceColor','none')
     set(gca,'XTick',1:size(Predictors,3)+1,'XTickLabel',{'C','W','V','D','A',char(920),'T'},'YAxisLocation','right','YTickLabelRotation',90,'XTickLabelRotation',90)
     ylabel('Normalized Score')
     makepretty
 
     subplot(1,2,2)
-    bar(cat(1,squeeze(Predictors(Pairs(1),Pairs(2),:)),squeeze(TotalScore(Pairs(1),Pairs(2))./6)),'FaceColor',cols(2,:),'EdgeColor','none')
+    bar(cat(1,squeeze(Predictors(Pairs(1),Pairs(2),:)),squeeze(TotalScore(Pairs(1),Pairs(2)))),'EdgeColor',cols(2,:),'FaceColor','none')
     set(gca,'XTick',1:size(Predictors,3)+1,'XTickLabel',{'C','W','V','D','A',char(920),'T'},'YAxisLocation','right','YTickLabelRotation',90,'XTickLabelRotation',90)
     ylabel('Normalized Score')
     makepretty

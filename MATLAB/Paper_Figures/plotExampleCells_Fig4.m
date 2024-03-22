@@ -1,7 +1,7 @@
 %% Load and format data
 
-UMFile = {'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\2ConsecutiveDays\Non_Stitched\AL032\AllProbes\AllIMRO\UnitMatch\UnitMatch.mat'};
-summaryFunctionalPlots(UMFile, 'Rank', 1)
+UMFile = {'D:\MatchingUnits\Output\ToRun\AL032\AL032_2019-11-21_stripe192-natIm_g0_t0.imec0.ap__AL032_2019-11-22_stripe192-natIm_g0_t0.imec0.ap\UnitMatch\UnitMatch.mat'};
+summaryFunctionalPlots(UMFile, 'Corr', 1)
 load(UMFile{1})
 
 % Extract cluster information
@@ -47,17 +47,17 @@ binsOn = (proc.window(1)+proc.binSize/2):proc.binSize:proc.window(2);
 binsOff =  proc.window(2)+((proc.binSize/2):proc.binSize:(proc.window(4)-proc.window(3)));
 bins = [binsOn binsOff];
 
-nRec = numel(UMparam.AllRawPaths);
+nRec = numel(UMparam.RawDataPaths);
 nClu = nan(1,nRec); for ss = 1:nRec; nClu(ss) = numel(unique(MatchTable.ID1(MatchTable.RecSes1 == ss))); end
 spikeData_cv = cell(1,2*nRec);
 clusterIDs = cell(1,nRec);
 spikeData = cell(1,nRec);
 for ss = 1:nRec
     % Get the original binFile (also for stitched?)
-    if iscell(UMparam.AllRawPaths{ss})
-        binFileRef = fullfile(UMparam.AllRawPaths{ss});
+    if iscell(UMparam.RawDataPaths{ss})
+        binFileRef = fullfile(UMparam.RawDataPaths{ss});
     else
-        binFileRef = fullfile(UMparam.AllRawPaths{ss}.folder,UMparam.AllRawPaths{ss}.name);
+        binFileRef = fullfile(UMparam.RawDataPaths{ss}.folder,UMparam.RawDataPaths{ss}.name);
     end
 
     % Find the associated experiments
@@ -157,8 +157,8 @@ sess2 = 2;
 
 % Find matches
 MatchTable_matches = MatchTable(MatchTable.UID1 == MatchTable.UID2 & MatchTable.RecSes1 == sess1 & MatchTable.RecSes2 == sess2, :);
-MatchTable_bestMatches = MatchTable_matches(MatchTable_matches.ACGCorr > 0.6 & MatchTable_matches.refPopCorr > 0.8 & MatchTable_matches.natImRespCorr > 0.8,:);
-matches2plt = 3; % 3
+MatchTable_bestMatches = MatchTable_matches(MatchTable_matches.ISICorr > 0.6 & MatchTable_matches.refPopCorr > 0.8 & MatchTable_matches.natImRespCorr > 0.8,:);
+matches2plt = 4UMF; % 3
 clu1 = MatchTable_bestMatches(matches2plt,:).ID1; % 98
 clu2 = MatchTable_bestMatches(matches2plt,:).ID2; % 99
 colMatches = [1 0 0]; 
@@ -166,7 +166,7 @@ colMatches = [1 0 0];
 % Find non-matches
 MatchTable_nonMatches = MatchTable(MatchTable.ID1 == clu1 & MatchTable.UID1 ~= MatchTable.UID2 & MatchTable.RecSes1 == sess1 & MatchTable.RecSes2 == sess1, :);
 MatchTable_worstNonMatches = MatchTable_nonMatches(MatchTable_nonMatches.CentroidDist > 0 & ...
-    MatchTable_nonMatches.ACGCorr < 0.6 | MatchTable_nonMatches.refPopCorr < 0.7 | MatchTable_nonMatches.natImRespCorr < 0.7,:);
+    MatchTable_nonMatches.ISICorr < 0.6 | MatchTable_nonMatches.refPopCorr < 0.7 | MatchTable_nonMatches.natImRespCorr < 0.7,:);
 nonMatches2plt = 6; % 6?
 clu3 = MatchTable_worstNonMatches(nonMatches2plt,:).ID2;
 colNonMatches = [0 0 0.7];
@@ -207,49 +207,61 @@ axis square
 freezeColors
 makepretty
 
-% ACG
+% ACG / ISIH
+ISIbins = [0 5*10.^(-4:0.1:0)];
 p(1) = subplot(4,4,2); % non-match
 hold all
 idx1_1 = sp.spikeTemplates == clu1 & sp.RecSes == sess1 & sp.st < max(sp.st)/2;
-[CCGClu1_1, tClu1_1] = CCGBz([double(sp.st(idx1_1)); double(sp.st(idx1_1))], [ones(size(sp.st(idx1_1), 1), 1); ...
-    ones(size(sp.st(idx1_1), 1), 1) * 2], 'binSize', UMparam.ACGbinSize, 'duration', UMparam.ACGduration, 'norm', 'rate'); %function
 idx1_2 = sp.spikeTemplates == clu1 & sp.RecSes == sess1 & sp.st > max(sp.st)/2;
-[CCGClu1_2, tClu1_2] = CCGBz([double(sp.st(idx1_2)); double(sp.st(idx1_2))], [ones(size(sp.st(idx1_2), 1), 1); ...
-    ones(size(sp.st(idx1_2), 1), 1) * 2], 'binSize', UMparam.ACGbinSize, 'duration', UMparam.ACGduration, 'norm', 'rate'); %function
-plot(tClu1_2(tClu1_2>0), CCGClu1_2(tClu1_2>0,1),'color',[0.5 0.5 0.5]);
-plot(tClu1_1(tClu1_1>0), CCGClu1_1(tClu1_1>0,1),'k');
-xticks([0 0.01 UMparam.ACGduration/2])
-yticks([0 20])
-xlabel('Time (s)')
+% [CCGClu1_1, tClu1_1] = CCGBz([double(sp.st(idx1_1)); double(sp.st(idx1_1))], [ones(size(sp.st(idx1_1), 1), 1); ...
+%     ones(size(sp.st(idx1_1), 1), 1) * 2], 'binSize', UMparam.ACGbinSize, 'duration', UMparam.ACGduration, 'norm', 'rate'); %function
+% [CCGClu1_2, tClu1_2] = CCGBz([double(sp.st(idx1_2)); double(sp.st(idx1_2))], [ones(size(sp.st(idx1_2), 1), 1); ...
+%     ones(size(sp.st(idx1_2), 1), 1) * 2], 'binSize', UMparam.ACGbinSize, 'duration', UMparam.ACGduration, 'norm', 'rate'); %function
+% plot(tClu1_2(tClu1_2>0), CCGClu1_2(tClu1_2>0,1),'color',[0.5 0.5 0.5]);
+% plot(tClu1_1(tClu1_1>0), CCGClu1_1(tClu1_1>0,1),'k');
+ISI1_1 = histcounts(diff(double(sp.st(idx1_1))),ISIbins, 'Normalization','probability');
+ISI1_2 = histcounts(diff(double(sp.st(idx1_2))),ISIbins, 'Normalization','probability');
+stairs(ISIbins(1:end-1)*1000, ISI1_2,'color',[0.5 0.5 0.5], 'LineWidth', 2.0);
+stairs(ISIbins(1:end-1)*1000, ISI1_1,'k', 'LineWidth', 2.0);
+xticks([5 50 500])
+yticks([0 0.07])
+xlabel('Time (ms)')
 ylabel('Firing rate (sp/s)')
 set(gca,'XScale','log')
 makepretty
 offsetAxes
 
-p(1) = subplot(4,4,6); % non-match
+p(2) = subplot(4,4,6); % non-match
 hold all
-plot(tClu1_1(tClu1_1>0), CCGClu1_1(tClu1_1>0,1),'k');
-[CCGClu3, tClu3] = CCGBz([double(sp.st(idx3)); double(sp.st(idx3))], [ones(size(sp.st(idx3), 1), 1); ...
-    ones(size(sp.st(idx3), 1), 1) * 2], 'binSize', UMparam.ACGbinSize, 'duration', UMparam.ACGduration, 'norm', 'rate'); %function
-plot(tClu3(tClu3>0), CCGClu3(tClu3>0,1),'color',colNonMatches);
-xticks([0 0.01 UMparam.ACGduration/2])
-yticks([0 20])
-xlabel('Time (s)')
+idx3 = sp.spikeTemplates == clu3 & sp.RecSes == sess1;
+% plot(tClu1_1(tClu1_1>0), CCGClu1_1(tClu1_1>0,1),'k');
+% [CCGClu3, tClu3] = CCGBz([double(sp.st(idx3)); double(sp.st(idx3))], [ones(size(sp.st(idx3), 1), 1); ...
+%     ones(size(sp.st(idx3), 1), 1) * 2], 'binSize', UMparam.ACGbinSize, 'duration', UMparam.ACGduration, 'norm', 'rate'); %function
+% plot(tClu3(tClu3>0), CCGClu3(tClu3>0,1),'color',colNonMatches);
+ISI3 = histcounts(diff(double(sp.st(idx3))),ISIbins, 'Normalization','probability');
+stairs(ISIbins(1:end-1)*1000, ISI1_1,'k', 'LineWidth', 2.0);
+stairs(ISIbins(1:end-1)*1000, ISI3,'color',colNonMatches, 'LineWidth', 2.0);
+xticks([5 50 500])
+yticks([0 0.07])
+xlabel('Time (ms)')
 ylabel('Firing rate (sp/s)')
 set(gca,'XScale','log')
 makepretty
 offsetAxes
 
-p(2) = subplot(4,4,10); % match
+p(3) = subplot(4,4,10); % match
 hold all
 idx2 = sp.spikeTemplates == clu2 & sp.RecSes == sess2;
-plot(tClu1_1(tClu1_1>0), CCGClu1_1(tClu1_1>0,1),'k');
-[CCGClu2, tClu2] = CCGBz([double(sp.st(idx2)); double(sp.st(idx2))], [ones(size(sp.st(idx2), 1), 1); ...
-    ones(size(sp.st(idx2), 1), 1) * 2], 'binSize', UMparam.ACGbinSize, 'duration', UMparam.ACGduration, 'norm', 'rate'); %function
-plot(tClu2(tClu2>0), CCGClu2(tClu2>0,1),'color',colMatches);
-xticks([0 0.01 UMparam.ACGduration/2])
-yticks([0 20])
-xlabel('Time (s)')
+% plot(tClu1_1(tClu1_1>0), CCGClu1_1(tClu1_1>0,1),'k');
+% [CCGClu2, tClu2] = CCGBz([double(sp.st(idx2)); double(sp.st(idx2))], [ones(size(sp.st(idx2), 1), 1); ...
+%     ones(size(sp.st(idx2), 1), 1) * 2], 'binSize', UMparam.ACGbinSize, 'duration', UMparam.ACGduration, 'norm', 'rate'); %function
+% plot(tClu2(tClu2>0), CCGClu2(tClu2>0,1),'color',colMatches);
+ISI2 = histcounts(diff(double(sp.st(idx2))),ISIbins, 'Normalization','probability');
+stairs(ISIbins(1:end-1)*1000, ISI1_1,'k', 'LineWidth', 2.0);
+stairs(ISIbins(1:end-1)*1000, ISI2,'color',colMatches, 'LineWidth', 2.0);
+xticks([5 50 500])
+yticks([0 0.07])
+xlabel('Time (ms)')
 ylabel('Firing rate (sp/s)')
 set(gca,'XScale','log')
 makepretty
@@ -257,9 +269,9 @@ offsetAxes
 linkaxes(p,'y')
 
 subplot(4,4,14) % matrix
-ACGCorrMat = reshape(MatchTable.ACGCorr, nclus, nclus);
-ACGCorrMat(ACGCorrMat<0.7) = 0.7;
-imagesc(ACGCorrMat(sortCluIdx,sortCluIdx))
+ISICorrMat = reshape(MatchTable.ISICorr, nclus, nclus);
+ISICorrMat(ISICorrMat<0.7) = 0.7;
+imagesc(ISICorrMat(sortCluIdx,sortCluIdx))
 hold on
 colormap('RedBlue')
 clim([0.45 0.95])
@@ -296,8 +308,7 @@ ylabel('Firing rate (sp/s)')
 makepretty
 offsetAxes
 
-% NatImCorr 
-p(1) = subplot(4,4,7); % non-match
+p(2) = subplot(4,4,7); % non-match
 hold all
 resp3 = nanmean(spikeData{recSesUni == sess1}(:,:,clusterIDs{recSesUni == sess1} == clu3,:),4);
 % plot timecourse
@@ -315,7 +326,7 @@ ylabel('Firing rate (sp/s)')
 makepretty
 offsetAxes
 
-p(2) = subplot(4,4,11); % non-match
+p(3) = subplot(4,4,11); % non-match
 hold all
 resp2 = nanmean(spikeData{recSesUni == sess2}(:,:,clusterIDs{recSesUni == sess2} == clu2,:),4);
 % plot timecourse
@@ -366,7 +377,7 @@ xticks([1 numel(neurOrd)])
 makepretty
 offsetAxes
 
-p(1) = subplot(4,4,8); % match
+p(2) = subplot(4,4,8); % match
 hold all
 clu3Idx = find(cluList1 == clu3);
 corrVec3 = corr(sr{sess1}(clu3Idx,:)', sr{sess1}(refPopIdx{sess1},:)');
@@ -379,7 +390,7 @@ xticks([1 numel(neurOrd)])
 makepretty
 offsetAxes
 
-p(2) = subplot(4,4,12); % non-match
+p(3) = subplot(4,4,12); % non-match
 hold all
 clu2Idx = find(cluList2 == clu2);
 corrVec2 = corr(sr{sess2}(clu2Idx,:)', sr{sess2}(refPopIdx{sess2},:)');

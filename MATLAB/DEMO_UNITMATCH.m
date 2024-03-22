@@ -38,7 +38,6 @@ clusinfo = struct; % Note, this can be kilosort input,
 % N.B. clusinfo can also be automatically extracted using clusinfo =
 % getClusinfo
 
-
 %% Add paths and subpaths
 mfilePath = mfilename('fullpath');
 if contains(mfilePath,'LiveEditorEvaluationHelper')

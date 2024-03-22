@@ -73,7 +73,7 @@ for uid = 1:nclus
             if UseMemMap
                 try %hacky way of figuring out if sync channel present or not
                     n_samples = spikeFile.bytes / (param.nChannels * dataTypeNBytes);
-                    nChannels = param.nChannels -1; % Last channel is sync, ignore for now
+                    nChannels = param.nChannels - param.nSyncChans; % Last channel is sync, ignore for now
                     ap_data = memmapfile(AllDecompPaths{GoodRecSesID(uid)}, 'Format', {'int16', [param.nChannels, n_samples], 'data'});
                 catch
                     ap_data = memmapfile(AllDecompPaths{GoodRecSesID(uid)}, 'Format', {'int16', [nChannels, n_samples], 'data'});
@@ -81,7 +81,7 @@ for uid = 1:nclus
                 memMapData = ap_data.Data.data;
             else
                 n_samples = spikeFile.bytes / (param.nSavedChans * dataTypeNBytes);
-                nChannels = param.nSavedChans - 1; % Last channel is sync, ignore for now
+                nChannels = param.nSavedChans - param.nSyncChans; % Last channel is sync, ignore for now
                 fid = fopen(AllDecompPaths{GoodRecSesID(uid)},'r');
             end
             Currentlyloaded = GoodRecSesID(uid);

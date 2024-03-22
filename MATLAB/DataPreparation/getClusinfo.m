@@ -40,7 +40,6 @@ for fieldid = 1:length(fields)
         try
             eval(['clusinfoNew.', fields{fieldid}, '= cat(2,clusinfo(:).', fields{fieldid}, ');'])
         catch ME
-            keyboard
         end
     end
 end

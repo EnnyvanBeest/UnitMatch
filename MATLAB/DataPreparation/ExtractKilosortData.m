@@ -1,7 +1,6 @@
 function Params = ExtractKilosortData(KiloSortPaths, Params, RawDataPathsInput)
 
 % Prepares cluster information for subsequent analysis
-
 %% Inputs:
 % KiloSortPaths = List of directories pointing at kilosort output (same format as what you get when
 % calling 'dir') for all sessions you want to analyze as one session (e.g.
@@ -174,7 +173,7 @@ for subsesid = 1:length(KiloSortPaths)
         
         if tmpparam.RunQualityMetrics == Params.RunQualityMetrics && tmpparam.RunPyKSChronicStitched == Params.RunPyKSChronicStitched && ~dateViolationflag
             if ~isfield(tmpparam,'RecordingDuration') || tmpparam.RecordingDuration < Params.MinRecordingDuration
-                if ~isempty(rawD) & ~contains(rawD(1).name,'.dat')
+                if ~isempty(rawD) & ~contains(rawD(1).name,'.dat') & ~contains(rawD(1).name,'.raw')
                     [channelpostmpconv, probeSN, recordingduration] = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done
                     channelmapKS = readNPY(fullfile(KiloSortPaths{subsesid},'channel_positions.npy'));
 
@@ -239,7 +238,7 @@ for subsesid = 1:length(KiloSortPaths)
     end
 
     %% Is it correct channelpos though...? Check using raw data. While reading this information, also extract recording duration and Serial number of probe
-    if ~isempty(rawD) & ~contains(rawD(1).name,'.dat')
+    if ~isempty(rawD) & (~contains(rawD(1).name,'.dat') & ~contains(rawD(1).name,'.raw'))
         [channelpostmpconv, probeSN, recordingduration] = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done
         if recordingduration<Params.MinRecordingDuration
             disp([KiloSortPaths{subsesid} ' recording too short, skip...'])
@@ -263,7 +262,7 @@ for subsesid = 1:length(KiloSortPaths)
         % Spacing:
         SpacingsKS = max(unique(diff(channelpostmp(:,1))));
         SpacingsReal = max(unique(diff(channelpostmpconv(:,1))));
-        if ismember((SpacingsReal - SpacingsKS),[50,100,150])
+        if ismember((SpacingsReal - SpacingsKS),[0,50,100,150])
             disp('Kilosort used different shank spacing for IMRO table. Not a big problem')
         else
 
@@ -296,6 +295,25 @@ for subsesid = 1:length(KiloSortPaths)
         templatePositionsAmplitudes(sp.temps, sp.winv, sp.ycoords, sp.xcoords, sp.spikeTemplates, sp.tempScalingAmps); %from the spikes toolbox
     templateWaveforms = sp.temps;
 
+    %% Check for spike hole bug in kilosort
+    stderiv = [diff(sp.st)];
+    Idx = (stderiv>7/1000); % Retain spike times >7ms
+    tmp = diff(sp.st(Idx))./2.18689567; % time difference in batches
+    figure; hh=histogram(tmp,500,'binLimits',[0 10]); % batch size
+    values = hh.Values;
+    Edges = hh.BinEdges;
+    Ratio = nansum(values(logical(Edges(2:end)==round(Edges(2:end)))))./nansum(values(~logical(Edges(2:end)==round(Edges(2:end)))));
+    title(['Spike hole ratio batch edges versus non-batch edges: ' num2str(Ratio)])
+    xlabel('Batch number')
+    ylabel('Count of spike times void>7ms')
+
+    if Ratio > 1
+       warning('Redo Kilosort for this session -- spike holes detected')
+       saveas(gcf,fullfile(KiloSortPaths{subsesid},['SpikeHoles.bmp']))
+    end
+
+
+   
     %% Remove noise; spikes across all channels'
     if ~isfield(Params, 'deNoise')
         Params.deNoise = 1;
@@ -308,11 +326,15 @@ for subsesid = 1:length(KiloSortPaths)
     % clear paramBC
     if Params.RunQualityMetrics
         paramBC = bc_qualityParamValuesForUnitMatch(dir(strrep(fullfile(rawD(1).folder, rawD(1).name), 'cbin', 'meta')), fullfile(Params.tmpdatafolder, strrep(rawD(1).name, 'cbin', 'bin')));
+    else
+        paramBC.minNumSpikes = 300;
     end
     %% Load Cluster Info
     myClusFile = dir(fullfile(KiloSortPaths{subsesid}, 'cluster_info.tsv')); % If you did phy (manual curation) we will find this one... We can trust you, right?
-    if isempty(myClusFile)
-        disp('This data is not curated with phy! Hopefully you''re using automated quality metrics to find good units!')
+    if isempty(myClusFile) || Params.RunQualityMetrics
+        if ~Params.RunQualityMetrics
+            disp('This data is not curated with phy! Hopefully you''re using automated quality metrics to find good units!')
+        end
         curratedflag = 0;
         myClusFile = dir(fullfile(KiloSortPaths{subsesid}, 'cluster_group.tsv'));
         if isempty(myClusFile)
@@ -671,6 +693,7 @@ for subsesid = 1:length(KiloSortPaths)
     SessionParams.RawDataPaths = RawDataPaths(subsesid);
     SessionParams.AllChannelPos = {channelpostmpconv};
     SessionParams.AllProbeSN = {probeSN};
+ 
     save(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat'), 'clusinfo', 'SessionParams', '-v7.3')
     if Params.saveSp %QQ not using savePaths
         try
@@ -695,7 +718,7 @@ if isstruct(RawDataPaths)
     end
 end
 
-CleanUpCheckFlag = nan; % Put to 1 is own responsibility! Make sure not to delete stuff from the server directly!
+CleanUpCheckFlag = 1; % Put to 1 is own responsibility! Make sure not to delete stuff from the server directly!
 if Params.DecompressLocal && Params.CleanUpTemporary
     try
         if isnan(CleanUpCheckFlag) && any(cellfun(@(X) exist(fullfile(Params.tmpdatafolder, strrep(X.name, 'cbin', 'bin'))),RawDataPaths(find(~cellfun(@isempty,RawDataPaths)))))

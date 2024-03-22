@@ -5,6 +5,7 @@ function [MatchTable, UniqueIDConversion] = AssignUniqueIDAlgorithm(MatchTable, 
 % UMparam (struct) with at least: ProbabilityThreshold and GoodUnitsOnly
 disp('Assigning correct Unique ID values now')
 
+ 
 %% Extract cluster information
 AllClusterIDs = UniqueIDConversion.OriginalClusID;
 UniqueIDLiberal = 1:length(AllClusterIDs); % Initial assumption: All clusters are unique
@@ -20,10 +21,19 @@ end
 GoodRecSesID = UniqueIDConversion.recsesAll;
 recOpt = unique(GoodRecSesID);
 nRec = length(recOpt);
+
 % Re-initialize UID
 [PairID3,PairID4]=meshgrid(OriUniqueID(Good_Idx));
 MatchTable.UID1 = PairID3(:);
 MatchTable.UID2 = PairID4(:);
+
+% Also conservative
+MatchTable.UID1Conservative = PairID3(:);
+MatchTable.UID2Conservative = PairID4(:);
+
+% And liberal
+MatchTable.UID1Liberal = PairID3(:);
+MatchTable.UID2Liberal = PairID4(:);
 
 %% Find probability threshold to use
 if UMparam.UseDatadrivenProbThrs
@@ -79,17 +89,20 @@ if ~isempty(Pairs)
         %% Conservative - most stringent
         % Identify the rows in the table containing TheseOriUids with
         % either of the currently considered units in Pairs
-        TheseOriUids = OriUniqueID(ismember(UniqueIDConservative,UniqueIDConservative(Pairs(id,:)))); % Find all units that are currently having the same UniqueIDLiberal as either one of the current pairs, and their original unique ID as they are known in matchtable
+        TheseOriUids = OriUniqueID(ismember(UniqueIDConservative,UniqueIDConservative(Pairs(id,:)))); % Find all units that are currently having the same UniqueIDConservative as either one of the current pairs, and their original unique ID as they are known in matchtable
         Idx = find(ismember(OriUniqueID,TheseOriUids)); % Find all units that have to be considered
-        tblidx = find((ismember(MatchTable.UID1,TheseOriUids)&ismember(MatchTable.UID2,Pairs(id,2)) | ismember(MatchTable.UID1,TheseOriUids)&ismember(MatchTable.UID2,Pairs(id,1)) | ismember(MatchTable.UID2,TheseOriUids)&ismember(MatchTable.UID1,Pairs(id,1)) | ismember(MatchTable.UID2,TheseOriUids)&ismember(MatchTable.UID1,Pairs(id,2))) & ~(MatchTable.UID1==MatchTable.UID2)); % !
+        tblidx = find(ismember(MatchTable.UID1,TheseOriUids)&ismember(MatchTable.UID2,TheseOriUids) & ~(MatchTable.UID1==MatchTable.UID2)); % !
+
+
 
         if all(MatchTable.MatchProb(tblidx)>UMparam.UsedProbability) % All of these should survive the threshold
             % All UIDs with this UID should now become the new UID
-            UniqueIDConservative(Idx) = min(UniqueIDConservative(Idx)); % Assign them all with the minimum UniqueIDLiberal
+           
+            UniqueIDConservative(Idx) = min(UniqueIDConservative(Idx)); % Assign them all with the minimum UniqueIDLiberal        
             nMatchesConservative = nMatchesConservative + 1;
 
             % That means the itnermediate one should be fine too
-            TheseOriUids2 = OriUniqueID(ismember(UniqueID,UniqueID(Pairs(id,:)))); % Find all units that are currently having the same UniqueIDLiberal as either one of the current pairs, and their original unique ID as they are known in matchtable
+            TheseOriUids2 = OriUniqueID(ismember(UniqueID,UniqueID(Pairs(id,:)))); % Find all units that are currently having the same UniqueIDIntermediate as either one of the current pairs, and their original unique ID as they are known in matchtable
             Idx2 = find(ismember(OriUniqueID,TheseOriUids2)); % Find all units that have to be considered
          
             UniqueID(Idx2) = min(UniqueID(Idx2)); % Assign them all with the minimum UniqueIDLiberal
@@ -109,7 +122,7 @@ if ~isempty(Pairs)
             TheseRecs = GoodRecSesID(Pairs(id,:));
             OtherRecs = GoodRecSesID(ismember(UniqueID,UniqueID(Pairs(id,:))));
             TheseOriUids(~ismember(OtherRecs,[TheseRecs-1; TheseRecs; TheseRecs+1;]))=[]; % Remove far days
-            tblidx = find((ismember(MatchTable.UID1,TheseOriUids)&ismember(MatchTable.UID2,Pairs(id,2)) | ismember(MatchTable.UID1,TheseOriUids)&ismember(MatchTable.UID2,Pairs(id,1)) | ismember(MatchTable.UID2,TheseOriUids)&ismember(MatchTable.UID1,Pairs(id,1)) | ismember(MatchTable.UID2,TheseOriUids)&ismember(MatchTable.UID1,Pairs(id,2))) & ~(MatchTable.UID1==MatchTable.UID2)); % !
+            tblidx = find(((ismember(MatchTable.UID1,TheseOriUids)&ismember(MatchTable.UID2,Pairs(id,2))) | (ismember(MatchTable.UID1,TheseOriUids)&ismember(MatchTable.UID2,Pairs(id,1))) | (ismember(MatchTable.UID2,TheseOriUids)&ismember(MatchTable.UID1,Pairs(id,1))) | (ismember(MatchTable.UID2,TheseOriUids)&ismember(MatchTable.UID1,Pairs(id,2)))) & ~(MatchTable.UID1==MatchTable.UID2)); % !
             if all(MatchTable.MatchProb(tblidx)>UMparam.UsedProbability) % All of these should survive the threshold
                 % All UIDs with this UID should now become the new UID
                 UniqueID(Idx) = min(UniqueID(Idx)); % Assign them all with the minimum UniqueIDLiberal
