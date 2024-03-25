@@ -102,6 +102,9 @@ function res = summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLa
     
         fprintf('Looping through days...\n')
         tic
+        if ~isstruct(UMparam.RawDataPaths{1})
+            UMparam.RawDataPaths = cellfun(@(x) dir(x), UMparam.RawDataPaths, 'uni', 0);
+        end
         days{midx} = cellfun(@(y) datenum(y), cellfun(@(x) regexp(x.folder,'\\\d*-\d*-\d*\\','match'), UMparam.RawDataPaths, 'uni', 0), 'uni', 0);
         days{midx} = cell2mat(days{midx}) - days{midx}{1};
         deltaDays{midx} = nan(numel(sessIDs)-1,numel(sessIDs));

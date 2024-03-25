@@ -56,6 +56,10 @@ try
         % Convert date strings to datenum format
         days = cellfun(@(dateStr) datenum(dateStr), dateStrings, 'UniformOutput', false);
     else
+
+        if ~isstruct(UMparam.RawDataPaths{1})
+            UMparam.RawDataPaths = cellfun(@(x) dir(x), UMparam.RawDataPaths, 'uni', 0);
+        end
         days = cellfun(@(y) datenum(y), cellfun(@(x) regexp(x.folder,'\\\d*-\d*-\d*\\','match'), UMparam.RawDataPaths, 'uni', 0), 'uni', 0);
     end
     days = cell2mat(days) - days{1};

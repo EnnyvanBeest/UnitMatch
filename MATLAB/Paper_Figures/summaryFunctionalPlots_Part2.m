@@ -65,6 +65,9 @@ function summaryFunctionalPlots_Part2(UMFiles, groupVector, UseKSLabels)
         WithinSesNoise = 0;
         fprintf('Looping through days...\n')
         tic
+        if ~isstruct(UMparam.RawDataPaths{1})
+            UMparam.RawDataPaths = cellfun(@(x) dir(x), UMparam.RawDataPaths, 'uni', 0);
+        end
         days{midx} = cellfun(@(y) datenum(y), cellfun(@(x) regexp(x.folder,'\\\d*-\d*-\d*\\','match'), UMparam.RawDataPaths, 'uni', 0), 'uni', 0);
         days{midx} = cell2mat(days{midx}) - days{midx}{1};
         deltaDays{midx} = nan(numel(sessIDs),numel(sessIDs));
@@ -84,7 +87,8 @@ function summaryFunctionalPlots_Part2(UMFiles, groupVector, UseKSLabels)
             sess1 = sessIDs(sess1Idx);
             day1 = days{midx}(sess1Idx);
             try
-            meta = ReadMeta2(UMparam.RawDataPaths{sess1}.folder);
+                    meta = ReadMeta2(UMparam.RawDataPaths{sess1}.folder);
+               
             catch ME
                 keyboard
             end

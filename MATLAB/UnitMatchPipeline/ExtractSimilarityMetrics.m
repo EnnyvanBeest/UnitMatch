@@ -944,7 +944,7 @@ while flag<2
     %% More plots
     if flag  && drawthis
         leaveoutmatches = false(nclus,nclus,length(Scores2Include)); %Used later
-        figure;
+        figure('Position',[50 50 2000 500]);
         if length(Scores2Include)>1
             for scid=1:length(Scores2Include)
                 ScoresTmp = Scores2Include(scid);
@@ -960,7 +960,7 @@ while flag<2
                 TotalScoreAcrossDays(X==Y)=nan;
 
                 subplot(2,length(Scores2Include),scid)
-                h=imagesc(TotalScoreLO,[0 base+1]);
+                h=imagesc(smooth2a(TotalScoreLO(SortingOrder,SortingOrder),3),[0 base+1]);
                 title([Scores2Include{scid}])
                 xlabel('Unit_i')
                 ylabel('Unit_j')
@@ -978,7 +978,7 @@ while flag<2
                 end
                 subplot(2,length(Scores2Include),scid+(length(Scores2Include)))
                 leaveoutmatches(:,:,scid)=TotalScoreLO>ThrsOptLO;
-                imagesc(TotalScoreLO>ThrsOptLO)
+                imagesc(smooth2a(TotalScoreLO(SortingOrder,SortingOrder)>ThrsOptLO,3))
                 hold on
                 title(['Thresholding at ' num2str(ThrsOptLO)])
                 xlabel('Unit_i')

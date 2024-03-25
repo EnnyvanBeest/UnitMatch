@@ -7,6 +7,12 @@ MinNumsUnit = -inf; % should have at least this amount of neurons, otherwise not
 savedir = UMFiles{1}(1:find(UMFiles{1}~=UMFiles{end},1,'first')-1);
 
 %% Initialize
+if nargin<2
+    UIDtoUse = {'UID1'};
+end
+if ~iscell(UIDtoUse)
+    UIDtoUse = {UIDtoUse};
+end
 if nargin<3 || ~exist('groupVector','var') || isempty(groupVector)
     groupVector = 1:length(UMFiles);
 end
@@ -78,6 +84,9 @@ for midx = 1:length(UMFiles)
     toc
 
     %% Sort out day situation
+    if ~isstruct(UMparam.RawDataPaths{1})
+        UMparam.RawDataPaths = cellfun(@(x) dir(x), UMparam.RawDataPaths, 'uni', 0);
+    end
     days{midx} = cellfun(@(y) datenum(y), cellfun(@(x) regexp(x.folder,'\\\d*-\d*-\d*\\','match'), UMparam.RawDataPaths, 'uni', 0), 'uni', 0);
     days{midx} = cell2mat(days{midx}) - days{midx}{1};
     deltaDays{midx} = days{midx} - days{midx}';
@@ -117,8 +126,8 @@ for midx = 1:length(UMFiles)
         nMatches = sum(MatchTable.UID1 == MatchTable.UID2 & MatchTable.RecSes2>MatchTable.RecSes1);
         if nMatches < 20*numel(RecSesOpt)
             durationflag = 0;
-            for recid = 1:length(UMparam.AllRawPaths)
-                meta = ReadMeta2(UMparam.AllRawPaths{recid}.folder)
+            for recid = 1:length(UMparam.RawDataPaths)
+                meta = ReadMeta2(UMparam.RawDataPaths{recid}.folder)
                 Dur = str2num(meta.fileTimeSecs)./60;
                 if Dur<UMparam.MinRecordingDuration
                     durationflag = 1;
@@ -364,7 +373,7 @@ for uidtype = 1:numel(UIDtoUse)
         end
         xlabel('delta Days')
         set(gca,'XTick',1:numel(deltaDaysBins)-1,'XTickLabel',yTickLabels)
-        ylabel('corr')
+        ylabel('AUC')
         title(fnames{ff})
         makepretty
         offsetAxes
