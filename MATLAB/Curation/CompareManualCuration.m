@@ -3,7 +3,7 @@ CurationThrs = 0.5; %minimal curation consensus (normally 0.5, which means 75% o
 MouseCols = distinguishable_colors(length(MiceOpt));
 QMetricDistrFig = figure('name','QM')
 
-
+ManualCurationPath = 'H:\MatchingUnits\SCORING\1DayDiff_WithFunctionalScores';
 
 QMetricOfInterest = {'nPeaks','nTroughs','spatialDecaySlope','waveformDuration_peakTrough','waveformBaselineFlatness','percentageSpikesMissing_gaussian', 'nSpikes','fractionRPVs_estimatedTauR','rawAmplitude','signalToNoiseRatio','presenceRatio'}
 ThrsName = {'maxNPeaks','maxNTroughs','minSpatialDecaySlope','minWvDuration','maxWvBaselineFraction','maxPercSpikesMissing','minNumSpikes','maxRPVviolations','minAmplitude','minSNR','minPresenceRatio'}
@@ -11,7 +11,7 @@ LnStls = {'-','--'}
 PercAboveThrs = nan(length(MiceOpt),length(QMetricOfInterest),2);
 for midx = 1:length(MiceOpt)
     % compare
-    tmpdir = dir(fullfile(SaveDir,MiceOpt{midx},'*','*','UnitMatch','UnitMatch.mat'));
+    tmpdir = dir(fullfile(ManualCurationPath,MiceOpt{midx},'*','*','UnitMatch','UnitMatch.mat'));
     tmpMatchTbl = matfile(fullfile(tmpdir.folder,tmpdir.name));
     MatchTable = tmpMatchTbl.MatchTable;
     nclus = sqrt(height(MatchTable));
@@ -34,7 +34,7 @@ for midx = 1:length(MiceOpt)
     % Individual scores:
     Scores2Inclde = UMparam.Scores2Include;
     % Add functional scores
-    Scores2Inclde = {Scores2Inclde{:} 'ACGCorr','FRDiff','refPopCorr'};
+    Scores2Inclde = {Scores2Inclde{:} 'ISICorr','FRDiff','refPopCorr'};
     for scid = 1:length(Scores2Inclde)
         eval([Scores2Inclde{scid} ' = reshape(MatchTable.' Scores2Inclde{scid} ',nclus,nclus);'])
     end
@@ -42,9 +42,9 @@ for midx = 1:length(MiceOpt)
     for fid = 1:2
         % Now load manual curation
         if fid == 1
-            tmpmanual = dir(fullfile(SaveDir,MiceOpt{midx},'*','*','UnitMatch','BlindFigures_WOFunct','BlindTable.mat'));
+            tmpmanual = dir(fullfile(ManualCurationPath,MiceOpt{midx},'BlindTable.mat'));
             tmpmanual = load(fullfile(tmpmanual.folder,tmpmanual.name));
-            manualscore = dir(fullfile(SaveDir,MiceOpt{midx},'*','*','UnitMatch','BlindFigures_WOFunct','manualCuration*.mat'));
+            manualscore = dir(fullfile(ManualCurationPath,MiceOpt{midx},'manualCuration*.mat'));
             if isempty(manualscore)
                 continue
             end
@@ -72,7 +72,7 @@ for midx = 1:length(MiceOpt)
 
             Order =  1:height(tbl);
         else
-            tmpmanual = dir(fullfile(SaveDir,MiceOpt{midx},'UnitMatch','BlindFigures','BlindTable.mat'));
+            tmpmanual = dir(fullfile(ManualCurationPath,MiceOpt{midx},'BlindTable.mat'));
             tmpmanual = load(fullfile(tmpmanual.folder,tmpmanual.name));
             tbl2 = tmpmanual.tbl;
             % Order?
@@ -445,10 +445,9 @@ for midx = 1:length(MiceOpt)
      Idx = (AvgMan'>CurationThrs | PyKS'==1 | MatchProb>0.5);
 
 %      h = venn([sum(PyKS(Idx)'==1 & MatchProb(Idx)<=0.5) sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5) sum(PyKS(Idx)'==1 & MatchProb(Idx)>0.5)]) 
-keyboard
 % Check these: should be z1, z2, z3, z12, z13, z23, z123
-      h = venn([sum(PyKS(Idx)'==1 & MatchProb(Idx)<=0.5 & AvgMan(Idx)'<=CurationThrs) sum(PyKS(Idx)'==1 & MatchProb(Idx)>0.5 & AvgMan(Idx)'<=CurationThrs) sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'<=CurationThrs) sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'>CurationThrs) ...
-        sum(PyKS(Idx)'==0 & MatchProb(Idx)<=0.5 & AvgMan(Idx)'>CurationThrs) sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'>CurationThrs) sum(PyKS(Idx)'==1 & AvgMan(Idx)'>CurationThrs&MatchProb(Idx)>0.5)] );
+      h = venn([sum(PyKS(Idx)'==1 & MatchProb(Idx)<=0.5 & AvgMan(Idx)'<=CurationThrs) sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'<=CurationThrs) sum(PyKS(Idx)'==0 & MatchProb(Idx)<=0.5 & AvgMan(Idx)'>CurationThrs) sum(PyKS(Idx)'==1 & MatchProb(Idx)>0.5 & AvgMan(Idx)'<=CurationThrs) ...
+        sum(PyKS(Idx)'==1 & MatchProb(Idx)<=0.5 & AvgMan(Idx)'>CurationThrs) sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5 & AvgMan(Idx)'>CurationThrs) sum(PyKS(Idx)'==1 & AvgMan(Idx)'>CurationThrs&MatchProb(Idx)>0.5)] );
       axis square
       axis off
       makepretty
@@ -463,7 +462,7 @@ keyboard
      end
      ManThrs = sum(AvgMan'>CurationThrs);
      nTrackedGT(:,2,midx) = [sum(MatchProb(Idx)>0.5); sum(PyKS(Idx)>0.5)]; 
-     nTrackedGT(:,1,midx) = [sum(MatchProb(Idx) & AvgMan(Idx)'>CurationThrs); sum(PyKS(Idx)'>0.5 & AvgMan(Idx)'>CurationThrs)];
+     nTrackedGT(:,1,midx) = [sum(MatchProb(Idx)>0.5 & AvgMan(Idx)'>CurationThrs); sum(PyKS(Idx)'>0.5 & AvgMan(Idx)'>CurationThrs)];
 
 
      %% Tracking performance?

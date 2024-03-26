@@ -10,7 +10,7 @@ function res = summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLa
     
     % Initialize
     if ~exist('whichMetric','var') || isempty(whichMetric)
-        whichMetric = 'Rank';
+        whichMetric = 'Corr';
     end
 
     if ~exist('groupVector','var') || isempty(groupVector)
@@ -102,6 +102,9 @@ function res = summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLa
     
         fprintf('Looping through days...\n')
         tic
+        if ~isstruct(UMparam.RawDataPaths{1})
+            UMparam.RawDataPaths = cellfun(@(x) dir(x), UMparam.RawDataPaths, 'uni', 0);
+        end
         days{midx} = cellfun(@(y) datenum(y), cellfun(@(x) regexp(x.folder,'\\\d*-\d*-\d*\\','match'), UMparam.RawDataPaths, 'uni', 0), 'uni', 0);
         days{midx} = cell2mat(days{midx}) - days{midx}{1};
         deltaDays{midx} = nan(numel(sessIDs)-1,numel(sessIDs));
@@ -293,6 +296,7 @@ function res = summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLa
             axis equal tight
             colormap(s, "RedBlue")
             clim([0 1])
+            colorbar
             title(sprintf('Fingerprint %s', FPNameCurr))
         end
     end
@@ -388,12 +392,14 @@ function res = summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLa
             nanIdx = isnan(yVal);
             xDays(nanIdx) = [];
             yVal(nanIdx) = [];
-            if ~isempty(FPSum.(FPNameCurr).AUC{midx}) && numel(unique(xDays)) > 1
-                scatter(log10(xDays),yVal,10,ROCCols(1,:),'filled')
+            if ~isempty(FPSum.(FPNameCurr).AUC{midx}) && numel(unique(xDays)) > 2
+                s = scatter(log10(xDays),yVal,10,ROCCols(1,:),'filled');
+                s.MarkerEdgeColor = 'k';
                 X = [ones(numel(xDays),1), xDays];
                 b = (X\yVal);
                 plot(log10(1:max(xDays)), b(1) + b(2)*(1:max(xDays)), 'color',ROCCols(1,:),'LineWidth',1);
-                scatter(-0.1,nanmean(mat2vec(FPSum.(FPNameCurr).AUC{midx}(2,:,:))),20,ROCCols(2,:),'filled')
+                s = scatter(-0.1,nanmean(mat2vec(FPSum.(FPNameCurr).AUC{midx}(2,:,:))),20,ROCCols(2,:),'filled');
+                s.MarkerEdgeColor = 'k';
             end
         end
         xlabel('Delta days')
@@ -415,12 +421,13 @@ function res = summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLa
             nanIdx = isnan(yVal);
             xDays(nanIdx) = [];
             yVal(nanIdx) = [];
-            if ~isempty(FPSum.(FPNameCurr).AUC{midx}) && numel(unique(xDays)) > 1
+            if ~isempty(FPSum.(FPNameCurr).AUC{midx}) && numel(unique(xDays)) > 2
                 X = [ones(numel(xDays),1), xDays];
                 b = (X\yVal);
                 plot(log10(1:max(xDays)), b(1) + b(2)*(1:max(xDays)), 'color',ROCCols(1,:),'LineWidth',1);
                 bsave{fpIdx}(midx,:) = b;
-                scatter(-0.1,nanmean(mat2vec(FPSum.(FPNameCurr).AUC{midx}(2,:,:))),20,ROCCols(2,:),'filled')
+                s = scatter(-0.1,nanmean(mat2vec(FPSum.(FPNameCurr).AUC{midx}(2,:,:))),20,ROCCols(2,:),'filled');
+                s.MarkerEdgeColor = 'k';
             end
         end
         xlabel('Delta days')
