@@ -23,6 +23,7 @@ function res = summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLa
         UseKSLabels = 0;
     end
 
+
     if ~exist('pltDayPairFig','var') || isempty(pltDayPairFig)
         pltDayPairFig = 0;
     end
@@ -62,7 +63,7 @@ function res = summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLa
         end
     end
     ROCBins = 0:0.01:1;
-    minMatches = 20;
+    minMatches = 15;
     durLim = 10*60;
 
     
@@ -167,6 +168,9 @@ function res = summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLa
 %                     matchedUnitsIdx = zeros(size(MatchTable_2sess,1),1);
 %                     matchedUnitsIdx(idx) = 1;
                 else
+                    if ~UMparam.RunPyKSChronicStitched
+                        warning('Are you sure you want to use KS labels? Kilosort was not run in a stitched manner...')
+                    end
                     matchedUnitsIdx = (MatchTable_2sess.ID1 == MatchTable_2sess.ID2) & (MatchTable_2sess.RecSes1 ~= MatchTable_2sess.RecSes2);
                     splitUnitsIdx = zeros(size(MatchTable_2sess,1),1);
                 end

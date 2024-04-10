@@ -40,6 +40,13 @@ if ~exist('UMFiles') || isempty(UMFiles) % When using the example pipeline this 
     end
     close all
 end
-% summaryFunctionalPlots_Part2(UMFiles, groupvec)
+Info  = DataSetInfo(UMFiles)
+Info.RecSes
+nanmean(cat(1,Info.nGoodUnits{:})./cat(1,Info.nTotalUnits{:}).*100)
+nanstd(cat(1,Info.nGoodUnits{:})./cat(1,Info.nTotalUnits{:}).*100)
+
 summaryMatchingPlots(UMFiles,{'UID1Liberal','UID1','UID1Conservative'},groupvec,1)
 summaryFunctionalPlots(UMFiles, 'Corr', groupvec)
+
+%
+summaryFunctionalPlots_Part2(UMFiles, groupvec, 0)

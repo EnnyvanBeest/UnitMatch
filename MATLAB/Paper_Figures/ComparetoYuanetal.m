@@ -43,11 +43,11 @@ for midx = 1:length(miceopt)
     Pairs = [tmpUM.MatchTable.ID1(tblidx) tmpUM.MatchTable.ID2(tblidx)]; 
     FPFNUM(midx,1) = sum(Pairs(:,1)~=Pairs(:,2))./nclus;
 
-    % All refPopCorr
+    % All ISICorr
     CV1idx = find(tmpUM.MatchTable.ID1 < tmpUM.MatchTable.ID2);% & tmpUM.MatchTable.EucledianDistance < tmpUM.UMparam.NeighbourDist); % Only neighbours
     % Extract functional scores
-    FunctionalScoreUM = tmpUM.MatchTable.refPopCorr(tblidx);
-    FunctionalScoreOther = tmpUM.MatchTable.refPopCorr(CV1idx(~ismember(CV1idx,tblidx)));
+    FunctionalScoreUM = tmpUM.MatchTable.ISICorr(tblidx);
+    FunctionalScoreOther = tmpUM.MatchTable.ISICorr(CV1idx(~ismember(CV1idx,tblidx)));
 
     % AUC
     scores = [FunctionalScoreOther', FunctionalScoreUM'];
@@ -72,8 +72,8 @@ for midx = 1:length(miceopt)
         YuanTblIdx(pairid) = find(ismember(tmpUM.MatchTable.ID1,RealIDTable(pairid,1)) & ...
             ismember(tmpUM.MatchTable.ID2,RealIDTable(pairid,2)));
     end
-    FunctionalScoreYuan = tmpUM.MatchTable.refPopCorr(YuanTblIdx);
-    FunctionalScoreOther = tmpUM.MatchTable.refPopCorr(CV1idx(~ismember(CV1idx,YuanTblIdx)));
+    FunctionalScoreYuan = tmpUM.MatchTable.ISICorr(YuanTblIdx);
+    FunctionalScoreOther = tmpUM.MatchTable.ISICorr(CV1idx(~ismember(CV1idx,YuanTblIdx)));
     % AUC
     scores = [FunctionalScoreOther', FunctionalScoreYuan'];
     labels = [zeros(1,length(FunctionalScoreOther)), ones(1,length(FunctionalScoreYuan))];
@@ -173,7 +173,7 @@ for midx = 1:length(miceopt)
     nMatches(midx,2) = nUniqueUM/min([tmpYuan.output.KSgood_f1,tmpYuan.output.KSgood_f2]);
     nMatches(midx,3) = nUniqueYuan/min([tmpYuan.output.KSgood_f1,tmpYuan.output.KSgood_f2]);
 
-    % All refPopCorr
+    % All ISICorr
     CV1idx = find(tmpUM.MatchTable.RecSes1 < tmpUM.MatchTable.RecSes2);% & tmpUM.MatchTable.EucledianDistance < tmpUM.UMparam.maxdist); % Only neighbours
     
     % 'Ground truth' functional scores
@@ -182,8 +182,8 @@ for midx = 1:length(miceopt)
     FPFNWithFunct(midx,2,1) = sum(ismember(FunctionalTruth,tblidx))./numel(FunctionalTruth); 
     
     % Extract functional scores
-    FunctionalScoreOverlap = tmpUM.MatchTable.refPopCorr(tblidx(OverlapIdx));
-    FunctionalScoreOther = tmpUM.MatchTable.refPopCorr(CV1idx(~ismember(CV1idx,tblidx(OverlapIdx))));
+    FunctionalScoreOverlap = tmpUM.MatchTable.ISICorr(tblidx(OverlapIdx));
+    FunctionalScoreOther = tmpUM.MatchTable.ISICorr(CV1idx(~ismember(CV1idx,tblidx(OverlapIdx))));
 
     % AUC
     scores = [FunctionalScoreOther', FunctionalScoreOverlap'];
@@ -191,8 +191,8 @@ for midx = 1:length(miceopt)
     [x,y,~,AUCsAcross(midx,1)] = perfcurve(labels,scores,1);
     
     %  UM 
-    FunctionalScoreUM = tmpUM.MatchTable.refPopCorr(tblidx);
-    FunctionalScoreOther = tmpUM.MatchTable.refPopCorr(CV1idx(~ismember(CV1idx,tblidx)));
+    FunctionalScoreUM = tmpUM.MatchTable.ISICorr(tblidx);
+    FunctionalScoreOther = tmpUM.MatchTable.ISICorr(CV1idx(~ismember(CV1idx,tblidx)));
 
     % AUC
     scores = [FunctionalScoreOther', FunctionalScoreUM'];
@@ -211,8 +211,8 @@ for midx = 1:length(miceopt)
     FPFNWithFunct(midx,1,3) = sum(~ismember(tblidx(OverlapIdx),FunctionalTruth))./numel(FunctionalTruth);
     FPFNWithFunct(midx,2,3) = sum(ismember(FunctionalTruth,tblidx(OverlapIdx)))./numel(FunctionalTruth); 
   
-    FunctionalScoreYuan = tmpUM.MatchTable.refPopCorr(YuanTblIdx);
-    FunctionalScoreOther = tmpUM.MatchTable.refPopCorr(CV1idx(~ismember(CV1idx,YuanTblIdx)));
+    FunctionalScoreYuan = tmpUM.MatchTable.ISICorr(YuanTblIdx);
+    FunctionalScoreOther = tmpUM.MatchTable.ISICorr(CV1idx(~ismember(CV1idx,YuanTblIdx)));
     % AUC
     scores = [FunctionalScoreOther', FunctionalScoreYuan'];
     labels = [zeros(1,length(FunctionalScoreOther)), ones(1,length(FunctionalScoreYuan))];
@@ -318,11 +318,11 @@ for midx = 1:length(miceopt)
         nMatches(did,2) = nUniqueUM/min([tmpYuan.output.KSgood_f1,tmpYuan.output.KSgood_f2]);
         nMatches(did,3) = nUniqueYuan/min([tmpYuan.output.KSgood_f1,tmpYuan.output.KSgood_f2]);
 
-        % All refPopCorr
+        % All ISICorr
         CV1idx = find(tmpUM.MatchTable.RecSes1 == did & tmpUM.MatchTable.RecSes2 == did+1);% & tmpUM.MatchTable.EucledianDistance < tmpUM.UMparam.maxdist); % Only neighbours
         % Extract functional scores
-        FunctionalScoreOverlap = tmpUM.MatchTable.refPopCorr(tblidx(OverlapIdx));
-        FunctionalScoreOther = tmpUM.MatchTable.refPopCorr(CV1idx(~ismember(CV1idx,tblidx(OverlapIdx))));
+        FunctionalScoreOverlap = tmpUM.MatchTable.ISICorr(tblidx(OverlapIdx));
+        FunctionalScoreOther = tmpUM.MatchTable.ISICorr(CV1idx(~ismember(CV1idx,tblidx(OverlapIdx))));
 
         % AUC
         if any(FunctionalScoreOverlap)
@@ -331,8 +331,8 @@ for midx = 1:length(miceopt)
             [x,y,~,AUCsAcrossManyDays(did,1)] = perfcurve(labels,scores,1);
         end
         %  UM 
-        FunctionalScoreUM = tmpUM.MatchTable.refPopCorr(tblidx);
-        FunctionalScoreOther = tmpUM.MatchTable.refPopCorr(CV1idx(~ismember(CV1idx,tblidx)));
+        FunctionalScoreUM = tmpUM.MatchTable.ISICorr(tblidx);
+        FunctionalScoreOther = tmpUM.MatchTable.ISICorr(CV1idx(~ismember(CV1idx,tblidx)));
 
         % AUC
         scores = [FunctionalScoreOther', FunctionalScoreUM'];
@@ -340,8 +340,8 @@ for midx = 1:length(miceopt)
         [x,y,~,AUCsAcrossManyDays(did,2)] = perfcurve(labels,scores,1);
 
 
-        FunctionalScoreYuan = tmpUM.MatchTable.refPopCorr(YuanTblIdx);
-        FunctionalScoreOther = tmpUM.MatchTable.refPopCorr(CV1idx(~ismember(CV1idx,YuanTblIdx)));
+        FunctionalScoreYuan = tmpUM.MatchTable.ISICorr(YuanTblIdx);
+        FunctionalScoreOther = tmpUM.MatchTable.ISICorr(CV1idx(~ismember(CV1idx,YuanTblIdx)));
         % AUC
         scores = [FunctionalScoreOther', FunctionalScoreYuan'];
         labels = [zeros(1,length(FunctionalScoreOther)), ones(1,length(FunctionalScoreYuan))];
@@ -382,6 +382,8 @@ title('AUC value across many successive days')
 makepretty
 offsetAxes
 
+[h,p] = ttest(AUCsAcrossManyDays(:,2),AUCsAcrossManyDays(:,3));
+text(0.5,0.95,['p=' num2str(round(p*100)/100)])
 % hold on
 % for modeid = 2:3
 %     h=scatter(repmat(modeid,1,nRec),AUCsAcrossManyDays(:,modeid)',20,cols(1:nRec,:),'filled')
