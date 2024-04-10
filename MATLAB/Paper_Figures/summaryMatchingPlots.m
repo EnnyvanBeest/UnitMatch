@@ -1,17 +1,20 @@
-function [unitPresence, unitProbaMatch, days, FalsePositives] = summaryMatchingPlots(UMFiles,UIDtoUse,groupVector,computeFuncScores)
+function [unitPresence, unitProbaMatch, days, EPosAndNeg, DataSetInfo] = summaryMatchingPlots(UMFiles,UIDtoUse,groupVector,computeFuncScores)
 
 %% Settings
 PlotIndividualMice = 0;
 % Drifts2Exclude = 50; % more than 50 micron, expected to lose neurons. This has nothing to do with software but with quality of recordings
 MinNumsUnit = -inf; % should have at least this amount of neurons, otherwise not a good session
 savedir = UMFiles{1}(1:find(UMFiles{1}~=UMFiles{end},1,'first')-1);
-
+RecSes = 0;
 %% Initialize
 if nargin<2
     UIDtoUse = {'UID1'};
 end
 if ~iscell(UIDtoUse)
     UIDtoUse = {UIDtoUse};
+end
+if any(ismember(UIDtoUse,'ID1'))
+    warning('Assuming stitched recording?')
 end
 if nargin<3 || ~exist('groupVector','var') || isempty(groupVector)
     groupVector = 1:length(UMFiles);
@@ -33,6 +36,8 @@ popProbaMatch = cell(length(UIDtoUse), length(UMFiles));
 % WIthin session check
 FalsePositives = nan(3,length(UMFiles)); % Liberal/intermedi/conserv
 FalseNegatives = nan(3,length(UMFiles));
+EPosAndNeg = nan(2,length(UMFiles));
+nUnitsPerRec = cell(1,length(UMFiles));
 
 % deltaDaysBinsOri = [0.1 1 2 3 4 5 10 20 50 100 inf];
 % deltaDaysBinsOri = [0.1 1 2 3 4 5 10 15 20 30 40 50 75 100 125 150 inf];
@@ -106,6 +111,20 @@ for midx = 1:length(UMFiles)
             continue
         end
     end
+
+    RecSes = RecSes + numel(nclusPerSess);
+    nUnitsPerRec{midx} = nclusPerSess;
+
+    %% Extra Positive
+    EPosAndNeg(1, midx) = sum(MatchTable.MatchProb(MatchTable.ID1 ~= MatchTable.ID2 & MatchTable.RecSes1 == MatchTable.RecSes2) > UMparam.ProbabilityThreshold)./sum(MatchTable.ID1 ~= MatchTable.ID2 & MatchTable.RecSes1 == MatchTable.RecSes2);
+
+    %Extra Negative
+    EPosAndNeg(2, midx) = sum(MatchTable.MatchProb(MatchTable.ID1 == MatchTable.ID2 & MatchTable.RecSes1 == MatchTable.RecSes2) < UMparam.ProbabilityThreshold)./sum(MatchTable.ID1 == MatchTable.ID2 & MatchTable.RecSes1 == MatchTable.RecSes2);
+
+    if UMparam.RunPyKSChronicStitched
+        EPosAndNeg(3, midx) = sum(MatchTable.MatchProb(MatchTable.ID1 == MatchTable.ID2 & MatchTable.RecSes1 < MatchTable.RecSes2) < UMparam.ProbabilityThreshold)./sum(MatchTable.ID1 == MatchTable.ID2 & MatchTable.RecSes1 < MatchTable.RecSes2);
+    end
+
     %% Within session noise levels?
     % FalsePositives = nan(3,length(UMFiles));
     % FalseNegatives = nan(3,length(UMFiles));
@@ -123,7 +142,7 @@ for midx = 1:length(UMFiles)
         [UIDuni,indx,~] = unique([MatchTable.(UIDtoUse{uidtype})]);
         RecSes = MatchTable.RecSes1(indx);
         RecSesOpt = unique(RecSes);
-        nMatches = sum(MatchTable.UID1 == MatchTable.UID2 & MatchTable.RecSes2>MatchTable.RecSes1);
+        nMatches = sum(MatchTable.(UIDtoUse{uidtype}) == MatchTable.(strrep(UIDtoUse{uidtype},'1','2')) & MatchTable.RecSes2>MatchTable.RecSes1);
         if nMatches < 20*numel(RecSesOpt)
             durationflag = 0;
             for recid = 1:length(UMparam.RawDataPaths)
@@ -442,9 +461,23 @@ saveas(FunctionalFig,fullfile(savedir,['FunctionalScores.bmp']))
 
 %%
 figure('name','FalsePositives')
+subplot(1,2,1)
 boxplot(FalsePositives'.*100,'boxstyle','filled','extrememode','clip')
 set(gca,'XTick',1:3,'XTickLabel',{'Liberal','Intermediate','Conservative'})
 makepretty
 offsetAxes
 ylim([0 10])
 ylabel('FP (%)')
+
+%% False Pos and negative
+subplot(1,2,2)
+scatter(EPosAndNeg(1,:).*100,(EPosAndNeg(2,:)).*100,35,distinguishable_colors(length(UMFiles)),'filled')
+xlabel('False Positives (%)')
+ylabel('False negative (%)')
+title('Using Match Prob')
+xlim([0 5])
+ylim([0 10])
+
+%% Info on dataset
+DataSetInfo.RecSes = RecSes;
+DataSetInfo.nUnits = nUnitsPerRec;

@@ -288,10 +288,14 @@ function summaryFunctionalPlots_Part2(UMFiles, groupVector, UseKSLabels)
     ylabel('pairs of days (%)')
     makepretty
     offsetAxes
-    save(fullfile('C:\Users\EnnyB\OneDrive - University College London\UnitMatch_Manuscript','chronicMice.mat'),'PercNeurons','numMatchedUnits','maxAvailableUnits')
+    save(fullfile('C:\Users\EnnyB\OneDrive - University College London\UnitMatch_Manuscript','ChronicMice.mat'),'PercNeurons','numMatchedUnits','maxAvailableUnits')
     disp([num2str(nanmedian(PercNeurons.*100)) '+/- ' num2str(mad(PercNeurons.*100)) ' in ' num2str(sum(~isnan(PercNeurons))) ' recordings'])
      
     %% 
+      stepsz = 5;
+    binvec = 0:stepsz:100;
+    plotvec = stepsz/2:stepsz:100-stepsz/2;
+ 
     tmpAcute = load(fullfile('C:\Users\EnnyB\OneDrive - University College London\UnitMatch_Manuscript','AcuteMice.mat')) % Load other one
     disp([num2str(nanmedian(tmpAcute.PercNeurons.*100)) '+/- ' num2str(mad(tmpAcute.PercNeurons.*100)) ' in ' num2str(sum(~isnan(tmpAcute.PercNeurons))) ' recordings'])
 
@@ -299,13 +303,19 @@ function summaryFunctionalPlots_Part2(UMFiles, groupVector, UseKSLabels)
     ha = histcounts(tmpAcute.PercNeurons.*100,binvec)./sum(~isnan(tmpAcute.PercNeurons)).*100;
     plot(plotvec,ha,'color',[0.5 0.5 0.5])
     hold on
-        plot(plotvec,hc,'color',[0 0 0])
-         xlabel('Matched pairs / maximally available (%)')
+
+    tmpChronic = load(fullfile('C:\Users\EnnyB\OneDrive - University College London\UnitMatch_Manuscript','ChronicMice.mat')) % Load other one
+    disp([num2str(nanmedian(tmpChronic.PercNeurons.*100)) '+/- ' num2str(mad(tmpChronic.PercNeurons.*100)) ' in ' num2str(sum(~isnan(tmpChronic.PercNeurons))) ' recordings'])
+
+    hc = histcounts(tmpChronic.PercNeurons.*100,binvec)./sum(~isnan(tmpChronic.PercNeurons)).*100;
+
+    plot(plotvec,hc,'color',[0 0 0])
+    xlabel('Matched pairs / maximally available (%)')
     ylabel('pairs of days (%)')
     makepretty
     offsetAxes
     legend('Acute','Chronic')
-    w = ranksum(tmpAcute.PercNeurons,PercNeurons)
+    w = ranksum(tmpAcute.PercNeurons,tmpChronic.PercNeurons)
 
 
 end

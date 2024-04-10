@@ -186,15 +186,15 @@ for midx = 1:length(MiceOpt)
                 end
                 UMtime = toc(UMtime)
 
-                % Visualization
-                % PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
-
+              
                 % Evaluate (within unit ID cross-validation)
                 EvaluatingUnitMatch(UMparam.SaveDir);
     
                 %% Function analysis
                 ComputeFunctionalScores(UMparam.SaveDir,1)
-                
+                  % Visualization
+                PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
+
                 %% Figures
                 if UMparam.MakePlotsOfPairs
                     DrawBlind = 0; %1 for blind drawing (for manual judging of pairs)

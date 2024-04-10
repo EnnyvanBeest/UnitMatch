@@ -70,6 +70,10 @@ catch ME
     disp('Can''t read in days')
 end
 
+if numel(UMparam.Coordinates)==1 
+    UMparam.Coordinates = repmat(UMparam.Coordinates,1,numel(nrec));
+end
+
 Modes = {'Liberal','Intermediate','Conservative'};
 for modethis = 1:3
     neuroncols = neuroncolsori;

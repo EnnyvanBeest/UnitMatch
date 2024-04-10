@@ -1,3 +1,4 @@
+MiceOpt = {'AL032','JF067','AV008','EB019','CB016'}; %'AL032', Add all mice you want to analyze
 Check = cell(4,length(MiceOpt));
 CurationThrs = 0.5; %minimal curation consensus (normally 0.5, which means 75% of curators need to agree)
 MouseCols = distinguishable_colors(length(MiceOpt));
@@ -78,7 +79,7 @@ for midx = 1:length(MiceOpt)
             % Order?
             Order = cell2mat(arrayfun(@(X) find(tbl2.ClusID1 == tbl.ClusID1(X) & tbl2.ClusID2 == tbl.ClusID2(X) & tbl2.RecID1 == tbl.RecID1(X) & tbl2.RecID2 == tbl.RecID2(X),1,'first'),1:height(tbl),'Uni',0));
             ReOrderedTbl = tbl2(Order,:);
-            manualscore = dir(fullfile(SaveDir,MiceOpt{midx},'UnitMatch','BlindFigures','manualCuration*.mat'));
+            manualscore = dir(fullfile(ManualCurationPath,MiceOpt{midx},'UnitMatch','BlindFigures','manualCuration*.mat'));
             if isempty(manualscore)
                 continue
             end
@@ -534,8 +535,8 @@ xlim([0.5 length(MiceOpt)+0.5])
 ylim([0 300])
 ylabel('Tracked Units (%)')
 makepretty
-saveas(gcf,fullfile(SaveDir,'TrackingPerformance_Curated.fig'))
-saveas(gcf,fullfile(SaveDir,'TrackingPerformance_Curated.bmp'))
+saveas(gcf,fullfile(ManualCurationPath,'TrackingPerformance_Curated.fig'))
+saveas(gcf,fullfile(ManualCurationPath,'TrackingPerformance_Curated.bmp'))
 
 %   nTrackedGT(:,2,midx) = [sum(MatchProb(Idx)>0.5); sum(PyKS(Idx)>0.5)]; 
 %      nTrackedGT(:,1,midx) = [sum(MatchProb(Idx) & AvgMan(Idx)'>CurationThrs); sum(PyKS(Idx)'>0.5 & AvgMan(Idx)'>CurationThrs)];
