@@ -512,7 +512,7 @@ for subsesid = 1:length(KiloSortPaths)
                 nchan = strsplit(Imecmeta.acqApLfSy, ',');
                 nChansInFile = str2num(nchan{1}) + str2num(nchan{3});
 
-                syncDatImec = extractSyncChannel(fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'bin')), nChansInFile, nChansInFile); %Last channel is sync
+                syncDatImec = extractSyncChannel(fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'bin')), nChansInFile, nChansInFile); %Last channel is sync (function of spikes toolbox)
                 statusCopy = copyfile(fullfile(Params.tmpdatafolder, strrep(rawD(id).name, '.cbin', '_sync.dat')), fullfile(rawD(id).folder, strrep(rawD(id).name, '.cbin', '_sync.dat'))); %QQ doesn't work on linux
 
             end

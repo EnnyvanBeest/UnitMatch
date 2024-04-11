@@ -1,6 +1,6 @@
 %% for Enny + Celian
-mouse = 'JF067'%% Get mouse behavior 
-
+mouse = 'JF082'%% Get mouse behavior 
+RedoUM = 0;
 % smoothdata(PSTH, 'movmean', [10-70])
 % or 0-70
 
@@ -10,34 +10,60 @@ bhvData = cl_task_performance({mouse});
 %% Recording info
 % using iMouse = 1 for now, but JF078, 84 (2 probes) and 82 (3 probes) are also in the same task + all the recs are processed - so they could be integrated. 
 savedirs = '\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\Learning_Striatum_new'
+UMDays = [2,3,4,5,6,7];
 RelevantDays = [2,4,5];%[2,4,5];%[2,7,8];%7:9;
 nRec = numel(RelevantDays);
 ColOpt = flipud(copper(nRec*2));
 ColOpt = cat(3,ColOpt(1:2:end-1,:),ColOpt(2:2:end,:));
 
 %% Get match data
-SaveDir = dir(fullfile(savedirs,mouse,'**','UnitMatch.mat'));
+
+SaveDir = dir(fullfile(savedirs,mouse,'*','*','UnitMatch.mat'));
 %[UniqueID, MatchTable] = AssignUniqueID_POSTUM(SaveDir);
 load(fullfile(SaveDir.folder,SaveDir.name))
-% 
+%
+
+% Rerun UnitMatch for relevant days only
+% Get clusinfo
+if RedoUM
+    UMparam.KSDir = UMparam.KSDir(UMDays);
+    UMparam.RawDataPaths = UMparam.RawDataPaths(UMDays);
+    UMparam.AllChannelPos = UMparam.AllChannelPos(UMDays);
+    UMparam.AllProbeSN = UMparam.AllProbeSN(UMDays);
+    UMparam.AllDecompPaths = UMparam.AllDecompPaths(UMDays);
+    UMparam.Coordinates = UMparam.Coordinates(UMDays);
+    UMparam.AllRawPaths = UMparam.AllRawPaths(UMDays);
+    UMparam.SaveDir = fullfile(UMparam.SaveDir,'UMDays');
+
+    clusinfo = getClusinfo(UMparam.KSDir);
+    [UniqueIDConversion, MatchTable, WaveformInfo, UMparam] = UnitMatch(clusinfo, UMparam);
+    [UniqueIDConversion, MatchTable] = AssignUniqueID(UMparam.SaveDir);
+    RelevantDays = find(ismember(UMDays,RelevantDays));
+
+end
+%% 
+
 % % Relevant for relevant days?
-% MatchTable = MatchTable(ismember(MatchTable.RecSes1, RelevantDays) & ismember(MatchTable.RecSes2, RelevantDays), :);
-% idx = ismember(UniqueIDConversion.recsesAll, RelevantDays) & UniqueIDConversion.GoodID' == 1;
-% idx2 = ismember(UniqueIDConversion.recsesAll(logical(UniqueIDConversion.GoodID)),RelevantDays);
-% UniqueIDConversion.OriginalClusID = UniqueIDConversion.OriginalClusID(idx);
-% UniqueIDConversion.recsesAll = UniqueIDConversion.recsesAll(idx);
-% UniqueIDConversion.GoodID = UniqueIDConversion.GoodID(idx);
-% UniqueIDConversion.Path4UnitNPY = UniqueIDConversion.Path4UnitNPY(idx2);
-% WaveformInfo.MaxChannel = WaveformInfo.MaxChannel(idx2,:);
-% WaveformInfo.ProjectedLocation = WaveformInfo.ProjectedLocation(:,idx2,:);
-% WaveformInfo.ProjectedWaveform = WaveformInfo.ProjectedWaveform(:,idx2,:);
-% WaveformInfo.ProjectedLocationPerTP = WaveformInfo.ProjectedLocationPerTP(:,idx2,:,:);
-% 
-% 
+idx = ismember(UniqueIDConversion.recsesAll, RelevantDays) & UniqueIDConversion.GoodID' == 1;
+idx2 = ismember(UniqueIDConversion.recsesAll(logical(UniqueIDConversion.GoodID)),RelevantDays);
+UniqueIDConversion.OriginalClusID = UniqueIDConversion.OriginalClusID(idx);
+UniqueIDConversion.recsesAll = UniqueIDConversion.recsesAll(idx);
+UniqueIDConversion.GoodID = UniqueIDConversion.GoodID(idx);
+UniqueIDConversion.Path4UnitNPY = UniqueIDConversion.Path4UnitNPY(idx2);
+UniqueIDConversion.UniqueIDConservative = UniqueIDConversion.UniqueIDConservative(idx);
+UniqueIDConversion.UniqueID = UniqueIDConversion.UniqueID(idx);
+
+WaveformInfo.MaxChannel = WaveformInfo.MaxChannel(idx2,:);
+WaveformInfo.ProjectedLocation = WaveformInfo.ProjectedLocation(:,idx2,:);
+WaveformInfo.ProjectedWaveform = WaveformInfo.ProjectedWaveform(:,idx2,:);
+WaveformInfo.ProjectedLocationPerTP = WaveformInfo.ProjectedLocationPerTP(:,idx2,:,:);
+
 % % Redo AssignUID for relevant subset of days
 % [MatchTable, UniqueIDConversion] = AssignUniqueIDAlgorithm(MatchTable, UniqueIDConversion, UMparam);
+UMparam.KSDir = UMparam.KSDir(RelevantDays);
 
-UniqueIDConversion.UniqueIDConservative = UniqueIDConversion.UniqueID;
+
+UniqueIDConversion.UniqueIDConservative = UniqueIDConversion.UniqueID; % We take intermediate
 %UniqueIDConversion = TmpFile.UniqueIDConversion;
 GoodId = logical(UniqueIDConversion.GoodID);
 UniqueID = UniqueIDConversion.UniqueIDConservative(GoodId);
@@ -49,52 +75,28 @@ RecSesPerUID = cat(2, RecSesPerUID{:});
 
 
 %% Continue extracting behavior
-bhvData.correct_trials = bhvData.goLeft(1:size(RecSesPerUID, 1)+1, 1) ./ bhvData.nTrials(1:size(RecSesPerUID, 1)+1, 1);
-bhvData.rxn = bhvData.stim_to_moveMean(1:size(RecSesPerUID, 1)+1, 1);
-bhvData.protocol(cellfun(@isempty, bhvData.protocol)) = {'0'};
+DatesKS = cellfun(@(X) strsplit(X,'\'),UMparam.KSDir,'Uni',0);
+DatesKS = cellfun(@(X) X{5},DatesKS,'Uni',0);
+BehaviorIdx = cellfun(@(X) find(ismember(bhvData.dates,X)),DatesKS,'Uni',0); % For some reason bhdata is +1 indexed
+BehaviorIdx2Take = cell2mat(BehaviorIdx(~cellfun(@isempty,BehaviorIdx)));
+BehaviorIdx = find(~cellfun(@isempty,BehaviorIdx));
+Performance = nan(1,nRec);
+Performance(BehaviorIdx) = bhvData.goLeft(BehaviorIdx2Take, 1) ./ bhvData.nTrials(BehaviorIdx2Take, 1);
 
-bhvData.correct_trials_nogo = bhvData.noGo(1:size(RecSesPerUID, 1)+1, 3) ./ bhvData.nTrials(1:size(RecSesPerUID, 1)+1, 3);
-bhvData.correct_trials_go2 = bhvData.goLeft(1:size(RecSesPerUID, 1)+1, 2) ./ bhvData.nTrials(1:size(RecSesPerUID, 1)+1, 2);
-bhvData.rewardAmount = bhvData.goLeft(1:size(RecSesPerUID, 1)+1, 1) .* bhvData.water_amount(1:size(RecSesPerUID, 1)+1, 1);
-bhvData.nRewardedTrials = bhvData.goLeft(1:size(RecSesPerUID, 1)+1, 1);
-bhvData.rewardRate = bhvData.rewardAmount ./ bhvData.duration(1:size(RecSesPerUID, 1)+1)';
-
-
-for iS = 1:size(bhvData.protocol, 2)
-    stage(iS) = str2num(bhvData.protocol{iS}(end));
-end
-
-
-last_thisDate = find(stage > 3, 1, 'first') + 2;
-
-
-%% 
-
-% Performance
-figPath = 'C:\Users\EnnyB\OneDrive - University College London\UnitMatch_Manuscript\2024-01 Nature Methods Revision\Julie\ex_data_sub2_v1.fig';
-if ~exist(figPath)
-    figPath = 'C:\Users\Célian\OneDrive - University College London\Dossiers_UCL\Papers\UnitMatch_Manuscript\2024-01 Nature Methods Revision\Julie\ex_data_sub2_v1.fig';
-end
-uiopen(figPath,1)
-% Select second subplot
-tmpplot = get(gca)
-Xdata = tmpplot.Children.XData;
-Ydata = tmpplot.Children.YData;
-
-figure;
-scatter(Xdata(RelevantDays),Ydata(RelevantDays),35,ColOpt(:,:,1),'filled')
+figure('name','Behavior');
+scatter(1:nRec,Performance,35,ColOpt(:,:,1),'filled')
 ylim([0.5 1])
+set(gca,'XTick',[1:nRec],'XTickLabel',DatesKS)
 makepretty
 offsetAxes
 
 
-%% Get PSTHs for matched cells 
 % units to get PSTH for 
 Or_UniqueID = arrayfun(@(x) {UniqueIDConversion.Path4UnitNPY{x}(end -17:end - 14)}, 1:size(UniqueIDConversion.Path4UnitNPY, 2));
 UUIDs = UniqueID(idx1);
+RecOpt = unique(recses);
 allRecordings = recses(idx1);
 oriID_good = UniqueIDConversion.OriginalClusID(GoodId);
-max_nRecs = max(sum(RecSesPerUID));
 theseUnits = find(sum(RecSesPerUID) >= 1); % get all cells 
 UniqueIDConversion.Path4UnitNPY_noGoodID = cell(size(UniqueIDConversion.UniqueIDConservative, 2), 1);
 UniqueIDConversion.Path4UnitNPY_noGoodID(GoodId) = UniqueIDConversion.Path4UnitNPY;
@@ -104,7 +106,13 @@ animal = mouse;
 protocol = 'choiceworld'; % (this is the name of the Signals protocol)
 experiments = cl_find_experiments(animal, protocol, true);
 experiments = experiments([experiments.ephys]);
+
+% Find experiments that we want to keep
+ExpIndx = cellfun(@(X) find(ismember({experiments.thisDate},X)),DatesKS);
+experiments = experiments(ExpIndx);
 loadClusters = 0; % whether to load phy output or not 
+
+%% Get PSTHs for matched cells 
 
 % PSTH and ACG parameters
 raster_window = [-0.5, 1];
@@ -112,22 +120,22 @@ psth_bin_size = 0.001;
 ACGbinSize = 0.001;
 ACGduration = 1;
 maxnTrials = 2500;
+ISIbins = [0 5*10.^(-4:0.2:0)];
 
 % PSTH time 
 psth_time = raster_window(1)+psth_bin_size/2:psth_bin_size:raster_window(2)-psth_bin_size/2;
 save(fullfile(savedirs,mouse,'psth_time.mat'), 'psth_time')
 
 % pre-allocate array space 
-waveforms_long_track = nan(size(theseUnits, 2), max_nRecs, 82);
-waveforms_raw_long_track = nan(size(theseUnits, 2), max_nRecs, 82);
-acg_long_track = nan(size(theseUnits, 2), max_nRecs, 500);
-vis_long_track_pass = nan(size(theseUnits, 2), max_nRecs, 3, 1500);
-dPrimePerUnit = nan(size(theseUnits, 2), max_nRecs);
-VisRespPerUnit = nan(size(theseUnits,2), max_nRecs, 3, maxnTrials);
+acg_long_track = nan(size(theseUnits, 2), nRec, 500);
+vis_long_track_pass = nan(size(theseUnits, 2), nRec, 3, 1500);
+dPrimePerUnit = nan(size(theseUnits, 2), nRec);
+VisRespPerUnit = nan(size(theseUnits,2), nRec, 3, maxnTrials);
+ISIsPerUnit = nan(size(theseUnits,2), nRec, length(ISIbins)-1);
 
-waveforms_raw_long_track_enny = nan(size(theseUnits, 2), max_nRecs, 82);
+UnitIsMerged = false(size(theseUnits, 2),1);
 
-for iRecording = 1:last_thisDate
+for iRecording = 1:nRec
     thisRecording = iRecording;
     site = 1;
     recording = [];
@@ -176,82 +184,37 @@ for iRecording = 1:last_thisDate
     spike_templates_0dx_unique = unique(spike_templates_0idx);
 
     for iUnit = 1:size(theseUnits, 2)
-
+      
         thisUID = UUIDs(theseUnits(iUnit));
         thisMatchTableIdx = GoodId & UniqueIDConversion.UniqueIDConservative == thisUID;
         recordings_unique = unique([UniqueIDConversion.recsesAll(thisMatchTableIdx)]);
-        if ~ismember(iRecording, recordings_unique)
+        if ~ismember(RecOpt(iRecording), recordings_unique)
             continue;
         end
 
         thisUnit_0idx = UniqueIDConversion.OriginalClusID(GoodId' & ...
             UniqueIDConversion.UniqueIDConservative' == thisUID & ...
-            UniqueIDConversion.recsesAll == thisRecording);
+            UniqueIDConversion.recsesAll == RecOpt(thisRecording));
 
-        thisUnit_1idx = thisUnit_0idx + 1;
-        thisRawWaveformPath = UniqueIDConversion.Path4UnitNPY_noGoodID{GoodId' & ...
-            UniqueIDConversion.UniqueIDConservative' == thisUID & ...
-            UniqueIDConversion.recsesAll == thisRecording};
-        waveforms_raw = readNPY([filename, filesep, 'templates._bc_rawWaveforms.npy']);
-        waveforms_raw_peak = readNPY([filename, filesep, 'templates._bc_rawWaveformPeakChannels.npy']);
-
-        if numel(thisUnit_0idx) > 1
-            thisUnit_abs = find(ismember(spike_templates_0dx_unique, thisUnit_0idx));
-
-            waveforms_long_track(iUnit, iRecording, :) = nanmean(waveforms(thisUnit_abs, :));
-
-            waveform_long_raw_tmp = zeros(numel(thisUnit_abs), 82);
-            waveform_long_raw_enny_tmp = zeros(numel(thisUnit_abs), 82);
-            for iiUnit = 1:numel(thisUnit_abs)
-                max_chan = find(max(max(waveforms_raw(thisUnit_abs(iiUnit), :, :), 2)) == max(max(max(waveforms_raw(thisUnit_abs(iiUnit), :, :), 2))));
-                if length(max_chan) > 1
-                    max_chan = max_chan(1);
-                end
-                waveform_long_raw_tmp(iiUnit, :) = waveforms_raw(thisUnit_abs(iiUnit), max_chan, :);
-
-                raw_enny = dir(thisRawWaveformPath);
-                raw_wv = readNPY([raw_enny.folder, filesep, raw_enny.name]);
-
-                % Detrending
-                raw_wv = permute(raw_wv, [2, 1, 3]); %detrend works over columns
-                raw_wv = detrend(raw_wv, 1); % Detrend (linearly) to be on the safe side. OVER TIME!
-                raw_wv = permute(raw_wv, [2, 1, 3]); % Put back in order
-                [~, max_chan] = nanmax(nanmax(abs(nanmean(raw_wv(35:70, :, :), 3)), [], 1));
-
-                waveform_long_raw_enny_tmp(iiUnit, :) = raw_wv(:, max_chan, 1);
-
-            end
-            waveforms_raw_long_track(iUnit, thisRecording, :) = nanmean(waveform_long_raw_tmp);
-            waveforms_raw_long_track_enny(iUnit, thisRecording, :) = nanmean(waveform_long_raw_enny_tmp);
-
-        else
-            thisUnit_abs = find(thisUnit_0idx == spike_templates_0dx_unique);
-            waveforms_long_track(iUnit, thisRecording, :) = waveforms(thisUnit_abs, :);
-            max_chan = find(max(max(waveforms_raw(thisUnit_abs, :, :), 2)) == max(max(max(waveforms_raw(thisUnit_abs, :, :), 2))));
-            if length(max_chan) > 1
-                max_chan = max_chan(1);
-            end
-            waveforms_raw_long_track(iUnit, thisRecording, :) = waveforms_raw(thisUnit_abs, max_chan, :);
-
-            raw_enny = dir(thisRawWaveformPath);
-            raw_wv = readNPY([raw_enny.folder, filesep, raw_enny.name]);
-
-            % Detrending
-            raw_wv = permute(raw_wv, [2, 1, 3]); %detrend works over columns
-            raw_wv = detrend(raw_wv, 1); % Detrend (linearly) to be on the safe side. OVER TIME!
-            raw_wv = permute(raw_wv, [2, 1, 3]); % Put back in order
-            [~, max_chan] = nanmax(nanmax(abs(nanmean(raw_wv(35:70, :, :), 3)), [], 1));
-
-            waveforms_raw_long_track_enny(iUnit, thisRecording, :) = raw_wv(:, max_chan, 1);
-
+        if numel(thisUnit_0idx)>1
+            UnitIsMerged(iUnit)=1;
         end
-
-        % get ACG
         theseSpikeTimes = spike_times_timeline(ismember(spike_templates_0idx, thisUnit_0idx));
+        if isempty(theseSpikeTimes)
+            keyboard
+        end
+        % get ACG
         [acg, ~] = CCGBz([double(theseSpikeTimes); double(theseSpikeTimes)], [ones(size(theseSpikeTimes, 1), 1); ...
             ones(size(theseSpikeTimes, 1), 1) * 2], 'binSize', ACGbinSize, 'duration', ACGduration, 'norm', 'rate'); %function
         ACG = acg(:, 1, 1);
         acg_long_track(iUnit, thisRecording, :) = ACG(501:1000);
+
+        % StimOffTimes = stimOn_times+1;
+        % exclst = arrayfun(@(X,Y) theseSpikeTimes<X|theseSpikeTimes>Y,stimOn_times,StimOffTimes,'Uni',0);
+        % exclst = any(cat(2,exclst{:}),2);
+        % theseSpikeTimes(exclst) = nan;
+        ISI2 = histcounts(diff(theseSpikeTimes),ISIbins, 'Normalization','probability');
+        ISIsPerUnit(iUnit,thisRecording,:) = ISI2./sum(ISI2);
 
         % get visual PSTH
         [align_group_a, align_group_b] = ismember(trial_conditions(:, 2), unique(trial_conditions(:, 2)));
@@ -266,13 +229,8 @@ for iRecording = 1:last_thisDate
 
         VisRespPerUnit(iUnit, thisRecording, 1, 1:numel(tmpl)) = tmpl;
         VisRespPerUnit(iUnit, thisRecording, 2, 1:numel(tmpc)) = tmpc;
-
-
-
     end
-
 end
-
 vis_long_track_pass(:,:,3,:) = []; %remove 90* stimulus, did not always show it. 
 %% save data
 % unit numbers 
@@ -299,7 +257,7 @@ timeline = round(min(psth_time)./stepsz).*stepsz+0.5.*stepsz:stepsz:round(max(ps
 [bincount,idx1,idx2] = histcounts(psth_time,binEdges); % idx2 ident,ifies which bin each sample belongs
 % smoothdata(PSTH, 'movmean', [10-70])
 
-PSTH = smoothdata(vis_long_track_pass(:,RelevantDays,:,:),4,'movmean',[10 70]);
+PSTH = smoothdata(vis_long_track_pass,4,'movmean',[10 70]);
 % PSTH = arrayfun(@(X) nansum(PSTH(:,:,:,idx2==X),4)./stepsz,unique(idx2),'Uni',0);
 % PSTH = cat(4,PSTH{:});
 timeline = psth_time;
@@ -308,6 +266,7 @@ PSTH_Z = (PSTH - nanmean(PSTH,4))./(nanstd(PSTH,[],4));
 %% Neurons to include
 [nPres,sortidx] = sort(nansum(PSTH(:,:,1,5)~=0 & ~isnan(PSTH(:,:,1,5)),2),'descend');
 sortidx = sortidx(nPres>=nRec);
+sortidx(UnitIsMerged(sortidx)) = [];
 % sortidx = sort(sortidx);
 % sortidx = [89,97,102,103,105,160,184]; % For JF067
 figure;
@@ -344,7 +303,7 @@ withinDesign.Day = categorical(withinDesign.Day);
 % Repeated measures model
 rm = fitrm(T,['baselinefr1-baselinefr' num2str(size(T,2)) ' ~ 1'],'WithinDesign',withinDesign);
 
-AT = ranova(rm,'WithinModel','Day');
+AT = ranova(rm,'WithinModel','Day')
 multcompare(rm,'Day')
 %% population
 dRR = (PSTH-nanmean(PSTH(:,:,:,timeline<0),4))./nanmean(PSTH(:,:,:,timeline<0),4);
@@ -375,18 +334,16 @@ for recid = 1:nRec
 end
 legend([h(:)],{'Central','Lateral'})
 
-%% Functional scores
-AllKSDir = arrayfun(@(X) fullfile(strrep(X,'/home/netshare/zinu/','\\zinu.cortexlab.net\Subjects\')),UMparam.KSDir);
-sp = getSpikesFromPrepData(AllKSDir);
+
 
 %% Example cells
 clear h
 % sortidx = [63, 97, 102, 103, 105, 111];
-nExample = 6;
+nExample = 5;
 nExampleOri = nExample;
 nBatch = ceil(numel(sortidx)/nExample);
 nCols = 3 + nRec;    
-ISIbins = [0 5*10.^(-4:0.2:0)];
+
 ISIstoSave = nan(numel(sortidx),length(ISIbins)-1,nRec);
 RespToSave = nan(numel(sortidx),length(timeline),nRec,2);
 % ExampleID = [478,215,279]
@@ -405,14 +362,19 @@ for batchid = 1:nBatch
     UID2take = unit_UniqueIDs(ExampleID);
     nExample = numel(ExampleID);
     for exid = 1:nExample
-        idx = find(ismember(UniqueIDConversion.UniqueIDConservative(logical(UniqueIDConversion.GoodID)),UID2take(exid)));
-        idx(~ismember(tmprecses(idx),RelevantDays)) = [];
-        tmpday = tmprecses(idx);
+        % idx = find(ismember(UniqueIDConversion.UniqueIDConservative(logical(UniqueIDConversion.GoodID)),UID2take(exid)));
+        % idx(~ismember(tmprecses(idx),RelevantDays)) = [];
+        % tmpday = tmprecses(idx);
 
+        thisUID = UUIDs(sortidx(exid));
+        
         subplot(nExample,nCols,(exid-1)*nCols+1)
         hold on
-        for did = 1:nRec
-            plot(squeeze(nanmean(nanmean(WaveformInfo.ProjectedWaveform(:,idx(tmpday==RelevantDays(did)),:),2),3)),'color',ColOpt(did,:,1))
+        for did = 1:nRec    
+            thiswavIdx = find(UniqueIDConversion.UniqueIDConservative(find(GoodId)) == thisUID & UniqueIDConversion.recsesAll(find(GoodId))'==RecOpt(did));
+
+            plot(squeeze(nanmean(nanmean(WaveformInfo.ProjectedWaveform(:,thiswavIdx,:),3),2)),'color',ColOpt(did,:,1));
+            % plot(squeeze(waveforms_raw_long_track_enny(ExampleID(exid),did,:)),'color',ColOpt(did,:,1));
         end
         if exid<nExample
             axis off
@@ -425,10 +387,12 @@ for batchid = 1:nBatch
 
         subplot(nExample,nCols,(exid-1)*nCols+2)
         hold on
-        waveidx = find(sum(~isnan(squeeze(nanmean(WaveformInfo.ProjectedLocationPerTP(2,idx,:,:),4))),1)==numel(idx));
+        thiswavIdx = find(UniqueIDConversion.UniqueIDConservative(find(GoodId)) == thisUID);
+        waveidx = find(sum(~isnan(squeeze(nanmean(WaveformInfo.ProjectedLocationPerTP(2,thiswavIdx,:,:),4))),1)==numel(thiswavIdx));
 
         for did = 1:nRec
-            plot(squeeze(nanmean(nanmean(WaveformInfo.ProjectedLocationPerTP(2,idx(tmpday==RelevantDays(did)),waveidx,:),2),4)),squeeze(nanmean(nanmean(WaveformInfo.ProjectedLocationPerTP(3,idx(tmpday==RelevantDays(did)),waveidx,:),2),4)),'color',ColOpt(did,:,1))
+            thiswavIdx = find(UniqueIDConversion.UniqueIDConservative(find(GoodId)) == thisUID & UniqueIDConversion.recsesAll(find(GoodId))'==RecOpt(did));
+            plot(squeeze(nanmean(nanmean(WaveformInfo.ProjectedLocationPerTP(2,thiswavIdx,waveidx,:),2),4)),squeeze(nanmean(nanmean(WaveformInfo.ProjectedLocationPerTP(3,thiswavIdx,waveidx,:),2),4)),'color',ColOpt(did,:,1))
         end
         if exid<nExample
             axis off
@@ -440,25 +404,15 @@ for batchid = 1:nBatch
 
     UID2take = unit_UniqueIDs(ExampleID);
     for exid = 1:nExample
-        idx = find(ismember(UniqueIDConversion.UniqueIDConservative(logical(UniqueIDConversion.GoodID)),UID2take(exid)));
-        idx(~ismember(tmprecses(idx),RelevantDays)) = [];
-        tmpday = tmprecses(idx);
-        DayOpt = unique(tmpday);
-
-
         subplot(nExample,nCols,(exid-1)*nCols+3)
         hold on
-        for did = 1:numel(DayOpt)
-            idx2 = find(ismember(sp.RecSes,DayOpt(did)) & ismember(sp.spikeTemplates,OriID(idx(ismember(tmpday,DayOpt(did))))));
-            % plot(tClu1_1(tClu1_1>0), CCGClu1_1(tClu1_1>0,1),'k');
-            % [CCGClu2, tClu2] = CCGBz([double(sp.st(idx2)); double(sp.st(idx2))], [ones(size(sp.st(idx2), 1), 1); ...
-            %     ones(size(sp.st(idx2), 1), 1) * 2], 'binSize', UMparam.ACGbinSize, 'duration', UMparam.ACGduration, 'norm', 'rate'); %function
-            % plot(tClu2(tClu2>0), CCGClu2(tClu2>0,1),'color',colMatches);
-            ISI2 = histcounts(diff(double(sp.st(idx2))),ISIbins, 'Normalization','probability');
-            stairs(ISIbins(1:end-1)*1000, smooth(ISI2,5),'color',ColOpt(did,:,1), 'LineWidth', 2.0);
-            ISIstoSave((batchid-1)*nExampleOri+exid,:,did) = ISI2;
+        for did = 1:nRec
+            stairs(ISIbins(1:end-1)*1000,smooth(squeeze(ISIsPerUnit(ExampleID(exid),did,:)),5),'color',ColOpt(did,:,1), 'LineWidth', 2.0);
+            ISIstoSave((batchid-1)*nExampleOri+exid,:,did) =squeeze(ISIsPerUnit(ExampleID(exid),did,:));
+
         end
-        tmpcorr = corr(squeeze(ISIstoSave((batchid-1)*nExampleOri+exid,:,:)),squeeze(ISIstoSave((batchid-1)*nExampleOri+exid,:,:)));
+
+        tmpcorr = corr(squeeze(ISIsPerUnit(ExampleID(exid),:,:))',squeeze(ISIsPerUnit(ExampleID(exid),:,:))');
         if any(tmpcorr(:))<0.5
             title('Low ISI corr)')
             ExclSingU((batchid-1)*nExampleOri+exid) = true;
@@ -517,6 +471,8 @@ end
 AUCISI = nan(nRec,nRec);
 AUCCentral = nan(nRec,nRec);
 AUClateral = nan(nRec,nRec);
+figure('name','AUC values')
+
 for did1 = 1:nRec
     for did2 = 1:nRec
         if did1>=did2
@@ -537,13 +493,14 @@ for did1 = 1:nRec
         labels = [ones(size(CentCorr,1),1); zeros(sum(sum(triu(ones(size(CentCorr)),1))),1)];
         [~,~,~,AUCCentral(did1,did2)] = perfcurve(labels,scores,1);
 
+
+        h(1) = scatter(AUCISI(did1,did2),AUCCentral(did1,did2),35,nanmean(ColOpt([did1,did2],:,1),1),'filled');
+        hold on;
+        h(2) = scatter(AUCISI(did1,did2),AUClateral(did1,did2),35,nanmean(ColOpt([did1,did2],:,2),1));
+
     end
 end
 
-figure('name','AUC values')
-h(1) = scatter(AUCISI(~isnan(AUCISI(:))),AUCCentral(~isnan(AUCISI(:))),35,ColOpt(:,:,1),'filled');
-hold on;
-h(2) = scatter(AUCISI(~isnan(AUCISI(:))),AUClateral(~isnan(AUCISI(:))),35,ColOpt(:,:,2));
 xlabel('ISI')
 ylabel('Visual response')
 xlim([0.5 1])
@@ -589,8 +546,8 @@ offsetAxes
 
 Sig = zeros(1,numel(sortidx));
 for uid = 1:numel(sortidx)
-    tmpl = squeeze(VisRespPerUnit(sortidx(uid),RelevantDays,1,:));
-    tmpc = squeeze(VisRespPerUnit(sortidx(uid),RelevantDays,2,:));
+    tmpl = squeeze(VisRespPerUnit(sortidx(uid),:,1,:));
+    tmpc = squeeze(VisRespPerUnit(sortidx(uid),:,2,:));
 
     % Difference
     tmpdiff = tmpc - tmpl;
@@ -598,31 +555,31 @@ for uid = 1:numel(sortidx)
     tmpc(:,sum(isnan(tmpc),1)==nRec) = [];
     tmpdiff(:,sum(isnan(tmpdiff),1)==nRec) = [];
 
+    tmpdiff = cat(1,tmpdiff(1,:),nanmean(tmpdiff([2:3],:),1));
 
-    T = array2table(tmpdiff');
-    withinDesign = table([1:nRec]','VariableNames',{'Day'});
-    withinDesign.Day = categorical(withinDesign.Day);
-    % Repeated measures model
-    rm = fitrm(T,['Var1-Var' num2str(size(T,2)) ' ~ 1'],'WithinDesign',withinDesign);
+    p = anova1(tmpdiff',[],'off');
 
-    AT = ranova(rm,'WithinModel','Day');
-    if AT.pValue(3)<0.05
-        if sum(diff(nanmean(tmpdiff,2)))>0
+    if p<0.05
+        if sum(sign(diff(nanmean(tmpdiff,2))))>0
             Sig(uid) = 1;
-        elseif sum(diff(nanmean(tmpdiff,2)))<0
+            dPrimePerUnit(sortidx(uid),:)
+
+        elseif sum(sign(diff(nanmean(tmpdiff,2))))<0
             Sig(uid) = -1;
         end
     end
+
+
 end
 subplot(2,1,2)
 hold on
 for uid = 1:numel(sortidx)
     if Sig(uid)==-1
-        plot(1:nRec, dPrimePerUnit(sortidx(uid),RelevantDays),'.-','color',[0 0.2 1],'MarkerSize',30)
+        plot(1:nRec, dPrimePerUnit(sortidx(uid),:),'.-','color',[0 0.2 1],'MarkerSize',30)
     elseif Sig(uid)==1
-        plot(1:nRec, dPrimePerUnit(sortidx(uid),RelevantDays),'.-','color',[1 0.2 0],'MarkerSize',30)
+        plot(1:nRec, dPrimePerUnit(sortidx(uid),:),'.-','color',[1 0.2 0],'MarkerSize',30)
     else
-        plot(1:nRec, dPrimePerUnit(sortidx(uid),RelevantDays),'.-','color',[0 0 0],'MarkerSize',30)
+        plot(1:nRec, dPrimePerUnit(sortidx(uid),:),'.-','color',[0 0 0],'MarkerSize',30)
     end
 end
 xlabel('Day')
@@ -639,6 +596,7 @@ piechart(categorical(Sig))
 %% Correlation of functional scores
 tmpl = squeeze(dRR(sortidx,:,1,:)); % tmp l
 tmpc = squeeze(dRR(sortidx,:,2,:)); % tmp c
+
 
 tmplcorr = nan(numel(sortidx),nRec,nRec);
 tmpccorr = nan(numel(sortidx),nRec,nRec);
@@ -704,6 +662,9 @@ ISIstoSave = (ISIstoSave-nanmin(ISIstoSave,[],2))./(nanmax(ISIstoSave,[],2) - na
 ISIstoSave = reshape(ISIstoSave,numel(sortidx),[],nRec);
 
 %% Shuffle
+tmpl = squeeze(dRR(:,:,1,:)); % tmp l
+tmpc = squeeze(dRR(:,:,2,:)); % tmp c
+
 nShuffle = 1000;
 tmplcorr = nan(numel(sortidx),nRec-1);
 tmpccorr = nan(numel(sortidx),nRec-1);
@@ -726,20 +687,21 @@ for did1 = 1:nRec-1
             % tmpccorr(uid,counter) = nanmean((squeeze(tmpc(uid,did1,:))-squeeze(tmpc(uid,did2,:))).^2);
             % ISIcorr(uid,counter) = nanmean((squeeze(ISIstoSave(uid,:,did1))-squeeze(ISIstoSave(uid,:,did2))).^2);
             % %             % 
-            tmplcorr(uid,counter) = corr(squeeze(tmpl(uid,did1,:)),squeeze(tmpl(uid,did2,:)),'Type','pearson');
-            tmpccorr(uid,counter) = corr(squeeze(tmpc(uid,did1,:)),squeeze(tmpc(uid,did2,:)),'Type','pearson');
-            ISIcorr(uid,counter) = corr(squeeze(ISIstoSave(uid,:,did1))',squeeze(ISIstoSave(uid,:,did2))','Type','pearson');
+            tmplcorr(uid,counter) = corr(squeeze(tmpl(sortidx(uid),did1,:)),squeeze(tmpl(sortidx(uid),did2,:)),'Type','pearson');
+            tmpccorr(uid,counter) = corr(squeeze(tmpc(sortidx(uid),did1,:)),squeeze(tmpc(sortidx(uid),did2,:)),'Type','pearson');
+            ISIcorr(uid,counter) = corr(squeeze(ISIsPerUnit(sortidx(uid),(did1),:)),squeeze(ISIsPerUnit(sortidx(uid),(did2),:)),'Type','pearson');
         end
         for shufid = 1:nShuffle
-            uid = datasample(1:numel(sortidx),2,'replace',false);
-            % tmplcorrShuf(shufid,counter) = nanmean((squeeze(tmpl(uid(1),did1,:))-squeeze(tmpl(uid(2),did2,:))).^2);
-            % tmpccorrShuf(shufid,counter) = nanmean((squeeze(tmpc(uid(1),did1,:))-squeeze(tmpc(uid(2),did2,:))).^2);
-            % ISIcorrShuf(shufid,counter) = nanmean((squeeze(ISIstoSave(uid(1),:,did1))-squeeze(ISIstoSave(uid(2),:,did2))).^2);
+            uid1 = datasample(find(~isnan(nanmean(tmpl(:,did1,:),3))),1);
+            uid2 = datasample(find(~isnan(nanmean(tmpl(:,did2,:),3))),1);
+            % tmplcorrShuf(shufid,counter) = nanmean((squeeze(tmpl(uid1,did1,:))-squeeze(tmpl(uid(2),did2,:))).^2);
+            % tmpccorrShuf(shufid,counter) = nanmean((squeeze(tmpc(uid1,did1,:))-squeeze(tmpc(uid(2),did2,:))).^2);
+            % ISIcorrShuf(shufid,counter) = nanmean((squeeze(ISIstoSave(uid1,:,did1))-squeeze(ISIstoSave(uid(2),:,did2))).^2);
             % %             % 
     
-            tmplcorrShuf(shufid,counter) = corr(squeeze(tmpl(uid(1),did1,:)),squeeze(tmpl(uid(2),did2,:)),'Type','pearson');
-            tmpccorrShuf(shufid,counter) = corr(squeeze(tmpc(uid(1),did1,:)),squeeze(tmpc(uid(2),did2,:)),'Type','pearson');
-            ISIcorrShuf(shufid,counter) = corr(squeeze(ISIstoSave(uid(1),:,did1))',squeeze(ISIstoSave(uid(2),:,did2))','Type','pearson');
+            tmplcorrShuf(shufid,counter) = corr(squeeze(tmpl(uid1,did1,:)),squeeze(tmpl(uid2,did2,:)),'Type','pearson');
+            tmpccorrShuf(shufid,counter) = corr(squeeze(tmpc(uid1,did1,:)),squeeze(tmpc(uid2,did2,:)),'Type','pearson');
+            ISIcorrShuf(shufid,counter) = corr(squeeze(ISIsPerUnit(uid1,(did1),:)),squeeze(ISIsPerUnit(uid2,(did2),:)),'Type','pearson');
         end
   
 

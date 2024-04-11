@@ -18,7 +18,7 @@ if ~isfield(Params,'CleanUpTemporary')
     Params.CleanUpTemporary = 0; % Clean up temporary data
 end
 if ~isfield(Params,'tmpdatafolder')
-    Params.tmpdatafolder = KiloSortPaths(1); % Directory to temporarily decompress data --> must
+    Params.tmpdatafolder = KiloSortPaths{1}; % Directory to temporarily decompress data --> must
 % be large enough!
 end
 if ~isfield(Params,'saveSp')

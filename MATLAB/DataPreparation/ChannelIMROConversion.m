@@ -1,4 +1,4 @@
-function [channelPos, probeSN, recordingduration] = ChannelIMROConversion(datapath,drawthis)
+function [channelPos, probeSN, recordingduration] = ChannelIMROConversion(datapath,saveout,drawthis)
 %Extract actual channelPositions from metafile
 
 
@@ -6,6 +6,13 @@ function [channelPos, probeSN, recordingduration] = ChannelIMROConversion(datapa
 if nargin==0
     [datafile datapath] = uigetfile();
 end
+if nargin<2
+    saveout = 0;
+end
+if nargin<3
+    drawthis = 0;
+end
+
 %Extract meta file
 meta = ReadMeta2(datapath);
 
@@ -48,7 +55,7 @@ if isfield(meta,'snsShankMap')
     nCols = LayOut{2};
     nChan = LayOut{3};
     if nChan>length(Shankmap)
-        nChan = length(Shankmap);
+        nChan = length(Shankmap)-1;
     end
 
 
@@ -79,7 +86,7 @@ if isfield(meta,'snsShankMap')
     Shank = cell2mat(cellfun(@(X) str2num(X{1}),Shankmap,'UniformOutput',0));
     Col = cell2mat(cellfun(@(X) str2num(X{2}),Shankmap,'UniformOutput',0));
     Row = cell2mat(cellfun(@(X) str2num(X{3}),Shankmap,'UniformOutput',0));
-    draw = cell2mat(cellfun(@(X) str2num(X{4}),Shankmap,'UniformOutput',0));
+    connected = cell2mat(cellfun(@(X) str2num(X{4}),Shankmap,'UniformOutput',0));
 
   
     % Make channelMapToPos for conversion
@@ -109,7 +116,7 @@ elseif isfield(meta,'snsGeomMap')
         % NP 1_phase 3B
         vSep = 20;      % in um
         hSep = 15;
-        shankSep = 0;
+        shankSep = 15;
         basex = 0; % shift by this much in x
 
     elseif nShanks == 4
@@ -130,7 +137,7 @@ elseif isfield(meta,'snsGeomMap')
     Shank = cell2mat(cellfun(@(X) str2num(X{1}),Shankmap,'UniformOutput',0));
     Col = cell2mat(cellfun(@(X) str2num(X{2}),Shankmap,'UniformOutput',0));
     Row = cell2mat(cellfun(@(X) str2num(X{3}),Shankmap,'UniformOutput',0));
-    draw = cell2mat(cellfun(@(X) str2num(X{4}),Shankmap,'UniformOutput',0));
+    connected = cell2mat(cellfun(@(X) str2num(X{4}),Shankmap,'UniformOutput',0));
 
     % Make channelMapToPos for conversion
     channelPos = nan(length(Shank),2);
@@ -157,7 +164,22 @@ if drawthis
     figure('name',['Probe Layout ' datapath])
     scatter(xpos,ypos,4,[0 0 0],'filled')
     hold on
-    scatter(channelPos(:,1),channelPos(:,2),4,draw,'filled')
+    scatter(channelPos(:,1),channelPos(:,2),4,connected,'filled')
 
-    xlim([-shankSep-0.5 nShanks*shankSep+0.5])
+    xlim([-shankSep-0.5 nShanks*(shankSep+0.5)])
+end
+
+%% 
+if saveout
+    fname = (strsplit(datapath,'.ap.meta'));
+    fname = fname{1};
+    newName = [fname,'_kilosortChanMap.mat'];
+    chanMap = (1:nChan)';
+    chanMap0ind = chanMap-1;
+    connected = logical(connected);
+    xcoords = channelPos(:,1);   %KS2 not yet using kcoords, so x coord includes shank sep
+    ycoords = channelPos(:,2); % variable names need to  match KS standard
+    kcoords = Shank + 1;     %KS1 uses kcoords to force templates to be on one shank
+    name = fname;
+    save(newName, 'chanMap', 'chanMap0ind', 'connected', 'name', 'xcoords', 'ycoords', 'kcoords' );
 end

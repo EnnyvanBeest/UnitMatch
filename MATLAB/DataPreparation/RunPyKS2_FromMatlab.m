@@ -280,9 +280,20 @@ for midx = 1:length(MiceOpt)
                             copyfile(fullfile(chfile.folder,chfile.name),fullfile(tmpdatafolder,chfile.name))
                         end
                     end
+                    % make channel map
+                    [channelPos, probeSN, recordingduration] = ChannelIMROConversion(fullfile(tmpdatafolder,metafile.name),1,0)
+
+                    if ~exist(fullfile(tmpdatafolder, strrep(tmpfile(sesid).name, 'cbin', 'bin')))
+                        disp('This is compressed data and we do not want to use Python integration... uncompress temporarily')
+                        decompDataFile = bc_extractCbinData(fullfile(rawD(id).folder, rawD(id).name), ...
+                            [], [], 0, fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'bin')));
+                        statusCopy = copyfile(strrep(fullfile(rawD(id).folder, rawD(id).name), 'cbin', 'meta'), strrep(fullfile(Params.tmpdatafolder, rawD(id).name), 'cbin', 'meta')); %QQ doesn't work on linux
+                    end
+
+                    tmpfile(sesid).name = strrep(tmpfile(sesid).name,'cbin','bin');
                     % PyKS2
                     try
-                        success = pyrunfile("RunPyKS2_FromMatlab.py","success",bin_file = strrep(fullfile(tmpdatafolder,tmpfile(sesid).name),'\','/'));
+                        success = pyrunfile("RunPyKS4_FromMatlab.py","success",bin_file = strrep(fullfile(tmpdatafolder,tmpfile(sesid).name),'\','/'),probe_file = strrep(fullfile(tmpdatafolder,strrep(tmpfile(sesid).name,'.ap.bin','_kilosortChanMap.mat')),'\','/'));
                         clear success
                     catch ME
                         disp(ME)
@@ -292,7 +303,7 @@ for midx = 1:length(MiceOpt)
 
                     % now copy the output
                     disp('Copying output from temporary directory to KS folder')
-                    copyfile(fullfile(tmpdatafolder,'output'),fullfile(myKsDir,ProbeName,Sesinfo))
+                    copyfile(fullfile(tmpdatafolder,'kilosort4'),fullfile(myKsDir,ProbeName,Sesinfo))
 
                     % Remove temporary files
                     disp('Delete files from temporary folder')
