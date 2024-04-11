@@ -146,9 +146,9 @@ for midx = 1:length(UMFiles)
         if nMatches < 20*numel(RecSesOpt)
             durationflag = 0;
             for recid = 1:length(UMparam.RawDataPaths)
-                meta = ReadMeta2(UMparam.RawDataPaths{recid}.folder)
+                meta = ReadMeta2(UMparam.RawDataPaths{recid}.folder);
                 Dur = str2num(meta.fileTimeSecs)./60;
-                if Dur<UMparam.MinRecordingDuration
+                if Dur < UMparam.MinRecordingDuration
                     durationflag = 1;
                 end
             end

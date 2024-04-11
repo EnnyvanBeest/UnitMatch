@@ -107,6 +107,9 @@ function res = summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLa
             UMparam.RawDataPaths = cellfun(@(x) dir(x), UMparam.RawDataPaths, 'uni', 0);
         end
         days{midx} = cellfun(@(y) datenum(y), cellfun(@(x) regexp(x.folder,'\\\d*-\d*-\d*\\','match'), UMparam.RawDataPaths, 'uni', 0), 'uni', 0);
+        if all(cell2mat(cellfun(@(x) isempty(x), days{midx}, 'uni', 0)))
+            days{midx} = cellfun(@(y) datenum(y{1}(2:end-1)), cellfun(@(x) regexp(x.folder,'\/\d*-\d*-\d*\/','match'), UMparam.RawDataPaths, 'uni', 0), 'uni', 0);
+        end
         days{midx} = cell2mat(days{midx}) - days{midx}{1};
         deltaDays{midx} = nan(numel(sessIDs)-1,numel(sessIDs));
         numMatchedUnits{midx} = nan(numel(sessIDs)-1,numel(sessIDs));
@@ -416,7 +419,7 @@ function res = summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLa
         makepretty
 
         % Plot stability of AUC with delta days
-        bsave{fpIdx} = nan(length(UMFiles),2);
+        bsave{fpIdx} = nan(2,length(UMFiles));
         subplot(4,numel(FPNames),3*numel(FPNames)+fpIdx); hold all
         for midx = 1:length(UMFiles)
             xDays = deltaDays{midx}(:);
@@ -429,7 +432,7 @@ function res = summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLa
                 X = [ones(numel(xDays),1), xDays];
                 b = (X\yVal);
                 plot(log10(1:max(xDays)), b(1) + b(2)*(1:max(xDays)), 'color',ROCCols(1,:),'LineWidth',1);
-                bsave{fpIdx}(midx,:) = b;
+                bsave{fpIdx}(:,midx) = b;
                 s = scatter(-0.1,nanmean(mat2vec(FPSum.(FPNameCurr).AUC{midx}(2,:,:))),20,ROCCols(2,:),'filled');
                 s.MarkerEdgeColor = 'k';
             end
@@ -451,7 +454,7 @@ function res = summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLa
     slope = nan(numel(FPNames),length(groups));
     for fpIdx = 1:numel(FPNames)
         for gg = 1:length(groups)
-            slope(fpIdx,gg) = nanmean(bsave{fpIdx}(groupVector == gg,2));
+            slope(fpIdx,gg) = nanmean(bsave{fpIdx}(2,groupVector == gg));
         end
     end
 
@@ -532,4 +535,5 @@ function res = summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLa
     res.deltaDays = deltaDays;
     res.numMatchedUnits = numMatchedUnits;
     res.maxAvailableUnits = maxAvailableUnits;
+    res.bsave = bsave;
 end
