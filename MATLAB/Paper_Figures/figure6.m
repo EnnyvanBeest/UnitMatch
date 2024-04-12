@@ -220,7 +220,7 @@ for iRecording = 1:nRec
         if numel(thisUnit_0idx)>1
             UnitIsMerged(iUnit)=1;
         end
-        theseSpikeTimes = spike_times_timeline(ismember(int32(spike_templates_0idx), thisUnit_0idx));
+        theseSpikeTimes = spike_times_timeline(ismember((spike_templates_0idx), uint32(thisUnit_0idx)));
         if isempty(theseSpikeTimes)
             keyboard
         end
