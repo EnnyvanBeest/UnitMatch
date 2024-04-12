@@ -36,17 +36,28 @@ for midx = 1:length(MiceOpt)
         myKsDir = fullfile(DataDir{DataDir2Use(midx)},MiceOpt{midx});
         AllKiloSortPaths = [];
         for did = 1:length(DateOpt{midx})
-            disp(['Finding all pyKS directories in ' myKsDir ', ' DateOpt{midx}{did}])
-            tmpfiles = dir(fullfile(myKsDir,DateOpt{midx}{did},'**','pyKS'));         
+            disp(['Finding all KS4 directories in ' myKsDir ', ' DateOpt{midx}{did}])
+            % First try KS4
+            tmpfiles = dir(fullfile(myKsDir,DateOpt{midx}{did},'**','KS4'));
             tmpfiles(cellfun(@(X) ismember(X,{'.','..'}),{tmpfiles(:).name})) = [];
             % Conver to string
             tmpfiles = arrayfun(@(X) fullfile(tmpfiles(X).folder,tmpfiles(X).name),1:length(tmpfiles),'uni',0);
 
-            if isempty(tmpfiles)
-                tmpfiles = dir(fullfile(myKsDir,DateOpt{midx}{did},'**','kilosort*','**','spike_clusters.npy'));
-                tmpfiles = arrayfun(@(X) fullfile(tmpfiles(X).folder),1:length(tmpfiles),'uni',0);
 
+            if isempty(tmpfiles)
+                disp(['Trying pyKS directories in ' myKsDir ', ' DateOpt{midx}{did}])
+                tmpfiles = dir(fullfile(myKsDir,DateOpt{midx}{did},'**','pyKS'));
+                tmpfiles(cellfun(@(X) ismember(X,{'.','..'}),{tmpfiles(:).name})) = [];
+                % Conver to string
+                tmpfiles = arrayfun(@(X) fullfile(tmpfiles(X).folder,tmpfiles(X).name),1:length(tmpfiles),'uni',0);
             end
+            % if isempty(tmpfiles)
+            %     disp(['Trying other kilosort directories in ' myKsDir ', ' DateOpt{midx}{did}])
+            % 
+            %     tmpfiles = dir(fullfile(myKsDir,DateOpt{midx}{did},'**','kilosort*','**','spike_clusters.npy'));
+            %     tmpfiles = arrayfun(@(X) fullfile(tmpfiles(X).folder),1:length(tmpfiles),'uni',0);
+            % 
+            % end
             AllKiloSortPaths = [AllKiloSortPaths, tmpfiles];
         end
     end
@@ -186,15 +197,15 @@ for midx = 1:length(MiceOpt)
                 end
                 UMtime = toc(UMtime)
 
-                % Visualization
-                % PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
-
+              
                 % Evaluate (within unit ID cross-validation)
                 EvaluatingUnitMatch(UMparam.SaveDir);
     
                 %% Function analysis
                 ComputeFunctionalScores(UMparam.SaveDir,1)
-                
+                  % Visualization
+                PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
+
                 %% Figures
                 if UMparam.MakePlotsOfPairs
                     DrawBlind = 0; %1 for blind drawing (for manual judging of pairs)

@@ -1,5 +1,5 @@
 % SummarizeAcrossMice
-FromDate = datetime("2023-10-03 09:00:00");
+FromDate = datetime("2024-03-27 09:00:00");
 
 FSCoreFig = figure('name', 'Functional Scores');
 

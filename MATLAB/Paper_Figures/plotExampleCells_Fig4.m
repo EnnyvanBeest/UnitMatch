@@ -1,6 +1,7 @@
 %% Load and format data
 
-UMFile = {'D:\MatchingUnits\Output\ToRun\AL032\AL032_2019-11-21_stripe192-natIm_g0_t0.imec0.ap__AL032_2019-11-22_stripe192-natIm_g0_t0.imec0.ap\UnitMatch\UnitMatch.mat'};
+% UMFile = {'D:\MatchingUnits\Output\ToRun\AL032\AL032_2019-11-21_stripe192-natIm_g0_t0.imec0.ap__AL032_2019-11-22_stripe192-natIm_g0_t0.imec0.ap\UnitMatch\UnitMatch.mat'};
+UMFile = {"\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\2ConsecutiveDaysNew\NonStitched\AL032\AllProbes\AllIMRO\UnitMatch\UnitMatch.mat"};
 summaryFunctionalPlots(UMFile, 'Corr', 1)
 load(UMFile{1})
 
@@ -158,7 +159,7 @@ sess2 = 2;
 % Find matches
 MatchTable_matches = MatchTable(MatchTable.UID1 == MatchTable.UID2 & MatchTable.RecSes1 == sess1 & MatchTable.RecSes2 == sess2, :);
 MatchTable_bestMatches = MatchTable_matches(MatchTable_matches.ISICorr > 0.6 & MatchTable_matches.refPopCorr > 0.8 & MatchTable_matches.natImRespCorr > 0.8,:);
-matches2plt = 4UMF; % 3
+matches2plt = 4; % 3
 clu1 = MatchTable_bestMatches(matches2plt,:).ID1; % 98
 clu2 = MatchTable_bestMatches(matches2plt,:).ID2; % 99
 colMatches = [1 0 0]; 

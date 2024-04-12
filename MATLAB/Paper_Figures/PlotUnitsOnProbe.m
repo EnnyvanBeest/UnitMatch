@@ -38,6 +38,7 @@ nRecPerUnit = arrayfun(@(X) length(unique(recsesGood(id2==X))) >= 0.8*length(nre
 TrackedNeuronPop = id1(nRecPerUnit);
 TrackedNeuronPop = ismember(id2,TrackedNeuronPop);
 end
+nodayflag = 0;
 % Extract DeltaDays
 try
     if isunix
@@ -68,6 +69,14 @@ try
 
 catch ME
     disp('Can''t read in days')
+    nodayflag = 1;
+end
+if isempty(days)
+    nodayflag = 1;
+end
+
+if numel(UMparam.Coordinates)==1 
+    UMparam.Coordinates = repmat(UMparam.Coordinates,1,numel(nrec));
 end
 
 Modes = {'Liberal','Intermediate','Conservative'};
@@ -131,7 +140,7 @@ for modethis = 1:3
         id2(takethesenot) = [];
         recsesGood(takethesenot) = [];
         nrec = unique(recsesGood);
-        if modethis == 1
+        if modethis == 1 & ~nodayflag
             days = days(nrec);
         end
     end
@@ -202,7 +211,7 @@ for modethis = 1:3
         if modethis >= 2
             set(gca,'YTickLabel',[])
         else
-            if exist('days','var')
+            if exist('days','var') && ~nodayflag
                 ylabel(['Day ' num2str(days(recid))])
             else
                 ylabel(['R=' num2str(recid)])

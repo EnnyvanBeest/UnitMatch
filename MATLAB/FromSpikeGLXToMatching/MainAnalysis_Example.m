@@ -2,21 +2,21 @@
 
 %% User Input
 %% Path information
-DataDir = {'H:\MatchingUnits\RawData'};%{'H:\MatchingUnits\RawDataMonthApart'};%  ;%Raw data folders, typically servers were e.g. *.cbin files are stored
-SaveDir = 'H:\MatchingUnits\SCORING\1DayDiff_WithFunctionalScores';%'H:\MatchingUnits\Output';%'H:\MatchingUnits\OutputMonthApart'; %'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\2ConsecutiveDays\Stitched';%'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\MonthApart\Stitched';%%'H:\MatchingUnits\Output\MonthApartStitched'% 'H:\MatchingUnits\Output\NotConcatenated';%'\\znas.cortexlab.net\Lab\Share\Celian\UnitMatch\MatchTables\NewSep27\MonthApart\Stitched'% %%;% %'H:\MatchingUnits\Output\ManyRecordings'%Folder where to store the results
-tmpdatafolder = 'H:\OpenEphys_Example\Tmp'; % temporary folder for temporary decompression of data 
-KilosortDir =  'H:\MatchingUnits\SCORING\KSComparisonSubset'; %'H:\MatchingUnits\KilosortOutput';%'H:\MatchingUnits\KilosortOutputMonthApart';%'\\znas.cortexlab.net\Lab\Share\Enny\UnitMatch\KSComparisonSubset';%'\\znas.cortexlab.net\Lab\Share\Enny\UnitMatch\KilosortOutputMonthApart';%'H:\MatchingUnits\KilosortOutputMonthApart';%'\\znas.cortexlab.net\Lab\Share\Celian\UnitMatch\KilosortOutputMonthApart';% Kilosort output folder
+DataDir = {'D:\JulieMice'};%{'H:\MatchingUnits\RawDataMonthApart'};%  ;%Raw data folders, typically servers were e.g. *.cbin files are stored
+SaveDir = 'H:\MatchingUnits\Output';%'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\Learning_Striatum_new';%'H:\MatchingUnits\Output';%'H:\MatchingUnits\OutputMonthApart'; %'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\2ConsecutiveDays\Stitched';%'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\MonthApart\Stitched';%%'H:\MatchingUnits\Output\MonthApartStitched'% 'H:\MatchingUnits\Output\NotConcatenated';%'\\znas.cortexlab.net\Lab\Share\Celian\UnitMatch\MatchTables\NewSep27\MonthApart\Stitched'% %%;% %'H:\MatchingUnits\Output\ManyRecordings'%Folder where to store the results
+tmpdatafolder = 'D:\tmpdata'; % temporary folder for temporary decompression of data 
+KilosortDir = '';%'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\Learning_Striatum_new\KS4\';%'H:\MatchingUnits\KilosortOutput';% 'H:\MatchingUnits\KilosortOutputMonthApart';%'\\znas.cortexlab.net\Lab\Share\Enny\UnitMatch\KSComparisonSubset';%'\\znas.cortexlab.net\Lab\Share\Enny\UnitMatch\KilosortOutputMonthApart';%'H:\MatchingUnits\KilosortOutputMonthApart';%'\\znas.cortexlab.net\Lab\Share\Celian\UnitMatch\KilosortOutputMonthApart';% Kilosort output folder
 GithubDir = 'C:\Users\EnnyB\Documents\GitHub'; % Github directory
-PythonEXE = 'C:\Users\EnnyB\anaconda3\envs\pyks2_debug\pythonw.exe' % Python version to run python code in:
+PythonEXE = 'C:\Users\EnnyB\anaconda3\envs\kilosort\pythonw.exe' % Python version to run python code in:
 
 %% Information on experiments
-MiceOpt = {'AL032','AV008','CB016','EB019','JF067'}; %'AL032', Add all mice you want to analyze
+MiceOpt = {'AL030'};%{'JF067'};%{'AL032','AV008','CB016','EB019','JF067'}; %'AL032', Add all mice you want to analyze
 DataDir2Use = repmat(1,[1,length(MiceOpt)]); % In case you have multiple DataDir, index which directory is used for each mouse
 RecordingType = repmat({'Chronic'},1,length(MiceOpt)); % And whether recordings were Chronic (default)
 RecordingType(ismember(MiceOpt,{''}))={'Acute'}; %EB014', % Or maybe acute?
 
 %% Parameters on how to prepare units/data for analysis
-PipelineParams.RunPyKSChronicStitched = 1; % Default 0. if 1, run PyKS chronic recordings stitched when same IMRO table was used
+PipelineParams.RunPyKSChronicStitched = 0; % Default 0. if 1, run PyKS chronic recordings stitched when same IMRO table was used
 PipelineParams.CopyToTmpFirst = 1; % If 1, copy data to local first, don't run from server (= advised!)
 PipelineParams.DecompressLocal = 1; % If 1, uncompress data first if it's currently compressed (= necessary for unitmatch and faster for QualityMetrics)
 
@@ -34,7 +34,7 @@ PipelineParams.loadPCs = 0; % Only necessary when computiong isoluation metrics/
 
 % UnitMatch
 PipelineParams.UnitMatch = 1; % If 1, find identical units across sessions or oversplits in a fast and flexible way
-PipelineParams.RedoUnitMatch = 0; % if 1, Redo unitmatch
+PipelineParams.RedoUnitMatch = 1; % if 1, Redo unitmatch
 PipelineParams.separateIMRO = 1; % Run for every IMRO separately (for memory reasons or when having multiple probes this might be a good idea)
 PipelineParams.UseHistology = 0; % Use real coordinates (3D space of tracked probes if available)
 
@@ -128,7 +128,53 @@ if ~exist('UMFiles') || isempty(UMFiles) % When using the example pipeline this 
         end
     end
 end
-summaryFunctionalPlots(UMFiles, 'Corr', groupvec)
-summaryFunctionalPlots_Part2(UMFiles, groupvec,1)
-summaryMatchingPlots(UMFiles,{'UID1'},groupvec,1)
+res = summaryFunctionalPlots(UMFiles, 'Corr', groupvec, 0, 0);
+resKS = summaryFunctionalPlots(UMFiles, 'Corr', groupvec, 1, 0);
+
+%% Compare with KS stitched performance
+figure('name','KS versus UM')
+fnames = fieldnames(res.FPSum);
+cols = distinguishable_colors(length(MiceOpt));
+
+for fid = 1:numel(fnames)
+    subplot(ceil(sqrt(numel(fnames))),round(sqrt(numel(fnames))),fid)
+    hold on
+    for midx = 1:length(MiceOpt)
+        tmp1 = squeeze(res.FPSum.(fnames{fid}).AUC{midx}(1,:,:));
+        tmp2 = squeeze(resKS.FPSum.(fnames{fid}).AUC{midx}(1,:,:));
+        days = res.deltaDays{midx};
+        if length(MiceOpt)==1
+        scatter(tmp1(:),tmp2(:),35,days(:),'filled')
+            colormap(copper)
+
+        else
+        scatter(tmp1(:),tmp2(:),35,cols(midx,:),'filled')
+        colormap(cols)
+
+        end
+    end
+    makepretty
+    offsetAxes
+    xlabel('UnitMatch')
+    ylabel('Kilosort')
+    xlim([0.5 1])
+    ylim([0.5 1])
+    line([0.5 1],[0.5 1],'color',[0.2 0.2 0.2])
+    if length(MiceOpt)>1 & fid == 1
+        hc = colorbar;
+
+        hc.Ticks = linspace(0,1,length(MiceOpt));
+        hc.TickLabels = MiceOpt;
+    end
+
+    title(fnames{fid})
+end
+
+%%
+[unitPresence, unitProbaMatch, days, EPosAndNeg] = summaryMatchingPlots(UMFiles,{'UID1','ID1'},groupvec,1)
+
 trackWithFunctionalMetrics(UMFiles)
+
+
+
+%% 

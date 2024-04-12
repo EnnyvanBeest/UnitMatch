@@ -275,14 +275,27 @@ for midx = 1:length(MiceOpt)
                     if ~exist(fullfile(tmpdatafolder,tmpfile(sesid).name))
                         disp('Copying data to local folder...')
                         copyfile(fullfile(tmpfile(sesid).folder,tmpfile(sesid).name),fullfile(tmpdatafolder,tmpfile(sesid).name))
+                    end
+                    if ~exist(fullfile(tmpdatafolder,metafile.name))
                         copyfile(fullfile(metafile.folder,metafile.name),fullfile(tmpdatafolder,metafile.name))
                         if Compressed
                             copyfile(fullfile(chfile.folder,chfile.name),fullfile(tmpdatafolder,chfile.name))
                         end
                     end
+                    % make channel map
+                    [channelPos, probeSN, recordingduration] = ChannelIMROConversion(fullfile(tmpdatafolder,metafile.name),1,0)
+
+                    if ~exist(fullfile(tmpdatafolder, strrep(tmpfile(sesid).name, 'cbin', 'bin')))
+                        disp('This is compressed data and we do not want to use Python integration... uncompress temporarily')
+                        decompDataFile = bc_extractCbinData(fullfile(tmpfile(sesid).folder, tmpfile(sesid).name), ...
+                            [], [], 0, fullfile(tmpdatafolder, strrep(tmpfile(sesid).name, 'cbin', 'bin')));
+                        statusCopy = copyfile(strrep(fullfile(tmpfile(sesid).folder, tmpfile(sesid).name), 'cbin', 'meta'), strrep(fullfile(tmpdatafolder, tmpfile(sesid).name), 'cbin', 'meta')); %QQ doesn't work on linux
+                    end
+
+                    tmpfile(sesid).name = strrep(tmpfile(sesid).name,'cbin','bin');
                     % PyKS2
                     try
-                        success = pyrunfile("RunPyKS2_FromMatlab.py","success",bin_file = strrep(fullfile(tmpdatafolder,tmpfile(sesid).name),'\','/'));
+                        success = pyrunfile("RunPyKS4_FromMatlab.py","success",bin_file = strrep(fullfile(tmpdatafolder,tmpfile(sesid).name),'\','/'),probe_file = strrep(fullfile(tmpdatafolder,strrep(tmpfile(sesid).name,'.ap.bin','_kilosortChanMap.mat')),'\','/'));
                         clear success
                     catch ME
                         disp(ME)
@@ -292,7 +305,7 @@ for midx = 1:length(MiceOpt)
 
                     % now copy the output
                     disp('Copying output from temporary directory to KS folder')
-                    copyfile(fullfile(tmpdatafolder,'output'),fullfile(myKsDir,ProbeName,Sesinfo))
+                    copyfile(fullfile(tmpdatafolder,'kilosort4'),fullfile(myKsDir,ProbeName,Sesinfo))
 
                     % Remove temporary files
                     disp('Delete files from temporary folder')
@@ -302,14 +315,10 @@ for midx = 1:length(MiceOpt)
                     catch ME
                         disp(ME)
                     end
+                    
                     try
-                        delete(fullfile(tmpdatafolder,tmpfile(sesid).name))
-                    catch ME
-                        disp(ME)
-                    end
-                    try
-                        delete(fullfile(tmpdatafolder,'output','*'))
-                        rmdir(fullfile(tmpdatafolder,'output'))
+                        delete(fullfile(tmpdatafolder,'kilosort4','*'))
+                        rmdir(fullfile(tmpdatafolder,'kilosort4'))
                     catch ME
                         disp(ME)
                     end

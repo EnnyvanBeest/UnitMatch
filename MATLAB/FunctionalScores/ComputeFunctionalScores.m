@@ -348,7 +348,11 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'natImRespCorr')) || recom
 
         % Find the associated experiments
         if ispc && Flag
+            try
             exp2keep = getNatImExpRef(binFileRef);
+            catch
+                exp2keep = [];
+            end
         else
             exp2keep = [];
             % Julie Fabre: on linux the servers are mounted differently, and the above
