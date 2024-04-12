@@ -12,7 +12,7 @@ bhvData = cl_task_performance({mouse});
 savedirs = '\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\Learning_Striatum_new'
 UMDays = [1:3];%[2,3,4,5,6,7];
 RelevantDays = [1,2,3];%[2,4,5];%[2,7,8];%7:9;
-PickChar = 'PyKS';%'KS4'; % 2 for PyKS, 1 for KS2
+PickChar = 'KS4';%'KS4'; %  PyKS, KS2
 
 nRec = numel(RelevantDays);
 ColOpt = flipud(copper(nRec+1));
@@ -32,16 +32,16 @@ if RedoUM
     UMparam.KSDir = UMparam.KSDir(UMDays);
     UMparam.RawDataPaths = UMparam.RawDataPaths(UMDays);
     UMparam.AllChannelPos = UMparam.AllChannelPos(UMDays);
-
-    for ksid = 1:numel(UMparam.KSDir)
-        myClusFile = dir(fullfile(UMparam.KSDir{ksid}, 'channel_map.npy'));
-        channelmaptmp = readNPY(fullfile(myClusFile(1).folder, myClusFile(1).name));
-
-        myClusFile = dir(fullfile(UMparam.KSDir{ksid}, 'channel_positions.npy'));
-        channelpostmp = readNPY(fullfile(myClusFile(1).folder, myClusFile(1).name));
-
-        UMparam.AllChannelPos{ksid} = channelpostmp;
-    end
+    % 
+    % for ksid = 1:numel(UMparam.KSDir)
+    %     myClusFile = dir(fullfile(UMparam.KSDir{ksid}, 'channel_map.npy'));
+    %     channelmaptmp = readNPY(fullfile(myClusFile(1).folder, myClusFile(1).name));
+    % 
+    %     myClusFile = dir(fullfile(UMparam.KSDir{ksid}, 'channel_positions.npy'));
+    %     channelpostmp = readNPY(fullfile(myClusFile(1).folder, myClusFile(1).name));
+    % 
+    %     UMparam.AllChannelPos{ksid} = channelpostmp;
+    % end
     UMparam.AllProbeSN = UMparam.AllProbeSN(UMDays);
     UMparam.AllDecompPaths = UMparam.AllDecompPaths(UMDays);
     UMparam.Coordinates = UMparam.Coordinates(UMDays);
@@ -49,9 +49,9 @@ if RedoUM
     UMparam.SaveDir = fullfile(UMparam.SaveDir,'UMDays');
 
     clusinfo = getClusinfo(UMparam.KSDir);
-    % UMparam.spikeWidth = 61; % width of spikes in samples (typically assuming 30KhZ sampling)
-    % UMparam.NewPeakLoc =  22; % floor(UMparam.spikeWidth./2);
-    % UMparam.waveidx =  UMparam.NewPeakLoc-7:UMparam.NewPeakLoc+10;
+    UMparam.spikeWidth = 61; % width of spikes in samples (typically assuming 30KhZ sampling)
+    UMparam.NewPeakLoc =  22; % floor(UMparam.spikeWidth./2);
+    UMparam.waveidx =  UMparam.NewPeakLoc-7:UMparam.NewPeakLoc+10;
     [UniqueIDConversion, MatchTable, WaveformInfo, UMparam] = UnitMatch(clusinfo, UMparam);
     [UniqueIDConversion, MatchTable] = AssignUniqueID(UMparam.SaveDir);
     RelevantDays = find(ismember(UMDays,RelevantDays));
@@ -92,7 +92,7 @@ RecSesPerUID = cat(2, RecSesPerUID{:});
 
 %% Continue extracting behavior
 DatesKS = cellfun(@(X) strsplit(X,'\'),UMparam.KSDir,'Uni',0);
-DatesKS = cellfun(@(X) X{9},DatesKS,'Uni',0);
+DatesKS = cellfun(@(X) X{find(cellfun(@(X) length(X)==10,DatesKS{1}))},DatesKS,'Uni',0);
 BehaviorIdx = cellfun(@(X) find(ismember(bhvData.dates,X)),DatesKS,'Uni',0); % For some reason bhdata is +1 indexed
 BehaviorIdx2Take = cell2mat(BehaviorIdx(~cellfun(@isempty,BehaviorIdx)));
 BehaviorIdx = find(~cellfun(@isempty,BehaviorIdx));
@@ -127,7 +127,7 @@ experiments = experiments([experiments.ephys]);
 ExpIndx = cellfun(@(X) find(ismember({experiments.thisDate},X)),DatesKS);
 experiments = experiments(ExpIndx);
 for iRecording = 1:length(experiments)
-    experiments(iRecording).ephys_ks_paths = UMparam.KSDir{1};
+    experiments(iRecording).ephys_ks_paths = UMparam.KSDir{iRecording};
 end
 loadClusters = 0; % whether to load phy output or not 
 
@@ -151,6 +151,7 @@ vis_long_track_pass = nan(size(theseUnits, 2), nRec, 3, 1500);
 dPrimePerUnit = nan(size(theseUnits, 2), nRec);
 VisRespPerUnit = nan(size(theseUnits,2), nRec, 3, maxnTrials);
 ISIsPerUnit = nan(size(theseUnits,2), nRec, length(ISIbins)-1);
+
 
 UnitIsMerged = false(size(theseUnits, 2),1);
 
@@ -220,7 +221,7 @@ for iRecording = 1:nRec
         if numel(thisUnit_0idx)>1
             UnitIsMerged(iUnit)=1;
         end
-        theseSpikeTimes = spike_times_timeline(ismember((spike_templates_0idx), uint32(thisUnit_0idx)));
+        theseSpikeTimes = spike_times_timeline(ismember(uint32(spike_templates_0idx), uint32(thisUnit_0idx)));
         if isempty(theseSpikeTimes)
             keyboard
         end
@@ -287,7 +288,7 @@ PSTH_Z = (PSTH - nanmean(PSTH,4))./(nanstd(PSTH,[],4));
 %% Neurons to include
 [nPres,sortidx] = sort(nansum(PSTH(:,:,1,5)~=0 & ~isnan(PSTH(:,:,1,5)),2),'descend');
 sortidx = sortidx(nPres>=nRec);
-% sortidx(UnitIsMerged(sortidx)) = [];
+sortidx(UnitIsMerged(sortidx)) = [];
 % sortidx = sort(sortidx);
 % sortidx = [89,97,102,103,105,160,184]; % For JF067
 figure;
@@ -315,6 +316,19 @@ for recid = 1:nRec
 end
 colormap(redblue)
 
+%% Match probability?
+MatchProb = nan(numel(sortidx), nRec-1);
+for uid = 1:numel(sortidx)
+    thisU = unit_UniqueIDs(sortidx(uid));
+    for recid = 1:nRec-1
+        tblidx1 = MatchTable.UID1==thisU & MatchTable.UID2 == thisU & MatchTable.RecSes1 == recid & MatchTable.RecSes2 == recid+1;
+        tblidx2 = MatchTable.UID1==thisU & MatchTable.UID2 == thisU & MatchTable.RecSes1 == recid+1 & MatchTable.RecSes2 == recid;
+        MatchProb(uid,recid) = nanmean([MatchTable.MatchProb(tblidx1); MatchTable.MatchProb(tblidx2)]);
+
+        disp([num2str(sortidx(uid)) ' day ' num2str(recid) ' versus' num2str(recid+1) ' p=' num2str(MatchProb(uid,recid))])
+    end
+end
+
 %% Baseline firing rates
 baselinefr = nanmean(nanmean(PSTH(sortidx,:,:,timeline<0),4),3);
 
@@ -326,6 +340,15 @@ rm = fitrm(T,['baselinefr1-baselinefr' num2str(size(T,2)) ' ~ 1'],'WithinDesign'
 
 AT = ranova(rm,'WithinModel','Day')
 multcompare(rm,'Day')
+
+baselinefrdiff = cat(2,baselinefr(:,2)-baselinefr(:,1),baselinefr(:,3)-baselinefr(:,2));
+MatchFig = figure('name','MatchProb vs Functional');
+subplot(2,2,1)
+scatter(MatchProb(:),baselinefrdiff(:),35,[0 0 0],'filled')
+xlabel('p(match)')
+ylabel('Baseline firing rate')
+makepretty
+offsetAxes
 %% population
 dRR = (PSTH-nanmean(PSTH(:,:,:,timeline<0),4))./nanmean(PSTH(:,:,:,timeline<0),4);
 clear h
@@ -351,16 +374,17 @@ for recid = 1:nRec
 
     offsetAxes
     makepretty
+    legend([h(:)],{'Central','Lateral'})
+
 
 end
-legend([h(:)],{'Central','Lateral'})
 
 
 
 %% Example cells
 clear h
 % sortidx = [63, 97, 102, 103, 105, 111];
-nExample = 5;
+nExample = 4;
 nExampleOri = nExample;
 nBatch = ceil(numel(sortidx)/nExample);
 nCols = 3 + nRec;    
@@ -487,6 +511,8 @@ for batchid = 1:nBatch
     end
 end
 
+
+
 %% AUC values
 AUCISI = nan(nRec,nRec);
 AUCCentral = nan(nRec,nRec);
@@ -508,7 +534,7 @@ for did1 = 1:nRec
         labels = [ones(size(LatCorr,1),1); zeros(sum(sum(triu(ones(size(LatCorr)),1))),1)];
         [~,~,~,AUClateral(did1,did2)] = perfcurve(labels,scores,1);
 
-        CentCorr = corr(squeeze(RespToSave(:,:,did1,1))',squeeze(RespToSave(:,:,did2,2))');
+        CentCorr = corr(squeeze(RespToSave(:,:,did1,2))',squeeze(RespToSave(:,:,did2,2))');
         scores = [diag(CentCorr);CentCorr(logical(triu(ones(size(CentCorr)),1)))];
         labels = [ones(size(CentCorr,1),1); zeros(sum(sum(triu(ones(size(CentCorr)),1))),1)];
         [~,~,~,AUCCentral(did1,did2)] = perfcurve(labels,scores,1);
@@ -521,12 +547,53 @@ for did1 = 1:nRec
     end
 end
 
+
 xlabel('ISI')
 ylabel('Visual response')
 xlim([0 1])
 ylim([0 1])
 line([0 1],[0 1],'color',[0.2 0.2 0.2])
 legend({'Central','Lateral'})
+makepretty
+offsetAxes
+
+%%
+
+CorrVals = nan(numel(sortidx),nRec-1);
+LatVals = nan(numel(sortidx),nRec-1);
+CentVals = nan(numel(sortidx),nRec-1);
+for did1 = 1:nRec-1
+    did2 = did1+1;
+    ISICorr = corr(squeeze(ISIstoSave(:,:,did1))',squeeze(ISIstoSave(:,:,did2))');
+    CorrVals(:,did1) = diag(ISICorr);
+
+       LatCorr = corr(squeeze(RespToSave(:,:,did1,1))',squeeze(RespToSave(:,:,did2,1))');
+       LatVals(:,did1) = diag(LatCorr);
+
+        CentCorr = corr(squeeze(RespToSave(:,:,did1,1))',squeeze(RespToSave(:,:,did2,1))');
+       CentVals(:,did1) = diag(CentCorr);
+end
+
+figure(MatchFig)
+subplot(2,2,2)
+scatter(MatchProb(:),CorrVals(:),35,[0 0 0],'filled')
+xlabel('p(match)')
+ylabel('ISICorr')
+makepretty
+offsetAxes
+
+subplot(2,2,3)
+scatter(MatchProb(:),LatVals(:),35,[0 0 0],'filled')
+xlabel('p(match)')
+ylabel('Lateral visual response')
+makepretty
+offsetAxes
+
+
+subplot(2,2,4)
+scatter(MatchProb(:),CentVals(:),35,[0 0 0],'filled')
+xlabel('p(match)')
+ylabel('Central visual response')
 makepretty
 offsetAxes
 

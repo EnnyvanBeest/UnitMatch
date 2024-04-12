@@ -68,9 +68,12 @@ if 1
             channelpostmp = readNPY(fullfile(myClusFile(1).folder, myClusFile(1).name));
 
             UMparam.AllChannelPos{ksid} = channelpostmp;
+            if size(channelpostmp,1)~=384
+                keyboard
+            end
         end
 
-        %% Actual UnitMatch & Unique UnitID assignment
+        % Actual UnitMatch & Unique UnitID assignment
         [UniqueIDConversion, MatchTable, WaveformInfo, UMparam] = UnitMatch(clusinfo, UMparam);
         if UMparam.AssignUniqueID
             [UniqueIDConversion, MatchTable] = AssignUniqueID(UMparam.SaveDir);
@@ -79,7 +82,7 @@ if 1
         % Evaluate (within unit ID cross-validation)
         EvaluatingUnitMatch(UMparam.SaveDir);
 
-        %% Function analysis
+        % Function analysis
         ComputeFunctionalScores(UMparam.SaveDir,1)
         % Visualization
         PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
