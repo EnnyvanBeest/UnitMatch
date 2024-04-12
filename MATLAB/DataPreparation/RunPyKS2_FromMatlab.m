@@ -275,6 +275,8 @@ for midx = 1:length(MiceOpt)
                     if ~exist(fullfile(tmpdatafolder,tmpfile(sesid).name))
                         disp('Copying data to local folder...')
                         copyfile(fullfile(tmpfile(sesid).folder,tmpfile(sesid).name),fullfile(tmpdatafolder,tmpfile(sesid).name))
+                    end
+                    if ~exist(fullfile(tmpdatafolder,metafile.name))
                         copyfile(fullfile(metafile.folder,metafile.name),fullfile(tmpdatafolder,metafile.name))
                         if Compressed
                             copyfile(fullfile(chfile.folder,chfile.name),fullfile(tmpdatafolder,chfile.name))
@@ -285,9 +287,9 @@ for midx = 1:length(MiceOpt)
 
                     if ~exist(fullfile(tmpdatafolder, strrep(tmpfile(sesid).name, 'cbin', 'bin')))
                         disp('This is compressed data and we do not want to use Python integration... uncompress temporarily')
-                        decompDataFile = bc_extractCbinData(fullfile(rawD(id).folder, rawD(id).name), ...
-                            [], [], 0, fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'bin')));
-                        statusCopy = copyfile(strrep(fullfile(rawD(id).folder, rawD(id).name), 'cbin', 'meta'), strrep(fullfile(Params.tmpdatafolder, rawD(id).name), 'cbin', 'meta')); %QQ doesn't work on linux
+                        decompDataFile = bc_extractCbinData(fullfile(tmpfile(sesid).folder, tmpfile(sesid).name), ...
+                            [], [], 0, fullfile(tmpdatafolder, strrep(tmpfile(sesid).name, 'cbin', 'bin')));
+                        statusCopy = copyfile(strrep(fullfile(tmpfile(sesid).folder, tmpfile(sesid).name), 'cbin', 'meta'), strrep(fullfile(tmpdatafolder, tmpfile(sesid).name), 'cbin', 'meta')); %QQ doesn't work on linux
                     end
 
                     tmpfile(sesid).name = strrep(tmpfile(sesid).name,'cbin','bin');
@@ -313,14 +315,10 @@ for midx = 1:length(MiceOpt)
                     catch ME
                         disp(ME)
                     end
+                    
                     try
-                        delete(fullfile(tmpdatafolder,tmpfile(sesid).name))
-                    catch ME
-                        disp(ME)
-                    end
-                    try
-                        delete(fullfile(tmpdatafolder,'output','*'))
-                        rmdir(fullfile(tmpdatafolder,'output'))
+                        delete(fullfile(tmpdatafolder,'kilosort4','*'))
+                        rmdir(fullfile(tmpdatafolder,'kilosort4'))
                     catch ME
                         disp(ME)
                     end

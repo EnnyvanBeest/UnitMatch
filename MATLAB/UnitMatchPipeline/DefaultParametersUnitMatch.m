@@ -2,6 +2,12 @@ function UMparam = DefaultParametersUnitMatch(UMparam)
 % Checks if all required parameters are there, and will fill in default
 % parameters if not wherever possible
 %% Check if path information is given
+% Kilosortversion?
+if any(strfind(UMparam.KSDir{1},'KS4'))||any(strfind(UMparam.KSDir{1},'kilosort4'))
+    UMparam.Kilosortversion = 4;
+else
+    UMparam.Kilosortversion = 2;
+end
 if ~isfield(UMparam,'SaveDir')
     disp('Warning, no SaveDir given. Assigning current directory')
     UMparam.SaveDir = fullfile(cd,'UnitMatch');
@@ -29,8 +35,17 @@ end
 if ~isfield(UMparam,'sampleamount')
     UMparam.sampleamount = 1000; % n raw waveforms to extract
 end
+
 if ~isfield(UMparam,'spikeWidth')
-    UMparam.spikeWidth = 82; % width of spikes in samples (typically assuming 30KhZ sampling)
+    if UMparam.Kilosortversion>=4
+        UMparam.spikeWidth = 61; % width of spikes in samples (typically assuming 30KhZ sampling)
+        UMparam.NewPeakLoc =  22; % floor(UMparam.spikeWidth./2);
+        UMparam.waveidx =  UMparam.NewPeakLoc-7:UMparam.NewPeakLoc+10;
+    else
+        UMparam.spikeWidth = 82; % width of spikes in samples (typically assuming 30KhZ sampling)
+        UMparam.NewPeakLoc =  floor(UMparam.spikeWidth./2);
+        UMparam.waveidx =  UMparam.NewPeakLoc-7:UMparam.NewPeakLoc+15;
+    end
 end
 if ~isfield(UMparam,'RedoExtraction')
     UMparam.RedoExtraction = 0; % Redoing raw average spike extraction --> this is time consuming

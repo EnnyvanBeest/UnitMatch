@@ -237,8 +237,9 @@ for uid = 1:nclus
             continue
         end
         try
-            p = lsqcurvefit(expFun,[max(spdctmp) 1],double(Distance2MaxChan'),spdctmp,[],[],opts);
-            GoodnessofFit(uid,cv) = nansum((spdctmp-expFun(p,double(Distance2MaxChan'))).^2);
+            [~,sortidx] = sort(double(Distance2MaxChan'));
+            p = lsqcurvefit(expFun,[max(spdctmp) 0.05],double(Distance2MaxChan(sortidx)'),sort(spdctmp(sortidx)),[],[],opts);
+            GoodnessofFit(uid,cv) = nansum((spdctmp-expFun(p,double(Distance2MaxChan')))./max(spdctmp).^2);
 
             %             p = lsqcurvefit(expFun,[max(spdctmp) 0.05 min(spdctmp)],Distance2MaxChan',spdctmp,[],[],opts);
         catch ME

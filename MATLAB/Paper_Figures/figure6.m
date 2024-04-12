@@ -1,6 +1,6 @@
 %% for Enny + Celian
-mouse = 'JF082'%% Get mouse behavior 
-RedoUM = 0;
+mouse = 'JF067'%% Get mouse behavior 
+RedoUM = 1;
 % smoothdata(PSTH, 'movmean', [10-70])
 % or 0-70
 
@@ -10,17 +10,20 @@ bhvData = cl_task_performance({mouse});
 %% Recording info
 % using iMouse = 1 for now, but JF078, 84 (2 probes) and 82 (3 probes) are also in the same task + all the recs are processed - so they could be integrated. 
 savedirs = '\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\Learning_Striatum_new'
-UMDays = [2,3,4,5,6,7];
-RelevantDays = [2,4,5];%[2,4,5];%[2,7,8];%7:9;
+UMDays = [1:3];%[2,3,4,5,6,7];
+RelevantDays = [1,2,3];%[2,4,5];%[2,7,8];%7:9;
+PickChar = 'PyKS';%'KS4'; % 2 for PyKS, 1 for KS2
+
 nRec = numel(RelevantDays);
-ColOpt = flipud(copper(nRec*2));
-ColOpt = cat(3,ColOpt(1:2:end-1,:),ColOpt(2:2:end,:));
+ColOpt = flipud(copper(nRec+1));
+ColOpt = cat(3,ColOpt,ColOpt.*0.5);
 
 %% Get match data
 
 SaveDir = dir(fullfile(savedirs,mouse,'*','*','UnitMatch.mat'));
 %[UniqueID, MatchTable] = AssignUniqueID_POSTUM(SaveDir);
-load(fullfile(SaveDir.folder,SaveDir.name))
+PickID = find(cellfun(@(X) any(strfind(X,PickChar)),{SaveDir(:).folder}));
+load(fullfile(SaveDir(PickID).folder,SaveDir(PickID).name))
 %
 
 % Rerun UnitMatch for relevant days only
@@ -29,6 +32,16 @@ if RedoUM
     UMparam.KSDir = UMparam.KSDir(UMDays);
     UMparam.RawDataPaths = UMparam.RawDataPaths(UMDays);
     UMparam.AllChannelPos = UMparam.AllChannelPos(UMDays);
+
+    for ksid = 1:numel(UMparam.KSDir)
+        myClusFile = dir(fullfile(UMparam.KSDir{ksid}, 'channel_map.npy'));
+        channelmaptmp = readNPY(fullfile(myClusFile(1).folder, myClusFile(1).name));
+
+        myClusFile = dir(fullfile(UMparam.KSDir{ksid}, 'channel_positions.npy'));
+        channelpostmp = readNPY(fullfile(myClusFile(1).folder, myClusFile(1).name));
+
+        UMparam.AllChannelPos{ksid} = channelpostmp;
+    end
     UMparam.AllProbeSN = UMparam.AllProbeSN(UMDays);
     UMparam.AllDecompPaths = UMparam.AllDecompPaths(UMDays);
     UMparam.Coordinates = UMparam.Coordinates(UMDays);
@@ -36,6 +49,9 @@ if RedoUM
     UMparam.SaveDir = fullfile(UMparam.SaveDir,'UMDays');
 
     clusinfo = getClusinfo(UMparam.KSDir);
+    % UMparam.spikeWidth = 61; % width of spikes in samples (typically assuming 30KhZ sampling)
+    % UMparam.NewPeakLoc =  22; % floor(UMparam.spikeWidth./2);
+    % UMparam.waveidx =  UMparam.NewPeakLoc-7:UMparam.NewPeakLoc+10;
     [UniqueIDConversion, MatchTable, WaveformInfo, UMparam] = UnitMatch(clusinfo, UMparam);
     [UniqueIDConversion, MatchTable] = AssignUniqueID(UMparam.SaveDir);
     RelevantDays = find(ismember(UMDays,RelevantDays));
@@ -76,7 +92,7 @@ RecSesPerUID = cat(2, RecSesPerUID{:});
 
 %% Continue extracting behavior
 DatesKS = cellfun(@(X) strsplit(X,'\'),UMparam.KSDir,'Uni',0);
-DatesKS = cellfun(@(X) X{5},DatesKS,'Uni',0);
+DatesKS = cellfun(@(X) X{9},DatesKS,'Uni',0);
 BehaviorIdx = cellfun(@(X) find(ismember(bhvData.dates,X)),DatesKS,'Uni',0); % For some reason bhdata is +1 indexed
 BehaviorIdx2Take = cell2mat(BehaviorIdx(~cellfun(@isempty,BehaviorIdx)));
 BehaviorIdx = find(~cellfun(@isempty,BehaviorIdx));
@@ -84,13 +100,13 @@ Performance = nan(1,nRec);
 Performance(BehaviorIdx) = bhvData.goLeft(BehaviorIdx2Take, 1) ./ bhvData.nTrials(BehaviorIdx2Take, 1);
 
 figure('name','Behavior');
-scatter(1:nRec,Performance,35,ColOpt(:,:,1),'filled')
+scatter(1:nRec,Performance,35,ColOpt(1:nRec,:,1),'filled')
 ylim([0.5 1])
 set(gca,'XTick',[1:nRec],'XTickLabel',DatesKS)
 makepretty
 offsetAxes
 
-
+%%
 % units to get PSTH for 
 Or_UniqueID = arrayfun(@(x) {UniqueIDConversion.Path4UnitNPY{x}(end -17:end - 14)}, 1:size(UniqueIDConversion.Path4UnitNPY, 2));
 UUIDs = UniqueID(idx1);
@@ -110,6 +126,9 @@ experiments = experiments([experiments.ephys]);
 % Find experiments that we want to keep
 ExpIndx = cellfun(@(X) find(ismember({experiments.thisDate},X)),DatesKS);
 experiments = experiments(ExpIndx);
+for iRecording = 1:length(experiments)
+    experiments(iRecording).ephys_ks_paths = UMparam.KSDir{1};
+end
 loadClusters = 0; % whether to load phy output or not 
 
 %% Get PSTHs for matched cells 
@@ -148,6 +167,7 @@ for iRecording = 1:nRec
 
     for iExperiment = 1:size(experiments(thisRecording).experiment, 2)
         exp = experiments(thisRecording).experiment(iExperiment);
+        % cl_cortexlab_filename(animal, thisDate, experiment, file, site, recording, shank, KSVersion)
         [block_filename, block_exists] = cl_cortexlab_filename(animal, thisDate, exp, 'block');
         try % QQ hacky 
             load(block_filename)
@@ -172,11 +192,12 @@ for iRecording = 1:nRec
         experiment = 2;
     end
 
-    filename = cl_cortexlab_filename(animal, thisDate, '', 'ephys', 1, '', '');
+    % filename = cl_cortexlab_filename(animal, thisDate, '', 'ephys', 1, '', '');
+    filename = UMparam.KSDir{thisRecording};
 
     try % QQ hacky 
         cl_load_experiment;
-    catch
+    catch ME
         warning('error')
         continue;
     end
@@ -199,7 +220,7 @@ for iRecording = 1:nRec
         if numel(thisUnit_0idx)>1
             UnitIsMerged(iUnit)=1;
         end
-        theseSpikeTimes = spike_times_timeline(ismember(spike_templates_0idx, thisUnit_0idx));
+        theseSpikeTimes = spike_times_timeline(ismember(int32(spike_templates_0idx), thisUnit_0idx));
         if isempty(theseSpikeTimes)
             keyboard
         end
@@ -218,8 +239,8 @@ for iRecording = 1:nRec
 
         % get visual PSTH
         [align_group_a, align_group_b] = ismember(trial_conditions(:, 2), unique(trial_conditions(:, 2)));
-        [curr_psth, curr_raster, t, raster_x, raster_y] = cl_raster_psth(spike_templates_0idx, spike_times_timeline, ...
-            thisUnit_0idx, raster_window, psth_bin_size, stimOn_times, align_group_b(1:size(stimOn_times, 1)));
+        [curr_psth, curr_raster, t, raster_x, raster_y] = cl_raster_psth(double(spike_templates_0idx), double(spike_times_timeline), ...
+            double(thisUnit_0idx), raster_window, psth_bin_size, stimOn_times, align_group_b(1:size(stimOn_times, 1)));
         vis_long_track_pass(iUnit, thisRecording, 1:size(curr_psth, 1), :) = curr_psth;
 
         tmpl = nansum(curr_raster(align_group_b==1,psth_time>0&psth_time<0.5),2).*2; %sp/sec
@@ -266,7 +287,7 @@ PSTH_Z = (PSTH - nanmean(PSTH,4))./(nanstd(PSTH,[],4));
 %% Neurons to include
 [nPres,sortidx] = sort(nansum(PSTH(:,:,1,5)~=0 & ~isnan(PSTH(:,:,1,5)),2),'descend');
 sortidx = sortidx(nPres>=nRec);
-sortidx(UnitIsMerged(sortidx)) = [];
+% sortidx(UnitIsMerged(sortidx)) = [];
 % sortidx = sort(sortidx);
 % sortidx = [89,97,102,103,105,160,184]; % For JF067
 figure;
@@ -314,14 +335,14 @@ ylims = [-1 5];
 %   stimulus type = 2 means a central stimulus. 
 for recid = 1:nRec
     subplot(1,nRec,recid)
-    h(1) = plot(timeline,squeeze(nanmean(dRR(sortidx,recid,2,:),1)),'color',ColOpt(recid,:,2));
+    h(1) = plot(timeline,squeeze(nanmean(dRR(sortidx,recid,2,:),1)),'color',ColOpt(recid,:,2),'LineWidth',3);
     hold on
-    h(2) = plot(timeline,squeeze(nanmean(dRR(sortidx,recid,1,:),1)),'color',ColOpt(recid,:,1));
+    h(2) = plot(timeline,squeeze(nanmean(dRR(sortidx,recid,1,:),1)),'color',ColOpt(recid,:,1),'LineWidth',1);
 
     line([0 0],ylims,'color',[0.5 0.5 0.5])
     title(['Day ' num2str(RelevantDays(recid))])
     if recid==1
-        ylabel('spikes/sec')
+        ylabel('dRR')
     else
         axis off
     end
@@ -409,7 +430,6 @@ for batchid = 1:nBatch
         for did = 1:nRec
             stairs(ISIbins(1:end-1)*1000,smooth(squeeze(ISIsPerUnit(ExampleID(exid),did,:)),5),'color',ColOpt(did,:,1), 'LineWidth', 2.0);
             ISIstoSave((batchid-1)*nExampleOri+exid,:,did) =squeeze(ISIsPerUnit(ExampleID(exid),did,:));
-
         end
 
         tmpcorr = corr(squeeze(ISIsPerUnit(ExampleID(exid),:,:))',squeeze(ISIsPerUnit(ExampleID(exid),:,:))');
@@ -451,7 +471,7 @@ for batchid = 1:nBatch
                 title(['Day ' num2str(RelevantDays(recid))])
             end
             if recid==1
-                ylabel('sp/s')
+                ylabel('dRR')
             end
             if exid == nExample
                 xlabel('time (s)')
@@ -503,9 +523,9 @@ end
 
 xlabel('ISI')
 ylabel('Visual response')
-xlim([0.5 1])
-ylim([0.5 1])
-line([0.5 1],[0.5 1],'color',[0.2 0.2 0.2])
+xlim([0 1])
+ylim([0 1])
+line([0 1],[0 1],'color',[0.2 0.2 0.2])
 legend({'Central','Lateral'})
 makepretty
 offsetAxes
@@ -516,7 +536,7 @@ offsetAxes
 %   stimulus_type = 1 means a lateral stimulus
 %   stimulus type = 2 means a central stimulus. 
 ExampleID = sortidx;
-ColOpt = ColOpt(:,:,1); % only need one
+ColOpt = ColOpt(1:nRec,:,1); % only need one
 
 NeuronCols = distinguishable_colors(numel(sortidx));
 ExIds = find(ismember(sortidx,ExampleID));

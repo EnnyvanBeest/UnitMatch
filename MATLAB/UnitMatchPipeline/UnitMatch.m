@@ -53,14 +53,11 @@ Allchannelpos = param.AllChannelPos;
 RunPyKSChronicStitched = param.RunPyKSChronicStitched;
 SaveDir = param.SaveDir;
 param.nChannels = length(Allchannelpos{1})+1; %First assume there's a sync channel as well.
-spikeWidth = param.spikeWidth; %83; % in sample space (time)
-NewPeakLoc = floor(spikeWidth./2); % This is where all peaks will be aligned to!
-waveidx = NewPeakLoc-7:NewPeakLoc+15; % Force this analysis window So far
+
+
 % best option
 param.TakeChannelRadius = TakeChannelRadius;
-param.waveidx = waveidx;
 param.SaveScoresAsProbability = SaveScoresAsProbability;
-param.NewPeakLoc = NewPeakLoc;
 param.maxdist = maxdist;
 
 if ~exist(SaveDir)

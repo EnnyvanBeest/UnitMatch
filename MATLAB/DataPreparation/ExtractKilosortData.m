@@ -244,14 +244,13 @@ for subsesid = 1:length(KiloSortPaths)
             disp([KiloSortPaths{subsesid} ' recording too short, skip...'])
             continue
         end
-        AllChannelPos{subsesid} = channelpostmpconv;
         AllProbeSN{subsesid} = probeSN;
     else
-        channelpostmpconv = channelpostmp;
-        AllChannelPos{subsesid} = channelpostmp;
         probeSN = '000000';
         AllProbeSN{subsesid} = probeSN;
     end
+    AllChannelPos{subsesid} = channelpostmp; % Use what was used for KS regardless.
+
 
     % JF overwrite for now. 
     % if size(channelpostmp,1) ~= size(channelpostmpconv,1)
@@ -325,7 +324,11 @@ for subsesid = 1:length(KiloSortPaths)
     %% Bombcell parameters
     % clear paramBC
     if Params.RunQualityMetrics
-        paramBC = bc_qualityParamValuesForUnitMatch(dir(strrep(fullfile(rawD(1).folder, rawD(1).name), 'cbin', 'meta')), fullfile(Params.tmpdatafolder, strrep(rawD(1).name, 'cbin', 'bin')));
+        if any(strfind(KiloSortPaths{subsesid},'KS4')) % Used KS4?
+            paramBC = bc_qualityParamValuesForUnitMatch(dir(strrep(fullfile(rawD(1).folder, rawD(1).name), 'cbin', 'meta')), fullfile(Params.tmpdatafolder, strrep(rawD(1).name, 'cbin', 'bin')));
+        else
+            paramBC = bc_qualityParamValuesForUnitMatch(dir(strrep(fullfile(rawD(1).folder, rawD(1).name), 'cbin', 'meta')), fullfile(Params.tmpdatafolder, strrep(rawD(1).name, 'cbin', 'bin')),2);
+        end
     else
         paramBC.minNumSpikes = 300;
     end
@@ -436,7 +439,7 @@ for subsesid = 1:length(KiloSortPaths)
         Good_IDtmp = ismember(cellstr(clusinfo.group), 'good');
         channeltmp = clusinfo.ch;
     end
-    channelpostmp = channelpostmpconv;
+    % channelpostmp = channelpostmpconv;
     ypostmp = channelpostmp(:, 2);
     xpostmp = channelpostmp(:, 1);
     xdiffs = unique(abs(diff(unique(xpostmp))));
@@ -468,6 +471,7 @@ for subsesid = 1:length(KiloSortPaths)
 
         %% Quality metrics - Bombcell (https://github.com/Julie-Fabre/bombcell)
         for id = 1:length(rawD)
+            statusCopy = 0;
             ephysap_tmp = [];
 
             %ephysap_path = fullfile(rawD(id).folder, rawD(id).name);

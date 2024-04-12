@@ -59,26 +59,6 @@ if isfield(meta,'snsShankMap')
     end
 
 
-
-    if nShanks==1
-
-        % NP 1_phase 3B
-        vSep = 20;      % in um
-        hSep = 15;
-        shankSep = 0;
-        basex = 0; % shift by this much in x
-
-    elseif nShanks == 4
-        % NP 2.0 MS (4 shank), probe type 24 electrode positions
-        vSep = 15;      % in um
-        hSep = 32;
-        shankSep = 250;
-        basex = 27; % shift by this much in x
-
-    else
-        disp('No layout known')
-    end
-
     % Read channel positions - stand for shank number, column, and row
     % (channel)
     Shankmap = Shankmap(2:end);
@@ -88,11 +68,38 @@ if isfield(meta,'snsShankMap')
     Row = cell2mat(cellfun(@(X) str2num(X{3}),Shankmap,'UniformOutput',0));
     connected = cell2mat(cellfun(@(X) str2num(X{4}),Shankmap,'UniformOutput',0));
 
+    if nShanks==1 
+        % NP 1_phase 3B
+        hSep = 32;
+        shankSep = 0;
+        basey = 20;
+        if ~any(strfind(meta.imDatPrb_pn,'4s')) % Phase 3B
+            vSep = 20;      % in um
+            basex = zeros(1,numel(Row));
+            basex(mod(Row,2)==0) = 27;% Even staggered
+            basex(mod(Row,2)==1) = 11; % odd staggered
+        else
+            % Npix 2 is not staggered
+            basex = 27;
+            vSep = 15;
+        end
+
+    elseif nShanks == 4
+        % NP 2.0 MS (4 shank), probe type 24 electrode positions
+        vSep = 15;      % in um
+        hSep = 32;
+        shankSep = 250;
+        basex = 27; % shift by this much in x
+        basey = 0;
+    else
+        error('No layout known')
+    end
+   
   
     % Make channelMapToPos for conversion
     channelPos = nan(length(Shank),2);
     channelPos(APRecordingOrder+1,1) = Shank*shankSep+Col*hSep+basex; %x-position
-    channelPos(APRecordingOrder+1,2) = Row*vSep; %y-position
+    channelPos(APRecordingOrder+1,2) = Row*vSep+basey; %y-position
 
 elseif isfield(meta,'snsGeomMap')
     Shankmap = meta.snsGeomMap;
