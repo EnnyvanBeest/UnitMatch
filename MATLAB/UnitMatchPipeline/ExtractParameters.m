@@ -237,8 +237,7 @@ for uid = 1:nclus
             continue
         end
         try
-            [~,sortidx] = sort(double(Distance2MaxChan'));
-            p = lsqcurvefit(expFun,[max(spdctmp) 0.05],double(Distance2MaxChan(sortidx)'),sort(spdctmp(sortidx)),[],[],opts);
+            p = lsqcurvefit(expFun,[max(spdctmp) 0.05],double(Distance2MaxChan(sortidx)'),(spdctmp(sortidx)),[],[],opts);
             GoodnessofFit(uid,cv) = nansum((spdctmp-expFun(p,double(Distance2MaxChan')))./max(spdctmp).^2);
 
             %             p = lsqcurvefit(expFun,[max(spdctmp) 0.05 min(spdctmp)],Distance2MaxChan',spdctmp,[],[],opts);
@@ -488,7 +487,7 @@ if 0
     ylabel('Amplitude (\muV)')
 
     hold on
-    p = lsqcurvefit(expFun,[max(spdctmp) 1],double(Distance2MaxChan'),spdctmp,[],[],opts);
+    p = lsqcurvefit(expFun,[max(spdctmp) 0.05],double(Distance2MaxChan'),spdctmp,[],[],opts);
     plot(sort(Distance2MaxChan)',expFun(p,sort(Distance2MaxChan)'))
     % text(min(Distance2MaxChan),max(expFun(p,sort(Distance2MaxChan)))*0.99,['A = ' num2str(round(p(1)*100)/100) '.^2 * ' num2str(p(2)) './d^2'])
     text(min(Distance2MaxChan),max(expFun(p,sort(Distance2MaxChan)))*0.99,['A = ' num2str(round(p(1)*100)/100) '* exp(-' num2str(round(p(2)*100)/100) 'd)'])
