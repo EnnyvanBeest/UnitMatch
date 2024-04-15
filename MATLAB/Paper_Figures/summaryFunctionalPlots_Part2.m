@@ -187,10 +187,10 @@ function summaryFunctionalPlots_Part2(UMFiles, groupVector, UseKSLabels)
         end
     end
 
-    allZdrift = [ZDrift{:}];
-    figure; histogram(allZdrift(~isnan(allZdrift)));
-    title('Z-drift')
-    SelUnitsPerc = cat(1,nUnitsSelected{:})./cat(1,nUnitsTotal{:}).*100;
+    % allZdrift = [ZDrift{:}];
+    % figure; histogram(allZdrift(~isnan(allZdrift)));
+    % title('Z-drift')
+    % SelUnitsPerc = cat(1,nUnitsSelected{:})./cat(1,nUnitsTotal{:}).*100;
     %% AUC distributions for qMetrics
     figure('name','AUC Distr')
     stepsz = 0.05;

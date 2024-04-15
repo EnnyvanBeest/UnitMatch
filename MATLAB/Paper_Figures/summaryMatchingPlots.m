@@ -477,6 +477,10 @@ ylabel('False negative (%)')
 title('Using Match Prob')
 xlim([0 5])
 ylim([0 10])
+disp([num2str(nanmedian(EPosAndNeg(1,:).*100)) '+/- ' num2str(mad(EPosAndNeg(1,:).*100)) ' false positives'])
+disp([num2str(nanmedian(EPosAndNeg(2,:).*100)) '+/- ' num2str(mad(EPosAndNeg(2,:).*100)) ' false negatives'])
+disp([num2str(nanmedian(EPosAndNeg(3,:).*100)) '+/- ' num2str(mad(EPosAndNeg(3,:).*100)) ' KS negatives'])
+
 
 %% Info on dataset
 DataSetInfo.RecSes = RecSes;

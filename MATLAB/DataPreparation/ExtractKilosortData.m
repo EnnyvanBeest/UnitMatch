@@ -187,7 +187,7 @@ for subsesid = 1:length(KiloSortPaths)
             disp(['Found existing data in ', KiloSortPaths{subsesid}, ', Using this...'])
 
             if isfield(tmpparam,'AllProbeSN')
-                if exist('channelpostmpconv','var') && any(tmpparam.AllChannelPos{1}(:) ~= channelpostmpconv(:))
+                if exist('channelpostmpconv','var') && any(tmpparam.AllChannelPos{1}(:) ~= channelmapKS(:))
 
                     figure; scatter(tmpparam.AllChannelPos{1}(:,1),tmpparam.AllChannelPos{1}(:,2))
                     hold on; scatter(channelpostmpconv(:,1),channelpostmpconv(:,2))
@@ -202,7 +202,7 @@ for subsesid = 1:length(KiloSortPaths)
                     else
                         warning('Kilosort probably used wrong IMRO table. Consider reanalyzing')
                     end
-                    tmpparam.AllChannelPos = {channelpostmpconv};
+                    tmpparam.AllChannelPos = {channelmapKS}; % Using KS map now
                     tmpparam.AllProbeSN = {probeSN};
                     overwrite = 1;
                 end
@@ -371,12 +371,12 @@ for subsesid = 1:length(KiloSortPaths)
             [~, minidx] = min(cell2mat(arrayfun(@(X) pdist(cat(1, channelpostmp(X, :), [xtmp(clusid), depthtmp(clusid)]), 'euclidean'), 1:size(channelpostmp, 1), 'UniformOutput', 0)));
             try
                 channeltmp(clusid) = channelmaptmp(minidx);
-                depthtmp(clusid) = channelpostmpconv(minidx, 2);
-                xtmp(clusid) = channelpostmpconv(minidx, 1);
+                depthtmp(clusid) = channelpostmp(minidx, 2);
+                xtmp(clusid) = channelpostmp(minidx, 1);
             catch
                 channeltmp(clusid) = channelmaptmp(minidx-1);
-                depthtmp(clusid) = channelpostmpconv(minidx-1, 2);
-                xtmp(clusid) = channelpostmpconv(minidx-1, 1);
+                depthtmp(clusid) = channelpostmp(minidx-1, 2);
+                xtmp(clusid) = channelpostmp(minidx-1, 1);
             end
             sp.spikeDepths(ismember(sp.clu, clusidtmp(clusid))) = depthtmp(clusid);
 
@@ -422,12 +422,12 @@ for subsesid = 1:length(KiloSortPaths)
             [~, minidx] = min(cell2mat(arrayfun(@(X) pdist(cat(1, channelpostmp(X, :), [xtmp(clusid), depthtmp(clusid)]), 'euclidean'), 1:size(channelpostmp, 1), 'UniformOutput', 0)));
             try
                 channeltmp(clusid) = channelmaptmp(minidx);
-                depthtmp(clusid) = channelpostmpconv(minidx, 2);
-                xtmp(clusid) = channelpostmpconv(minidx, 1);
+                depthtmp(clusid) = channelpostmp(minidx, 2);
+                xtmp(clusid) = channelpostmp(minidx, 1);
             catch
                 channeltmp(clusid) = channelmaptmp(minidx-1);
-                depthtmp(clusid) = channelpostmpconv(minidx-1, 2);
-                xtmp(clusid) = channelpostmpconv(minidx-1, 1);
+                depthtmp(clusid) = channelpostmp(minidx-1, 2);
+                xtmp(clusid) = channelpostmp(minidx-1, 1);
             end
             sp.spikeDepths(ismember(sp.clu, clusidtmp(clusid))) = depthtmp(clusid);
 
@@ -695,7 +695,7 @@ for subsesid = 1:length(KiloSortPaths)
     SessionParams = Params; % But only store for this specific session - otherwise confusion!
     SessionParams.KSDir = KiloSortPaths(subsesid);
     SessionParams.RawDataPaths = RawDataPaths(subsesid);
-    SessionParams.AllChannelPos = {channelpostmpconv};
+    SessionParams.AllChannelPos = {channelpostmp};
     SessionParams.AllProbeSN = {probeSN};
  
     save(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat'), 'clusinfo', 'SessionParams', '-v7.3')

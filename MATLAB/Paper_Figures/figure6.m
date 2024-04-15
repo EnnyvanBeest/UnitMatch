@@ -343,10 +343,11 @@ multcompare(rm,'Day')
 
 baselinefrdiff = cat(2,baselinefr(:,2)-baselinefr(:,1),baselinefr(:,3)-baselinefr(:,2));
 MatchFig = figure('name','MatchProb vs Functional');
-subplot(2,2,1)
+subplot(4,1,1)
 scatter(MatchProb(:),baselinefrdiff(:),35,[0 0 0],'filled')
-xlabel('p(match)')
-ylabel('Baseline firing rate')
+hold on
+line(get(gca,'xlim'),[0 0],'LineStyle',':','color',[0.1 0.1 0.1])
+ylabel('Baseline firing')
 makepretty
 offsetAxes
 %% population
@@ -558,40 +559,60 @@ makepretty
 offsetAxes
 
 %%
+RespToSave = (RespToSave-nanmin(reshape(RespToSave,numel(sortidx),[]),[],2))./(nanmax(reshape(RespToSave,numel(sortidx),[]),[],2)-nanmin(reshape(RespToSave,numel(sortidx),[]),[],2));
+ISIstoSave = (ISIstoSave-nanmin(reshape(ISIstoSave,numel(sortidx),[]),[],2))./(nanmax(reshape(ISIstoSave,numel(sortidx),[]),[],2)-nanmin(reshape(ISIstoSave,numel(sortidx),[]),[],2));
 
+%%
 CorrVals = nan(numel(sortidx),nRec-1);
 LatVals = nan(numel(sortidx),nRec-1);
 CentVals = nan(numel(sortidx),nRec-1);
 for did1 = 1:nRec-1
     did2 = did1+1;
-    ISICorr = corr(squeeze(ISIstoSave(:,:,did1))',squeeze(ISIstoSave(:,:,did2))');
-    CorrVals(:,did1) = diag(ISICorr);
+    ISICorr = nanmean((squeeze(ISIstoSave(:,:,did1))'-squeeze(ISIstoSave(:,:,did2))').^2);
+    CorrVals(:,did1) = (ISICorr);
 
-       LatCorr = corr(squeeze(RespToSave(:,:,did1,1))',squeeze(RespToSave(:,:,did2,1))');
-       LatVals(:,did1) = diag(LatCorr);
+    % ISICorr = corr(squeeze(ISIstoSave(:,:,did1))',squeeze(ISIstoSave(:,:,did2))');
+    % CorrVals(:,did1) = diag(ISICorr);
 
-        CentCorr = corr(squeeze(RespToSave(:,:,did1,1))',squeeze(RespToSave(:,:,did2,1))');
-       CentVals(:,did1) = diag(CentCorr);
+    LatCorr = nanmean((squeeze(RespToSave(:,:,did1,1))'-squeeze(RespToSave(:,:,did2,1))').^2);
+    LatVals(:,did1) = (LatCorr);
+
+       % LatCorr = corr(squeeze(RespToSave(:,:,did1,1))',squeeze(RespToSave(:,:,did2,1))');
+       % LatVals(:,did1) = diag(LatCorr);
+
+        CentCorr = nanmean((squeeze(RespToSave(:,:,did1,2))'-squeeze(RespToSave(:,:,did2,2))').^2);
+    CentVals(:,did1) = (CentCorr);
+
+       %  CentCorr = corr(squeeze(RespToSave(:,:,did1,2))',squeeze(RespToSave(:,:,did2,2))');
+       % CentVals(:,did1) = diag(CentCorr);
 end
 
 figure(MatchFig)
-subplot(2,2,2)
+subplot(4,1,2)
 scatter(MatchProb(:),CorrVals(:),35,[0 0 0],'filled')
-xlabel('p(match)')
-ylabel('ISICorr')
+hold on
+line(get(gca,'xlim'),[0 0],'LineStyle',':','color',[0.1 0.1 0.1])
+
+ylabel('ISI')
 makepretty
 offsetAxes
 
-subplot(2,2,3)
+subplot(4,1,3)
 scatter(MatchProb(:),LatVals(:),35,[0 0 0],'filled')
-xlabel('p(match)')
+hold on
+line(get(gca,'xlim'),[0 0],'LineStyle',':','color',[0.1 0.1 0.1])
+ylim([0 1.5])
+
 ylabel('Lateral visual response')
 makepretty
 offsetAxes
 
 
-subplot(2,2,4)
+subplot(4,1,4)
 scatter(MatchProb(:),CentVals(:),35,[0 0 0],'filled')
+hold on
+line(get(gca,'xlim'),[0 0],'LineStyle',':','color',[0.1 0.1 0.1])
+ylim([0 1.5])
 xlabel('p(match)')
 ylabel('Central visual response')
 makepretty
