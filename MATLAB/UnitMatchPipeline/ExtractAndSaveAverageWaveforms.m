@@ -7,6 +7,12 @@ AllDecompPaths = param.AllDecompPaths;
 sampleamount = param.sampleamount; %500; % Nr. waveforms to include
 spikeWidth = param.spikeWidth; % in sample space (time) - number of samples
 halfWidth = floor(spikeWidth/2);
+
+if param.Kilosortversion == 4 && param.spikeWidth == 61
+    halfWidth = 20;
+else
+    halfWidth = floor(spikeWidth/2);
+end
 %% Extract all cluster info
 AllClusterIDs = clusinfo.cluster_id;
 AllRecSes = clusinfo.RecSesID;

@@ -891,9 +891,11 @@ while flag<2
 
     param.nExpectedMatches = sum(TotalScore(:)>ThrsOpt);
     if param.nExpectedMatches==0
+        warning('No expected matches, something is wrong')
         keyboard
     end
     priorMatch = 1-(param.nExpectedMatches./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days) % Times 2 for symmetry
+
 
     %% Cumulative density function
     if flag  && drawthis

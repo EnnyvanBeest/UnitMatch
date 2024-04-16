@@ -543,11 +543,14 @@ end
 
 
 %% AUC values
+redCol = cat(2,linspace(0.3,1,3)',repmat(0,3,1),repmat(0,3,1));
+blueCol = cat(2,repmat(0,3,1),repmat(0,3,1),linspace(0.3,1,3)');
+
 AUCISI = nan(nRec,nRec);
 AUCCentral = nan(nRec,nRec);
 AUClateral = nan(nRec,nRec);
 figure('name','AUC values')
-
+countid = 1;
 for did1 = 1:nRec
     for did2 = 1:nRec
         if did1>=did2
@@ -569,9 +572,10 @@ for did1 = 1:nRec
         [~,~,~,AUCCentral(did1,did2)] = perfcurve(labels,scores,1);
 
 
-        h(1) = scatter(AUCISI(did1,did2),AUCCentral(did1,did2),35,nanmean(ColOpt([did1,did2],:,1),1),'filled');
+        h(1) = scatter(AUCISI(did1,did2),AUCCentral(did1,did2),35,redCol(countid,:),'filled');
         hold on;
-        h(2) = scatter(AUCISI(did1,did2),AUClateral(did1,did2),35,nanmean(ColOpt([did1,did2],:,2),1));
+        h(2) = scatter(AUCISI(did1,did2),AUClateral(did1,did2),35,blueCol(countid,:),'filled');
+        countid = countid+1;
 
     end
 end
@@ -579,9 +583,10 @@ end
 
 xlabel('ISI')
 ylabel('Visual response')
+line([0 1],[0 1],'color',[0.2 0.2 0.2])
+
 xlim([0 1])
 ylim([0 1])
-line([0 1],[0 1],'color',[0.2 0.2 0.2])
 legend({'Central','Lateral'})
 makepretty
 offsetAxes
