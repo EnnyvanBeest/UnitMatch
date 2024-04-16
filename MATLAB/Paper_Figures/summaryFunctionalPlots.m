@@ -32,7 +32,7 @@ function res = summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLa
         case 'Corr'
             fprintf("Taking the correlation values!\n")
             FPNames = {'FRDiff','ISICorr','natImRespCorr','refPopCorr'};
-            stepsz = [0.05 0.05 0.05 0.05];
+            stepsz = [0.1 0.1 0.1 0.1];
             minVal = [0 -1 -1 -1];
             maxVal = [15 1 1 1];
             flipROC = [0 1 1 1];
@@ -63,7 +63,7 @@ function res = summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLa
         end
     end
     ROCBins = 0:0.01:1;
-    minMatches = 15;
+    minMatches = 20;
     durLim = 10*60;
 
     
