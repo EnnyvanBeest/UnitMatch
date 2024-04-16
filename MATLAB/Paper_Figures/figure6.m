@@ -1,8 +1,11 @@
 %% for Enny + Celian
 mouse = 'JF067'%% Get mouse behavior 
 RedoUM = 1;
+TakingExampleCells = [7,8,11]; % were used for the paper
 % smoothdata(PSTH, 'movmean', [10-70])
 % or 0-70
+nShuffle = 1000;
+
 
 %% Behavior data
 bhvData = cl_task_performance({mouse});
@@ -15,7 +18,8 @@ RelevantDays = [1,2,3];%[2,4,5];%[2,7,8];%7:9;
 PickChar = 'KS4';%'KS4'; %  PyKS, KS2
 
 nRec = numel(RelevantDays);
-ColOpt = flipud(copper(nRec+1));
+ColOpt = flipud(gray(nRec+1));
+ColOpt = ColOpt(2:end,:);
 ColOpt = cat(3,ColOpt,ColOpt.*0.5);
 
 %% Get match data
@@ -316,21 +320,30 @@ for recid = 1:nRec
 end
 colormap(redblue)
 
-%% Match probability?
-MatchProb = nan(numel(sortidx), nRec-1);
-for uid = 1:numel(sortidx)
-    thisU = unit_UniqueIDs(sortidx(uid));
-    for recid = 1:nRec-1
-        tblidx1 = MatchTable.UID1==thisU & MatchTable.UID2 == thisU & MatchTable.RecSes1 == recid & MatchTable.RecSes2 == recid+1;
-        tblidx2 = MatchTable.UID1==thisU & MatchTable.UID2 == thisU & MatchTable.RecSes1 == recid+1 & MatchTable.RecSes2 == recid;
-        MatchProb(uid,recid) = nanmean([MatchTable.MatchProb(tblidx1); MatchTable.MatchProb(tblidx2)]);
+%% Match probability vs baselinen firing
+baselinefr = nanmean(nanmean(PSTH(sortidx,:,:,timeline<0),4),3);
+baselinefrdiff = nan(numel(sortidx),nRec);
+MatchProb = nan(numel(sortidx), nRec);
+countid = 1;
 
-        disp([num2str(sortidx(uid)) ' day ' num2str(recid) ' versus' num2str(recid+1) ' p=' num2str(MatchProb(uid,recid))])
+for recid = 1:nRec-1
+    for recid2 = recid+1:nRec
+        for uid = 1:numel(sortidx)
+            thisU = unit_UniqueIDs(sortidx(uid));
+            tblidx1 = MatchTable.UID1==thisU & MatchTable.UID2 == thisU & MatchTable.RecSes1 == recid & MatchTable.RecSes2 == recid2;
+            tblidx2 = MatchTable.UID1==thisU & MatchTable.UID2 == thisU & MatchTable.RecSes1 == recid2 & MatchTable.RecSes2 == recid;
+            MatchProb(uid,countid) = nanmean([MatchTable.MatchProb(tblidx1); MatchTable.MatchProb(tblidx2)]);
+
+            disp([num2str(sortidx(uid)) ' day ' num2str(recid) ' versus' num2str(recid2) ' p=' num2str(MatchProb(uid,countid))])
+        end
+        baselinefrdiff(:,countid) = baselinefr(:,recid2)-baselinefr(:,recid);
+
+        countid = countid + 1;
+
     end
 end
 
 %% Baseline firing rates
-baselinefr = nanmean(nanmean(PSTH(sortidx,:,:,timeline<0),4),3);
 
 T = array2table(baselinefr);
 withinDesign = table([1:nRec]','VariableNames',{'Day'});
@@ -341,15 +354,30 @@ rm = fitrm(T,['baselinefr1-baselinefr' num2str(size(T,2)) ' ~ 1'],'WithinDesign'
 AT = ranova(rm,'WithinModel','Day')
 multcompare(rm,'Day')
 
-baselinefrdiff = cat(2,baselinefr(:,2)-baselinefr(:,1),baselinefr(:,3)-baselinefr(:,2));
 MatchFig = figure('name','MatchProb vs Functional');
 subplot(4,1,1)
-scatter(MatchProb(:),baselinefrdiff(:),35,[0 0 0],'filled')
+hold on
+for countid = 1:size(MatchProb,2)
+    scatter(MatchProb(:,countid),baselinefrdiff(:,countid),35,ColOpt(countid,:,1),'filled')
+    scatter(MatchProb(TakingExampleCells,countid),baselinefrdiff(TakingExampleCells,countid),37,hsv(length(TakingExampleCells)))
+
+end
 hold on
 line(get(gca,'xlim'),[0 0],'LineStyle',':','color',[0.1 0.1 0.1])
 ylabel('Baseline firing')
+% set(gca,'xscale','log')
 makepretty
 offsetAxes
+
+[r,pval] = corr(MatchProb(:),baselinefrdiff(:));
+pShuf = nan(1,nShuffle);
+for shufid = 1:nShuffle
+    [pShuf(shufid)] = corr(MatchProb(:),datasample(baselinefrdiff(:),numel(baselinefrdiff(:))));
+end
+adjPval = invprctile(pShuf,r)/100;
+disp(['Adjusted p=' num2str(adjPval) ' for firing rate'])
+title(['p= ' num2str(adjPval)])
+
 %% population
 dRR = (PSTH-nanmean(PSTH(:,:,:,timeline<0),4))./nanmean(PSTH(:,:,:,timeline<0),4);
 clear h
@@ -563,62 +591,142 @@ RespToSave = (RespToSave-nanmin(reshape(RespToSave,numel(sortidx),[]),[],2))./(n
 ISIstoSave = (ISIstoSave-nanmin(reshape(ISIstoSave,numel(sortidx),[]),[],2))./(nanmax(reshape(ISIstoSave,numel(sortidx),[]),[],2)-nanmin(reshape(ISIstoSave,numel(sortidx),[]),[],2));
 
 %%
-CorrVals = nan(numel(sortidx),nRec-1);
-LatVals = nan(numel(sortidx),nRec-1);
-CentVals = nan(numel(sortidx),nRec-1);
+CorrVals = nan(numel(sortidx),nRec);
+LatVals = nan(numel(sortidx),nRec);
+CentVals = nan(numel(sortidx),nRec);
+countid = 1;
 for did1 = 1:nRec-1
-    did2 = did1+1;
-    ISICorr = nanmean((squeeze(ISIstoSave(:,:,did1))'-squeeze(ISIstoSave(:,:,did2))').^2);
-    CorrVals(:,did1) = (ISICorr);
+    for did2 = did1+1:nRec;
+        % ISICorr = nanmean((squeeze(ISIstoSave(:,:,did1))'-squeeze(ISIstoSave(:,:,did2))').^2);
+        % CorrVals(:,countid) = (ISICorr);
 
-    % ISICorr = corr(squeeze(ISIstoSave(:,:,did1))',squeeze(ISIstoSave(:,:,did2))');
-    % CorrVals(:,did1) = diag(ISICorr);
+        ISICorr = corr(squeeze(ISIstoSave(:,:,did1))',squeeze(ISIstoSave(:,:,did2))');
+        CorrVals(:,countid) = diag(ISICorr);
 
-    LatCorr = nanmean((squeeze(RespToSave(:,:,did1,1))'-squeeze(RespToSave(:,:,did2,1))').^2);
-    LatVals(:,did1) = (LatCorr);
+        LatCorr = nanmean((squeeze(RespToSave(:,:,did1,1))'-squeeze(RespToSave(:,:,did2,1))').^2);
+        LatVals(:,countid) = (LatCorr);
 
-       % LatCorr = corr(squeeze(RespToSave(:,:,did1,1))',squeeze(RespToSave(:,:,did2,1))');
-       % LatVals(:,did1) = diag(LatCorr);
+        % LatCorr = corr(squeeze(RespToSave(:,:,did1,1))',squeeze(RespToSave(:,:,did2,1))');
+        % LatVals(:,countid) = diag(LatCorr);
 
         CentCorr = nanmean((squeeze(RespToSave(:,:,did1,2))'-squeeze(RespToSave(:,:,did2,2))').^2);
-    CentVals(:,did1) = (CentCorr);
+        CentVals(:,countid) = (CentCorr);
 
-       %  CentCorr = corr(squeeze(RespToSave(:,:,did1,2))',squeeze(RespToSave(:,:,did2,2))');
-       % CentVals(:,did1) = diag(CentCorr);
+        %  CentCorr = corr(squeeze(RespToSave(:,:,did1,2))',squeeze(RespToSave(:,:,did2,2))');
+        % CentVals(:,countid) = diag(CentCorr);
+        countid = countid+1;
+    end
 end
+
+
+[r,pval] = corr(MatchProb(:),CorrVals(:));
+pShuf = nan(1,nShuffle);
+for shufid = 1:nShuffle
+    [pShuf(shufid)] = corr(MatchProb(:),datasample(CorrVals(:),numel(CorrVals(:))));
+end
+    adjPval = invprctile(pShuf,r)/100;
+    disp(['Adjusted p=' num2str(adjPval) ' for ISI'])
+
 
 figure(MatchFig)
 subplot(4,1,2)
-scatter(MatchProb(:),CorrVals(:),35,[0 0 0],'filled')
 hold on
-line(get(gca,'xlim'),[0 0],'LineStyle',':','color',[0.1 0.1 0.1])
+for countid = 1:size(MatchProb,2)
+    scatter(MatchProb(:,countid),CorrVals(:,countid),35,ColOpt(countid,:,1),'filled')
+    scatter(MatchProb(TakingExampleCells,countid),CorrVals(TakingExampleCells,countid),37,hsv(length(TakingExampleCells)))
+end
+title(['p= ' num2str(adjPval)])
 
+line(get(gca,'xlim'),[0 0],'LineStyle',':','color',[0.1 0.1 0.1])
 ylabel('ISI')
 makepretty
 offsetAxes
 
+[r,pval] = corr(MatchProb(:),LatVals(:));
+pShuf = nan(1,nShuffle);
+for shufid = 1:nShuffle
+    [pShuf(shufid)] = corr(MatchProb(:),datasample(LatVals(:),numel(LatVals(:))));
+end
+    adjPval = invprctile(pShuf,r)/100;
+    disp(['Adjusted p=' num2str(adjPval) ' for Lateral visual response'])
+
 subplot(4,1,3)
-scatter(MatchProb(:),LatVals(:),35,[0 0 0],'filled')
 hold on
+for countid = 1:size(MatchProb,2)
+    scatter(MatchProb(:,countid),LatVals(:,countid),35,ColOpt(countid,:,1),'filled')
+    scatter(MatchProb(TakingExampleCells,countid),LatVals(TakingExampleCells,countid),37,hsv(length(TakingExampleCells)))
+end
 line(get(gca,'xlim'),[0 0],'LineStyle',':','color',[0.1 0.1 0.1])
-ylim([0 1.5])
+% ylim([0 0.1])
+title(['p= ' num2str(adjPval)])
 
 ylabel('Lateral visual response')
 makepretty
 offsetAxes
 
+[r,pval] = corr(MatchProb(:),CentVals(:));
+pShuf = nan(1,nShuffle);
+for shufid = 1:nShuffle
+    [pShuf(shufid)] = corr(MatchProb(:),datasample(CentVals(:),numel(CentVals(:))));
+end
+    adjPval = invprctile(pShuf,r)/100;
+    disp(['Adjusted p=' num2str(adjPval) ' for Central visual response'])
+
 
 subplot(4,1,4)
-scatter(MatchProb(:),CentVals(:),35,[0 0 0],'filled')
 hold on
+for countid = 1:size(MatchProb,2)
+    scatter(MatchProb(:,countid),CentVals(:,countid),35,ColOpt(countid,:,1),'filled')
+    scatter(MatchProb(TakingExampleCells,countid),CentVals(TakingExampleCells,countid),37,hsv(length(TakingExampleCells)))
+end
+title(['p= ' num2str(adjPval)])
+
 line(get(gca,'xlim'),[0 0],'LineStyle',':','color',[0.1 0.1 0.1])
-ylim([0 1.5])
+% ylim([0 1.5])
 xlabel('p(match)')
 ylabel('Central visual response')
 makepretty
 offsetAxes
+%%
+figure('name','ISI vsLateral')
+subplot(3,1,1)
+hold on
+for countid = 1:size(MatchProb,2)
+    scatter(CorrVals(:,countid),CentVals(:,countid),35,ColOpt(countid,:,1),'filled')
+    scatter(CorrVals(TakingExampleCells,countid),CentVals(TakingExampleCells,countid),37,hsv(length(TakingExampleCells)))
+end
+line(get(gca,'xlim'),[0 0],'LineStyle',':','color',[0.1 0.1 0.1])
+% ylim([0 1.5])
+xlabel('ISI')
+ylabel('Central')
+makepretty
+offsetAxes
 
+subplot(3,1,2)
+hold on
+for countid = 1:size(MatchProb,2)
+    scatter(CorrVals(:,countid),LatVals(:,countid),35,ColOpt(countid,:,1),'filled')
+    scatter(CorrVals(TakingExampleCells,countid),LatVals(TakingExampleCells,countid),37,hsv(length(TakingExampleCells)))
+end
+line(get(gca,'xlim'),[0 0],'LineStyle',':','color',[0.1 0.1 0.1])
+% ylim([0 1.5])
+xlabel('ISI')
+ylabel('Lateral')
+makepretty
+offsetAxes
 
+subplot(3,1,3)
+hold on
+for countid = 1:size(MatchProb,2)
+    scatter(CentVals(:,countid),LatVals(:,countid),35,ColOpt(countid,:,1),'filled')
+    scatter(CentVals(TakingExampleCells,countid),LatVals(TakingExampleCells,countid),37,hsv(length(TakingExampleCells)))
+end
+line(get(gca,'xlim'),[0 0],'LineStyle',':','color',[0.1 0.1 0.1])
+% ylim([0 1.5])
+xlabel('Central')
+ylabel('Lateral')
+makepretty
+offsetAxes
 %% Conclusion about population?
 % Ratio Lateral-Central
 %   stimulus_type = 1 means a lateral stimulus
@@ -773,7 +881,6 @@ ISIstoSave = reshape(ISIstoSave,numel(sortidx),[],nRec);
 tmpl = squeeze(dRR(:,:,1,:)); % tmp l
 tmpc = squeeze(dRR(:,:,2,:)); % tmp c
 
-nShuffle = 1000;
 tmplcorr = nan(numel(sortidx),nRec-1);
 tmpccorr = nan(numel(sortidx),nRec-1);
 ISIcorr = nan(numel(sortidx),nRec-1);
@@ -835,6 +942,7 @@ plot(1:counter,quantile(tmpccorrShuf,0.05,1),'-','color',[0.5 0.5 0.5])
 plot(1:counter,quantile(tmpccorrShuf,0.95,1),'-','color',[0.5 0.5 0.5])
 scatter(1:counter,nanmean(tmpccorr,1),50,[0 0 0],'filled')
 title('Central stimulus')
+
 makepretty
 offsetAxes
 ylabel('Corr')

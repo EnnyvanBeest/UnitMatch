@@ -783,6 +783,10 @@ while flag<2
         ScoreVector = ScoreVector';
     end
     ThrsOpt = ScoreVector(find(smoothdata(hd)>smoothdata(hnd)&ScoreVector>0.6,1,'first'));
+    if isempty(ThrsOpt)
+        warning('Cannot identify any larger than threshold...')
+        ThrsOpt = 1;
+    end
     [muw, sw] = normfit(tmp(~isnan(tmp) & tmp<ThrsOpt));
    % % 
    % % Paper figures 3

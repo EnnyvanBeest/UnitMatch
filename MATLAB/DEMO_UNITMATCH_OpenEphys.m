@@ -16,8 +16,8 @@
 
 %% User input: 
 UMparam.SaveDir = 'H:\MatchingUnits\OpenEphys\Output'; % Recommended to use end this path with \Probe0\IMRO_1\ if more probes/IMRO tables were used or \AllProbes\AllIMRO\ otherwise
-UMparam.KSDir = {'H:\MatchingUnits\OpenEphys\Data'};  % This is a cell array with a path, in the path there should be a subfolder called 'RawWaveforms'. 
-UMparam.RawDataPaths = {'H:\MatchingUnits\OpenEphys\Data\Continuous.dat'} % OPTIONAL, it can also be read in from params.py file (if dat-path properly points at the raw OpenEphys/SpikeGLX file)
+UMparam.KSDir = {'H:\MatchingUnits\OpenEphys\Data1','H:\MatchingUnits\OpenEphys\Data1'};  % This is a cell array with a KS path per session, in the path there should be a subfolder called 'RawWaveforms'. 
+UMparam.RawDataPaths = {'H:\MatchingUnits\OpenEphys\Data1\Continuous.dat','H:\MatchingUnits\OpenEphys\Data2\Continuous.dat'} % OPTIONAL, it can also be read in from params.py file (if dat-path properly points at the raw OpenEphys/SpikeGLX file)
 % N.B. if you want to use the functional score evaluation of UnitMatch, 'KSDir' should also contain typical 'Kilosort output', (e.g. spike times etc.)
 
 %% N.B. the following user input can also be automatically extracted and prepared/cleaned up using UMparam = ExtractKilosortData(KiloSortPaths, UMparam) for Kilosorted data of SpikeGLX recorded data (see next section);
