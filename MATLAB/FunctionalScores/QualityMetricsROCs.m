@@ -55,6 +55,7 @@ for recid = 1:nRec
         qMetricAllGoodUnits = qtmp; % Add sessions together, only take good units
         VarNames = qMetricAllGoodUnits.Properties.VariableNames;
     else
+        qtmp = qMetricAllGoodUnits([],:);
         [taketheseMetrics,puthere] = ismember(qMetric.Properties.VariableNames,qMetricAllGoodUnits.Properties.VariableNames);
         qtmp(putUnithere(putUnithere~=0),puthere(puthere~=0)) = qMetric(taketheseUnits, taketheseMetrics);
         qtmp.hasMatch = hasMatch';
