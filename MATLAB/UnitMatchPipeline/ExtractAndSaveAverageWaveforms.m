@@ -71,11 +71,18 @@ for uid = 1:nclus
                 AllDecompPaths{GoodRecSesID(uid)} = fullfile(AllDecompPaths{GoodRecSesID(uid)}.folder, AllDecompPaths{GoodRecSesID(uid)}.name);
             end
             % Check memory
-            [userview,systemview] = memory;
-            if spikeFile.bytes>userview.MaxPossibleArrayBytes
-                disp('Cannot load raw data to memory, serial loading instead')
+            if ispc
+                [userview,systemview] = memory;
+                if spikeFile.bytes>userview.MaxPossibleArrayBytes
+                    disp('Cannot load raw data to memory, serial loading instead')
+                    UseMemMap = 0;
+                end
+            else
+                % better safe than sorry
+                disp('Not a windows; better safe than sorry. serial loading of data')
                 UseMemMap = 0;
             end
+
             if UseMemMap
                 try %hacky way of figuring out if sync channel present or not
                     n_samples = spikeFile.bytes / (param.nChannels * dataTypeNBytes);
