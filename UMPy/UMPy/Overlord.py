@@ -1,7 +1,7 @@
-import Param_fun as pf
-import Metrics_fun as mf
-import Bayes_fun as bf
-import utils as util
+import UMPy.Param_fun as pf
+import UMPy.Metrics_fun as mf
+import UMPy.Bayes_fun as bf
+import UMPy.utils as util
 import numpy as np
 
 def extract_parameters(waveform, ChannelPos, ClusInfo, param):

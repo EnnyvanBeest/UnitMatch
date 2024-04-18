@@ -1,5 +1,5 @@
 import numpy as np
-import Param_fun as pf
+import UMPy.Param_fun as pf
 
 def get_ParameterKernels(Scores2Include, labels, Cond, param, addone = 1):
     """
