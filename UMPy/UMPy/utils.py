@@ -73,7 +73,7 @@ def get_default_param(param = None):
 
 def load_good_waveforms(WavePaths, UnitLabelPaths, param):
     """"
-    This is the reccomeneded way to read in data. It uses 
+    This is the recommended way to read in data. It uses 
     """
     if len(WavePaths) == len(UnitLabelPaths):
         nSessions = len(WavePaths)
@@ -92,13 +92,14 @@ def load_good_waveforms(WavePaths, UnitLabelPaths, param):
     #go through each session and load in units to waveforms list
     for ls in range(len(WavePaths)):
         #load in the first good unit, to get the shape of each waveform
-        tmp = np.load(WavePaths[ls] + rf'\Unit{int(GoodUnits[ls][0].squeeze())}_RawSpikes.npy')
+        p_file = os.path.join(WavePaths[ls],f'Unit{int(GoodUnits[ls][0].squeeze())}_RawSpikes.npy')
+        tmp = np.load(p_file)
         tmpWaveform = np.zeros( (len(GoodUnits[ls]), tmp.shape[0], tmp.shape[1], tmp.shape[2]))
 
         for i in range(len(GoodUnits[ls])):
             #loads in all GoodUnits for that session
-            path = WavePaths[ls] + rf'\Unit{int(GoodUnits[ls][i].squeeze())}_RawSpikes.npy'
-            tmpWaveform[i] = np.load(path)
+            p_file_good = os.path.join(WavePaths[ls],f'Unit{int(GoodUnits[ls][i].squeeze())}_RawSpikes.npy')
+            tmpWaveform[i] = np.load(p_file_good)
         #adds that session to the list
         waveforms.append(tmpWaveform)
 
@@ -154,13 +155,14 @@ def load_good_units(GoodUnits, WavePaths, param):
     #go through each session and load in units to waveforms list
     for ls in range(len(WavePaths)):
         #load in the first good unit, to get the shape of each waveform
-        tmp = np.load(WavePaths[ls] + rf'\Unit{int(GoodUnits[ls][0].squeeze())}_RawSpikes.npy')
+        tmp_path = os.path.join(WavePaths[ls], f'Unit{int(GoodUnits[ls][0].squeeze())}_RawSpikes.npy')
+        tmp = np.load(tmp_path)
         tmpWaveform = np.zeros( (len(GoodUnits[ls]), tmp.shape[0], tmp.shape[1], tmp.shape[2]))
 
         for i in range(len(GoodUnits[ls])):
             #loads in all GoodUnits for that session
-            path = WavePaths[ls] + rf'\Unit{int(GoodUnits[ls][i].squeeze())}_RawSpikes.npy'
-            tmpWaveform[i] = np.load(path)
+            tmp_path_good = os.path.join(WavePaths[ls], f'Unit{int(GoodUnits[ls][i].squeeze())}_RawSpikes.npy')
+            tmpWaveform[i] = np.load(tmp_path_good)
         #adds that session to the list
         waveforms.append(tmpWaveform)
 
@@ -187,7 +189,7 @@ def load_good_units(GoodUnits, WavePaths, param):
 
 def compare_units(AvgWaveform, AvgCentroid, unit1, unit2):
     """
-    Basic helper function, plots the average wavefucntion (of cv 0) and the average centroid to quickly compare 2 units 
+    Basic helper function, plots the average wave function (of cv 0) and the average centroid to quickly compare 2 units 
     """
     plt.plot(AvgWaveform[:,unit1,0])
     plt.plot(AvgWaveform[:,unit2,0])
@@ -274,7 +276,7 @@ def paths_fromKS(KSdirs):
     for i in range(nSessions):
         PathTmp = os.path.join(KSdirs[i], 'channel_positions.npy')
         PosTmp = np.load(PathTmp)
-        #  Want 3-D posiotns, however at the moment code only needs 2-D so add 1's to 0 axis position
+        #  Want 3-D positions, however at the moment code only needs 2-D so add 1's to 0 axis position
         PosTmp = np.insert(PosTmp, 0, np.ones(PosTmp.shape[0]), axis = 1)
         ChannelPos.append(PosTmp)
 
@@ -290,7 +292,7 @@ def paths_fromKS(KSdirs):
     return WavePaths, UnitLabelPaths, ChannelPos
 
 ##########################################################################################################################
-#The folowing functions are the old way of reading in units, is slower and will not work if unit are missing e.g 1,2,4
+#The following functions are the old way of reading in units, is slower and will not work if unit are missing e.g 1,2,4
 
 # def load_waveforms(WavePaths, UnitLabelPaths, param):
 #     """

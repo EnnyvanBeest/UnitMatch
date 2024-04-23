@@ -1,0 +1,14 @@
+name: UMPy
+
+dependencies:
+  - python>3.7,<3.11
+  - numpy
+  - matplotlib
+  - pip:
+    - scipy
+    - pandas
+    - mtscomp
+    - jobLib
+    - tk
+    - tqdm
+    - spikeinterface

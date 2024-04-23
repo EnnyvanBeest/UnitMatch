@@ -6,7 +6,7 @@ from pathlib import Path
 from scipy.ndimage import gaussian_filter
 from mtscomp import decompress
 from joblib import Parallel, delayed
-import utils as util
+import UMPy.utils as util
 
 
 #Decompressed data functions
