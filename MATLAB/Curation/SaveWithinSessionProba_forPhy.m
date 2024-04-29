@@ -22,6 +22,9 @@ function SaveWithinSessionProba_forPhy(SaveDir, recompute)
         probaMatrix(idxClusters,idxClusters) = reshape(MatchTable(idxTable,:).MatchProb, ...
             [sum(idxClusters) sum(idxClusters)]);
 
+        % easier if symmetrical
+        probaMatrix = .5*probaMatrix + .5*probaMatrix';
+
         % write it
         writeNPY(probaMatrix, targetFile);
     end
