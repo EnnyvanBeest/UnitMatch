@@ -44,14 +44,15 @@ function [AUCPerqParam, qParamNames] = getAUCforQMetrics(UMFiles)
     plotvec = stepsz/2:stepsz:1-stepsz/2;
     for qid = 1:length(qParamNames)
         subplot(ceil(sqrt(length(qParamNames))),round(sqrt(length(qParamNames))),qid)
+        s = 1;
         if nanmedian(AUCPerqParam(qid,:))<0.5
-            AUCPerqParam(qid,:) = 1-AUCPerqParam(qid,:);
+            s = -1;
         end
-        nums = histcounts(AUCPerqParam(qid,:),binvec);
+        nums = histcounts(s*AUCPerqParam(qid,:),binvec);
         plot(plotvec,nums,'k-');
         hold on
-        line([nanmedian(AUCPerqParam(qid,:)) nanmedian(AUCPerqParam(qid,:))],get(gca,'ylim'),'color',[1 0 0])
-        [h,p(qid)] = ttest(AUCPerqParam(qid,:),0.5);
+        line([nanmedian(s*AUCPerqParam(qid,:)) nanmedian(s*AUCPerqParam(qid,:))],get(gca,'ylim'),'color',[1 0 0])
+        [h,p(qid)] = ttest(s*AUCPerqParam(qid,:),0.5);
 
         title([qParamNames{qid} ', p=' num2str(round(p(qid)*100)./100)])
         xlim([0 1])
