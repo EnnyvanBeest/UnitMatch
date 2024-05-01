@@ -51,6 +51,10 @@ After the initial UnitMatch algorithm, you can use different 'Modules' to check 
 5. DrawPairsUnitMatch: Draws and saves a figure for every matching pair that was found. It will also include some 'doubt cases', such as pairs that had very high functional scores, yet were not found to be a match.
 6. FigureFlick: Useful for manual curation. A column will be added to the Matching table with the user's judgment for pairs of units. Only works after running the DrawPairsUnitMatch module.
 
+### Phy plugin
+`custom_unitmatch_probability_phy.py` swaps the built-in similarity measure for UnitMatch's matching probability computed within recordings. It can be useful to find clusters to merge! 
+The plugin loads a file named `probability_templates.npy` which contains the within-recording probability matrix. This file can be generated using `SaveWithinSessionProba_forPhy.m`. Phy plugin installation instructions can be found [here](https://phy.readthedocs.io/en/latest/plugins/#how-to-use-a-plugin). 
+
 ### Examples
 
 Two recording sessions of same IMRO table. In the first recording this unit was oversplit, and UnitMatch will Merge it. Additonally it found it's match in the second recording.
