@@ -7,11 +7,13 @@ AllDecompPaths = param.AllDecompPaths;
 sampleamount = param.sampleamount; %500; % Nr. waveforms to include
 spikeWidth = param.spikeWidth; % in sample space (time) - number of samples
 
-if param.Kilosortversion == 4 && param.spikeWidth == 61
-    halfWidth = 20;
+if param.Kilosortversion == 4 && spikeWidth == 61
+    baselinewidth = 20;
 else
-    halfWidth = floor(spikeWidth/2);
+    baselinewidth = floor(spikeWidth/2);
 end
+waveformwidth = spikeWidth - baselinewidth;
+
 %% Extract all cluster info
 AllClusterIDs = clusinfo.cluster_id;
 AllRecSes = clusinfo.RecSesID;
@@ -126,17 +128,17 @@ for uid = 1:nclus
             thisSpikeIdx = spikeIndicestmp(iSpike);
 
             if UseMemMap
-                if thisSpikeIdx > halfWidth && (thisSpikeIdx + halfWidth) < size(memMapData,2) % check that it's not out of bounds
-                    tmp = smoothdata(double(memMapData(1:param.nSavedChans,thisSpikeIdx-halfWidth:thisSpikeIdx+halfWidth)),2,'gaussian',5);
+                if thisSpikeIdx > baselinewidth && (thisSpikeIdx + waveformwidth) < size(memMapData,2) % check that it's not out of bounds
+                    tmp = smoothdata(double(memMapData(1:param.nSavedChans,thisSpikeIdx-baselinewidth:thisSpikeIdx+waveformwidth)),2,'gaussian',5);
                     tmp = (tmp - mean(tmp(:,1:20),2))';
                     tmp(:,end+1:nChannels) = nan(size(tmp,1),nChannels-size(tmp,2));
                     % Subtract first 10 samples to level spikes
                     spikeMap(:,:,iSpike) = tmp(1:spikeWidth,1:nChannels);
                 end
             else
-                if ((thisSpikeIdx - halfWidth) * param.nSavedChans) * dataTypeNBytes > halfWidth &&...
-                        (thisSpikeIdx + halfWidth) * param.nSavedChans * dataTypeNBytes < spikeFile.bytes %
-                    bytei = ((thisSpikeIdx - halfWidth) * param.nSavedChans) * dataTypeNBytes;
+                if ((thisSpikeIdx - baselinewidth) * param.nSavedChans) * dataTypeNBytes > baselinewidth &&...
+                        (thisSpikeIdx + waveformwidth) * param.nSavedChans * dataTypeNBytes < spikeFile.bytes %
+                    bytei = ((thisSpikeIdx - baselinewidth) * param.nSavedChans) * dataTypeNBytes;
                     fseek(fid, bytei, 'bof');
                     data0 = fread(fid, param.nSavedChans*spikeWidth, 'int16=>int16'); % read individual waveform from binary file
                     frewind(fid);
