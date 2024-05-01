@@ -12,6 +12,11 @@ function spAll = getSpikesFromPrepData(AllKSDir)
                 load(fullfile(AllKSDir{did}, 'PreparedData.mat'), 'sp', 'Params');
                 SessionParams = Params;
             end
+            if ~exist('SessionParams')
+                load(fullfile(AllKSDir{did}, 'PreparedData.mat'), 'Params');
+                SessionParams = Params;
+            end
+
         else
             SessionParams.RunPyKSChronicStitched = 0;
             warning('No PreparedData.mat found... loading in directly from KS.. have not checked for empty clusters... Consider using ExtractKilosortData.m')

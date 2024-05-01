@@ -151,6 +151,18 @@ for subsesid = 1:length(KiloSortPaths)
     end
     Params.DecompressionFlag = 0;
   
+    %% Channel data
+    myClusFile = dir(fullfile(KiloSortPaths{subsesid}, 'channel_map.npy'));
+    channelmaptmp = readNPY(fullfile(myClusFile(1).folder, myClusFile(1).name));
+
+    myClusFile = dir(fullfile(KiloSortPaths{subsesid}, 'channel_positions.npy'));
+    channelpostmp = readNPY(fullfile(myClusFile(1).folder, myClusFile(1).name));
+
+    % Some KS versions do not store empty channels?
+    channelpos = nan(Params.nSavedChans-Params.nSyncChans,2);
+    channelpos(channelmaptmp+1,:) = channelpostmp;
+    channelpostmp = fillmissingprobe(channelpos);
+
     %% Load existing?
     if exist(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat')) && ~Params.RedoQM && ~Params.ReLoadAlways
         % Check if parameters are the same, of not we have to redo it
@@ -175,8 +187,6 @@ for subsesid = 1:length(KiloSortPaths)
             if ~isfield(tmpparam,'RecordingDuration') || tmpparam.RecordingDuration < Params.MinRecordingDuration
                 if ~isempty(rawD) & ~contains(rawD(1).name,'.dat') & ~contains(rawD(1).name,'.raw')
                     [channelpostmpconv, probeSN, recordingduration] = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done
-                    channelmapKS = readNPY(fullfile(KiloSortPaths{subsesid},'channel_positions.npy'));
-
                     Params.RecordingDuration = recordingduration;
                     if recordingduration<Params.MinRecordingDuration
                         disp([KiloSortPaths{subsesid} ' recording too short, skip...'])
@@ -187,22 +197,21 @@ for subsesid = 1:length(KiloSortPaths)
             disp(['Found existing data in ', KiloSortPaths{subsesid}, ', Using this...'])
 
             if isfield(tmpparam,'AllProbeSN')
-                if exist('channelpostmpconv','var') && any(tmpparam.AllChannelPos{1}(:) ~= channelpostmpconv(:))
+                if exist('channelpostmpconv','var') && (size(channelpostmp,1) ~= size(tmpparam.AllChannelPos{1},1) || any(tmpparam.AllChannelPos{1}(:) ~= channelpostmp(:)))
 
                     figure; scatter(tmpparam.AllChannelPos{1}(:,1),tmpparam.AllChannelPos{1}(:,2))
                     hold on; scatter(channelpostmpconv(:,1),channelpostmpconv(:,2))
-                    channelmapKS = readNPY(fullfile(KiloSortPaths{subsesid},'channel_positions.npy'));
-                    scatter(channelmapKS(:,1),channelmapKS(:,2))
+                    scatter(channelpostmp(:,1),channelpostmp(:,2))
                     title('Blue = stored in prepared data, red = correct map, yellow = used by KS')
 
-                    SpacingsKS = max(unique(diff(channelmapKS(:,1))));
+                    SpacingsKS = max(unique(diff(channelpostmp(:,1))));
                     SpacingsReal = max(unique(diff(channelpostmpconv(:,1))));
                     if (SpacingsReal - SpacingsKS) == 50
                         disp('Kilosort used different shank spacing for IMRO table. Not a big problem')
                     else
                         warning('Kilosort probably used wrong IMRO table. Consider reanalyzing')
                     end
-                    tmpparam.AllChannelPos = {channelpostmpconv};
+                    tmpparam.AllChannelPos = {channelpostmp}; % Using KS map now
                     tmpparam.AllProbeSN = {probeSN};
                     overwrite = 1;
                 end
@@ -227,16 +236,7 @@ for subsesid = 1:length(KiloSortPaths)
         end
     end
 
-    %% Channel data
-    myClusFile = dir(fullfile(KiloSortPaths{subsesid}, 'channel_map.npy'));
-    channelmaptmp = readNPY(fullfile(myClusFile(1).folder, myClusFile(1).name));
-
-    myClusFile = dir(fullfile(KiloSortPaths{subsesid}, 'channel_positions.npy'));
-    channelpostmp = readNPY(fullfile(myClusFile(1).folder, myClusFile(1).name));
-    if length(channelmaptmp) < length(channelpostmp)
-        channelmaptmp(end+1:length(channelpostmp)) = length(channelmaptmp):length(channelpostmp) - 1;
-    end
-
+  
     %% Is it correct channelpos though...? Check using raw data. While reading this information, also extract recording duration and Serial number of probe
     if ~isempty(rawD) & (~contains(rawD(1).name,'.dat') & ~contains(rawD(1).name,'.raw'))
         [channelpostmpconv, probeSN, recordingduration] = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done
@@ -250,28 +250,6 @@ for subsesid = 1:length(KiloSortPaths)
         AllProbeSN{subsesid} = probeSN;
     end
     AllChannelPos{subsesid} = channelpostmp; % Use what was used for KS regardless.
-
-
-    % JF overwrite for now. 
-    % if size(channelpostmp,1) ~= size(channelpostmpconv,1)
-    %     warning('Different number of channels in kilosort and metafile''s IMRO. Using metaFile''s version')
-    %     channelpostmp = channelpostmpconv;
-    % end
-    if size(channelpostmp,1) == size(channelpostmpconv,1) && any(channelpostmpconv(:)~=channelpostmp(:))
-        % Spacing:
-        SpacingsKS = max(unique(diff(channelpostmp(:,1))));
-        SpacingsReal = max(unique(diff(channelpostmpconv(:,1))));
-        if ismember((SpacingsReal - SpacingsKS),[0,50,100,150])
-            disp('Kilosort used different shank spacing for IMRO table. Not a big problem')
-        else
-
-            figure;
-            hold on; scatter(channelpostmpconv(:,1),channelpostmpconv(:,2))
-            scatter(channelpostmp(:,1),channelpostmp(:,2))
-            title('Blue = correct map, red = used by KS')
-            warning('Kilosort probably used wrong IMRO table. Consider reanalyzing')
-        end
-    end
 
     if ExtractChannelMapThenContinue % Version compatibility
         countid = countid + 1;
@@ -371,12 +349,12 @@ for subsesid = 1:length(KiloSortPaths)
             [~, minidx] = min(cell2mat(arrayfun(@(X) pdist(cat(1, channelpostmp(X, :), [xtmp(clusid), depthtmp(clusid)]), 'euclidean'), 1:size(channelpostmp, 1), 'UniformOutput', 0)));
             try
                 channeltmp(clusid) = channelmaptmp(minidx);
-                depthtmp(clusid) = channelpostmpconv(minidx, 2);
-                xtmp(clusid) = channelpostmpconv(minidx, 1);
+                depthtmp(clusid) = channelpostmp(minidx, 2);
+                xtmp(clusid) = channelpostmp(minidx, 1);
             catch
                 channeltmp(clusid) = channelmaptmp(minidx-1);
-                depthtmp(clusid) = channelpostmpconv(minidx-1, 2);
-                xtmp(clusid) = channelpostmpconv(minidx-1, 1);
+                depthtmp(clusid) = channelpostmp(minidx-1, 2);
+                xtmp(clusid) = channelpostmp(minidx-1, 1);
             end
             sp.spikeDepths(ismember(sp.clu, clusidtmp(clusid))) = depthtmp(clusid);
 
@@ -422,12 +400,12 @@ for subsesid = 1:length(KiloSortPaths)
             [~, minidx] = min(cell2mat(arrayfun(@(X) pdist(cat(1, channelpostmp(X, :), [xtmp(clusid), depthtmp(clusid)]), 'euclidean'), 1:size(channelpostmp, 1), 'UniformOutput', 0)));
             try
                 channeltmp(clusid) = channelmaptmp(minidx);
-                depthtmp(clusid) = channelpostmpconv(minidx, 2);
-                xtmp(clusid) = channelpostmpconv(minidx, 1);
+                depthtmp(clusid) = channelpostmp(minidx, 2);
+                xtmp(clusid) = channelpostmp(minidx, 1);
             catch
                 channeltmp(clusid) = channelmaptmp(minidx-1);
-                depthtmp(clusid) = channelpostmpconv(minidx-1, 2);
-                xtmp(clusid) = channelpostmpconv(minidx-1, 1);
+                depthtmp(clusid) = channelpostmp(minidx-1, 2);
+                xtmp(clusid) = channelpostmp(minidx-1, 1);
             end
             sp.spikeDepths(ismember(sp.clu, clusidtmp(clusid))) = depthtmp(clusid);
 
@@ -695,7 +673,7 @@ for subsesid = 1:length(KiloSortPaths)
     SessionParams = Params; % But only store for this specific session - otherwise confusion!
     SessionParams.KSDir = KiloSortPaths(subsesid);
     SessionParams.RawDataPaths = RawDataPaths(subsesid);
-    SessionParams.AllChannelPos = {channelpostmpconv};
+    SessionParams.AllChannelPos = {channelpostmp};
     SessionParams.AllProbeSN = {probeSN};
  
     save(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat'), 'clusinfo', 'SessionParams', '-v7.3')

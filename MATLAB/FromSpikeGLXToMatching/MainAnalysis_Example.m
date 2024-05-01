@@ -2,15 +2,15 @@
 
 %% User Input
 %% Path information
-DataDir = {'D:\JulieMice'};%{'H:\MatchingUnits\RawDataMonthApart'};%  ;%Raw data folders, typically servers were e.g. *.cbin files are stored
+DataDir = {'H:\MatchingUnits\RawData'};%{'H:\MatchingUnits\RawDataMonthApart'};%  ;%Raw data folders, typically servers were e.g. *.cbin files are stored
 SaveDir = 'H:\MatchingUnits\Output';%'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\Learning_Striatum_new';%'H:\MatchingUnits\Output';%'H:\MatchingUnits\OutputMonthApart'; %'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\2ConsecutiveDays\Stitched';%'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\MonthApart\Stitched';%%'H:\MatchingUnits\Output\MonthApartStitched'% 'H:\MatchingUnits\Output\NotConcatenated';%'\\znas.cortexlab.net\Lab\Share\Celian\UnitMatch\MatchTables\NewSep27\MonthApart\Stitched'% %%;% %'H:\MatchingUnits\Output\ManyRecordings'%Folder where to store the results
 tmpdatafolder = 'D:\tmpdata'; % temporary folder for temporary decompression of data 
-KilosortDir = '';%'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\Learning_Striatum_new\KS4\';%'H:\MatchingUnits\KilosortOutput';% 'H:\MatchingUnits\KilosortOutputMonthApart';%'\\znas.cortexlab.net\Lab\Share\Enny\UnitMatch\KSComparisonSubset';%'\\znas.cortexlab.net\Lab\Share\Enny\UnitMatch\KilosortOutputMonthApart';%'H:\MatchingUnits\KilosortOutputMonthApart';%'\\znas.cortexlab.net\Lab\Share\Celian\UnitMatch\KilosortOutputMonthApart';% Kilosort output folder
+KilosortDir = 'H:\MatchingUnits\KilosortOutput';%'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\Learning_Striatum_new\KS4\';%'H:\MatchingUnits\KilosortOutput';% 'H:\MatchingUnits\KilosortOutputMonthApart';%'\\znas.cortexlab.net\Lab\Share\Enny\UnitMatch\KSComparisonSubset';%'\\znas.cortexlab.net\Lab\Share\Enny\UnitMatch\KilosortOutputMonthApart';%'H:\MatchingUnits\KilosortOutputMonthApart';%'\\znas.cortexlab.net\Lab\Share\Celian\UnitMatch\KilosortOutputMonthApart';% Kilosort output folder
 GithubDir = 'C:\Users\EnnyB\Documents\GitHub'; % Github directory
 PythonEXE = 'C:\Users\EnnyB\anaconda3\envs\kilosort\pythonw.exe' % Python version to run python code in:
 
 %% Information on experiments
-MiceOpt = {'AL030'};%{'JF067'};%{'AL032','AV008','CB016','EB019','JF067'}; %'AL032', Add all mice you want to analyze
+MiceOpt = {'AL032'};%{'JF067'};%{'AL032','AV008','CB016','EB019','JF067'}; %'AL032', Add all mice you want to analyze
 DataDir2Use = repmat(1,[1,length(MiceOpt)]); % In case you have multiple DataDir, index which directory is used for each mouse
 RecordingType = repmat({'Chronic'},1,length(MiceOpt)); % And whether recordings were Chronic (default)
 RecordingType(ismember(MiceOpt,{''}))={'Acute'}; %EB014', % Or maybe acute?
@@ -131,7 +131,7 @@ end
 res = summaryFunctionalPlots(UMFiles, 'Corr', groupvec, 0, 0);
 resKS = summaryFunctionalPlots(UMFiles, 'Corr', groupvec, 1, 0);
 
-%% Compare with KS stitched performance
+%% Compare with KS stitched performance (Fig S3e/f)
 figure('name','KS versus UM')
 fnames = fieldnames(res.FPSum);
 cols = distinguishable_colors(length(MiceOpt));

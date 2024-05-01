@@ -783,6 +783,10 @@ while flag<2
         ScoreVector = ScoreVector';
     end
     ThrsOpt = ScoreVector(find(smoothdata(hd)>smoothdata(hnd)&ScoreVector>0.6,1,'first'));
+    if isempty(ThrsOpt)
+        warning('Cannot identify any larger than threshold...')
+        ThrsOpt = 1;
+    end
     [muw, sw] = normfit(tmp(~isnan(tmp) & tmp<ThrsOpt));
    % % 
    % % Paper figures 3
@@ -886,10 +890,13 @@ while flag<2
 
 
     param.nExpectedMatches = sum(TotalScore(:)>ThrsOpt);
-    if param.nExpectedMatches==0
+
+    priorMatch = 1-(param.nExpectedMatches./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days) % Times 2 for symmetry
+    if param.nExpectedMatches==0 || priorMatch == 1
+        warning('No expected matches, something is wrong. Please send this:')
+        figure; imagesc(TotalScore)
         keyboard
     end
-    priorMatch = 1-(param.nExpectedMatches./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days) % Times 2 for symmetry
 
     %% Cumulative density function
     if flag  && drawthis

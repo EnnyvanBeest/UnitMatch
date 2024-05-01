@@ -286,7 +286,7 @@ for midx = 1:length(MiceOpt)
                     [channelPos, probeSN, recordingduration] = ChannelIMROConversion(fullfile(tmpdatafolder,metafile.name),1,0)
 
                     if ~exist(fullfile(tmpdatafolder, strrep(tmpfile(sesid).name, 'cbin', 'bin')))
-                        disp('This is compressed data and we do not want to use Python integration... uncompress temporarily')
+                        disp('This is compressed data and need to uncompress... uncompress temporarily')
                         decompDataFile = bc_extractCbinData(fullfile(tmpfile(sesid).folder, tmpfile(sesid).name), ...
                             [], [], 0, fullfile(tmpdatafolder, strrep(tmpfile(sesid).name, 'cbin', 'bin')));
                         statusCopy = copyfile(strrep(fullfile(tmpfile(sesid).folder, tmpfile(sesid).name), 'cbin', 'meta'), strrep(fullfile(tmpdatafolder, tmpfile(sesid).name), 'cbin', 'meta')); %QQ doesn't work on linux
@@ -338,7 +338,7 @@ for midx = 1:length(MiceOpt)
 
                     tmp = regexp(C{1}{idx},'='); %Find =
                     C{1}{idx}(tmp+1:end) = []; %Remove current paths
-                    C{1}{idx} = strcat(C{1}{idx}, ['r"' strrep(fullfile(tmpfile(sesid).folder,tmpfile(sesid).name),'\','/') '"'])
+                    C{1}{idx} = strcat(C{1}{idx}, ['r"' strrep(fullfile(tmpfile(sesid).folder,strrep(tmpfile(sesid).name,'bin','cbin')),'\','/') '"'])
 
                     % Rename old params
                     movefile(fullfile(myKsDir,ProbeName,Sesinfo,'params.py'),fullfile(myKsDir,ProbeName,Sesinfo,'paramsOri.py'))

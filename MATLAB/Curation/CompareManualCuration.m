@@ -442,7 +442,7 @@ for midx = 1:length(MiceOpt)
      else
          figure(VENNFig)
      end
-     subplot(ceil(sqrt(length(MiceOpt))),round(sqrt(length(MiceOpt))),midx)
+     subplot(ceil(sqrt(length(MiceOpt))),round(sqrt(length(MiceOpt))),midx+1)
      Idx = (AvgMan'>CurationThrs | PyKS'==1 | MatchProb>0.5);
 
 %      h = venn([sum(PyKS(Idx)'==1 & MatchProb(Idx)<=0.5) sum(PyKS(Idx)'==0 & MatchProb(Idx)>0.5) sum(PyKS(Idx)'==1 & MatchProb(Idx)>0.5)]) 
@@ -579,7 +579,7 @@ legend('KS','UnitMatch')
 makepretty
 
 figure(VENNFig)
-subplot(3,2,6)
+subplot(3,2,1)
 % vennEulerDiagram({[1,2,3],[3,4,5],[3,4,6]}, 'drawProportional', true, 'SetLabels', ["KS"; "UM"; "Cur"]);
 venn([10 10 10 10 10 10 10])
 makepretty
