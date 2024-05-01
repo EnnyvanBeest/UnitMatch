@@ -1,9 +1,0 @@
-numpy
-scipy
-pandas
-matplotlib
-mtscomp
-jobLib
-tk
-tqdm
-spikeinterface
