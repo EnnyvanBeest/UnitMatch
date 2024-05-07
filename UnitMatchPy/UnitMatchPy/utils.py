@@ -58,7 +58,7 @@ def get_default_param(param = None):
     tmp = {'SpikeWidth' : 82, 'waveidx' : np.arange(33,56), 'ChannelRadius' : 150,
          'PeakLoc' : 40, 'MaxDist' : 100, 'NeighbourDist' : 50, 'stepsz' : 0.01, 
          'SmoothProb' : 9, 'MinAngleDist' : 0.1, 'NoShanks' : 4, 'ShankDist' : 175,
-         'MatchNumThreshold' : 15
+         'MatchNumThreshold' : 15, 'MatchThreshold' : 0.5
         }
     tmp['ScoreVector'] = np.arange(tmp['stepsz']/2 ,1 ,tmp['stepsz'])
     tmp['Bins'] = np.arange(0, 1 + tmp['stepsz'], tmp['stepsz'])
@@ -71,9 +71,9 @@ def get_default_param(param = None):
         out = tmp | param
     return out
 
-def load_good_waveforms(WavePaths, UnitLabelPaths, param):
+def load_good_waveforms(WavePaths, UnitLabelPaths, param, GoodUnitsOnly = True):
     """"
-    This is the reccomeneded way to read in data. It uses 
+    This is the recommended way to read in data. It uses 
     """
     if len(WavePaths) == len(UnitLabelPaths):
         nSessions = len(WavePaths)
@@ -82,28 +82,51 @@ def load_good_waveforms(WavePaths, UnitLabelPaths, param):
         return
 
     GoodUnits = []
+    nUnitsPerSessionALL = []
     for i in range(len(UnitLabelPaths)):
         UnitLabel = load_tsv(UnitLabelPaths[i])
         TmpIdx = np.argwhere(UnitLabel[:,1] == 'good')
         goodunit_idx = UnitLabel[TmpIdx, 0]
         GoodUnits.append(goodunit_idx)
+        nUnitsPerSessionALL.append(UnitLabel.shape[0])
 
     waveforms = []
+    if GoodUnitsOnly:
     #go through each session and load in units to waveforms list
-    for ls in range(len(WavePaths)):
-        #load in the first good unit, to get the shape of each waveform
-        tmp = np.load(WavePaths[ls] + rf'\Unit{int(GoodUnits[ls][0].squeeze())}_RawSpikes.npy')
-        tmpWaveform = np.zeros( (len(GoodUnits[ls]), tmp.shape[0], tmp.shape[1], tmp.shape[2]))
+        for ls in range(len(WavePaths)):
+            #load in the first good unit, to get the shape of each waveform
+            p_file = os.path.join(WavePaths[ls],f'Unit{int(GoodUnits[ls][0].squeeze())}_RawSpikes.npy')
+            tmp = np.load(p_file)
+            tmpWaveform = np.zeros( (len(GoodUnits[ls]), tmp.shape[0], tmp.shape[1], tmp.shape[2]))
 
-        for i in range(len(GoodUnits[ls])):
-            #loads in all GoodUnits for that session
-            path = WavePaths[ls] + rf'\Unit{int(GoodUnits[ls][i].squeeze())}_RawSpikes.npy'
-            tmpWaveform[i] = np.load(path)
-        #adds that session to the list
-        waveforms.append(tmpWaveform)
+            for i in range(len(GoodUnits[ls])):
+                #loads in all GoodUnits for that session
+                p_file_good = os.path.join(WavePaths[ls],f'Unit{int(GoodUnits[ls][i].squeeze())}_RawSpikes.npy')
+                tmpWaveform[i] = np.load(p_file_good)
+            #adds that session to the list
+            waveforms.append(tmpWaveform)
 
-    del tmpWaveform
-    del tmp
+        del tmpWaveform
+        del tmp
+    
+    else:
+        for ls in range(len(WavePaths)):
+            #load in the first good unit, to get the shape of each waveform
+            p_file = os.path.join(WavePaths[ls],f'Unit{int(GoodUnits[ls][0].squeeze())}_RawSpikes.npy')
+            tmp = np.load(p_file)
+            tmpWaveform = np.zeros( (len(os.listdir(WavePaths[ls])), tmp.shape[0], tmp.shape[1], tmp.shape[2]))
+
+            for i in range(len(os.listdir(WavePaths[ls]))):
+                #loads in all GoodUnits for that session
+                p_file_good = os.path.join(WavePaths[ls], f'Unit{int(GoodUnits[ls][0].squeeze())}_RawSpikes.npy')
+                tmpWaveform[i] = np.load(p_file_good)
+            #adds that session to the list
+            waveforms.append(tmpWaveform)
+
+        del tmpWaveform
+        del tmp
+    
+
 
     nUnitsPerSession = np.zeros(nSessions, dtype = 'int')
     waveform = np.array([])
@@ -120,6 +143,14 @@ def load_good_waveforms(WavePaths, UnitLabelPaths, param):
     param['nUnits'], sessionid, SessionSwitch, param['nSessions'] = get_session_data(nUnitsPerSession)
     WithinSession = get_within_session(sessionid, param)
     param['nChannels'] = waveform.shape[2]
+    param['nUnitsPerSession'] = nUnitsPerSessionALL
+
+    #if the set of default paramaters have a different spike width update these parameters
+    if param['SpikeWidth'] != waveform.shape[1]:
+        param['SpikeWidth'] = waveform.shape[1]
+        param['PeakLoc'] = np.floor(waveform.shape[1]/2).astype(int)
+        param['waveidx'] = np.arange(param['PeakLoc'] - 8,  param['PeakLoc'] + 15, dtype = int)
+
     return waveform, sessionid, SessionSwitch, WithinSession, GoodUnits, param
 
 def get_good_units(UnitLabelPaths, good = True):
@@ -154,13 +185,14 @@ def load_good_units(GoodUnits, WavePaths, param):
     #go through each session and load in units to waveforms list
     for ls in range(len(WavePaths)):
         #load in the first good unit, to get the shape of each waveform
-        tmp = np.load(WavePaths[ls] + rf'\Unit{int(GoodUnits[ls][0].squeeze())}_RawSpikes.npy')
+        tmp_path = os.path.join(WavePaths[ls], f'Unit{int(GoodUnits[ls][0].squeeze())}_RawSpikes.npy')
+        tmp = np.load(tmp_path)
         tmpWaveform = np.zeros( (len(GoodUnits[ls]), tmp.shape[0], tmp.shape[1], tmp.shape[2]))
 
         for i in range(len(GoodUnits[ls])):
             #loads in all GoodUnits for that session
-            path = WavePaths[ls] + rf'\Unit{int(GoodUnits[ls][i].squeeze())}_RawSpikes.npy'
-            tmpWaveform[i] = np.load(path)
+            tmp_path_good = os.path.join(WavePaths[ls], f'Unit{int(GoodUnits[ls][i].squeeze())}_RawSpikes.npy')
+            tmpWaveform[i] = np.load(tmp_path_good)
         #adds that session to the list
         waveforms.append(tmpWaveform)
 
@@ -187,7 +219,7 @@ def load_good_units(GoodUnits, WavePaths, param):
 
 def compare_units(AvgWaveform, AvgCentroid, unit1, unit2):
     """
-    Basic helper function, plots the average wavefucntion (of cv 0) and the average centroid to quickly compare 2 units 
+    Basic helper function, plots the average wave function (of cv 0) and the average centroid to quickly compare 2 units 
     """
     plt.plot(AvgWaveform[:,unit1,0])
     plt.plot(AvgWaveform[:,unit2,0])
@@ -266,15 +298,88 @@ def currate_matches(MatchesGUI, IsMatch, NotMatch, Mode = 'And'):
 
     return Matches
 
+def fill_missing_pos(KSdir, nChannels):
+    PathTmp = os.path.join(KSdir, 'channel_positions.npy')
+    Pos = np.load(PathTmp)
+
+    PathTmp = os.path.join(KSdir, 'channel_map.npy')
+    ChannelMap = np.load(PathTmp).squeeze()
+
+    ChannelPos = np.full((nChannels,2), np.nan)
+    ChannelPos[ChannelMap,:] = Pos
+
+    ChannelPosNew = []
+    #get the unique x positions
+    xUnique = np.unique(ChannelPos[:,0])
+    xUnique = xUnique[~np.isnan(xUnique)]
+
+    #go through each coloumn
+    for x in xUnique:
+        #get the known y-values for that coloumn
+        yColoumn = ChannelPos[np.argwhere(ChannelPos[:,0] == x), 1].squeeze()
+
+        #test to see if any other coloumns have the same set of y positions
+        SameXPattern = np.unique(ChannelPos[np.in1d(ChannelPos[:,1], yColoumn), 0])
+        SameYPattern = ChannelPos[np.in1d(ChannelPos[:,0], SameXPattern), 1]
+
+        #find the mode difference, i.e the steps between y-positions 
+        ySteps, yStepCounts = np.unique(np.diff(np.unique(SameYPattern)), return_counts= True)
+        ySteps = ySteps[np.argmax(yStepCounts)].astype(int)
+
+        #find the min/max y-positions to fill in all positions for the coloumn
+        ymin = np.min(SameYPattern).astype(int)
+        ymax = np.max(SameYPattern).astype(int)
+        yPos = np.arange(ymin, ymax+ySteps, ySteps)
+
+        ChannelPosColoumn = np.stack((np.full_like(yPos,x), yPos)).T
+        ChannelPosNew.append(ChannelPosColoumn)
+
+
+    nUniqueX = xUnique.shape[0]
+
+    ChannelPosFill = np.zeros_like(ChannelPos)
+    for i, x in enumerate(xUnique):
+        #find which sequence of positions this x-coloumn fills 
+        xPoint = np.argwhere(ChannelPos[:,0] == x).squeeze()[0]
+        start = xPoint % nUniqueX
+        Points = np.arange(start, nChannels, nUniqueX)
+        #fill in the positions for this coloumn
+        for j, point in enumerate(Points):
+            ChannelPosFill[point,:] = ChannelPosNew[i][j,:]
+
+    if np.sum(ChannelPos == ChannelPosFill) //2 == Pos.shape[0]:
+        print('Likely to be correctly filled')
+        return ChannelPosFill
+    else:
+        print('Error in filling channel positions')
+        return ChannelPosFill
+        
+
+
+
 def paths_fromKS(KSdirs):
     nSessions = len(KSdirs)
+
+    #load in the number of channels
+    tmp = os.getcwd()
+    nChannels = []
+    for i in range(nSessions):
+        pathtmp = os.path.join(KSdirs[0], 'params.py')#
+        os.chdir(KSdirs[0])
+        from params import n_channels_dat
+        nChannels.append(n_channels_dat - 1) #subtract the sync channel
+    os.chdir(tmp)
 
     #Load ChannelPos
     ChannelPos = []
     for i in range(nSessions):
         PathTmp = os.path.join(KSdirs[i], 'channel_positions.npy')
         PosTmp = np.load(PathTmp)
-        #  Want 3-D posiotns, however at the moment code only needs 2-D so add 1's to 0 axis position
+        if PosTmp.shape[0] != nChannels[i]:
+            print('Attmepting to fill in missing channel positions')
+            PosTmp = fill_missing_pos(KSdirs[i], nChannels[i])
+
+        #  Want 3-D positions, however at the moment code only needs 2-D so add 1's to 0 axis position
         PosTmp = np.insert(PosTmp, 0, np.ones(PosTmp.shape[0]), axis = 1)
         ChannelPos.append(PosTmp)
 
@@ -290,7 +395,7 @@ def paths_fromKS(KSdirs):
     return WavePaths, UnitLabelPaths, ChannelPos
 
 ##########################################################################################################################
-#The folowing functions are the old way of reading in units, is slower and will not work if unit are missing e.g 1,2,4
+#The following functions are the old way of reading in units, is slower and will not work if unit are missing e.g 1,2,4
 
 # def load_waveforms(WavePaths, UnitLabelPaths, param):
 #     """

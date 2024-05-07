@@ -1,2 +1,13 @@
 *.asv
+.DS_Store
+# gitignore for python 
 
+*.pyc 
+/*/__pycache__/*
+UMPy/__pycache__/*
+.pytest_cache/
+*.ipynb_checkpoints
+testpy.py
+*.eggs/
+*.egg-info/
+.coverage

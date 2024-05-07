@@ -3,7 +3,7 @@ import pickle
 import pandas as pd
 import numpy as np
 
-def make_match_table(Scores2Include, Matches, Output, TotalScore, OutputThreshold, ClusInfo, param, MatchesCurated = None):
+def make_match_table(Scores2Include, Matches, Output, TotalScore, OutputThreshold, ClusInfo, param, UIDs = None, MatchesCurated = None):
     # Making Match Table
     nUnits = param['nUnits']
 
@@ -46,10 +46,36 @@ def make_match_table(Scores2Include, Matches, Output, TotalScore, OutputThreshol
     for key, value in Scores2Include.items():
         df[key] = np.reshape(value, (nUnits *nUnits)).T
 
+    #ifyou have supplied UIDs create a data frame using them and merge it to the save table
+    if UIDs is not None:
+        UniqueIDLiberal = UIDs[0]
+        UniqueID = UIDs[1]
+        UniqueIDConservative = UIDs[2]
+        OriUniqueID = UIDs[3]
+
+        xx, yy = np.meshgrid(UniqueIDLiberal, UniqueIDLiberal)
+        UnitALiberaldID = xx.reshape(nUnits*nUnits)
+        UnitBLiberaldID = yy.reshape(nUnits*nUnits)
+
+        xx, yy = np.meshgrid(OriUniqueID, OriUniqueID)
+        UnitAOriID = xx.reshape(nUnits*nUnits)
+        UnitBOriID = yy.reshape(nUnits*nUnits)
+
+        xx, yy = np.meshgrid(UniqueIDConservative, UniqueIDConservative)
+        UnitAConID = xx.reshape(nUnits*nUnits)
+        UnitBConID = yy.reshape(nUnits*nUnits)
+
+        xx, yy = np.meshgrid(UniqueID, UniqueID)
+        UnitAIntID = xx.reshape(nUnits*nUnits)
+        UnitBIntID = yy.reshape(nUnits*nUnits)
+
+        UIDdf = pd.DataFrame(np.array([UnitAOriID, UnitBOriID, UnitALiberaldID, UnitBLiberaldID, UnitAIntID, UnitBIntID, UnitAConID, UnitBConID]).T, columns = ['UID1', 'UID2', 'UID Liberal 1', 'UID Liberal 2', 'UID int 1', 'UM UID int 2', 'UID Conservative 1', 'UID Conservative 2'])
+        df = df.join(UIDdf)
+
     return df
 
 def save_to_output(SaveDir, Scores2Include, Matches, Output, AvgCentroid, AvgWaveform, AvgWaveformPerTP, MaxSite,
-                   TotalScore, OutputThreshold, ClusInfo, param, MatchesCurated = None, SaveMatchTable = True):
+                   TotalScore, OutputThreshold, ClusInfo, param, UIDs = None, MatchesCurated = None, SaveMatchTable = True):
     """ 
     Save all of the useful infomation into a SaveDIR.
     keyword arguments are MatchesCurated and SaveMatchTable, Supply MatchesCurrated of you have currated matches and
@@ -97,12 +123,12 @@ def save_to_output(SaveDir, Scores2Include, Matches, Output, AvgCentroid, AvgWav
         np.save(MatchesCuratedPath, MatchesCurated)
 
     if SaveMatchTable == True:
-        df = make_match_table(Scores2Include, Matches, Output, TotalScore, OutputThreshold, ClusInfo, param, MatchesCurated = None)
+        df = make_match_table(Scores2Include, Matches, Output, TotalScore, OutputThreshold, ClusInfo, param, UIDs = UIDs, MatchesCurated = None)
         MatchTablePath = os.path.join(SaveDir, 'MatchTable.csv')
         df.to_csv(MatchTablePath, index = False)
 
 def save_to_output_seperate_CV(SaveDir, Scores2Include, Matches, Output, AvgCentroid, AvgWaveform, AvgWaveformPerTP, MaxSite,
-                   TotalScore, MatchThreshold, ClusInfo, param, MatchesCurated = None, SaveMatchTable = True):
+                   TotalScore, MatchThreshold, ClusInfo, param, UIDs = None, MatchesCurated = None, SaveMatchTable = True):
 
     #Start by sperating the info into CV
     Matches12part1 = np.argwhere(np.tril(Output) > MatchThreshold) 
@@ -185,7 +211,7 @@ def save_to_output_seperate_CV(SaveDir, Scores2Include, Matches, Output, AvgCent
     OutputThreshold[Output > MatchThreshold] = 1
 
     if SaveMatchTable == True:
-        df = make_match_table(Scores2Include, Matches, Output, TotalScore, OutputThreshold, ClusInfo, param, MatchesCurated = None)
+        df = make_match_table(Scores2Include, Matches, Output, TotalScore, OutputThreshold, ClusInfo, param, UIDs = UIDs, MatchesCurated = None)
         MatchTablePath = os.path.join(SaveDir, 'MatchTable.csv')
         df.to_csv(MatchTablePath, index = False)
 
@@ -261,3 +287,38 @@ def load_output_seperate_CV(SaveDir, LoadMatchTable = False):
 
         return UMScoresCV12, UMScoresCV21, ClusInfo, param, MatchProbCV12, MatchProbCV21,MatchesCV12, MatchesCV21, WavefromInfo, MatchTable
     return UMScoresCV12, UMScoresCV21, ClusInfo, param, MatchProbCV12, MatchProbCV21,MatchesCV12, MatchesCV21, WavefromInfo
+
+def SaveProbForPhy(Probability, param, ClusInfo):
+    """
+    Saves the within session UnitMatch probabilities for each session in their KiloSort directory,
+    to be used with the UnitMatch Phy plugin 
+
+    Parameters
+    ----------
+    Probability : ndarray (nUnits, nUnits)
+        The calcualtes UnitMatch probability array
+    param : dictionary
+        The param dictionary
+    ClusInfo : dictionary
+        The ClusInfo dictionary
+    """
+
+    SessionSwitch = ClusInfo['SessionSwitch']
+    nUnitsPerSession = param['nUnitsPerSession']
+
+    for sid in range(SessionSwitch.shape[0] - 1):
+        #file to save the array in
+        SaveFileTmp = os.path.join(param['KSdirs'][sid], 'probability_templates.npy')
+
+        MatrixProb = np.full((nUnitsPerSession[sid], nUnitsPerSession[sid]), np.nan) #Make the size of all the units
+
+        SessionOutput = Probability[SessionSwitch[sid]:SessionSwitch[sid+1], SessionSwitch[sid]:SessionSwitch[sid+1]]
+        #If Only good units where used add values know to a matrix of NaNs 
+        if SessionSwitch[sid+1] - SessionSwitch[sid] != nUnitsPerSession[sid]:
+            AllGoodUnits = ClusInfo['GoodUnits'][sid].squeeze().astype(int)
+            for id, gid in enumerate(ClusInfo['GoodUnits'][sid].astype(int)):
+                MatrixProb[gid, AllGoodUnits] = SessionOutput[id,:]
+        else:
+            MatrixProb = SessionOutput
+
+        np.save(SaveFileTmp, MatrixProb)

@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy as sp
-import Param_fun as pf
+import UnitMatchPy.Param_fun as pf
 #from sklearn.metrics import roc_auc_score
 
 def re_scale(vector):

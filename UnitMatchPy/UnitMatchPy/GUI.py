@@ -6,6 +6,8 @@ from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg,
 NavigationToolbar2Tk) 
 import numpy as np
 from matplotlib import rcParams
+import os
+
 
 def run_GUI():
     global CVtkinter
@@ -45,14 +47,16 @@ def run_GUI():
     NotMatch = []
 
     root = Tk()
-    # download theme from https://sourceforge.net/projects/tcl-awthemes/
-    root.tk.call('lappend', 'auto_path', r'TkinterTheme\awthemes-10.4.0')
+    #C:\Users\Experiment\Documents\temp\UnitMatch\UMPy\UMPy\TkinterTheme\awthemes-10.4.0\awdark.tcl
+    # downloaded theme from https://sourceforge.net/projects/tcl-awthemes/
+    theme_path = os.path.join(os.path.dirname(os.path.abspath(__file__)) , r'TkinterTheme')
+    root.tk.call('lappend', 'auto_path', theme_path)
     root.tk.call('package', 'require', 'awdark')
     s = ttk.Style(root)
     s.theme_use('awdark')
     root.title('UMPy - Manual Curation')
     #root.geometry('800x800')
-    root.iconbitmap(r'UM Logo.ico')
+    root.iconbitmap(os.path.join(os.path.dirname(os.path.abspath(__file__)) , r'UM Logo.ico'))
     background = ttk.Frame(root)
     background.place(x=0, y=0, relwidth=1.0, relheight=1.0)
 

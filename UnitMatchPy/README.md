@@ -11,3 +11,19 @@ The GUI is a optional step to curated and investigate the infomation Unit Match 
 ## Dependencies
 This version relies on many core python packages [numpy](https://numpy.org/), [scipy](https://scipy.org/), [JobLib](https://joblib.readthedocs.io/en/stable/), [pandas](https://pandas.pydata.org/), [tkinter](https://docs.python.org/3/library/tkinter.html) and [matplotlib](https://matplotlib.org/). All of these libaries come with a [Anaconda](https://www.anaconda.com/download/) version of python. 
 For extracting raw data the library [mtscomp](https://github.com/int-brain-lab/mtscomp) is needed, this can be installed by `pip install mtscomp`.
+
+
+## Installation 
+
+After creating an python environment
+
+```
+conda create --name UnitMatch python 
+conda activate UnitMatch
+```
+
+You can install UnitMatchPy with pip. It will automatically install all the dependency.
+
+```
+pip install UnitMatchPy
+```
