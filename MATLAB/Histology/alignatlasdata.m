@@ -124,13 +124,16 @@ end
 depth = clusinfo.depth;
 channel = clusinfo.ch;
 RecSes_ID = clusinfo.RecSesID;
-Good_ID = find(ismember(cellstr(Label),'good')); %Identify good clusters
-if isempty(Good_ID)
-    Good_ID = find(ismember(Label,'g')); %Identify good clusters
+if isfield(clusinfo,'Good_ID')
+    Good_ID = find(clusinfo.Good_ID);
+else
+    Good_ID = find(ismember(cellstr(Label),'good')); %Identify good clusters
+    if isempty(Good_ID)
+        Good_ID = find(ismember(Label,'g')); %Identify good clusters
+    end
 end
 try
-
-    Noise_ID = find(clusinfo.Noise_ID);
+    Noise_ID = find(~clusinfo.Good_ID);
 catch
     Noise_ID = find(~ismember(Label,'g'));
 end
@@ -215,7 +218,7 @@ if nargin>8
         DistProbe(trid) = norm(trackcoordinates{trid}(1,:)-trackcoordinates{trid}(end,:));
         hold on
     end
-    legend([h(:)],arrayfun(@(X) ['Shank ' num2str(X)],1:length(trackcoordinates),'UniformOutput',0))
+    legend([h(:)],arrayfun(@(X) ['Shank ' num2str(X-1)],1:length(trackcoordinates),'UniformOutput',0))
     title('These Shanks should be in the right order, if not order histinfo accordingly')
     DProbe = nanmax(DistProbe);
 end
@@ -336,7 +339,10 @@ end
 
 while ~flag
     %Now divide position of probe along this track
-    if istable(histinfo)&& any(histinfo.Position)
+    if any(ismember(histinfo.Properties.VariableNames,'DistanceFromFirstPosition_um_'))
+        histinfo.Position = histinfo.DistanceFromFirstPosition_um_; % Renaming variables in software is so nice..
+    end
+    if istable(histinfo) && any(histinfo.Position)
         histinfo.RegionAcronym(ismember(histinfo.RegionAcronym,'Not found in brain')| ismember(histinfo.RegionAcronym,'void')) = {'root'};
            for shid = 1:nshanks
             if ~surfacefirst
