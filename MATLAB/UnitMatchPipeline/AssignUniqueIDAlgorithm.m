@@ -23,23 +23,19 @@ recOpt = unique(GoodRecSesID);
 nRec = length(recOpt);
 nClus = numel(Good_Idx);
 
+%% Initial replacement
+UniqueIDConversion.UniqueIDConservative = UniqueIDConservative;
+UniqueIDConversion.UniqueIDLiberal = UniqueIDLiberal;
+UniqueIDConversion.UniqueID = UniqueID;
+
+%% Make variables ready for indexing only Good_Idx
+UniqueIDLiberal = UniqueIDLiberal(Good_Idx);
+OriUniqueID = OriUniqueID(Good_Idx);
+UniqueIDConservative = UniqueIDConservative(Good_Idx);
+UniqueID = UniqueID(Good_Idx);
+GoodRecSesID = GoodRecSesID(Good_Idx);
 % Extract match prob
 MatchProb = reshape(MatchTable.MatchProb,nClus,nClus);
-
-% Re-initialize UID
-[PairID3,PairID4]=meshgrid(OriUniqueID(Good_Idx));
-
-
-% MatchTable.UID1 = PairID3(:);
-% MatchTable.UID2 = PairID4(:);
-%
-% % Also conservative
-% MatchTable.UID1Conservative = PairID3(:);
-% MatchTable.UID2Conservative = PairID4(:);
-%
-% % And liberal
-% MatchTable.UID1Liberal = PairID3(:);
-% MatchTable.UID2Liberal = PairID4(:);
 
 %% Find probability threshold to use
 if UMparam.UseDatadrivenProbThrs
@@ -95,38 +91,38 @@ if ~isempty(Pairs)
             %% Conservative - most stringent
             % Identify the rows in the table containing TheseOriUids with
             % either of the currently considered units in Pairs
-            TheseOriUids = OriUniqueID(ismember(UniqueIDConservative,UniqueIDConservative(Good_Idx(Pairs(id,:))))); % Find all units that are currently having the same UniqueIDConservative as either one of the current pairs, and their original unique ID as they are known in matchtable
-            Idx = find(ismember(OriUniqueID(Good_Idx),TheseOriUids)); % Find all units that have to be considered
+            TheseOriUids = OriUniqueID(ismember(UniqueIDConservative,UniqueIDConservative(Pairs(id,:)))); % Find all units that are currently having the same UniqueIDConservative as either one of the current pairs, and their original unique ID as they are known in matchtable
+            Idx = find(ismember(OriUniqueID,TheseOriUids)); % Find all units that have to be considered
 
             % For conservative, all pairs need to match with eachother
-            AllRelevantProbs = nanmean(cat(3,MatchProb(Idx,Idx),MatchProb(Idx,Idx)'),3); % Relevant probs for Conservative
+            AllRelevantProbs = nanmin(cat(3,MatchProb(Idx,Idx),MatchProb(Idx,Idx)'),[],3); % Relevant probs for Conservative
             AllRelevantProbs = AllRelevantProbs(triu(true(size(AllRelevantProbs)),1));
             if all(AllRelevantProbs>UMparam.UsedProbability) % All of these should survive the threshold
                 % All UIDs with this UID should now become the new UID
-                UniqueIDConservative(Good_Idx(Idx)) = min(UniqueIDConservative(Good_Idx(Idx))); % Assign them all with the minimum UniqueIDLiberal
+                UniqueIDConservative(Idx) = min(UniqueIDConservative(Idx)); % Assign them all with the minimum UniqueIDLiberal
                 nMatchesConservative = nMatchesConservative + 1;
             end
 
             %% Intermediate
-            TheseOriUids = OriUniqueID(ismember(UniqueID,UniqueID(Good_Idx(Pairs(id,:))))); % Find all units that are currently having the same UniqueIDConservative as either one of the current pairs, and their original unique ID as they are known in matchtable
-            Idx = find(ismember(OriUniqueID(Good_Idx),TheseOriUids)); % Find all units that have to be considered
+            TheseOriUids = OriUniqueID(ismember(UniqueID,UniqueID(Pairs(id,:)))); % Find all units that are currently having the same UniqueIDConservative as either one of the current pairs, and their original unique ID as they are known in matchtable
+            Idx = find(ismember(OriUniqueID,TheseOriUids)); % Find all units that have to be considered
 
-            Ses2Consid = [GoodRecSesID(Good_Idx(Pairs(id,:)))-1 GoodRecSesID(Good_Idx(Pairs(id,:))) GoodRecSesID(Good_Idx(Pairs(id,:)))+1];
+            Ses2Consid = [GoodRecSesID(Pairs(id,:))-1 GoodRecSesID(Pairs(id,:)) GoodRecSesID(Pairs(id,:))+1];
             Ses2Consid = unique(Ses2Consid(:));
-            Idx(~ismember(GoodRecSesID(Good_Idx(Idx)),Ses2Consid)) = []; % Don't consider these
+            Idx(~ismember(GoodRecSesID(Idx),Ses2Consid)) = []; % Don't consider these
 
-            AllRelevantProbs = nanmean(cat(3,MatchProb(Idx,Idx),MatchProb(Idx,Idx)'),3); % Relevant probs for Conservative
+            AllRelevantProbs = nanmin(cat(3,MatchProb(Idx,Idx),MatchProb(Idx,Idx)'),[],3); % Relevant probs for Conservative
             AllRelevantProbs = AllRelevantProbs(triu(true(size(AllRelevantProbs)),1));
             if all(AllRelevantProbs>UMparam.UsedProbability) % All of these should survive the threshold
                 % All UIDs with this UID should now become the new UID
-                UniqueID(Good_Idx(Idx)) = min(UniqueID(Good_Idx(Idx))); % Assign them all with the minimum UniqueIDLiberal
+                UniqueID(Idx) = min(UniqueID(Idx)); % Assign them all with the minimum UniqueIDLiberal
                 nMatches = nMatches+ 1;
             end
 
             %% Liberal
-            TheseOriUids = OriUniqueID(ismember(UniqueIDLiberal,UniqueIDLiberal(Good_Idx(Pairs(id,:))))); % Find all units that are currently having the same UniqueIDLiberal as either one of the current pairs, and their original unique ID as they are known in matchtable
-            Idx = find(ismember(OriUniqueID(Good_Idx),TheseOriUids)); % Find all units that have to be considered
-            UniqueIDLiberal(Good_Idx(Idx)) = min(UniqueIDLiberal(Good_Idx(Idx))); % Assign them all with the minimum UniqueIDLiberal
+            TheseOriUids = OriUniqueID(ismember(UniqueIDLiberal,UniqueIDLiberal(Pairs(id,:)))); % Find all units that are currently having the same UniqueIDLiberal as either one of the current pairs, and their original unique ID as they are known in matchtable
+            Idx = find(ismember(OriUniqueID,TheseOriUids)); % Find all units that have to be considered
+            UniqueIDLiberal(Idx) = min(UniqueIDLiberal(Idx)); % Assign them all with the minimum UniqueIDLiberal
             nMatchesLiberal = nMatchesLiberal + 1;
         end
         disp('')
@@ -136,19 +132,19 @@ if ~isempty(Pairs)
     end
 end
 %% Replace in table
-[PairID3,PairID4] = meshgrid(UniqueIDConservative(Good_Idx));
+[PairID3,PairID4] = meshgrid(UniqueIDConservative);
 MatchTable.UID1Conservative = PairID3(:);
 MatchTable.UID2Conservative = PairID4(:);
-[PairID3,PairID4] = meshgrid(UniqueIDLiberal(Good_Idx));
+[PairID3,PairID4] = meshgrid(UniqueIDLiberal);
 MatchTable.UID1Liberal = PairID3(:);
 MatchTable.UID2Liberal = PairID4(:);
-[PairID3,PairID4] = meshgrid(UniqueID(Good_Idx));
+[PairID3,PairID4] = meshgrid(UniqueID);
 MatchTable.UID1 = PairID3(:);
 MatchTable.UID2 = PairID4(:);
 
 %% Replace in UniqueIDConversion
-UniqueIDConversion.UniqueIDConservative = UniqueIDConservative;
-UniqueIDConversion.UniqueIDLiberal = UniqueIDLiberal;
-UniqueIDConversion.UniqueID = UniqueID;
+UniqueIDConversion.UniqueIDConservative(Good_Idx) = UniqueIDConservative;
+UniqueIDConversion.UniqueIDLiberal(Good_Idx) = UniqueIDLiberal;
+UniqueIDConversion.UniqueID(Good_Idx) = UniqueID;
 
 return
