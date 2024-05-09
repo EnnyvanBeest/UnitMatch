@@ -151,9 +151,8 @@ function res = summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLa
                     UniqueIDConversion_2sess.recsesAll = UniqueIDConversion.recsesAll(idx);
                     UniqueIDConversion_2sess.GoodID = UniqueIDConversion.GoodID(idx);
                     UMparam.UseDatadrivenProbThrs = 0;
-                    
                     [MatchTable_2sess, UniqueIDConversion_2sess] = AssignUniqueIDAlgorithm(MatchTable_2sess, UniqueIDConversion_2sess, UMparam);
-
+               
                     % Find matched units
                     % % Should take liberal ones because only two days and easier to remove splits
                     matchedUnitsIdx = (MatchTable_2sess.UID1 == MatchTable_2sess.UID2) & (MatchTable_2sess.RecSes1 ~= MatchTable_2sess.RecSes2); % using Unique ID

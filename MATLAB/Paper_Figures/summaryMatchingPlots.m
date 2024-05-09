@@ -449,7 +449,9 @@ for uidtype = 1:numel(UIDtoUse)
 end
 legend([h(:)],UIDtoUse,'Location','best')
 
-
+if ~exist(savedir)
+    mkdir(savedir)
+end
 saveas(IndivFig,fullfile(savedir,['IndividData.fig']))
 saveas(IndivFig,fullfile(savedir,['IndividData.bmp']))
  
@@ -479,8 +481,9 @@ xlim([0 5])
 ylim([0 10])
 disp([num2str(nanmedian(EPosAndNeg(1,:).*100)) '+/- ' num2str(mad(EPosAndNeg(1,:).*100)) ' false positives'])
 disp([num2str(nanmedian(EPosAndNeg(2,:).*100)) '+/- ' num2str(mad(EPosAndNeg(2,:).*100)) ' false negatives'])
-disp([num2str(nanmedian(EPosAndNeg(3,:).*100)) '+/- ' num2str(mad(EPosAndNeg(3,:).*100)) ' KS negatives'])
-
+if UMparam.RunPyKSChronicStitched
+    disp([num2str(nanmedian(EPosAndNeg(3,:).*100)) '+/- ' num2str(mad(EPosAndNeg(3,:).*100)) ' KS negatives'])
+end
 
 %% Info on dataset
 DataSetInfo.RecSes = RecSes;

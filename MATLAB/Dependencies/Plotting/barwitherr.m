@@ -120,8 +120,8 @@ hold on
 hBar = handles.bar;
 
 if nRows > 1
-    hErrorbar = zeros(1,nRows);
-    for col = 1:nRows
+    hErrorbar = zeros(1,nCols);
+    for col = 1:nCols
         % Extract the x location data needed for the errorbar plots:
         if verLessThan('matlab', '8.4')
             % Original graphics:
