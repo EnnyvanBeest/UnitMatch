@@ -21,7 +21,7 @@ for xid = 1:numel(xUnique)
     yAllPos = yUnique{xid}; % Current column
 
     % Most similar column
-    SameIdx = find(cellfun(@(X) all(ismember(yUnique{xid},X)),yUnique)); % This column should have the same ypos
+    SameIdx = find(cellfun(@(X) all(ismember(yUnique{xid},X)) | all(ismember(X,yUnique{xid})),yUnique)); % This column should have the same ypos
     SameIdx(SameIdx == xid) =  [];
     [~,Idx2] = min(abs(numel(yUnique{xid})-cellfun(@numel,yUnique(SameIdx)))); % Most similar column
     yAllPosSim = yUnique{SameIdx(Idx2)};
