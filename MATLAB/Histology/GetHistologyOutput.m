@@ -1,6 +1,7 @@
 histodone=0;
 histoflag = 0;
 Depth2AreaPerUnit = [];
+AllenCCFPath = fullfile(GithubDir,'allenCCF');
 if ~exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
     mkdir(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
 end

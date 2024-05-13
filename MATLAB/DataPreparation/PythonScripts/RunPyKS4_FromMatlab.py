@@ -29,6 +29,6 @@ def RunKS4(bin_file,probe_file):
 
 
 if __name__ == '__main__':
-	#bin_file = 'D:/tmpdata/2022_01_26-JF067_g0_t0.imec0.ap.bin'
-	#probe_file = 'D:/tmpdata/2022_01_26-JF067_g0_t0.imec0_kilosortChanMap.mat'
+	#bin_file = 'D:/tmpdata/2024-01-24_EB036_OrangeRigs_g0_t0.imec0.ap.bin'
+	#probe_file = 'D:/tmpdata/2024-01-24_EB036_OrangeRigs_g0_t0.imec0_kilosortChanMap.mat'
 	success = RunKS4(bin_file,probe_file)
