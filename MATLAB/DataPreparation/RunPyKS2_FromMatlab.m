@@ -322,12 +322,7 @@ for midx = 1:length(MiceOpt)
                     catch ME
                         disp(ME)
                     end
-                    try
-                        delete(fullfile(tmpdatafolder,'.kilosort',tmpfile(sesid).name))
-                        rmdir(fullfile(tmpdatafolder,'.kilosort'))
-                    catch ME
-                        disp(ME)
-                    end
+                    
 
                     % change dat_path in params file
                     paramsfile = dir(fullfile(myKsDir,ProbeName,Sesinfo,'params.py'));

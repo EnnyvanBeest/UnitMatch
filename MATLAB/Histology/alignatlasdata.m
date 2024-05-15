@@ -1,4 +1,4 @@
-function Depth2AreaPerUnit = alignatlasdata(histinfo,AllenCCFPath,sp,clusinfo,removenoise,surfacefirst,LFPDir,treeversion,trackcoordinates)
+function Depth2Area = alignatlasdata(histinfo,AllenCCFPath,sp,clusinfo,removenoise,surfacefirst,LFPDir,treeversion,trackcoordinates)
 % Enny van Beest, based on AP_histology from AJPeters & IBLAPP from Mayo
 % Faulkner
 
@@ -27,11 +27,9 @@ function Depth2AreaPerUnit = alignatlasdata(histinfo,AllenCCFPath,sp,clusinfo,re
 % using readNPY(fullfile(histofile(1).folder,strrep(histofile(1).name,'.csv','.npy')))
 
 %% Outputs:
-% Depth2AreaPerUnit: Table with Cluster_ID,Depth,Areaname (as defined by
+% Depth2Area: Table with Depth,Areaname (as defined by
 % Allen Brain),Color (as defined by Allen Brain), Coordinates (as defined
-% by Allen Brain) for every unit. Be aware that Cluster_ID change with
-% merging/splitting, so this output is no longer valid after changes are
-% made with e.g. phy --> re-run alignatlasdata
+% by Allen Brain) for every channel. 
 
 %% Check inputs
 if ~iscell(histinfo)
@@ -770,12 +768,16 @@ for shid=1:nshanks
     if coordinateflag
         clustercoord = repmat({[nan,nan,nan]},1,length(cluster_id(ShankID==shid)));
         clustercoord(idx) = num2cell(newtrackcoordinates{shid}(cell2mat(tmp(idx)),:),2);
-        Depth2AreaPerUnit{shid} = table(cluster_id(ShankID==shid),depth(ShankID==shid),ShankID(ShankID==shid),clusterarea',clustercolor',clustercoord','VariableNames',{'Cluster_ID','Depth','Shank','Area','Color','Coordinates'});
+        ShIdx = find(ShankID==shid);
+        [~,Id1,~] = unique(depth(ShIdx));
+        Depth2Area{shid} = table(depth(ShIdx(Id1)),ShankID(ShIdx(Id1)),clusterarea(Id1)',clustercolor(Id1)',clustercoord(Id1)','VariableNames',{'Depth','Shank','Area','Color','Coordinates'});
     else
-        Depth2AreaPerUnit{shid} = table(cluster_id(ShankID==shid),depth(ShankID==shid),ShankID(ShankID==shid),clusterarea',clustercolor','VariableNames',{'Cluster_ID','Depth','Shank','Area','Color'});
+        ShIdx = find(ShankID==shid);
+        [~,Id1,~] = unique(depth(ShIdx));
+        Depth2Area{shid} = table(depth(ShIdx(Id1)),ShankID(ShIdx(Id1)),clusterarea(Id1)',clustercolor(Id1)','VariableNames',{'Cluster_ID','Depth','Shank','Area','Color'});
     end
 end
-Depth2AreaPerUnit=cat(1,Depth2AreaPerUnit{:});
+Depth2Area=cat(1,Depth2Area{:});
 
 end
 

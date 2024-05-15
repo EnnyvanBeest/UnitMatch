@@ -1,6 +1,6 @@
 histodone=0;
 histoflag = 0;
-Depth2AreaPerUnit = [];
+Depth2Area = [];
 AllenCCFPath = fullfile(GithubDir,'allenCCF');
 if ~exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
     mkdir(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
@@ -8,7 +8,7 @@ end
 if exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,'HistoEphysAlignment.mat')) && ~NewHistologyNeeded
     tmpfile = load(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,'HistoEphysAlignment.mat'));
     try
-        Depth2AreaPerUnit = tmpfile.Depth2AreaPerUnit;
+        Depth2Area = tmpfile.Depth2AreaPerUnit;
         histodone=1;
         disp('Data already aligned to histology')
         histoflag=1;
@@ -55,7 +55,7 @@ if ~histodone %Just in case it's not done yet
                 fullfile(fullfile(histofile(1).folder,histofile(1).name))
                 
                 % Align ephys data with probe
-                Depth2AreaPerUnit  = alignatlasdata(histinfo,AllenCCFPath,sp,clusinfo,1,1,2);
+                Depth2Area  = alignatlasdata(histinfo,AllenCCFPath,sp,clusinfo,1,1,2);
                 
             end
         else % Automatic alignment with brain globe output
@@ -67,9 +67,9 @@ if ~histodone %Just in case it's not done yet
             trackcoordinates = arrayfun(@(X) readNPY(fullfile(histofile(X).folder,strrep(histofile(X).name,'.csv','.npy'))),1:length(histofile),'UniformOutput',0);
             % Align ephys data with probe
             if exist('lfpD') && ~isempty(lfpD)
-                Depth2AreaPerUnit  = alignatlasdata(histinfo,AllenCCFPath,sp,clusinfo,0,0,fullfile(lfpD.folder,lfpD.name),2,trackcoordinates);
+                Depth2Area  = alignatlasdata(histinfo,AllenCCFPath,sp,clusinfo,0,0,fullfile(lfpD.folder,lfpD.name),2,trackcoordinates);
             else
-                Depth2AreaPerUnit  = alignatlasdata(histinfo,AllenCCFPath,sp,clusinfo,0,0,[],2,trackcoordinates);
+                Depth2Area  = alignatlasdata(histinfo,AllenCCFPath,sp,clusinfo,0,0,[],2,trackcoordinates);
             end
         end
     else
@@ -93,10 +93,10 @@ if ~histodone %Just in case it's not done yet
         histinfonew.Properties.VariableNames = {'Position','RegionID','RegionAcronym','RegionName'};
 
         % Align ephys data with probe
-        Depth2AreaPerUnit  = alignatlasdata(histinfonew,AllenCCFPath,sp,clusinfo,0,0,fullfile(lfpD.folder,lfpD.name),2);
+        Depth2Area  = alignatlasdata(histinfonew,AllenCCFPath,sp,clusinfo,0,0,fullfile(lfpD.folder,lfpD.name),2);
     end
 end
 if histoflag && ~histodone
-    saveas(gcf,fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,'HistoEphysAlignment.fig'))
-    save(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,'HistoEphysAlignment.mat'),'Depth2AreaPerUnit')
+    saveas(gcf,fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment.fig']))
+    save(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment.mat']),'Depth2Area')
 end
