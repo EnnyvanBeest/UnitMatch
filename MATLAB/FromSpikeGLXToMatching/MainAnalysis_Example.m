@@ -2,10 +2,10 @@
 
 %% User Input
 %% Path information
-DataDir = {'H:\MatchingUnits\RawData'};%{'H:\MatchingUnits\RawDataMonthApart'};%  ;%Raw data folders, typically servers were e.g. *.cbin files are stored
+DataDir = {'H:\MatchingUnits\RawDataMonthApart'};%{'H:\MatchingUnits\RawData'};%  ;%Raw data folders, typically servers were e.g. *.cbin files are stored
 SaveDir = 'H:\MatchingUnits\Output';%'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\Learning_Striatum_new';%'H:\MatchingUnits\Output';%'H:\MatchingUnits\OutputMonthApart'; %'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\2ConsecutiveDays\Stitched';%'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\MonthApart\Stitched';%%'H:\MatchingUnits\Output\MonthApartStitched'% 'H:\MatchingUnits\Output\NotConcatenated';%'\\znas.cortexlab.net\Lab\Share\Celian\UnitMatch\MatchTables\NewSep27\MonthApart\Stitched'% %%;% %'H:\MatchingUnits\Output\ManyRecordings'%Folder where to store the results
 tmpdatafolder = 'D:\tmpdata'; % temporary folder for temporary decompression of data 
-KilosortDir = 'H:\MatchingUnits\KilosortOutput';%'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\Learning_Striatum_new\KS4\';%'H:\MatchingUnits\KilosortOutput';% 'H:\MatchingUnits\KilosortOutputMonthApart';%'\\znas.cortexlab.net\Lab\Share\Enny\UnitMatch\KSComparisonSubset';%'\\znas.cortexlab.net\Lab\Share\Enny\UnitMatch\KilosortOutputMonthApart';%'H:\MatchingUnits\KilosortOutputMonthApart';%'\\znas.cortexlab.net\Lab\Share\Celian\UnitMatch\KilosortOutputMonthApart';% Kilosort output folder
+KilosortDir = 'H:\MatchingUnits\KilosortOutputMonthApart';%'H:\MatchingUnits\KilosortOutput';%'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\Learning_Striatum_new\KS4\';%'H:\MatchingUnits\KilosortOutput';% '\\znas.cortexlab.net\Lab\Share\Enny\UnitMatch\KSComparisonSubset';%'\\znas.cortexlab.net\Lab\Share\Enny\UnitMatch\KilosortOutputMonthApart';%'H:\MatchingUnits\KilosortOutputMonthApart';%'\\znas.cortexlab.net\Lab\Share\Celian\UnitMatch\KilosortOutputMonthApart';% Kilosort output folder
 GithubDir = 'C:\Users\EnnyB\Documents\GitHub'; % Github directory
 PythonEXE = 'C:\Users\EnnyB\anaconda3\envs\kilosort\pythonw.exe' % Python version to run python code in:
 
@@ -93,7 +93,7 @@ end
 %% Actual pipeline
 %% PyKS - run pykilosort from Matlab/Python integration
 if PipelineParams.ExtractNewDataNow
-    RunPyKS2_FromMatlab
+    RunKS4_FromMatlab
 end
 
 %% Runs unitmatch across all data from a mouse to generate a table
@@ -129,7 +129,9 @@ if ~exist('UMFiles') || isempty(UMFiles) % When using the example pipeline this 
     end
 end
 res = summaryFunctionalPlots(UMFiles, 'Corr', groupvec, 0, 0);
-resKS = summaryFunctionalPlots(UMFiles, 'Corr', groupvec, 1, 0);
+summaryMatchingPlots(UMFiles,{'UID1Liberal','UID1','UID1Conservative'},groupvec,1)
+
+% resKS = summaryFunctionalPlots(UMFiles, 'Corr', groupvec, 1, 0);
 
 %% Compare with KS stitched performance (Fig S3e/f)
 figure('name','KS versus UM')

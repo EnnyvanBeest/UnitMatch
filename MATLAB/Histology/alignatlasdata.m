@@ -1,4 +1,4 @@
-function Depth2AreaPerUnit = alignatlasdata(histinfo,AllenCCFPath,sp,clusinfo,removenoise,surfacefirst,LFPDir,treeversion,trackcoordinates)
+function Depth2Area = alignatlasdata(histinfo,AllenCCFPath,sp,clusinfo,removenoise,surfacefirst,LFPDir,treeversion,trackcoordinates)
 % Enny van Beest, based on AP_histology from AJPeters & IBLAPP from Mayo
 % Faulkner
 
@@ -27,11 +27,9 @@ function Depth2AreaPerUnit = alignatlasdata(histinfo,AllenCCFPath,sp,clusinfo,re
 % using readNPY(fullfile(histofile(1).folder,strrep(histofile(1).name,'.csv','.npy')))
 
 %% Outputs:
-% Depth2AreaPerUnit: Table with Cluster_ID,Depth,Areaname (as defined by
+% Depth2Area: Table with Depth,Areaname (as defined by
 % Allen Brain),Color (as defined by Allen Brain), Coordinates (as defined
-% by Allen Brain) for every unit. Be aware that Cluster_ID change with
-% merging/splitting, so this output is no longer valid after changes are
-% made with e.g. phy --> re-run alignatlasdata
+% by Allen Brain) for every channel. 
 
 %% Check inputs
 if ~iscell(histinfo)
@@ -124,13 +122,16 @@ end
 depth = clusinfo.depth;
 channel = clusinfo.ch;
 RecSes_ID = clusinfo.RecSesID;
-Good_ID = find(ismember(cellstr(Label),'good')); %Identify good clusters
-if isempty(Good_ID)
-    Good_ID = find(ismember(Label,'g')); %Identify good clusters
+if isfield(clusinfo,'Good_ID')
+    Good_ID = find(clusinfo.Good_ID);
+else
+    Good_ID = find(ismember(cellstr(Label),'good')); %Identify good clusters
+    if isempty(Good_ID)
+        Good_ID = find(ismember(Label,'g')); %Identify good clusters
+    end
 end
 try
-
-    Noise_ID = find(clusinfo.Noise_ID);
+    Noise_ID = find(~clusinfo.Good_ID);
 catch
     Noise_ID = find(~ismember(Label,'g'));
 end
@@ -215,7 +216,7 @@ if nargin>8
         DistProbe(trid) = norm(trackcoordinates{trid}(1,:)-trackcoordinates{trid}(end,:));
         hold on
     end
-    legend([h(:)],arrayfun(@(X) ['Shank ' num2str(X)],1:length(trackcoordinates),'UniformOutput',0))
+    legend([h(:)],arrayfun(@(X) ['Shank ' num2str(X-1)],1:length(trackcoordinates),'UniformOutput',0))
     title('These Shanks should be in the right order, if not order histinfo accordingly')
     DProbe = nanmax(DistProbe);
 end
@@ -336,7 +337,10 @@ end
 
 while ~flag
     %Now divide position of probe along this track
-    if istable(histinfo)&& any(histinfo.Position)
+    if any(ismember(histinfo.Properties.VariableNames,'DistanceFromFirstPosition_um_'))
+        histinfo.Position = histinfo.DistanceFromFirstPosition_um_; % Renaming variables in software is so nice..
+    end
+    if istable(histinfo) && any(histinfo.Position)
         histinfo.RegionAcronym(ismember(histinfo.RegionAcronym,'Not found in brain')| ismember(histinfo.RegionAcronym,'void')) = {'root'};
            for shid = 1:nshanks
             if ~surfacefirst
@@ -764,12 +768,16 @@ for shid=1:nshanks
     if coordinateflag
         clustercoord = repmat({[nan,nan,nan]},1,length(cluster_id(ShankID==shid)));
         clustercoord(idx) = num2cell(newtrackcoordinates{shid}(cell2mat(tmp(idx)),:),2);
-        Depth2AreaPerUnit{shid} = table(cluster_id(ShankID==shid),depth(ShankID==shid),ShankID(ShankID==shid),clusterarea',clustercolor',clustercoord','VariableNames',{'Cluster_ID','Depth','Shank','Area','Color','Coordinates'});
+        ShIdx = find(ShankID==shid);
+        [~,Id1,~] = unique(depth(ShIdx));
+        Depth2Area{shid} = table(depth(ShIdx(Id1)),ShankID(ShIdx(Id1)),clusterarea(Id1)',clustercolor(Id1)',clustercoord(Id1)','VariableNames',{'Depth','Shank','Area','Color','Coordinates'});
     else
-        Depth2AreaPerUnit{shid} = table(cluster_id(ShankID==shid),depth(ShankID==shid),ShankID(ShankID==shid),clusterarea',clustercolor','VariableNames',{'Cluster_ID','Depth','Shank','Area','Color'});
+        ShIdx = find(ShankID==shid);
+        [~,Id1,~] = unique(depth(ShIdx));
+        Depth2Area{shid} = table(depth(ShIdx(Id1)),ShankID(ShIdx(Id1)),clusterarea(Id1)',clustercolor(Id1)','VariableNames',{'Cluster_ID','Depth','Shank','Area','Color'});
     end
 end
-Depth2AreaPerUnit=cat(1,Depth2AreaPerUnit{:});
+Depth2Area=cat(1,Depth2Area{:});
 
 end
 

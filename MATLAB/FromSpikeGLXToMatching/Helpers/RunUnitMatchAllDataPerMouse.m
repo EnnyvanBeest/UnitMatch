@@ -10,7 +10,7 @@ FromDate = datetime("2024-02-26 09:00:00");
 
 LogError = {}; % Keep track of which runs didn't work
 if ~exist('PipelineParamsOri','var')
-PipelineParamsOri = PipelineParams;
+    PipelineParamsOri = PipelineParams;
 end
 for midx = 1:length(MiceOpt)
     close all % to not overcrowd the graphics card
@@ -197,6 +197,8 @@ for midx = 1:length(MiceOpt)
                 end
                 UMtime = toc(UMtime)
 
+                % Save phy similarity info for individual sessions
+                SaveWithinSessionProba_forPhy(UMparam.SaveDir)
               
                 % Evaluate (within unit ID cross-validation)
                 EvaluatingUnitMatch(UMparam.SaveDir);

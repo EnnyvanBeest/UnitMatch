@@ -298,14 +298,87 @@ def currate_matches(MatchesGUI, IsMatch, NotMatch, Mode = 'And'):
 
     return Matches
 
+def fill_missing_pos(KSdir, nChannels):
+    PathTmp = os.path.join(KSdir, 'channel_positions.npy')
+    Pos = np.load(PathTmp)
+
+    PathTmp = os.path.join(KSdir, 'channel_map.npy')
+    ChannelMap = np.load(PathTmp).squeeze()
+
+    ChannelPos = np.full((nChannels,2), np.nan)
+    ChannelPos[ChannelMap,:] = Pos
+
+    ChannelPosNew = []
+    #get the unique x positions
+    xUnique = np.unique(ChannelPos[:,0])
+    xUnique = xUnique[~np.isnan(xUnique)]
+
+    #go through each coloumn
+    for x in xUnique:
+        #get the known y-values for that coloumn
+        yColoumn = ChannelPos[np.argwhere(ChannelPos[:,0] == x), 1].squeeze()
+
+        #test to see if any other coloumns have the same set of y positions
+        SameXPattern = np.unique(ChannelPos[np.in1d(ChannelPos[:,1], yColoumn), 0])
+        SameYPattern = ChannelPos[np.in1d(ChannelPos[:,0], SameXPattern), 1]
+
+        #find the mode difference, i.e the steps between y-positions 
+        ySteps, yStepCounts = np.unique(np.diff(np.unique(SameYPattern)), return_counts= True)
+        ySteps = ySteps[np.argmax(yStepCounts)].astype(int)
+
+        #find the min/max y-positions to fill in all positions for the coloumn
+        ymin = np.min(SameYPattern).astype(int)
+        ymax = np.max(SameYPattern).astype(int)
+        yPos = np.arange(ymin, ymax+ySteps, ySteps)
+
+        ChannelPosColoumn = np.stack((np.full_like(yPos,x), yPos)).T
+        ChannelPosNew.append(ChannelPosColoumn)
+
+
+    nUniqueX = xUnique.shape[0]
+
+    ChannelPosFill = np.zeros_like(ChannelPos)
+    for i, x in enumerate(xUnique):
+        #find which sequence of positions this x-coloumn fills 
+        xPoint = np.argwhere(ChannelPos[:,0] == x).squeeze()[0]
+        start = xPoint % nUniqueX
+        Points = np.arange(start, nChannels, nUniqueX)
+        #fill in the positions for this coloumn
+        for j, point in enumerate(Points):
+            ChannelPosFill[point,:] = ChannelPosNew[i][j,:]
+
+    if np.sum(ChannelPos == ChannelPosFill) //2 == Pos.shape[0]:
+        print('Likely to be correctly filled')
+        return ChannelPosFill
+    else:
+        print('Error in filling channel positions')
+        return ChannelPosFill
+        
+
+
+
 def paths_fromKS(KSdirs):
     nSessions = len(KSdirs)
+
+    #load in the number of channels
+    tmp = os.getcwd()
+    nChannels = []
+    for i in range(nSessions):
+        pathtmp = os.path.join(KSdirs[0], 'params.py')#
+        os.chdir(KSdirs[0])
+        from params import n_channels_dat
+        nChannels.append(n_channels_dat - 1) #subtract the sync channel
+    os.chdir(tmp)
 
     #Load ChannelPos
     ChannelPos = []
     for i in range(nSessions):
         PathTmp = os.path.join(KSdirs[i], 'channel_positions.npy')
         PosTmp = np.load(PathTmp)
+        if PosTmp.shape[0] != nChannels[i]:
+            print('Attmepting to fill in missing channel positions')
+            PosTmp = fill_missing_pos(KSdirs[i], nChannels[i])
+
         #  Want 3-D positions, however at the moment code only needs 2-D so add 1's to 0 axis position
         PosTmp = np.insert(PosTmp, 0, np.ones(PosTmp.shape[0]), axis = 1)
         ChannelPos.append(PosTmp)
