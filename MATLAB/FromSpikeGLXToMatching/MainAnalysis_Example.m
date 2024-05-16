@@ -93,7 +93,7 @@ end
 %% Actual pipeline
 %% PyKS - run pykilosort from Matlab/Python integration
 if PipelineParams.ExtractNewDataNow
-    RunPyKS2_FromMatlab
+    RunKS4_FromMatlab
 end
 
 %% Runs unitmatch across all data from a mouse to generate a table
