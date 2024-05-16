@@ -5,10 +5,11 @@ AllenCCFPath = fullfile(GithubDir,'allenCCF');
 if ~exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
     mkdir(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
 end
-if exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,'HistoEphysAlignment.mat')) && ~NewHistologyNeeded
-    tmpfile = load(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,'HistoEphysAlignment.mat'));
+tmphistfile = dir(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,'*HistoEphysAlignment.mat'));
+if ~isempty(tmphistfile) && ~NewHistologyNeeded
+    tmpfile = load(fullfile(tmphistfile.folder,tmphistfile.name));
     try
-        Depth2Area = tmpfile.Depth2AreaPerUnit;
+        Depth2Area = tmpfile.Depth2Area;
         histodone=1;
         disp('Data already aligned to histology')
         histoflag=1;

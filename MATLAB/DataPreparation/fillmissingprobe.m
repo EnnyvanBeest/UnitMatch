@@ -15,7 +15,7 @@ MissingChan = nan(0,2);
 ProbablechIdx = nan(0,1);
 
 MissIdx = find(isnan(channelpos(:,1)));
-
+countid = 1;
 % Recreate a channelmap based on these values
 for xid = 1:numel(xUnique)
     yAllPos = yUnique{xid}; % Current column
@@ -35,9 +35,10 @@ for xid = 1:numel(xUnique)
         PotentialChans(PotentialChans<=0) = [];
         ThisChans = MissIdx(ismember(MissIdx,PotentialChans));
         if isempty(ThisChans)
-            ThisChans = MissIdx(end); % Probably the last channel?
+            ThisChans = MissIdx(countid); % Probably the last channel?
         end
         ProbablechIdx = cat(1,ProbablechIdx,ThisChans);
+        countid = countid+1;
     end
 
 end
