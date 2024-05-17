@@ -75,6 +75,7 @@ clear spnew
 % Save out sp unique cluster
 recsesidxIncluded = false(1,length(KiloSortPaths));
 nclus = length(clusinfo.cluster_id);
+RawPathsUsed = {};
 sp.UniqClu = sp.clu;
 if Params.UnitMatch
     disp('Assigning correct unique ID')
@@ -105,11 +106,13 @@ if Params.UnitMatch
             sp.UniqClu(sp.clu==clusinfo.cluster_id(TheseClus(clusid)) & sp.RecSes==clusinfo.RecSesID(TheseClus(clusid))) = clusinfo.UniqueID(clusid);
         end
         recsesidxIncluded(recsesidx2) = 1;
+        RawPathsUsed = {RawPathsUsed{:} UMparam.RawDataPaths{recsesidx}};
     end
 else
     clusinfo.UniqueID = (1:length(clusinfo.cluster_id))';
 end
-
+Params.RawDataPaths = RawPathsUsed;
+Params.KSDir = KiloSortPaths;
 %% add nans for missing UID values
 if any(recsesidxIncluded==0)
     clusinfo.UniqueID(ismember(clusinfo.RecSesID,find(recsesidxIncluded==0))) = nan;

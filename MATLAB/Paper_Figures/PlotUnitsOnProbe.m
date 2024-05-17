@@ -71,7 +71,7 @@ catch ME
     disp('Can''t read in days')
     nodayflag = 1;
 end
-if isempty(days)
+if ~exist('days','var') 
     nodayflag = 1;
 end
 

@@ -114,7 +114,7 @@ elseif isfield(meta,'snsGeomMap')
     LayOut = cellfun(@(X) str2num(X),LayOut,'UniformOutput',0);
     LayOut(cellfun(@isempty,LayOut))=[];
     nShanks = LayOut{1};
-    nChan = length(Shankmap);
+    nChan = length(Shankmap)-1;
     nCols = 2;
 
 

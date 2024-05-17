@@ -161,7 +161,13 @@ for subsesid = 1:length(KiloSortPaths)
     % Some KS versions do not store empty channels?
     channelpos = nan(Params.nSavedChans-Params.nSyncChans,2);
     channelpos(channelmaptmp+1,:) = channelpostmp;
-    channelpostmp = fillmissingprobe(channelpos);
+    try
+        channelpostmp = fillmissingprobe(channelpos);
+    catch ME
+        warning('Your channel map has gaps, please check')
+        channelpostmp = channelpos;
+    end
+
 
     %% Load existing?
     if exist(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat')) && ~Params.RedoQM && ~Params.ReLoadAlways

@@ -119,8 +119,8 @@ handles.bar = bar(varargin{:}); % standard implementation of bar fn
 hold on
 hBar = handles.bar;
 
-if nCols > 1
-    hErrorbar = zeros(1,nRows);
+if nRows > 1
+    hErrorbar = zeros(1,nCols);
     for col = 1:nCols
         % Extract the x location data needed for the errorbar plots:
         if verLessThan('matlab', '8.4')
