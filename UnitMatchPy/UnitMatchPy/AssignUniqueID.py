@@ -13,6 +13,7 @@ def check_is_in(TestArray, ParentArray):
     IsIn = (TestArray[:, None] == ParentArray).all(-1).any(-1)
     return IsIn
 
+
 def AssignUID(Output, param, ClusInfo):
 
     AllClusterIDs = ClusInfo['OriginalID'] # each units has unique ID
@@ -21,7 +22,7 @@ def AssignUID(Output, param, ClusInfo):
     UniqueIDLiberal = np.arange(AllClusterIDs.shape[0])
     OriUniqueID = np.arange(AllClusterIDs.shape[0])
     UniqueIDConservative = np.arange(AllClusterIDs.shape[0])
-    UniqueID = np.arange(AllClusterIDs.shape[0])
+    UniqueID = np.arange(AllClusterIDs.shape[0]) #Intermediate Case
 
     GoodRecSesID = ClusInfo['SessionID']
     RecOpt = np.unique(ClusInfo['SessionID'])
@@ -88,55 +89,57 @@ def AssignUID(Output, param, ClusInfo):
         if (np.logical_and(np.all(check_is_in(CheckPairsA, PairsAll)), np.all(check_is_in(CheckPairsB, PairsAll)))):
             #If each pairs matches with every unit in the other pairs group
             #can add as match to all classes
-            UniqueIDConservative[pair[0]] = min(UniqueIDConservative[pair])
-            UniqueIDConservative[pair[1]] = min(UniqueIDConservative[pair])
+            AllPairs = np.vstack((CheckPairsA, CheckPairsB))
+            AllGoupsIdxs = np.unique(AllPairs)
+            UniqueIDConservative[AllGoupsIdxs] = np.min(UniqueIDConservative[AllGoupsIdxs])
             nMatchesConservative +=1
 
-            UniqueID[pair[0]] = min(UniqueID[pair])
-            UniqueID[pair[1]] = min(UniqueID[pair])
+        ##Intermediate matches
+        #Now test to see if each pairs match with every unit in the other pair IF they are in the same/adjacent sessions 
+        UnitAID = UniqueID[pair[0]]
+        UnitBID = UniqueID[pair[1]]
+
+        SameGroupIdA = np.argwhere(UniqueID == UnitAID).squeeze()
+        SameGroupIdB = np.argwhere(UniqueID == UnitBID).squeeze()
+        if len(SameGroupIdA.shape) == 0:
+            SameGroupIdA = SameGroupIdA[np.newaxis]
+        if len(SameGroupIdB.shape) == 0:
+            SameGroupIdB = SameGroupIdB[np.newaxis]
+
+        CheckPairsA = np.stack((SameGroupIdB, np.broadcast_to(np.array(pair[0]), SameGroupIdB.shape)), axis = -1)
+        CheckPairsB = np.stack((SameGroupIdA, np.broadcast_to(np.array(pair[1]), SameGroupIdA.shape)), axis = -1)
+        #delte potential self-matches
+        CheckPairsA = np.delete(CheckPairsA, np.argwhere(CheckPairsA[:,0] == CheckPairsA[:,1]), axis =0)
+        CheckPairsB = np.delete(CheckPairsB, np.argwhere(CheckPairsB[:,0] == CheckPairsB[:,1]), axis =0)
+
+        #check to see if they are in the same or adjacent sessions
+        InNearSessionA = np.abs(np.diff(ClusInfo['SessionID'][CheckPairsA])) <= 1
+        InNearSessionB = np.abs(np.diff(ClusInfo['SessionID'][CheckPairsB])) <= 1
+
+        CheckPairsNearA = CheckPairsA[InNearSessionA.squeeze()]
+        CheckPairsNearB = CheckPairsB[InNearSessionB.squeeze()]
+
+        #Catch the csae where the units ARE NOT in adjacent session, so CheckPairsNear is empty
+        if np.logical_and(CheckPairsNearA.size == 0, CheckPairsNearB.size == 0):
+            AllPairs = np.vstack((CheckPairsA, CheckPairsB))
+            AllGoupsIdxs = np.unique(AllPairs)
+            UniqueID[AllGoupsIdxs] = np.min(UniqueID[AllGoupsIdxs])
+            nMatches +=1
+        elif (np.logical_and(np.all(check_is_in(CheckPairsNearA, PairsAll)), np.all(check_is_in(CheckPairsNearB, PairsAll)))):
+            AllPairs = np.vstack((CheckPairsA, CheckPairsB))
+            AllGoupsIdxs = np.unique(AllPairs)
+            UniqueID[AllGoupsIdxs] = np.min(UniqueID[AllGoupsIdxs])
             nMatches +=1
 
-            UniqueIDLiberal[pair[0]] = min(UniqueIDLiberal[pair])
-            UniqueIDLiberal[pair[0]] = min(UniqueIDLiberal[pair])
-            nMatchesLiberal +=1
-        else:
-            #Now test to see if each pairs match with every unit in the other pair IF they are in the same/adjacent sessions 
-            UnitAID = UniqueID[pair[0]]
-            UnitBID = UniqueID[pair[1]]
+        ## Liberal Matches
+        SameGroupIdA = np.argwhere(UniqueIDLiberal == UniqueIDLiberal[pair[0]]).squeeze()
+        SameGroupIdB = np.argwhere(UniqueIDLiberal == UniqueIDLiberal[pair[1]]).squeeze()
 
-            SameGroupIdA = np.argwhere(UniqueID == UnitAID).squeeze()
-            SameGroupIdB = np.argwhere(UniqueID == UnitBID).squeeze()
-            if len(SameGroupIdA.shape) == 0:
-                SameGroupIdA = SameGroupIdA[np.newaxis]
-            if len(SameGroupIdB.shape) == 0:
-                SameGroupIdB = SameGroupIdB[np.newaxis]
-
-            CheckPairsA = np.stack((SameGroupIdB, np.broadcast_to(np.array(pair[0]), SameGroupIdB.shape)), axis = -1)
-            CheckPairsB = np.stack((SameGroupIdA, np.broadcast_to(np.array(pair[1]), SameGroupIdA.shape)), axis = -1)
-            #delte potential self-matches
-            CheckPairsA = np.delete(CheckPairsA, np.argwhere(CheckPairsA[:,0] == CheckPairsA[:,1]), axis =0)
-            CheckPairsB = np.delete(CheckPairsB, np.argwhere(CheckPairsB[:,0] == CheckPairsB[:,1]), axis =0)
-
-            #check to see if they are in the same or adjacent sessions
-            InNearSessionA = np.abs(np.diff(ClusInfo['SessionID'][CheckPairsA])) <= 1
-            InNearSessionB = np.abs(np.diff(ClusInfo['SessionID'][CheckPairsB])) <= 1
-
-            CheckPairsNearA = CheckPairsA[InNearSessionA.squeeze()]
-            CheckPairsNearB = CheckPairsB[InNearSessionB.squeeze()]
-
-            if (np.logical_and(np.all(check_is_in(CheckPairsNearA, PairsAll)), np.all(check_is_in(CheckPairsNearB, PairsAll)))):
-                UniqueID[pair[0]] = min(UniqueID[pair])
-                UniqueID[pair[1]] = min(UniqueID[pair])
-                nMatches +=1
-
-                UniqueIDLiberal[pair[0]] = min(UniqueIDLiberal[pair])
-                UniqueIDLiberal[pair[1]] = min(UniqueIDLiberal[pair])
-                nMatchesLiberal +=1
-            else:
-                UniqueIDLiberal[pair[0]] = min(UniqueIDLiberal[pair])
-                UniqueIDLiberal[pair[1]] = min(UniqueIDLiberal[pair])
-                nMatchesLiberal +=1
-                
+        AllPairs = np.hstack((SameGroupIdA, SameGroupIdB))
+        AllGoupsIdxs = np.unique(AllPairs)
+        UniqueIDLiberal[AllGoupsIdxs] = np.min(UniqueIDLiberal[AllGoupsIdxs])
+        nMatchesLiberal +=1
+            
     print(f'Number of Liberal Matches: {nMatchesLiberal}')
     print(f'Number of Intermediate Matches: {nMatches}')
     print(f'Number of Conservative Matches: {nMatchesConservative}')

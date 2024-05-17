@@ -5,11 +5,12 @@ with open('README.md', 'r') as f:
 
 setup(
     name="UnitMatchPy",
-    version="1.2",
+    version="1.5b",
     description="Description of the package",
     author="Enny van Beest, Celian Bimbard and Sam Dodgson",
     author_email="e.beest@ucl.ac.uk",
     packages=find_packages(),  
+    include_package_data=True,
     python_requires=">=3.7",
     install_requires=[
         "numpy",
