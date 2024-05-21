@@ -234,11 +234,12 @@ for midx = 1:length(MiceOpt)
                 end
                 load(fullfile(UMparam.SaveDir,'UnitMatch.mat'),'UMparam','UniqueIDConversion','WaveformInfo')
                 %% Visualization
-                % PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
+                PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
 
                 % Evaluate (within unit ID cross-validation)
                 EvaluatingUnitMatch(UMparam.SaveDir);
     
+                
             end
            
             %%
