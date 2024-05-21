@@ -45,11 +45,9 @@ def run_GUI():
     np.set_printoptions(suppress = True)
     IsMatch = []
     NotMatch = []
-
     root = Tk()
-    #C:\Users\Experiment\Documents\temp\UnitMatch\UMPy\UMPy\TkinterTheme\awthemes-10.4.0\awdark.tcl
     # downloaded theme from https://sourceforge.net/projects/tcl-awthemes/
-    theme_path = os.path.join(os.path.dirname(os.path.abspath(__file__)) , r'TkinterTheme')
+    theme_path = os.path.join(os.path.dirname(os.path.abspath(__file__)) , r'TkinterTheme\awthemes-10.4.0')
     root.tk.call('lappend', 'auto_path', theme_path)
     root.tk.call('package', 'require', 'awdark')
     s = ttk.Style(root)
