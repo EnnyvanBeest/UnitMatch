@@ -75,13 +75,9 @@ addpath(genpath(fullfile(GithubDir,'UnitMatch'))) % Make sure to have this one f
 
 try
     % Only need to do this once:
-    % Follow instructions on installing pykilosort in anaconda environment,
-    % eg. https://github.com/int-brain-lab/pykilosort
+    % Follow instructions on installing kilosort in anaconda environment,
+    % eg. https://github.com/MouseLand/Kilosort
     % Additionally run (from within this environment):
-    % pip install matlab
-    % pip install pyqt5-tools
-    % If it doesn't work, please try the forked version on my github repo: 
-    % https://github.com/EnnyvanBeest/pykilosort/tree/UnitMatchPipeline
     % Python version to run python code in:
     pyversion(PythonEXE) %Explanation on how to do this is provided in the README
 
