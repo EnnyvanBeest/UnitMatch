@@ -101,3 +101,10 @@ if histoflag && ~histodone
     saveas(gcf,fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment.fig']))
     save(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment.mat']),'Depth2Area')
 end
+
+% Add information to clusinfo
+if exist('clusinfo','var') & ~isempty(Depth2Area)
+    [mindist,DistIdx] = nanmin(abs(clusinfo.depth - Depth2Area.Depth'),[],2);
+    clusinfo.Area = Depth2Area.Area(DistIdx);
+    clusinfo.Color = cell2mat(arrayfun(@(X) hex2rgb(Depth2Area.Color{X}),DistIdx,'Uni',0));
+end
