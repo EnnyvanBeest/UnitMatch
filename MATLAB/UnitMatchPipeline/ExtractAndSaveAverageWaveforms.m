@@ -130,7 +130,7 @@ for uid = 1:nclus
             if UseMemMap
                 if thisSpikeIdx > baselinewidth && (thisSpikeIdx + waveformwidth) < size(memMapData,2) % check that it's not out of bounds
                     tmp = smoothdata(double(memMapData(1:param.nSavedChans,thisSpikeIdx-baselinewidth:thisSpikeIdx+waveformwidth)),2,'gaussian',5);
-                    tmp = (tmp - mean(tmp(:,1:20),2))';
+                    tmp = (tmp - mean(tmp(:,1:baselinewidth),2))';
                     tmp(:,end+1:nChannels) = nan(size(tmp,1),nChannels-size(tmp,2));
                     % Subtract first 10 samples to level spikes
                     spikeMap(:,:,iSpike) = tmp(1:spikeWidth,1:nChannels);
@@ -144,7 +144,7 @@ for uid = 1:nclus
                     frewind(fid);
                     data = reshape(data0, param.nSavedChans, []);
                     tmp = smoothdata(double(data(1:nChannels,:)),2,'gaussian',5);
-                    tmp = (tmp - mean(tmp(:,1:20),2))';
+                    tmp = (tmp - mean(tmp(:,1:baselinewidth),2))';
                     tmp(:,end+1:nChannels) = nan(size(tmp,1),nChannels-size(tmp,2));
                     spikeMap(:,:,iSpike) = tmp(1:spikeWidth,1:nChannels);
                 end
