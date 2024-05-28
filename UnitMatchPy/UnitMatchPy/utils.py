@@ -362,12 +362,14 @@ def paths_fromKS(KSdirs):
 
     #load in the number of channels
     tmp = os.getcwd()
+    #load in a waveform from each session to get the number of channels!
     nChannels = []
     for i in range(nSessions):
-        pathtmp = os.path.join(KSdirs[0], 'params.py')#
-        os.chdir(KSdirs[0])
-        from params import n_channels_dat
-        nChannels.append(n_channels_dat - 1) #subtract the sync channel
+        pathtmp = os.path.join(KSdirs[i], 'RawWaveforms')
+        file = os.listdir(pathtmp)
+        WaveformTmp = np.load(os.path.join(pathtmp,file[0]))
+        nChannels.append(WaveformTmp.shape[1])
+
     os.chdir(tmp)
 
     #Load ChannelPos
