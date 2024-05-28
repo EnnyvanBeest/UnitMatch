@@ -266,10 +266,10 @@ for subsesid = 1:length(KiloSortPaths)
     
     %% Load histology if available
     tmphisto = dir(fullfile(KiloSortPaths{subsesid}, 'HistoEphysAlignment.mat'));
-    clear Depth2AreaPerUnit
+    clear Depth2Area
     if ~isempty(tmphisto)
         histodat = load(fullfile(tmphisto.folder, tmphisto.name));
-        Depth2AreaPerUnit = histodat.Depth2AreaPerUnit;
+        Depth2Area = histodat.Depth2Area;
     end
 
     %% Load Spike Data
@@ -652,10 +652,10 @@ for subsesid = 1:length(KiloSortPaths)
         clusinfo.Good_ID = Good_ID;
     end
 
-    if exist('Depth2AreaPerUnit', 'var') % Add area information
-        Idx = cell2mat(arrayfun(@(X) find(Depth2AreaPerUnit.Cluster_ID-1 == X), clusinfo.cluster_id, 'Uni', 0));
-        clusinfo.Area = Depth2AreaPerUnit.Area(Idx);
-        clusinfo.Coordinates = Depth2AreaPerUnit.Coordinates(Idx);
+    if exist('Depth2Area', 'var') % Add area information
+        Idx = cell2mat(arrayfun(@(X) find(Depth2Area.Cluster_ID-1 == X), clusinfo.cluster_id, 'Uni', 0));
+        clusinfo.Area = Depth2Area.Area(Idx);
+        clusinfo.Coordinates = Depth2Area.Coordinates(Idx);
         if length(clusinfo.Coordinates) ~= length(clusinfo.cluster_id)
             clusinfo.Coordinates = []; % Doesn't work out
             clusinfo.Area = [];
@@ -706,7 +706,7 @@ if isstruct(RawDataPaths)
     end
 end
 
-CleanUpCheckFlag = 1; % Put to 1 is own responsibility! Make sure not to delete stuff from the server directly!
+CleanUpCheckFlag = nan; % Put to 1 is own responsibility! Make sure not to delete stuff from the server directly!
 if Params.DecompressLocal && Params.CleanUpTemporary
     try
         if isnan(CleanUpCheckFlag) && any(cellfun(@(X) exist(fullfile(Params.tmpdatafolder, strrep(X.name, 'cbin', 'bin'))),RawDataPaths(find(~cellfun(@isempty,RawDataPaths)))))
@@ -719,7 +719,7 @@ if Params.DecompressLocal && Params.CleanUpTemporary
             else
                 CleanUpCheckFlag = 0;
             end
-        else
+        elseif isnan(CleanUpCheckFlag)
             CleanUpCheckFlag = 0;
         end
     catch
@@ -731,8 +731,11 @@ if Params.DecompressLocal && Params.CleanUpTemporary
         clear ap_data
         try
             for id = 1:length(RawDataPaths)
-                delete(fullfile(Params.tmpdatafolder, strrep(RawDataPaths(id).name, 'cbin', 'bin')))
-                delete(fullfile(Params.tmpdatafolder, strrep(RawDataPaths(id).name, 'cbin', 'meta')))
+                delete(fullfile(Params.tmpdatafolder, strrep(RawDataPaths{id}.name, 'cbin', 'bin')))
+                delete(fullfile(Params.tmpdatafolder, strrep(RawDataPaths{id}.name, 'cbin', 'meta')))
+                delete(fullfile(Params.tmpdatafolder, strrep(RawDataPaths{id}.name, '.ap.cbin', '_kilosortChanMap.mat')))
+                delete(fullfile(Params.tmpdatafolder, strrep(RawDataPaths{id}.name, '.cbin', '_sync.dat')))
+                delete(fullfile(Params.tmpdatafolder, RawDataPaths{id}.name))
             end
         catch ME
             keyboard

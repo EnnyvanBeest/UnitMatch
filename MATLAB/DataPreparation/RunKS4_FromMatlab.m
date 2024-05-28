@@ -257,6 +257,9 @@ for midx = 1:length(MiceOpt)
 
                     if ~isempty(dir(fullfile(myKsDir,ProbeName,Sesinfo,'spike*')))
                         disp([fullfile(myKsDir,ProbeName,Sesinfo) ' already done, skip...'])
+                        % Also extract KS data + do Bombcell, so that .bin file can be removed again afterwards
+                        % PipelineParams = ExtractKilosortData({fullfile(myKsDir,ProbeName,Sesinfo)},PipelineParams);
+
                         continue
                     end
                     metafile = dir(fullfile(tmpfile(sesid).folder,'*ap.meta'));
@@ -344,11 +347,15 @@ for midx = 1:length(MiceOpt)
                         fprintf(fid,'%s\r\n',C{1,1}{k,1});
                     end
                     fclose(fid);
+                    
+                    
+                    %% Also extract KS data + do Bombcell, so that .bin file can be removed again afterwards
+                    PipelineParams.RawDataPaths = {fullfile(tmpfile(sesid).folder,strrep(tmpfile(sesid).name,'bin','cbin'))};
+                    PipelineParams = ExtractKilosortData({fullfile(myKsDir,ProbeName,Sesinfo)},PipelineParams);
 
                 end
+
             end
-
-
         end
     end
 end

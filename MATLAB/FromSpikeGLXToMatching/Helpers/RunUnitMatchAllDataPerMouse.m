@@ -225,20 +225,21 @@ for midx = 1:length(MiceOpt)
                     disp(['Couldn''t do Quality metrics for ' MiceOpt{midx}])
                 end
             
-            else
-                % Get clusinfo
-                clusinfo = getClusinfo(UMparam.KSDir);
-                if ~any(clusinfo.Good_ID) || sum(clusinfo.Good_ID)<UMparam.minGoodUnits
-                    disp('No good units, continue')
-                    continue
-                end
-                load(fullfile(UMparam.SaveDir,'UnitMatch.mat'),'UMparam','UniqueIDConversion','WaveformInfo')
-                %% Visualization
-                % PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
-
-                % Evaluate (within unit ID cross-validation)
-                EvaluatingUnitMatch(UMparam.SaveDir);
-    
+            % else
+            %     % Get clusinfo
+            %     clusinfo = getClusinfo(UMparam.KSDir);
+            %     if ~any(clusinfo.Good_ID) || sum(clusinfo.Good_ID)<UMparam.minGoodUnits
+            %         disp('No good units, continue')
+            %         continue
+            %     end
+            %     load(fullfile(UMparam.SaveDir,'UnitMatch.mat'),'UMparam','UniqueIDConversion','WaveformInfo')
+            %     %% Visualization
+            %     PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
+            % 
+            %     % Evaluate (within unit ID cross-validation)
+            %     EvaluatingUnitMatch(UMparam.SaveDir);
+            % 
+                
             end
            
             %%

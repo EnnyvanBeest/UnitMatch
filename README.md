@@ -37,6 +37,8 @@ We included a DEMO_UNITMATCH.m script, which hopefully clarifies how to use Unit
 Also using spikeGLX and Neuropixels, and spikesorting your data with (some form of) Kilosort? You are lucky!
 We included two example pipelines (see the folder 'ExampleAnalysisPipelines'), to show how we go from raw data (SpikeGLX + Neuropixels) to Kilosorted data ((Py)Kilosort) to curated single units (Bombcell), from where we can smoothly run UnitMatch.
 
+You can also find some example data [here](https://doi.org/10.6084/m9.figshare.24305758.v1).
+
 ### Output
 UnitMatch has two main outputs:
 1. A matching table. This contains for every included pair of units each of the similarity scores, the probability of being a match, and some extra information (e.g. functional scores, if using our functional score validation analysis).
