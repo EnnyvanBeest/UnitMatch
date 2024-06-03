@@ -107,4 +107,5 @@ if exist('clusinfo','var') & ~isempty(Depth2Area)
     [mindist,DistIdx] = nanmin(abs(clusinfo.depth - Depth2Area.Depth'),[],2);
     clusinfo.Area = Depth2Area.Area(DistIdx);
     clusinfo.Color = cell2mat(arrayfun(@(X) hex2rgb(Depth2Area.Color{X}),DistIdx,'Uni',0));
+    clusinfo.Coordinates = cell2mat(Depth2Area.Coordinates(DistIdx));
 end
