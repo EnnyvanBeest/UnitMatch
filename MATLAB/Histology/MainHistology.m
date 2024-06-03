@@ -10,28 +10,26 @@ structure_tree_location = 'structure_tree_safe_2017.csv';
 % plane used to view when points were clicked ('coronal' -- most common, 'sagittal', 'transverse')
 plane = 'coronal';
 
-% probe insertion direction 'down' (i.e. from the dorsal surface, downward -- most common!) 
+% probe insertion direction 'down' (i.e. from the dorsal surface, downward -- most common!)
 % or 'up' (from a ventral surface, upward)
 probe_insertion_direction = 'down';
 
 % show a table of regions that the probe goes through, in the console
 show_region_table = true;
-      
+
 % black brain?
 black_brain = false;
-
-SaveFigs = SaveDir;
+AllenCCFPath = fullfile(GithubDir,'allenCCF');
 %% Automated
 % Load all data
 % Find available datasets (always using dates as folders)
 clear DateOpt
 DateOpt = arrayfun(@(X) dir(fullfile(DataDir{DataDir2Use(X)},MiceOpt{X},'*-*')),1:length(MiceOpt),'UniformOutput',0);
-
 DateOpt = cellfun(@(X) X([X.isdir]),DateOpt,'UniformOutput',0);
 DateOpt = cellfun(@(X) {X.name},DateOpt,'UniformOutput',0);
 NewHistologyNeededOri = NewHistologyNeeded;
 
- % load the reference brain annotations
+% load the reference brain annotations
 if ~exist('av','var') || ~exist('st','var')
     disp('loading reference atlas...')
     av = readNPY(annotation_volume_location);
@@ -47,14 +45,15 @@ elseif strcmp(plane,'transverse')
     av_plot = permute(av,[2 3 1]);
 end
 
-
+nInsertionsIncluded = 0;
+nMiceIncluded = false(length(MiceOpt),1);
 fwireframe = [];
 % create a new figure with wireframe
 fwireframe = plotBrainGrid([], [], fwireframe, black_brain);
 hold on;
 fwireframe.InvertHardcopy = 'off';
 
-ProbeColors = .75*[1.3 1.3 1.3; 1 .75 0;  .3 1 1; .4 .6 .2; 1 .35 .65; .7 .7 .9; .65 .4 .25; .7 .95 .3; .7 0 0; .6 0 .7; 1 .6 0]; 
+ProbeColors = .75*[1.3 1.3 1.3; 1 .75 0;  .3 1 1; .4 .6 .2; 1 .35 .65; .7 .7 .9; .65 .4 .25; .7 .95 .3; .7 0 0; .6 0 .7; 1 .6 0];
 if length(ProbeColors)<length(MiceOpt)
     ProbeColors = distinguishable_colors(length(MiceOpt));
 end
@@ -70,236 +69,221 @@ for midx = 1:length(MiceOpt)
     else
         multidate=0;
     end
-%     if strcmp(RecordingType{midx},'Chronic') %& ~multidate  % These are my chronic mice, one dataset per mouse
-%         %% Loading data from kilosort/phy easily
-%         if ~MatchUnitsAcrossDays % Don't use pykilosort
-%             myKsDir = fullfile(LocalDir,MiceOpt{midx},'Chronic');
-%         else
-%             myKsDir = fullfile(LocalDir,MiceOpt{midx});
-%         end
-%         subksdirs = dir(fullfile(myKsDir,'*','Probe*')); %This changed because now I suddenly had 2 probes per recording
-%         if length(subksdirs)<1
-%             clear subksdirs
-%             subksdirs.folder = myKsDir; %Should be a struct array
-%             subksdirs.name = 'Probe0';
-%         end
-%         ProbeOpt = unique({subksdirs(:).name});
-%         for probeid = 1:length(ProbeOpt)
-%             thisprobe = ProbeOpt{probeid}
-%             myKsDir = (fullfile(subksdirs(1).folder,ProbeOpt{probeid}))
-%             if ~isdir(myKsDir)
-%                 continue
-%             end
-%             
-%             %Saving directory
-%             if (~NewHistologyNeeded && exist(fullfile(SaveDir,MiceOpt{midx},thisprobe,'HistoEphysAlignment.mat'))) && (~RedoAfterClustering || exist(fullfile(SaveDir,MiceOpt{midx},thisprobe,'CuratedResults.mat')))
-%                 disp([MiceOpt{midx} ' already aligned... '])
-%                 if RedoUserInput
-%                     tmpfig = open(fullfile(SaveDir,MiceOpt{midx},thisprobe,'HistoEphysAlignment.fig'));
-%                     answer = questdlg(['Would you like to redo or keep this alignment? '  MiceOpt{midx} ' Probe' thisprobe], ...
-%                         'Redo Alignment', ...
-%                         'Redo','Keep','Keep');
-%                     close(tmpfig)
-% 
-%                     if strcmp(answer,'Redo')
-%                         NewHistologyNeeded=1;
-%                     else
-%                         disp('Skip')
-%                         DrawProbeInBrain
-%                         continue
-%                     end
-%                     
-%                 else
-%                     disp('Skip')
-%                     DrawProbeInBrain
-%                     continue
-% 
-%                 end
-%             elseif RedoAfterClustering || NewHistologyNeeded
-%                 myClusFile = dir(fullfile(myKsDir,'cluster_info.tsv'));
-%                 if isempty(myClusFile)
-%                     disp([MiceOpt{midx} ' is not yet curated with phy!!'])
-%                 end
-%                 NewHistologyNeeded = 1; %Automatically to 1 after RedoAfterClustering
-%             end
-%             
-%             %% Get cluster information
-%             myKsDir = fullfile(LocalDir,MiceOpt{midx},'*',ProbeOpt{probeid});
-%             clear params
-%             params.loadPCs=true;
-%             thisdate = [];
-%             PrepareClusInfo
-%             
-%             %% Get LFP?
-%             myLFDir = fullfile(DataDir{DataDir2Use(midx)},MiceOpt{midx},'*','ephys');
-%             lfpD = dir(fullfile(myLFDir,'*','*','*.lf.*bin')); % ap file from spikeGLX specifically
-%             if isempty(lfpD)
-%                 disp('No LFP data found, maybe it lives in .ap file?')
-%                 lfpD = dir(fullfile(myLFDir,'*','*','*.ap.*bin')); % ap file from spikeGLX specifically
-%             end
-%             if isempty(lfpD)
-%                 disp('No, really no data found..')
-%             elseif length(lfpD)>length(subksdirs)
-%                 disp('Just take data from the last recording')
-%                 lfpD = lfpD(end);
-%             elseif length(lfpD)<length(subksdirs)
-%                 disp('Should be a different amount of probes?')
-%                 keyboard
-%             else
-%                 lfpD = lfpD(probeid);
-%             end
-%             
-%             %% Get Histology output
-%             GetHistologyOutput      %I created an extra function to have one line of code in the different scripts
-%             if ~histoflag
-%                 disp([MiceOpt{midx} ' ' thisprobe 'No histology data, skip...'])
-%                 continue
-%             end
-% 
-%             %% Plot in atlas space
-%            DrawProbeInBrain
-% 
-% 
-%         end
-%     else
-        % For every date a different dataset
-        Dates4Mouse = DateOpt{midx};
-        for didx = 1:length(Dates4Mouse)
-            % Within folders, look for 'RF mapping sessions'
-            thisdate = Dates4Mouse{didx};
-           
-            %% Loading data from kilosort/phy easily
-            myKsDir = fullfile(KilosortDir,MiceOpt{midx},thisdate);
-            subksdirs = dir(fullfile(myKsDir,'Probe*')); %This changed because now I suddenly had 2 probes per recording
-            if length(subksdirs)<1
-                clear subksdirs
-                subksdirs.folder = myKsDir; %Should be a struct array
-                subksdirs.name = 'Probe0';
-            end
-            for probeid = 1:length(subksdirs)
-                myKsDir = fullfile(subksdirs(probeid).folder,subksdirs(probeid).name)
-                if ~isdir(myKsDir)
-                    continue
-                end
-                
-                %Saving directory
-                thisprobe = subksdirs(probeid).name
-                if (~NewHistologyNeeded && exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,'HistoEphysAlignment.mat'))) && (~RedoAfterClustering || exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,'CuratedResults.mat')))
-                    if RedoUserInput
-                        tmpfig = open(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,'HistoEphysAlignment.fig'));
-                        answer = questdlg(['Would you like to redo or keep this alignment? '  MiceOpt{midx} ' ' thisdate ' Probe' thisprobe], ...
-                            'Redo Alignment', ...
-                            'Redo','Keep','Keep');
-                        close(tmpfig)
-                        if strcmp(answer,'Redo')
-                            NewHistologyNeeded=1;
-                        else
-                            disp('Skip')
-                            DrawProbeInBrain
-                            continue
-                        end
-                    else
-                      
 
+    % For every date a different dataset
+    Dates4Mouse = DateOpt{midx};
+    for didx = 1:length(Dates4Mouse)
+        
+
+        % Within folders, look for 'RF mapping sessions'
+        thisdate = Dates4Mouse{didx};
+
+        tmpephysdir = dir(fullfile(DataDir{DataDir2Use(midx)},MiceOpt{midx},thisdate,'ephys',['*' MiceOpt{midx} '*']));
+        if exist('IgnoreTheseFiles','var')
+            for id = 1:length(IgnoreTheseFiles)
+                % Check if there's an ephys folder, if so run pyks2
+                tmpephysdir(find(cell2mat(cellfun(@(X) any(strfind(X,IgnoreTheseFiles{id})),{tmpephysdir(:).name},'UniformOutput',0))))=[];
+            end
+        end
+        if isempty(tmpephysdir)
+            continue
+        end
+
+        %% Loading data from kilosort/phy easily
+        myKsDir = fullfile(KilosortDir,MiceOpt{midx},thisdate);
+        subksdirs = dir(fullfile(myKsDir,'Probe*')); %This changed because now I suddenly had 2 probes per recording
+        if length(subksdirs)<1
+            clear subksdirs
+            subksdirs.folder = myKsDir; %Should be a struct array
+            subksdirs.name = 'Probe0';
+        end
+        for probeid = 1:length(subksdirs)
+            myKsDir = fullfile(subksdirs(probeid).folder,subksdirs(probeid).name)
+            if ~isdir(myKsDir)
+                continue
+            end
+
+
+            % Copy to other folders with same probe SN
+            tmp = dir(fullfile(subksdirs(probeid).folder,subksdirs(probeid).name,'**','PreparedData.mat'));
+            if ~isempty(tmp)
+                load(fullfile(tmp(1).folder,tmp(1).name),'SessionParams')
+                if isfield(SessionParams,'AllProbeSN')
+                    SN = SessionParams.AllProbeSN{1};
+                else
+                    rawD = SessionParams.RawDataPaths{1};
+                    [channelpostmpconv, SN, recordingduration] = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done
+                end
+            else
+                tmpfil = dir(fullfile(subksdirs(probeid).folder,subksdirs(probeid).name,'**','Params.py'));
+                spikeStruct = loadParamsPy(fullfile(tmpfil(1).folder,tmpfil(1).name));
+                rawD = spikeStruct.dat_path;
+                rawD = strsplit(rawD, ',');
+                for rid = 1:length(rawD)
+                    rawD{rid} = rawD{rid}(strfind(rawD{rid}, '"') + 1:end);
+                    rawD{rid} = rawD{rid}(1:strfind(rawD{rid}, '"') - 1);
+                    rawD{rid} = dir(rawD{rid});
+                    if isempty(rawD{rid})
+                        rawD{rid} = dir(strrep(rawD{rid}, 'bin', 'cbin'));
+                    end
+                end
+                rawD = cat(2, rawD{:});
+                [channelpostmpconv, SN, recordingduration] = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done
+            end
+
+           
+            %Saving directory
+            thisprobe = subksdirs(probeid).name
+            if (~NewHistologyNeeded && exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment.mat']))) && (~RedoAfterClustering || exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,'CuratedResults.mat')))
+                if RedoUserInput
+                    tmpfig = open(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment.fig']));
+                    answer = questdlg(['Would you like to redo or keep this alignment? '  MiceOpt{midx} ' ' thisdate ' Probe' thisprobe], ...
+                        'Redo Alignment', ...
+                        'Redo','Keep','Keep');
+                    close(tmpfig)
+                    if strcmp(answer,'Redo')
+                        NewHistologyNeeded=1;
+                    else
                         disp('Skip')
                         DrawProbeInBrain
+                        nInsertionsIncluded = nInsertionsIncluded + 1;
+                        nMiceIncluded(midx) = true;
                         continue
                     end
-                elseif RedoAfterClustering || NewHistologyNeeded
-                    myKsDir = fullfile(KilosortDir,MiceOpt{midx},thisdate,thisprobe);
-                    myClusFile = dir(fullfile(myKsDir,'cluster_info.tsv'));
-                    if isempty(myClusFile)
-                        disp([MiceOpt{midx} ' ' thisdate 'is not yet curated with phy!!'])
-                        if (~NewHistologyNeeded && exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,'HistoEphysAlignment.mat')))
-                            if RedoUserInput
-                                tmpfig = open(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,'HistoEphysAlignment.fig'));
-                                answer = questdlg(['Would you like to redo or keep this alignment? '  MiceOpt{midx} ' ' thisdate ' Probe' thisprobe], ...
-                                    'Redo Alignment', ...
-                                    'Redo','Keep','Keep');
-                                close(tmpfig)
-                                if strcmp(answer,'Redo')
-                                    NewHistologyNeeded=1;
-                                else
-                                    disp('Skip')
-                                    DrawProbeInBrain
-                                    continue
-                                end
+                else
+
+
+                    disp('Skip')
+                    try
+                        DrawProbeInBrain
+                    catch ME
+
+                    end
+                    nInsertionsIncluded = nInsertionsIncluded + 1;
+                    nMiceIncluded(midx) = true;
+
+
+                    continue
+                end
+            elseif RedoAfterClustering || NewHistologyNeeded || ~exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment.mat']))
+                myKsDir = fullfile(KilosortDir,MiceOpt{midx},thisdate,thisprobe);
+                myClusFile = dir(fullfile(myKsDir,'cluster_info.tsv'));
+                if isempty(myClusFile)
+                    disp([MiceOpt{midx} ' ' thisdate 'is not yet curated with phy!!'])
+                    if (~NewHistologyNeeded && exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment.mat'])))
+                        if RedoUserInput
+                            tmpfig = open(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment.fig']));
+                            answer = questdlg(['Would you like to redo or keep this alignment? '  MiceOpt{midx} ' ' thisdate ' Probe' thisprobe], ...
+                                'Redo Alignment', ...
+                                'Redo','Keep','Keep');
+                            close(tmpfig)
+                            if strcmp(answer,'Redo')
+                                NewHistologyNeeded=1;
                             else
                                 disp('Skip')
                                 DrawProbeInBrain
+                                nInsertionsIncluded = nInsertionsIncluded + 1;
+                                nMiceIncluded(midx) = true;
+
                                 continue
                             end
-
                         else
-                            NewHistologyNeeded = 1; %Automatically to 1 after RedoAfterClustering
+                            disp('Skip')
+                            DrawProbeInBrain
+                            nInsertionsIncluded = nInsertionsIncluded + 1;
+                            nMiceIncluded(midx) = true;
 
+                            continue
                         end
+
+                    else
+                        NewHistologyNeeded = 1; %Automatically to 1 after RedoAfterClustering
+
                     end
                 end
-                
-                
-                %% Get cluster information
-                  PipelineParams.thisdate = thisdate;
-                PipelineParams.SaveDir = fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe);
-                 try
-                     [clusinfo, sp, Params]  = LoadPreparedClusInfo(subsesopt,PipelineParams);
-                catch ME
-                    disp(ME)
-                    PipelineParams = ExtractKilosortData(subsesopt,PipelineParams);
-                     [clusinfo, sp, Params]  = LoadPreparedClusInfo(subsesopt,PipelineParams);
-                end
-                % This extracts the parameters within clusinfo and sp
-                % struct for further analysis
-                % ExtractFields({sp,clusinfo})
-                % clear params
-                % params.loadPCs=true;
-                % params.thisdate = thisdate;
-                % PrepareClusInfo
-                % 
-                %% Get LFP?
-                myLFDir = fullfile(DataDir{DataDir2Use(midx)},MiceOpt{midx},thisdate,'ephys');
-                lfpD = dir(fullfile([myLFDir '*'], '**\*.lf.*bin')); % lf file from spikeGLX specifically
-                if isempty(lfpD)
-                    disp('No LFP data found')
-                elseif length(lfpD)~=length(subksdirs)
-                    disp('Should be a different amount of probes?')
-                    keyboard
-                else
-                    lfpD = lfpD(probeid);
-                end
-                 
-                %% Get Histology output
-                GetHistologyOutput      %I created an extra function to have one line of code in the different scripts
-                if ~histoflag
-                    disp([MiceOpt{midx} ' ' thisdate ' ' thisprobe 'No histology data, skip...'])
+            end
+
+
+            %% Get cluster information
+            PipelineParams.thisdate = thisdate;
+            PipelineParams.SaveDir = fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe);
+            myKsDir = dir(fullfile(myKsDir,'**','spike_clusters.npy'));
+            myKsDir = arrayfun(@(X) X.folder,myKsDir,'UniformOutput',0);
+            try
+                [clusinfo, sp, Params]  = LoadPreparedClusInfo(myKsDir,PipelineParams);
+            catch ME
+                disp(ME)
+                PipelineParams = ExtractKilosortData(myKsDir,PipelineParams);
+                [clusinfo, sp, Params]  = LoadPreparedClusInfo(myKsDir,PipelineParams);
+            end
+            % This extracts the parameters within clusinfo and sp
+            % struct for further analysis
+            ExtractFields({sp,clusinfo})
+            Good_IDx = find(Good_ID');
+
+            %% Get LFP?
+            myLFDir = fullfile(DataDir{DataDir2Use(midx)},MiceOpt{midx},thisdate,'ephys');
+            lfpD = dir(fullfile([myLFDir '*'], '**\*.lf.*bin')); % lf file from spikeGLX specifically
+            if isempty(lfpD)
+                disp('No LFP data found')
+            elseif length(lfpD)~=length(subksdirs)
+                disp('Should be a different amount of probes?')
+                keyboard
+            else
+                lfpD = lfpD(probeid);
+            end
+
+            if strcmp(RecordingType{midx},'Chronic')
+                histfile = dir(fullfile(SaveDir,MiceOpt{midx},'**',[num2str(SN) '_HistoEphysAlignment.mat']));
+                if ~isempty(histfile)
+                    if ~exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
+                        mkdir(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
+                    end
+                    copyfile(fullfile(histfile(1).folder,histfile(1).name),fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,histfile(1).name))
+
                     continue
                 end
-                
-                NewHistologyNeeded = NewHistologyNeededOri;
-
-                %% Plot in atlas space
-              
-                try
-                DrawProbeInBrain
-                catch ME
-                    disp(ME)
-                end
             end
-            if strcmp(RecordingType{midx},'Chronic')
-                break
+
+            %% Get Histology output
+            if numel(myKsDir) == 1
+                myKsDir = myKsDir{1};
+            else
+                keyboard
+            end
+            GetHistologyOutput      %I created an extra function to have one line of code in the different scripts
+            NewHistologyNeeded = NewHistologyNeededOri;
+
+            if ~histoflag
+                disp([MiceOpt{midx} ' ' thisdate ' ' thisprobe 'No histology data, skip...'])
+                continue
+            end
+
+
+            %% Plot in atlas space
+            try
+                DrawProbeInBrain
+                nInsertionsIncluded = nInsertionsIncluded + 1;
+                nMiceIncluded(midx) = true;
+
+            catch ME
+                disp(ME)
             end
         end
-%     end
+      
+    end
+    %     end
 end
 % Save image
 figure(fwireframe)
-saveas(gcf,fullfile(SaveFigs,['3DProbes2.fig']))
-saveas(gcf,fullfile(SaveFigs,['3DProbes2.svg']))
+saveas(gcf,fullfile(SaveDir,['3DProbes2.fig']))
+saveas(gcf,fullfile(SaveDir,['3DProbes2.svg']))
 
-% set(fwireframe,'Units','normalized','Position',[0 0 1 1])
+set(fwireframe,'Units','normalized','Position',[0 0 1 1])
 
-% spinningGIF(fullfile(SaveDir,'ProbeInsertionsAcrossMice.gif'))
+disp([num2str(nInsertionsIncluded) ' insertions included in ' num2str(sum(nMiceIncluded)) ' mice'])
 
+spinningGIF(fullfile(SaveDir,'ProbeInsertionsAcrossMice.gif'))
 
 
 

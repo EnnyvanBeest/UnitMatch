@@ -135,10 +135,19 @@ for subsesid = 1:length(KiloSortPaths)
                 %                 rawD = fullfile(rawD.folder,rawD.name);
             end        
         else
+            try
             if isstruct(Params.RawDataPaths)
                 rawD = Params.RawDataPaths(subsesid);
+            elseif iscell((Params.RawDataPaths))
+                rawD = Params.RawDataPaths{subsesid};
+                if ~isstruct(rawD)
+                    rawD = dir(rawD);
+                end
             else
                 rawD = dir(fullfile(Params.RawDataPaths{subsesid}));
+            end
+            catch ME
+                keyboard
             end
         end
         if isempty(rawD)
@@ -309,9 +318,9 @@ for subsesid = 1:length(KiloSortPaths)
     % clear paramBC
     if Params.RunQualityMetrics
         if any(strfind(KiloSortPaths{subsesid},'KS4')) % Used KS4?
-            paramBC = bc_qualityParamValuesForUnitMatch(dir(strrep(fullfile(rawD(1).folder, rawD(1).name), 'cbin', 'meta')), fullfile(Params.tmpdatafolder, strrep(rawD(1).name, 'cbin', 'bin')));
+            paramBC = bc_qualityParamValuesForUnitMatch(dir(strrep(fullfile(rawD(1).folder, rawD(1).name), 'cbin', 'meta')), fullfile(Params.tmpdatafolder, strrep(rawD(1).name, 'cbin', 'bin')),KiloSortPaths{subsesid},[],4);
         else
-            paramBC = bc_qualityParamValuesForUnitMatch(dir(strrep(fullfile(rawD(1).folder, rawD(1).name), 'cbin', 'meta')), fullfile(Params.tmpdatafolder, strrep(rawD(1).name, 'cbin', 'bin')),2);
+            paramBC = bc_qualityParamValuesForUnitMatch(dir(strrep(fullfile(rawD(1).folder, rawD(1).name), 'cbin', 'meta')), fullfile(Params.tmpdatafolder, strrep(rawD(1).name, 'cbin', 'bin')),KiloSortPaths{subsesid},[],2);
         end
     else
         paramBC.minNumSpikes = 300;
@@ -706,7 +715,7 @@ if isstruct(RawDataPaths)
     end
 end
 
-CleanUpCheckFlag = nan; % Put to 1 is own responsibility! Make sure not to delete stuff from the server directly!
+CleanUpCheckFlag = 1; % Put to 1 is own responsibility! Make sure not to delete stuff from the server directly!
 if Params.DecompressLocal && Params.CleanUpTemporary
     try
         if isnan(CleanUpCheckFlag) && any(cellfun(@(X) exist(fullfile(Params.tmpdatafolder, strrep(X.name, 'cbin', 'bin'))),RawDataPaths(find(~cellfun(@isempty,RawDataPaths)))))

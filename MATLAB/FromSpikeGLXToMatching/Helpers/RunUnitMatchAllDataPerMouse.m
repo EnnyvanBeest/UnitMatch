@@ -6,7 +6,6 @@ clear DateOpt
 DateOpt = arrayfun(@(X) dir(fullfile(DataDir{DataDir2Use(X)},MiceOpt{X},'*-*')),1:length(MiceOpt),'UniformOutput',0); % DataDir2Use = server
 DateOpt = cellfun(@(X) X([X.isdir]),DateOpt,'UniformOutput',0);
 DateOpt = cellfun(@(X) {X.name},DateOpt,'UniformOutput',0);
-FromDate = datetime("2024-02-26 09:00:00");
 
 LogError = {}; % Keep track of which runs didn't work
 if ~exist('PipelineParamsOri','var')
@@ -90,7 +89,9 @@ for midx = 1:length(MiceOpt)
     end
 
     %% Prepare cluster information
+    if exist('FromDate','var')
     PipelineParams.FromDate = FromDate;
+    end
     PipelineParams = ExtractKilosortData(AllKiloSortPaths,PipelineParams);
      
     PipelineParams.RecType = RecordingType{midx};%
