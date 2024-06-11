@@ -90,7 +90,7 @@ for midx = 1:length(MiceOpt)
 
     %% Prepare cluster information
     if exist('FromDate','var')
-    PipelineParams.FromDate = FromDate;
+        PipelineParams.FromDate = FromDate;
     end
     PipelineParams = ExtractKilosortData(AllKiloSortPaths,PipelineParams);
      

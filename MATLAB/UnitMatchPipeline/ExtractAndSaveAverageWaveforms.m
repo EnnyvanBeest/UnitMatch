@@ -8,9 +8,9 @@ sampleamount = param.sampleamount; %500; % Nr. waveforms to include
 spikeWidth = param.spikeWidth; % in sample space (time) - number of samples
 
 if param.Kilosortversion == 4 && spikeWidth == 61
-    baselinewidth = 20;
+    baselinewidth = 10;
 else
-    baselinewidth = floor(spikeWidth/2);
+    baselinewidth = 20;
 end
 waveformwidth = spikeWidth - baselinewidth;
 
