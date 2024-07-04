@@ -125,6 +125,9 @@ for subsesid = 1:length(KiloSortPaths)
             if isempty(rawD)
                 rawD = dir(strrep(tmpdr, 'bin', 'cbin'));
             end
+            if isempty(rawD)
+                rawD = dir(strrep(tmpdr, 'cbin', 'bin'));
+            end
             % Try another way
             if isempty(rawD)
                 FolderParts = strsplit(KiloSortPaths{subsesid},{'pyKS','PyKS','kilosort2'});
@@ -501,16 +504,18 @@ for subsesid = 1:length(KiloSortPaths)
                     statusCopy = copyfile(strrep(fullfile(rawD(id).folder, rawD(id).name), 'cbin', 'meta'), strrep(fullfile(Params.tmpdatafolder, rawD(id).name), 'cbin', 'meta')); %QQ doesn't work on linux
                 end
                 Params.DecompressionFlag = 1;
+                [~,~,currext] = fileparts(rawD(id).name);
+
                 if ~exist('statusCopy','var') ||statusCopy == 0 %could not copy meta file - use original meta file
-                    [Imecmeta] = ReadMeta2(fullfile(rawD(id).folder, strrep(rawD(id).name, 'cbin', 'meta')), 'ap');
+                    [Imecmeta] = ReadMeta2(fullfile(rawD(id).folder, strrep(rawD(id).name, currext, '.meta')), 'ap');
                 else
-                    [Imecmeta] = ReadMeta2(fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'meta')), 'ap');
+                    [Imecmeta] = ReadMeta2(fullfile(Params.tmpdatafolder, strrep(rawD(id).name, currext, '.meta')), 'ap');
                 end
                 nchan = strsplit(Imecmeta.acqApLfSy, ',');
                 nChansInFile = str2num(nchan{1}) + str2num(nchan{3});
 
-                syncDatImec = extractSyncChannel(fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'bin')), nChansInFile, nChansInFile); %Last channel is sync (function of spikes toolbox)
-                statusCopy = copyfile(fullfile(Params.tmpdatafolder, strrep(rawD(id).name, '.cbin', '_sync.dat')), fullfile(rawD(id).folder, strrep(rawD(id).name, '.cbin', '_sync.dat'))); %QQ doesn't work on linux
+                syncDatImec = extractSyncChannel(fullfile(Params.tmpdatafolder, strrep(rawD(id).name, currext, '.bin')), nChansInFile, nChansInFile); %Last channel is sync (function of spikes toolbox)
+                statusCopy = copyfile(fullfile(Params.tmpdatafolder, strrep(rawD(id).name, currext, '_sync.dat')), fullfile(rawD(id).folder, strrep(rawD(id).name, '.cbin', '_sync.dat'))); %QQ doesn't work on linux
 
             end
             if ~qMetricsExist || Params.RedoQM
