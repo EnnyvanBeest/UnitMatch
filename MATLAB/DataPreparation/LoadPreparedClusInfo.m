@@ -17,8 +17,15 @@ for subsesid=1:length(KiloSortPaths)
     addthis=max(clusinfo{subsesid}.RecSesID);
 end
 
+
+
 % Add all cluster information in one 'cluster' struct - can be used for further analysis
 clusinfo = [clusinfo{:}];
+if isempty(clusinfo)
+    clusinfo = [];
+    sp = [];
+    return
+end
 clusinfoNew = struct;
 fields = fieldnames(clusinfo(1));
 for fieldid=1:length(fields)
@@ -77,6 +84,8 @@ recsesidxIncluded = false(1,length(KiloSortPaths));
 nclus = length(clusinfo.cluster_id);
 RawPathsUsed = {};
 sp.UniqClu = sp.clu;
+clusinfo.UniqueID = (1:length(clusinfo.cluster_id))';
+clusinfo.IMROID = repmat(0,length(clusinfo.cluster_id),1);
 if Params.UnitMatch
     disp('Assigning correct unique ID')
     PartsPath = strsplit(Params.SaveDir,'\');
@@ -99,21 +108,20 @@ if Params.UnitMatch
         UniqueIDConversion = UMOutput.UniqueIDConversion;
         
         TheseClus = find(ismember(clusinfo.RecSesID,recsesidx2));
-        clusinfo.UniqueID(TheseClus) = UniqueIDConversion.UniqueID(ismember(UniqueIDConversion.recsesAll,recsesidx))'; %Assign correct UniqueID
-        clusinfo.IMROID(TheseClus) = repmat(IMROId,sum(ismember(clusinfo.RecSesID,recsesidx2)),1);
-
+        if ~isempty(TheseClus)
+            clusinfo.UniqueID(TheseClus) = UniqueIDConversion.UniqueID(ismember(UniqueIDConversion.recsesAll,recsesidx))'; %Assign correct UniqueID
+            clusinfo.IMROID(TheseClus) = repmat(IMROId,sum(ismember(clusinfo.RecSesID,recsesidx2)),1);
+        end
         for clusid=1:length(TheseClus)
             sp.UniqClu(sp.clu==clusinfo.cluster_id(TheseClus(clusid)) & sp.RecSes==clusinfo.RecSesID(TheseClus(clusid))) = clusinfo.UniqueID(clusid);
         end
         recsesidxIncluded(recsesidx2) = 1;
         RawPathsUsed = {RawPathsUsed{:} UMparam.RawDataPaths{recsesidx}};
     end
-else
-    clusinfo.UniqueID = (1:length(clusinfo.cluster_id))';
 end
 Params.RawDataPaths = RawPathsUsed;
 Params.KSDir = KiloSortPaths;
-%% add nans for missing UID values
+%% add nans for missing UID values to not confuse them with other UIDs
 if any(recsesidxIncluded==0)
     clusinfo.UniqueID(ismember(clusinfo.RecSesID,find(recsesidxIncluded==0))) = nan;
     clusinfo.IMROID(ismember(clusinfo.RecSesID,find(recsesidxIncluded==0))) = nan;
