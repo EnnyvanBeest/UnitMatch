@@ -1,12 +1,13 @@
 % 
-% SaveDir = '\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\FullAnimal_KSChanMap'; %H:\Ongoing\'%'H:\SfN_2022'; %%'E:\Data\ResultsOngoing' %
-SaveDir = '\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\2ConsecutiveDays_KSChanMap\Stitched\'
+SaveDir = '\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\FullAnimal_KSChanMap'; %H:\Ongoing\'%'H:\SfN_2022'; %%'E:\Data\ResultsOngoing' %
+% SaveDir = '\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\2ConsecutiveDays_KSChanMap\Stitched\'
 % SaveDir = 'H:\UnitMatch\'
 FromDate = datetime("2024-03-08 09:00:00");
 AssignUnitDate = datetime("2024-03-14 10:00:00");
 
 UMFiles = cell(1,0); % Define your UMfolders here or use below:
 groupvec = nan(1,0);
+SpGLXV = cell(1,0);
 if ~exist('UMFiles') || isempty(UMFiles) % When using the example pipeline this may be useful:
     MiceOpt = dir(SaveDir);
     MiceOpt = arrayfun(@(X) X.name,MiceOpt,'Uni',0);
@@ -18,6 +19,7 @@ if ~exist('UMFiles') || isempty(UMFiles) % When using the example pipeline this 
         % tmpfile = dir(fullfile(SaveDir, MiceOpt{midx}, 'UnitMatch.mat'));
 
         tmpfile = dir(fullfile(SaveDir, MiceOpt{midx},'*','*','UnitMatch', 'UnitMatch.mat'));
+
         if isempty(tmpfile)
             continue
         end
@@ -29,6 +31,12 @@ if ~exist('UMFiles') || isempty(UMFiles) % When using the example pipeline this 
                 end
                 % Check that these data are not too noisy
               
+                load(fullfile(tmpfile(id).folder,tmpfile(id).name),'UMparam')
+                for rid = 1:numel(UMparam.RawDataPaths)
+                   meta = ReadMeta2(UMparam.RawDataPaths{rid}.folder);
+                   SpGLXV = {SpGLXV{:} meta.appVersion};
+                end
+
 
                 %             FolderParts = strsplit(tmpfile(id).folder,filesep);
                 %             idx = find(ismember(FolderParts,MiceOpt{midx}));
@@ -43,10 +51,15 @@ if ~exist('UMFiles') || isempty(UMFiles) % When using the example pipeline this 
     end
     close all
 end
+
 Info  = DataSetInfo(UMFiles)
 Info.RecSes
 nanmean(cat(1,Info.nGoodUnits{:})./cat(1,Info.nTotalUnits{:}).*100)
 nanstd(cat(1,Info.nGoodUnits{:})./cat(1,Info.nTotalUnits{:}).*100)
+
+
+AUCExtract(UMFiles)
+
 
 summaryMatchingPlots(UMFiles,{'UID1Liberal','UID1','UID1Conservative'},groupvec,1)
 summaryFunctionalPlots(UMFiles, 'Corr', groupvec)
@@ -103,7 +116,7 @@ end
 
 
 %% Redo
-if 1
+if 0
     for midx = 1:length(UMFiles)
 
         load(UMFiles{midx})
