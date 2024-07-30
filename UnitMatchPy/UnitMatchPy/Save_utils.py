@@ -3,155 +3,253 @@ import pickle
 import pandas as pd
 import numpy as np
 
-def make_match_table(Scores2Include, Matches, Output, TotalScore, OutputThreshold, ClusInfo, param, UIDs = None, MatchesCurated = None):
+def make_match_table(scores_to_include, matches, output_prob, total_score, output_threshold, clus_info, param, UIDs = None, matches_curated = None):
+    """
+    Creates the match table showing information for every pair of units
+
+    Parameters
+    ----------
+    scores_to_include : dictionary
+        The dictionary containing the used scores and the values for each pair of units
+    matches : list
+        The list of all matches
+    output_prob : ndarray (n_units, n_units)
+        The array containing the UnitMatch match probability for each pair of units for cv 1/2 and 2/1
+    total_score : ndarray (n_units, n_units)
+        The total score for each pair of units being a match for each pair of units for cv 1/2 and 2/1
+    output_threshold : int
+        The probability threshold value for deciding matches
+    clus_info : dict
+        The clus_info dictionary
+    param : dict
+        The param dictionary
+    UIDs : list, optional
+        The list of unique ids for different case from assign_unique_id, by default None
+    matches_curated : list, optional
+        A list of matches manually curated using the GUI, by default None
+
+    Returns
+    -------
+    dataframe
+        A pandas dataframe as a match table for each pair of units
+    """
     # Making Match Table
-    nUnits = param['nUnits']
+    n_units = param['n_units']
 
     #Give UMID add it as well?
     # xx, yy =np.meshgrid(np.arange(nUnits), np.arange(nUnits))
     # UnitA = np.reshape(xx, (nUnits * nUnits)).astype(np.int16)
     # UnitB = np.reshape(yy, (nUnits * nUnits)).astype(np.int16)
 
-    OriginalIDs = ClusInfo['OriginalID'].squeeze()
-    xx, yy = np.meshgrid(OriginalIDs, OriginalIDs)
-    UnitALS = xx.reshape(nUnits*nUnits)
-    UnitBLS = yy.reshape(nUnits*nUnits)
+    original_ids = clus_info['original_ids'].squeeze()
+    xx, yy = np.meshgrid(original_ids, original_ids)
+    unit_a_list = xx.reshape(n_units*n_units)
+    unit_b_list = yy.reshape(n_units*n_units)
 
-    SessionIDs = ClusInfo['SessionID']
-    xx, yy = np.meshgrid(SessionIDs, SessionIDs)
-    UnitAsessionLS = xx.reshape(nUnits*nUnits) + 1 # Add onehere so it counts from one not 0
-    UnitBsessionLS = yy.reshape(nUnits*nUnits) + 1
+    sessions_ids = clus_info['sessions_ids']
+    xx, yy = np.meshgrid(sessions_ids, sessions_ids)
+    unit_a_session_list = xx.reshape(n_units*n_units) + 1 # Add one here so it counts from one not 0
+    unit_b_session_list = yy.reshape(n_units*n_units) + 1
 
-    ALLMatches = np.reshape(OutputThreshold, (nUnits*nUnits)).astype(np.int8) # Uses Matches currated .. as well
-    TotalScoreLS = np.reshape(TotalScore, (nUnits*nUnits))
-    ProbLS = np.reshape(Output, (nUnits*nUnits))
+    all_matches = np.reshape(output_threshold, (n_units*n_units)).astype(np.int8) # Uses Matches currated .. as well
+    total_score_list = np.reshape(total_score, (n_units*n_units))
+    prob_list = np.reshape(output_prob, (n_units*n_units))
 
-    #add euclidiean distance
 
-    #create the intial array wiht theimportant info
-    #see if there is a curated lsit and if soo add it
-    if MatchesCurated != None:
-        MatchesCuratedLS = np.zeros((nUnits,nUnits))
-        for match in Matches:
-            MatchesCuratedLS[match[0], match[1]] = 1
+    #create the initial array with the important info
+    #see if there is a curated list and if soo add it
+    if matches_curated is not None:
+        matches_curated_list = np.zeros((n_units,n_units))
+        for match in matches:
+            matches_curated_list[match[0], match[1]] = 1
 
-        MatchesCuratedLS = np.reshape(MatchesCurated, (nUnits * nUnits)).astype(np.int8)
+        matches_curated_list = np.reshape(matches_curated, (n_units * n_units)).astype(np.int8)
 
-        df = pd.DataFrame(np.array([UnitALS, UnitBLS, UnitAsessionLS, UnitBsessionLS, ALLMatches, MatchesCuratedLS, ProbLS, TotalScoreLS]).T, columns = ['ID1', 'ID2', 'RecSes 1', 'RecSes 2', 'Matches', 'Matches Currated', 'UM Probabilities', 'TotalScore'])
+        df = pd.DataFrame(np.array([unit_a_list, unit_b_list, unit_a_session_list, unit_b_session_list, all_matches, matches_curated_list, prob_list, total_score_list]).T, columns = ['ID1', 'ID2', 'RecSes 1', 'RecSes 2', 'Matches', 'Matches Currated', 'UM Probabilities', 'TotalScore'])
 
     else:
-        df = pd.DataFrame(np.array([UnitALS, UnitBLS, UnitAsessionLS, UnitBsessionLS, ALLMatches, ProbLS, TotalScoreLS]).T, columns = ['ID1', 'ID2', 'RecSes 1', 'RecSes 2', 'Matches', 'UM Probabilities', 'TotalScore'])
+        df = pd.DataFrame(np.array([unit_a_list, unit_b_list, unit_a_session_list, unit_b_session_list, all_matches, prob_list, total_score_list]).T, columns = ['ID1', 'ID2', 'RecSes 1', 'RecSes 2', 'Matches', 'UM Probabilities', 'TotalScore'])
 
     #add a dictionary to the match table
-    for key, value in Scores2Include.items():
-        df[key] = np.reshape(value, (nUnits *nUnits)).T
+    for key, value in scores_to_include.items():
+        df[key] = np.reshape(value, (n_units *n_units)).T
 
-    #ifyou have supplied UIDs create a data frame using them and merge it to the save table
+    #if you have supplied UIDs create a data frame using them and merge it to the save table
     if UIDs is not None:
-        UniqueIDLiberal = UIDs[0]
-        UniqueID = UIDs[1]
-        UniqueIDConservative = UIDs[2]
-        OriUniqueID = UIDs[3]
+        unique_id_liberal = UIDs[0]
+        unique_id = UIDs[1]
+        unique_id_conservative = UIDs[2]
+        original_unique_id = UIDs[3]
 
-        xx, yy = np.meshgrid(UniqueIDLiberal, UniqueIDLiberal)
-        UnitALiberaldID = xx.reshape(nUnits*nUnits)
-        UnitBLiberaldID = yy.reshape(nUnits*nUnits)
+        xx, yy = np.meshgrid(unique_id_liberal, unique_id_liberal)
+        unit_a_liberal_id = xx.reshape(n_units*n_units)
+        unit_b_liberal_id = yy.reshape(n_units*n_units)
 
-        xx, yy = np.meshgrid(OriUniqueID, OriUniqueID)
-        UnitAOriID = xx.reshape(nUnits*nUnits)
-        UnitBOriID = yy.reshape(nUnits*nUnits)
+        xx, yy = np.meshgrid(original_unique_id, original_unique_id)
+        unit_a_original_id = xx.reshape(n_units*n_units)
+        unit_b_original_id = yy.reshape(n_units*n_units)
 
-        xx, yy = np.meshgrid(UniqueIDConservative, UniqueIDConservative)
-        UnitAConID = xx.reshape(nUnits*nUnits)
-        UnitBConID = yy.reshape(nUnits*nUnits)
+        xx, yy = np.meshgrid(unique_id_conservative, unique_id_conservative)
+        unit_a_conservative_id = xx.reshape(n_units*n_units)
+        unit_b_conservative_id = yy.reshape(n_units*n_units)
 
-        xx, yy = np.meshgrid(UniqueID, UniqueID)
-        UnitAIntID = xx.reshape(nUnits*nUnits)
-        UnitBIntID = yy.reshape(nUnits*nUnits)
+        xx, yy = np.meshgrid(unique_id, unique_id)
+        unit_a_int_id = xx.reshape(n_units*n_units)
+        unit_b_int_id = yy.reshape(n_units*n_units)
 
-        UIDdf = pd.DataFrame(np.array([UnitAOriID, UnitBOriID, UnitALiberaldID, UnitBLiberaldID, UnitAIntID, UnitBIntID, UnitAConID, UnitBConID]).T, columns = ['UID1', 'UID2', 'UID Liberal 1', 'UID Liberal 2', 'UID int 1', 'UM UID int 2', 'UID Conservative 1', 'UID Conservative 2'])
-        df = df.join(UIDdf)
+        unique_id_df = pd.DataFrame(np.array([unit_a_original_id, unit_b_original_id, unit_a_liberal_id, unit_b_liberal_id, unit_a_int_id, unit_b_int_id, unit_a_conservative_id, unit_b_conservative_id]).T, columns = ['UID1', 'UID2', 'UID Liberal 1', 'UID Liberal 2', 'UID int 1', 'UM UID int 2', 'UID Conservative 1', 'UID Conservative 2'])
+        df = df.join(unique_id_df)
 
     return df
 
-def save_to_output(SaveDir, Scores2Include, Matches, Output, AvgCentroid, AvgWaveform, AvgWaveformPerTP, MaxSite,
-                   TotalScore, OutputThreshold, ClusInfo, param, UIDs = None, MatchesCurated = None, SaveMatchTable = True):
-    """ 
-    Save all of the useful infomation into a SaveDIR.
-    keyword arguments are MatchesCurated and SaveMatchTable, Supply MatchesCurrated of you have currated matches and
-    pass SaveMatchTable = False, to not save the .csv match table as this takes the most time
-    
+def save_to_output(save_dir, scores_to_include, matches, output_prob, avg_centroid, avg_waveform, avg_waveform_per_tp, max_site,
+                   total_score, output_threshold, clus_info, param, UIDs = None, matches_curated = None, save_match_table = True):
+    """
+    Saves all useful information calculated by UnitMatch to a given save_dir
+
+    Parameters
+    ----------
+    save_dir : str
+        The absolute path to the save directory
+    scores_to_include : dictionary
+        The dictionary containing the used scores and the values for each pair of units
+    matches : list
+        The list of all matches
+    output_prob : ndarray (n_units, n_units)
+        The array containing the UnitMatch match probability for each pair of units for cv 1/2 and 2/1
+    avg_centroid : _type_
+        _description_
+    avg_waveform : ndarray (n_units, spike_width, cv)
+        The weighted average waveform over channels
+    avg_waveform_per_tp : ndarray
+        The average waveform per time point
+    max_site : ndarray
+        The maximum site for each unit
+    total_score : ndarray (n_units, n_units)
+        The total score for each pair of units being a match for each pair of units for cv 1/2 and 2/1
+    output_threshold : int
+        The probability threshold value for deciding matches
+    clus_info : dict
+        The clus_info dictionary
+    param : dict
+        The param dictionary
+        _description_
+    UIDs : list, optional
+        The list of unique ids for different case from assign_unique_id, by default None
+    matches_curated : list, optional
+        A list of matches manually curated using the GUI, by default None
+    save_match_table : bool, optional
+        If True will save a match table containing the information for every pair of units in a table, by default True
     """
 
     #Choose a file where the save directory will be made
     #options for create and overwrite?
-    if os.path.isdir(SaveDir) == False:
-        os.mkdir(SaveDir)
+    if os.path.isdir(save_dir) == False:
+        os.mkdir(save_dir)
 
     #save scores
-    UMscoresPath = os.path.join(SaveDir, 'UM Scores')
-    np.savez(UMscoresPath, **Scores2Include)
+    UM_scores_path = os.path.join(save_dir, 'UM Scores')
+    np.savez(UM_scores_path, **scores_to_include)
 
 
     # #save ClusInfo
-    ClusInfoPath = os.path.join(SaveDir, 'ClusInfo.pickle')
-    with open(ClusInfoPath, 'wb') as fp:
-        pickle.dump(ClusInfo, fp)
+    clus_info_path = os.path.join(save_dir, 'ClusInfo.pickle')
+    with open(clus_info_path, 'wb') as fp:
+        pickle.dump(clus_info, fp)
 
     #Save param
-    ParamPath = os.path.join(SaveDir, 'UMparam.pickle')
-    with open(ParamPath, 'wb') as fp:
+    param_path = os.path.join(save_dir, 'UMparam.pickle')
+    with open(param_path, 'wb') as fp:
         pickle.dump(param, fp)
 
     #Save output
-    MatchProbPath = os.path.join(SaveDir, 'MatchProb')
+    match_prob_path = os.path.join(save_dir, 'MatchProb')
     #MAY WANT TO CHANGE TOSAVE PROB FOR BOTH CV AND AVG?
-    np.save(MatchProbPath, Output)
+    np.save(match_prob_path, output_prob)
 
     #Save Waveform info
-    WaveformInfo = {"AvgCentroid" : AvgCentroid, "AvgWaveform" : AvgWaveform, "AvgWaveformPerTP" : AvgWaveformPerTP, 
-                    "MaxSite" : MaxSite}
-    WavefromInfoPath = os.path.join(SaveDir, 'WaveformInfo')
-    np.savez(WavefromInfoPath, **WaveformInfo)
+    waveform_info = {"avg_centroid" : avg_centroid, "avg_waveform" : avg_waveform, "avg_waveform_per_tp" : avg_waveform_per_tp, 
+                    "max_site" : max_site}
+    waveform_info_path = os.path.join(save_dir, 'WaveformInfo')
+    np.savez(waveform_info_path, **waveform_info)
 
     #save autimatuc matches
-    MatchesPath = os.path.join(SaveDir, 'Matches')
-    np.save(MatchesPath, Matches)
+    matches_path = os.path.join(save_dir, 'Matches')
+    np.save(matches_path, matches)
 
-    if MatchesCurated != None:
-        MatchesCuratedPath = os.path.join(SaveDir, 'Matches Currated')
-        np.save(MatchesCuratedPath, MatchesCurated)
+    if matches_curated != None:
+        matches_curated_path = os.path.join(save_dir, 'Matches Currated')
+        np.save(matches_curated_path, matches_curated)
 
-    if SaveMatchTable == True:
-        df = make_match_table(Scores2Include, Matches, Output, TotalScore, OutputThreshold, ClusInfo, param, UIDs = UIDs, MatchesCurated = None)
-        MatchTablePath = os.path.join(SaveDir, 'MatchTable.csv')
-        df.to_csv(MatchTablePath, index = False)
+    if save_match_table == True:
+        df = make_match_table(scores_to_include, matches, output_prob, total_score, output_threshold, clus_info, param, UIDs = UIDs, matches_curated = None)
+        match_table_path = os.path.join(save_dir, 'MatchTable.csv')
+        df.to_csv(match_table_path, index = False)
 
-def save_to_output_seperate_CV(SaveDir, Scores2Include, Matches, Output, AvgCentroid, AvgWaveform, AvgWaveformPerTP, MaxSite,
-                   TotalScore, MatchThreshold, ClusInfo, param, UIDs = None, MatchesCurated = None, SaveMatchTable = True):
+def save_to_output_seperate_CV(save_dir, scores_to_include, matches, output_prob, avg_centroid, avg_waveform, avg_waveform_per_tp, max_site,
+                   total_score, match_threshold, clus_info, param, UIDs = None, matches_curated = None, save_match_table = True):
+    """
+    Saves all useful information calculated by UnitMatch to a given save_dir.
+    This function will split the n_unit * n_units arrays into separate arrays depending on which pair of CV is used
 
-    #Start by sperating the info into CV
-    Matches12part1 = np.argwhere(np.tril(Output) > MatchThreshold) 
-    Matches12part2 = np.argwhere(np.tril(Output).T > MatchThreshold)
-    Matches12 = np.unique(np.concatenate((Matches12part1,Matches12part2)), axis = 0)
+    Parameters
+    ----------
+    save_dir : str
+        The absolute path to the save directory
+    scores_to_include : dictionary
+        The dictionary containing the used scores and the values for each pair of units
+    matches : list
+        The list of all matches
+    output_prob : ndarray (n_units, n_units)
+        The array containing the UnitMatch match probability for each pair of units for cv 1/2 and 2/1
+    avg_centroid : _type_
+        _description_
+    avg_waveform : ndarray (n_units, spike_width, cv)
+        The weighted average waveform over channels
+    avg_waveform_per_tp : ndarray
+        The average waveform per time point
+    max_site : ndarray
+        The maximum site for each unit
+    total_score : ndarray (n_units, n_units)
+        The total score for each pair of units being a match for each pair of units for cv 1/2 and 2/1
+    output_threshold : int
+        The probability threshold value for deciding matches
+    clus_info : dict
+        The clus_info dictionary
+    param : dict
+        The param dictionary
+        _description_
+    UIDs : list, optional
+        The list of unique ids for different case from assign_unique_id, by default None
+    matches_curated : list, optional
+        A list of matches manually curated using the GUI, by default None
+    save_match_table : bool, optional
+        If True will save a match table containing the infomation for every pair of units in a table, by default True
+    """
 
-    Matches21part1 = np.argwhere(np.triu(Output) > MatchThreshold) 
-    Matches21part2 = np.argwhere(np.triu(Output).T > MatchThreshold)
-    Matches21 = np.unique(np.concatenate((Matches21part1,Matches21part2)), axis = 0)
 
-    Output12tmp1 = np.tril(Output)
-    Output12tmp2 = np.tril(Output).T
-    np.fill_diagonal(Output12tmp2, 0)
-    Output12 = Output12tmp1 + Output12tmp2
+    #Start by separating the info into CV
+    matches12_part1 = np.argwhere(np.tril(output_prob) > match_threshold) 
+    matches12_part2 = np.argwhere(np.tril(output_prob).T > match_threshold)
+    matches12 = np.unique(np.concatenate((matches12_part1,matches12_part2)), axis = 0)
 
-    Output21tmp1= np.triu(Output)
-    Output21tmp2 = np.triu(Output).T
-    np.fill_diagonal(Output21tmp2, 0)
-    Output21 = Output21tmp1 + Output21tmp2
+    matches21_part1 = np.argwhere(np.triu(output_prob) > match_threshold) 
+    matches21_part2 = np.argwhere(np.triu(output_prob).T > match_threshold)
+    matches21 = np.unique(np.concatenate((matches21_part1,matches21_part2)), axis = 0)
 
-    Scores2Include12 = {}
-    Scores2Include21 = {}
-    for key, value in Scores2Include.items():
+    output12_tmp1 = np.tril(output_prob)
+    output12_tmp2 = np.tril(output_prob).T
+    np.fill_diagonal(output12_tmp2, 0)
+    output12 = output12_tmp1 + output12_tmp2
+
+    output21_tmp1= np.triu(output_prob)
+    output21_tmp2 = np.triu(output_prob).T
+    np.fill_diagonal(output21_tmp2, 0)
+    output21 = output21_tmp1 + output21_tmp2
+
+    scores_to_include12 = {}
+    scores_to_include21 = {}
+    for key, value in scores_to_include.items():
         tmp1 = np.tril(value)
         tmp2 = np.tril(value).T
         np.fill_diagonal(tmp2, 0)
@@ -160,135 +258,164 @@ def save_to_output_seperate_CV(SaveDir, Scores2Include, Matches, Output, AvgCent
         tmp4 = np.triu(value).T
         np.fill_diagonal(tmp4, 0)
 
-        Scores2Include12[key] = tmp1 + tmp2 
-        Scores2Include21[key] = tmp3 + tmp4  
+        scores_to_include12[key] = tmp1 + tmp2 
+        scores_to_include21[key] = tmp3 + tmp4  
 
     #Now can save all of these like above
     #Choose a file where the save directory will be made
     #options for create and overwrite?
-    if os.path.isdir(SaveDir) == False:
-        os.mkdir(SaveDir)
+    if os.path.isdir(save_dir) == False:
+        os.mkdir(save_dir)
 
     #save scores
-    UMscoresPathCV12 = os.path.join(SaveDir, 'UM Scores CV12')
-    np.savez(UMscoresPathCV12, **Scores2Include12)
-    UMscoresPathCV21 = os.path.join(SaveDir, 'UM Scores CV21')
-    np.savez(UMscoresPathCV21, **Scores2Include21)
+    UM_scores_path_cv12 = os.path.join(save_dir, 'UM Scores CV12')
+    np.savez(UM_scores_path_cv12, **scores_to_include12)
+    UM_scores_path_cv21 = os.path.join(save_dir, 'UM Scores CV21')
+    np.savez(UM_scores_path_cv21, **scores_to_include21)
 
     # #save ClusInfo
-    ClusInfoPath = os.path.join(SaveDir, 'ClusInfo.pickle')
-    with open(ClusInfoPath, 'wb') as fp:
-        pickle.dump(ClusInfo, fp)
+    clus_info_path = os.path.join(save_dir, 'ClusInfo.pickle')
+    with open(clus_info_path, 'wb') as fp:
+        pickle.dump(clus_info, fp)
 
     #Save param
-    ParamPath = os.path.join(SaveDir, 'UMparam.pickle')
-    with open(ParamPath, 'wb') as fp:
+    param_path = os.path.join(save_dir, 'UMparam.pickle')
+    with open(param_path, 'wb') as fp:
         pickle.dump(param, fp)
 
-    #Save output nUnit*nUnits probabilite array
-    MatchProbPathCV12 = os.path.join(SaveDir, 'MatchProb CV12')
-    np.save(MatchProbPathCV12, Output12)
-    MatchProbPathCV21 = os.path.join(SaveDir, 'MatchProb CV21')
-    np.save(MatchProbPathCV21, Output21)
+    #Save output n_unit*n_units probability array
+    match_prob_path_cv12 = os.path.join(save_dir, 'MatchProb CV12')
+    np.save(match_prob_path_cv12, output12)
+    match_prob_path_cv21 = os.path.join(save_dir, 'MatchProb CV21')
+    np.save(match_prob_path_cv21, output21)
 
     #Save Waveform info
-    WaveformInfo = {"AvgCentroid" : AvgCentroid, "AvgWaveform" : AvgWaveform, "AvgWaveformPerTP" : AvgWaveformPerTP, 
-                    "MaxSite" : MaxSite}
-    WavefromInfoPath = os.path.join(SaveDir, 'WaveformInfo')
-    np.savez(WavefromInfoPath, **WaveformInfo)
+    waveform_info = {"avg_centroid" : avg_centroid, "avg_waveform" : avg_waveform, "avg_waveform_per_tp" : avg_waveform_per_tp,
+                    "max_site" : max_site}
+    wavefrom_info_path = os.path.join(save_dir, 'WaveformInfo')
+    np.savez(wavefrom_info_path, **waveform_info)
 
-    #save autimatuc matches
-    MatchesPathCV12 = os.path.join(SaveDir, 'Matches CV12')
-    np.save(MatchesPathCV12, Matches12)
-    MatchesPathCV21 = os.path.join(SaveDir, 'Matches CV21')
-    np.save(MatchesPathCV21, Matches21)
+    #save automatic matches
+    matches_path_cv12 = os.path.join(save_dir, 'Matches CV12')
+    np.save(matches_path_cv12, matches12)
+    matches_path_cv21 = os.path.join(save_dir, 'Matches CV21')
+    np.save(matches_path_cv21, matches21)
 
-    if MatchesCurated != None:
-        MatchesCuratedPath = os.path.join(SaveDir, 'Matches Currated')
-        np.save(MatchesCuratedPath, MatchesCurated)
+    if matches_curated != None:
+        MatchesCuratedPath = os.path.join(save_dir, 'Matches Currated')
+        np.save(MatchesCuratedPath, matches_curated)
 
-    OutputThreshold = np.zeros_like(Output)
-    OutputThreshold[Output > MatchThreshold] = 1
+    output_threshold = np.zeros_like(output_prob)
+    output_threshold[output_prob > match_threshold] = 1
 
-    if SaveMatchTable == True:
-        df = make_match_table(Scores2Include, Matches, Output, TotalScore, OutputThreshold, ClusInfo, param, UIDs = UIDs, MatchesCurated = None)
-        MatchTablePath = os.path.join(SaveDir, 'MatchTable.csv')
-        df.to_csv(MatchTablePath, index = False)
+    if save_match_table == True:
+        df = make_match_table(scores_to_include, matches, output_prob, total_score, output_threshold, clus_info, param, UIDs = UIDs, matches_curated = None)
+        match_table_path = os.path.join(save_dir, 'MatchTable.csv')
+        df.to_csv(match_table_path, index = False)
 
 
-def load_output(SaveDir, LoadMatchTable = False):
+def load_output(save_dir, load_match_table = True):
+    """
+    Will load all the information in the save directory
+
+    Parameters
+    ----------
+    save_dir : str
+        The absolute path to the save directory
+    load_match_table : bool, optional
+        If True will load in the match table, by default True
+
+    Returns
+    -------
+    All data saved in the UM save directory
+    """
 
     #load scores
-    UMscoresPath = os.path.join(SaveDir, 'UM Scores.npz')
-    UMScores = dict(np.load(UMscoresPath))
+    UM_scores_path = os.path.join(save_dir, 'UM Scores.npz')
+    UM_scores = dict(np.load(UM_scores_path))
 
     #load ClusInfo
-    ClusInfoPath = os.path.join(SaveDir, 'ClusInfo.pickle')
-    with open(ClusInfoPath, 'rb') as fp:
-        ClusInfo = pickle.load(fp)
+    clus_info_path = os.path.join(save_dir, 'ClusInfo.pickle')
+    with open(clus_info_path, 'rb') as fp:
+        clus_info = pickle.load(fp)
 
     #load param
-    ParamPath = os.path.join(SaveDir, 'UMparam.pickle')
-    with open(ParamPath, 'rb') as fp:
+    param_path = os.path.join(save_dir, 'UMparam.pickle')
+    with open(param_path, 'rb') as fp:
         param = pickle.load(fp)
 
     #load output
-    MatchProbPath = os.path.join(SaveDir, 'MatchProb.npy')
-    MatchProb = np.load(MatchProbPath)
+    match_prob_path = os.path.join(save_dir, 'MatchProb.npy')
+    match_prob = np.load(match_prob_path)
 
     
     #Load Waveform info
-    WavefromInfoPath = os.path.join(SaveDir, 'WaveformInfo.npz')
-    WavefromInfo =dict(np.load(WavefromInfoPath))
+    wavefrom_info_path = os.path.join(save_dir, 'WaveformInfo.npz')
+    wavefrom_info =dict(np.load(wavefrom_info_path))
 
-    if LoadMatchTable == True:
-        MatchTablePath = os.path.join(SaveDir, 'MatchTable.csv') 
-        MatchTable = pd.read_csv(MatchTablePath)
+    if load_match_table == True:
+        match_table_path = os.path.join(save_dir, 'MatchTable.csv') 
+        match_table = pd.read_csv(match_table_path)
     
-        return UMScores, ClusInfo, param, MatchProb, WavefromInfo, MatchTable
-    return UMScores, ClusInfo, param, WavefromInfo, MatchProb
+        return UM_scores, clus_info, param, match_prob, wavefrom_info, match_table
+    return UM_scores, clus_info, param, wavefrom_info, match_prob
 
-def load_output_seperate_CV(SaveDir, LoadMatchTable = False):
+def load_output_separate_CV(save_dir, load_match_table = True):
+    """
+    Will load all the information in the save directory.
+    This function will load in data if the CV are saved separately
 
-    UMscoresPathCV12 = os.path.join(SaveDir, 'UM Scores CV12.npz')
-    UMScoresCV12 = dict(np.load(UMscoresPathCV12))
-    UMscoresPathCV21 = os.path.join(SaveDir, 'UM Scores CV21.npz')
-    UMScoresCV21 = dict(np.load(UMscoresPathCV21))
+    Parameters
+    ----------
+    save_dir : str
+        The absolute path to the save directory
+    load_match_table : bool, optional
+        If True will load in the match table, by default True
+
+    Returns
+    -------
+    All data saved in the UM save directory
+    """
+
+    UM_scores_path_cv12 = os.path.join(save_dir, 'UM Scores CV12.npz')
+    UM_scores_cv12 = dict(np.load(UM_scores_path_cv12))
+    UM_scores_path_cv21 = os.path.join(save_dir, 'UM Scores CV21.npz')
+    UM_scores_cv21 = dict(np.load(UM_scores_path_cv21))
 
     # #Load ClusInfo
-    ClusInfoPath = os.path.join(SaveDir, 'ClusInfo.pickle')
-    with open(ClusInfoPath, 'rb') as fp:
-        ClusInfo = pickle.load(fp)
+    clus_info_path = os.path.join(save_dir, 'ClusInfo.pickle')
+    with open(clus_info_path, 'rb') as fp:
+        clus_info = pickle.load(fp)
 
     #Load param
-    ParamPath = os.path.join(SaveDir, 'UMparam.pickle')
-    with open(ParamPath, 'rb') as fp:
+    param_path = os.path.join(save_dir, 'UMparam.pickle')
+    with open(param_path, 'rb') as fp:
         param = pickle.load(fp)
 
-    #Load output nUnit*nUnits probabilites array
-    MatchProbPathCV12 = os.path.join(SaveDir, 'MatchProb CV12.npy')
-    MatchProbCV12 = np.load(MatchProbPathCV12)
-    MatchProbPathCV21 = os.path.join(SaveDir, 'MatchProb CV21.npy')
-    MatchProbCV21 = np.load(MatchProbPathCV21)
+    #Load output nUnit*nUnits probabilities array
+    match_prob_path_cv12 = os.path.join(save_dir, 'MatchProb CV12.npy')
+    match_prob_cv12 = np.load(match_prob_path_cv12)
+    match_prob_path_cv21 = os.path.join(save_dir, 'MatchProb CV21.npy')
+    match_prob_cv21 = np.load(match_prob_path_cv21)
 
     #Load Waveform info
-    WavefromInfoPath = os.path.join(SaveDir, 'WaveformInfo.npz')
-    WavefromInfo =dict(np.load(WavefromInfoPath))
+    wavefrom_info_path = os.path.join(save_dir, 'WaveformInfo.npz')
+    wavefrom_info =dict(np.load(wavefrom_info_path))
 
-    #save autimatic matches
-    MatchesPathCV12 = os.path.join(SaveDir, 'Matches CV12.npy')
-    MatchesCV12 = np.load(MatchesPathCV12)
-    MatchesPathCV21 = os.path.join(SaveDir, 'Matches CV21.npy')
-    MatchesCV21 = np.load(MatchesPathCV21)
+    #save automatic matches
+    matches_path_cv12 = os.path.join(save_dir, 'Matches CV12.npy')
+    matches_cv12 = np.load(matches_path_cv12)
+    matches_path_cv21 = os.path.join(save_dir, 'Matches CV21.npy')
+    matches_cv21 = np.load(matches_path_cv21)
 
-    if LoadMatchTable == True:
-        MatchTablePath = os.path.join(SaveDir, 'MatchTable.csv') 
-        MatchTable = pd.read_csv(MatchTablePath)
+    if load_match_table == True:
+        match_table_path = os.path.join(save_dir, 'MatchTable.csv') 
+        match_table = pd.read_csv(match_table_path)
 
-        return UMScoresCV12, UMScoresCV21, ClusInfo, param, MatchProbCV12, MatchProbCV21,MatchesCV12, MatchesCV21, WavefromInfo, MatchTable
-    return UMScoresCV12, UMScoresCV21, ClusInfo, param, MatchProbCV12, MatchProbCV21,MatchesCV12, MatchesCV21, WavefromInfo
+        return UM_scores_cv12, UM_scores_cv21, clus_info, param, match_prob_cv12, match_prob_cv21,matches_cv12, matches_cv21, wavefrom_info, match_table
+    return UM_scores_cv12, UM_scores_cv21, clus_info, param, match_prob_cv12, match_prob_cv21,matches_cv12, matches_cv21, wavefrom_info
 
-def SaveProbForPhy(Probability, param, ClusInfo):
+def save_prob_for_phy(probability, param, clus_info):
     """
     Saves the within session UnitMatch probabilities for each session in their KiloSort directory,
     to be used with the UnitMatch Phy plugin 
@@ -296,29 +423,29 @@ def SaveProbForPhy(Probability, param, ClusInfo):
     Parameters
     ----------
     Probability : ndarray (nUnits, nUnits)
-        The calcualtes UnitMatch probability array
+        The calculates UnitMatch probability array
     param : dictionary
         The param dictionary
     ClusInfo : dictionary
         The ClusInfo dictionary
     """
 
-    SessionSwitch = ClusInfo['SessionSwitch']
-    nUnitsPerSession = param['nUnitsPerSession']
+    session_switch = clus_info['session_switch']
+    n_units_per_session = param['n_units_per_session']
 
-    for sid in range(SessionSwitch.shape[0] - 1):
+    for sid in range(session_switch.shape[0] - 1):
         #file to save the array in
-        SaveFileTmp = os.path.join(param['KSdirs'][sid], 'probability_templates.npy')
+        save_file_tmp = os.path.join(param['KSdirs'][sid], 'probability_templates.npy')
 
-        MatrixProb = np.full((nUnitsPerSession[sid], nUnitsPerSession[sid]), np.nan) #Make the size of all the units
+        matrix_prob = np.full((n_units_per_session[sid], n_units_per_session[sid]), np.nan) #Make the size of all the units
 
-        SessionOutput = Probability[SessionSwitch[sid]:SessionSwitch[sid+1], SessionSwitch[sid]:SessionSwitch[sid+1]]
+        session_output = probability[session_switch[sid]:session_switch[sid+1], session_switch[sid]:session_switch[sid+1]]
         #If Only good units where used add values know to a matrix of NaNs 
-        if SessionSwitch[sid+1] - SessionSwitch[sid] != nUnitsPerSession[sid]:
-            AllGoodUnits = ClusInfo['GoodUnits'][sid].squeeze().astype(int)
-            for id, gid in enumerate(ClusInfo['GoodUnits'][sid].astype(int)):
-                MatrixProb[gid, AllGoodUnits] = SessionOutput[id,:]
+        if session_switch[sid+1] - session_switch[sid] != n_units_per_session[sid]:
+            all_good_units = clus_info['GoodUnits'][sid].squeeze().astype(int)
+            for id, gid in enumerate(clus_info['GoodUnits'][sid].astype(int)):
+                matrix_prob[gid, all_good_units] = session_output[id,:]
         else:
-            MatrixProb = SessionOutput
+            matrix_prob = session_output
 
-        np.save(SaveFileTmp, MatrixProb)
+        np.save(save_file_tmp, matrix_prob)

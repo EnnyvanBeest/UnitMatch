@@ -1,216 +1,299 @@
-#Function for extracting and averaging raw data
-
+#Functions for extracting and averaging raw data
 import os
-import numpy as np
 from pathlib import Path
+import numpy as np
 from scipy.ndimage import gaussian_filter
 from mtscomp import decompress
 from joblib import Parallel, delayed
 import UnitMatchPy.utils as util
 
 #Decompressed data functions
-def Read_Meta(metaPath):
-    "Readin Meta data as a dictionary"
-    metaDict = {}
-    with metaPath.open() as f:
-        mdatList = f.read().splitlines()
+def read_meta(meta_path):
+    """
+    Reads in the meta data as a dictionary
+
+    Parameters
+    ----------
+    meta_path : str
+        The absolute path to the meta data dictionary
+
+    Returns
+    -------
+    dict
+        The meta data dictionary
+    """
+    meta_dict = {}
+    with meta_path.open() as f:
+        meta_list = f.read().splitlines()
         # convert the list entries into key value pairs
-        for m in mdatList:
-            csList = m.split(sep='=')
-            if csList[0][0] == '~':
-                currKey = csList[0][1:len(csList[0])]
+        for m in meta_list:
+            cs_list = m.split(sep='=')
+            if cs_list[0][0] == '~':
+                curr_key = cs_list[0][1:len(cs_list[0])]
             else:
-                currKey = csList[0]
-            metaDict.update({currKey: csList[1]})
+                curr_key = cs_list[0]
+            meta_dict.update({curr_key: cs_list[1]})
 
-    return(metaDict)
+    return meta_dict
 
-def get_sample_idx(SpikeTimes, UnitIDs, SampleAmount, units):
+def get_sample_idx(spike_times, unit_ids, sample_amount, units):
     """
-    Needs spike times, unit ID's (from kilosort dir) and maximum number of samples per unit.
-    Returns a (nUnits, SampleAmount) array with what spikes to sample for every unit, selected spikes evely spaced over time and
-    fill with NaN if the unit has less spikes than SampleAmount
+    Uses data from KiloSort to choose a even subset of spikes for each unit
+
+    Parameters
+    ----------
+    spike_times : ndarray (n_spikes)
+        The times (in samples) for each spike
+    unit_ids : ndarays
+        The id's for each unit
+    sample_amount : int
+        The number of spikes sampled for each amount
+    units : ndarray
+        The ids for each unit
+
+    Returns
+    -------
+    sample_idx
+        The idxs of the spikes to be sampled for each unit
     """
+    unique_unit_ids = np.unique(unit_ids) 
+    nunits_all = len(unique_unit_ids)
 
-    UniqueUnitIDs = np.unique(UnitIDs) 
-    nUnitsALL = len(UniqueUnitIDs)
-
-    SampleIdx = np.zeros((nUnitsALL, SampleAmount))
+    sample_idx = np.zeros((nunits_all, sample_amount))
     #Process ALL unit
     for i, idx in enumerate(units):
-        UnitTimes = SpikeTimes[UnitIDs == idx]
-        if SampleAmount < len(UnitTimes):
-            ChooseIdx = np.linspace(0,len(UnitTimes)-1, SampleAmount, dtype = int) # -1 so can't indx out of region
-            SampleIdx[i,:] = UnitTimes[ChooseIdx]
+        unit_times = spike_times[unit_ids == idx]
+        if sample_amount < len(unit_times):
+            chosen_idxs = np.linspace(0,len(unit_times)-1, sample_amount, dtype = int) # -1 so can't index out of region
+            sample_idx[i,:] = unit_times[chosen_idxs]
         else:
-            SampleIdx[i,:len(UnitTimes)] = UnitTimes
-            SampleIdx[i,len(UnitTimes):] = np.nan
+            sample_idx[i,:len(unit_times)] = unit_times
+            sample_idx[i,len(unit_times):] = np.nan
     
-    return SampleIdx
+    return sample_idx
 
-def Extract_A_Unit(SampleIdx, Data, HalfWidth, SpikeWidth, nChannels, SampleAmount):
-    """ 
-    This function extracts and averages the raw data for A unit, and splits the unit into two half for cross verification.
-    returns AvgWavforms shape (nChannels, SpikeWidth, 2)
+def extract_a_unit(sample_idx, data, half_width, spike_width, n_channels, sample_amount):
+    """
+    Extract an average waveform for a single unit.
 
-    NOTE - Here SampleIdx is a array of shape (SampleAmount), i.e use SampleIdx[UnitIdx] to get the AvgWAveform for that unit
+    Parameters
+    ----------
+    sample_idx : ndarray (sample_amount)
+        The spike index's to be sampled for this unit
+    data : memmap
+        The memmap array of raw data
+    half_width : int
+        The half width value for this extraction
+    spike_width : int
+        The width of each unit in samples
+    n_channels : int
+        The number of channels to extract (to exclude sync channels)
+    sample_amount : int
+        The number of spike to extract for each unit
+
+    Returns
+    -------
+    ndarray (spike_width, n_channels, 2)
+        Two average waveforms for each unit
     """
 
-    Channels = np.arange(0,nChannels)
+    channels = np.arange(0,n_channels)
 
-    AllSampleWaveforms = np.zeros( (SampleAmount, SpikeWidth, nChannels))
-    for i, idx in enumerate(SampleIdx[:]):
+    all_sample_waveforms = np.zeros( (sample_amount, spike_width, n_channels))
+    for i, idx in enumerate(data[:]):
         if np.isnan(idx):
             continue 
-        tmp = Data[ int(idx - HalfWidth - 1): int(idx + HalfWidth - 1), Channels] # -1, to better fit with ML
+        tmp = data[ int(idx - half_width - 1): int(idx + half_width - 1), channels] # -1, to better fit with ML
         tmp.astype(np.float32)
-        #gaussina smooth, over time gaussina window = 5, sigma = window size / 5
+        #gaussian smooth, over time gaussian window = 5, sigma = window size / 5
         tmp = gaussian_filter(tmp, 1, radius = 2, axes = 0) #edges are handled differently to ML
         # window ~ radius *2 + 1
         tmp = tmp - np.mean(tmp[:20,:], axis = 0)
-        AllSampleWaveforms[i] = tmp
+        all_sample_waveforms[i] = tmp
 
     #median and split CV's
-    nWavs = np.sum(~np.isnan(SampleIdx[:]))
-    CVlim = np.floor(nWavs / 2).astype(int)
+    n_waves = np.sum(~np.isnan(sample_idx[:]))
+    cv_limit = np.floor(n_waves / 2).astype(int)
 
     #find median over samples
-    AvgWaveforms = np.zeros((SpikeWidth, nChannels, 2))
-    AvgWaveforms[:, :, 0] = np.median(AllSampleWaveforms[:CVlim, :, :], axis = 0) #median over samples
-    AvgWaveforms[:, :, 1] = np.median(AllSampleWaveforms[CVlim:nWavs, :, :], axis = 0) #median over samples
-    return AvgWaveforms
+    avg_waveforms = np.zeros((spike_width, n_channels, 2))
+    avg_waveforms[:, :, 0] = np.median(all_sample_waveforms[:cv_limit, :, :], axis = 0) #median over samples
+    avg_waveforms[:, :, 1] = np.median(all_sample_waveforms[cv_limit:n_waves, :, :], axis = 0) #median over samples
+    return avg_waveforms
 
-def Extract_A_UnitKS4(SampleIdx, Data, SamplesBefore, SamplesAfter, SpikeWidth, nChannels, SampleAmount):
-    """ 
-    This function extracts and averages the raw data for A unit, and splits the unit into two half for cross verification.
-    returns AvgWavforms shape (nChannels, SpikeWidth, 2)
-
-    NOTE - Here SampleIdx is a array of shape (SampleAmount), i.e use SampleIdx[UnitIdx] to get the AvgWAveform for that unit
+def extract_a_unit_KS4(sample_idx, data, samples_before, samples_after, spike_width, n_channels, sample_amount):
     """
+    Extract a single units average waveform from KS4 data
 
-    Channels = np.arange(0,nChannels)
+    Parameters
+    ----------
+    sample_idx : ndarray (sample_amount)
+        The spike index's to be sampled for this unit
+    data : memmap
+        The memmap array of raw data
+    samples_before : int
+        The number of samples before the spike to sample
+    samples_after : int
+        The number of samples after the spike to sample
+    spike_width : int
+        The width of each unit in samples
+    n_channels : int
+        The number of channels to extract (to exclude sync channels)
+    sample_amount : int
+        The number of spike to extract for each unit
 
-    AllSampleWaveforms = np.zeros( (SampleAmount, SpikeWidth, nChannels))
-    for i, idx in enumerate(SampleIdx[:]):
+    Returns
+    -------
+    ndarray (spike_width, n_channels, 2)
+        Two average waveforms for each unit
+    """
+    channels = np.arange(0,n_channels)
+
+    all_sample_waveforms = np.zeros( (sample_amount, spike_width, n_channels))
+    for i, idx in enumerate(sample_idx[:]):
         if np.isnan(idx):
             continue 
-        tmp = Data[ int(idx - SamplesBefore - 1): int(idx + SamplesAfter - 1), Channels] # -1, to better fit with ML
+        tmp = data[ int(idx - samples_before - 1): int(idx + samples_after - 1), channels] # -1, to better fit with ML
         tmp.astype(np.float32)
-        #gaussina smooth, over time gaussina window = 5, sigma = window size / 5
+        #gaussian smooth, over time gaussian window = 5, sigma = window size / 5
         tmp = gaussian_filter(tmp, 1, radius = 2, axes = 0) #edges are handled differently to ML
         # window ~ radius *2 + 1
         tmp = tmp - np.mean(tmp[:20,:], axis = 0)
-        AllSampleWaveforms[i] = tmp
+        all_sample_waveforms[i] = tmp
 
     #median and split CV's
-    nWavs = np.sum(~np.isnan(SampleIdx[:]))
-    CVlim = np.floor(nWavs / 2).astype(int)
+    n_waves = np.sum(~np.isnan(sample_idx[:]))
+    cv_lim = np.floor(n_waves / 2).astype(int)
 
     #find median over samples
-    AvgWaveforms = np.zeros((SpikeWidth, nChannels, 2))
-    AvgWaveforms[:, :, 0] = np.median(AllSampleWaveforms[:CVlim, :, :], axis = 0) #median over samples
-    AvgWaveforms[:, :, 1] = np.median(AllSampleWaveforms[CVlim:nWavs, :, :], axis = 0) #median over samples
-    return AvgWaveforms
+    avg_waveforms = np.zeros((spike_width, n_channels, 2))
+    avg_waveforms[:, :, 0] = np.median(all_sample_waveforms[:cv_lim, :, :], axis = 0) #median over samples
+    avg_waveforms[:, :, 1] = np.median(all_sample_waveforms[cv_lim:n_waves, :, :], axis = 0) #median over samples
+    return avg_waveforms
 
 
-def Save_AvgWaveforms(AvgWaveforms, SaveDir, GoodUnits, ExtractGoodUnitsOnly = False):
+def save_avg_waveforms(avg_waveforms, save_dir, good_units, extract_good_units_only = False):
     """
-    Will save the extracted average waveforms in a folder called 'RawWaveforms' in the given SaveDir
-    Each waveform will be saved in a unique .npy file called 'UnitX_RawSpikes.npy.
-    Supply GoodUnits, a array of which idx's are included, if they you are not extract all units
-    from the recording session. 
+    Saves the average waveforms as a unique .npy file called "UnitX_RawSpikes.npy" in a folder called 
+    RawWaveforms in the save_dir.
+
+    Parameters
+    ----------
+    avg_waveforms : ndarray (n_units, spike_width, n_channels, 2)
+        The extracts waveforms for all units
+    save_dir : str
+        The absolute path to the directory where the results are to be saved, recommend the KS results directory
+    good_units : ndarray
+        A list of the good units in the session
+    extract_good_units_only : bool, optional
+        If True will only save the good units, by default False
     """
-    CurrentDir = os.getcwd()
-    os.chdir(SaveDir)
-    DirList = os.listdir()
-    if 'RawWaveforms' in DirList:
-        TmpPath = os.path.join(SaveDir, 'RawWaveforms')
-        
+    current_dir = os.getcwd()
+    os.chdir(save_dir)
+    dir_list = os.listdir()
+    if 'RawWaveforms' in dir_list:
+        tmp_path = os.path.join(save_dir, 'RawWaveforms')
     else:
         os.mkdir('RawWaveforms')
-        TmpPath = os.path.join(SaveDir, 'RawWaveforms')
+        tmp_path = os.path.join(save_dir, 'RawWaveforms')
 
-    os.chdir(TmpPath)
-
-    #first axis is each unit
+    os.chdir(tmp_path)
 
     #ALL waveforms from 0->nUnits
-    if ExtractGoodUnitsOnly == False:
-        for i in range(AvgWaveforms.shape[0]):
-            np.save(f'Unit{i}_RawSpikes.npy', AvgWaveforms[i,:,:,:])
+    if extract_good_units_only == False:
+        for i in range(avg_waveforms.shape[0]):
+            np.save(f'Unit{i}_RawSpikes.npy', avg_waveforms[i,:,:,:])
+        print(f'Saved {avg_waveforms.shape[0] + 1} units to RawWaveforms directory, saving all units')
 
     #If only extracting GoodUnits
     else:
-        for i, idx in enumerate(GoodUnits):
-            # ironically need idx[0], to selct value so saves with correct name
-            np.save(f'Unit{idx[0]}_RawSpikes.npy', AvgWaveforms[i,:,:,:])
-    
-    os.chdir(CurrentDir)
+        for i, idx in enumerate(good_units):
+            # ironically need idx[0], to select value so saves with correct name
+            np.save(f'Unit{idx[0]}_RawSpikes.npy', avg_waveforms[i,:,:,:])
+        print(f'Saved {good_units.shape[0] + 1} units to RawWaveforms directory, only saving good units')
+    os.chdir(current_dir)
 
 
 
 
 # Load in necessary files from KS directory and raw data directory   
 # extracting n Sessions
-def get_raw_data_paths(RawDataDirPaths):
+def get_raw_data_paths(raw_data_dir_paths):
     """
-    This function requires RawDatPaths, a list of pahts to the Raw data directories, e.g where .cbin, .ch .meta files are
-    This function will return a list fo paths to the.cbin, .ch and .meta files
-    """
-    cbinPaths = []
-    chPaths = []
-    metaPaths = []
+    This function will look in the raw data directory to find the necessary files
 
-    for i in range(len(RawDataDirPaths)):
-        for f in os.listdir(RawDataDirPaths[i]):
+    Parameters
+    ----------
+    raw_data_dir_paths : list
+        Each value is the path to the raw data for the session
+
+    Returns
+    -------
+    lists
+        lists where the values are the paths to the necessary files for each case
+    """
+    cbin_paths = []
+    ch_paths = []
+    meta_paths = []
+
+    for i in range(len(raw_data_dir_paths)):
+        for f in os.listdir(raw_data_dir_paths[i]):
             name, ext = os.path.splitext(f)
             
             if ext == '.cbin':
-                cbinPaths.append(os.path.join(RawDataDirPaths[i], name + ext))
+                cbin_paths.append(os.path.join(raw_data_dir_paths[i], name + ext))
 
             if ext == '.ch':
-                chPaths.append(os.path.join(RawDataDirPaths[i], name + ext))
+                ch_paths.append(os.path.join(raw_data_dir_paths[i], name + ext))
 
             if ext == '.meta':
-                metaPaths.append(os.path.join(RawDataDirPaths[i], name + ext))
+                meta_paths.append(os.path.join(raw_data_dir_paths[i], name + ext))
     
-    return cbinPaths, chPaths, metaPaths
+    return cbin_paths, ch_paths, meta_paths
 
 
-def extract_KSdata(KSdirs, ExtractGoodUnitsOnly = False):
+def extract_KS_data(KS_dirs, extract_good_units_only = False):
     """
-    This fucntion requires KSdirs, a lsit of KiloSort directories for each session.
-    This function will then load in the spike_times, spike_ids and a Good_Units
+    This function will look in each KS directory to find the needed files
+
+    Parameters
+    ----------
+    KS_dirs : list
+        each value is the path to a KS directory for each session
+    extract_good_units_only : bool, optional
+        If True will extract good units only, by default False
+
+    Returns
+    -------
+    lists
+        The lists of path to the files for each session
     """
-    nSessions = len(KSdirs)
+    n_sessions = len(KS_dirs)
 
     #Load Spike Times
-    SpikeTimes = []
-    for i in range(nSessions):
-        PathTmp = os.path.join(KSdirs[i], 'spike_times.npy')
-        SpikeTimestmp = np.load(PathTmp)
-        SpikeTimes.append(SpikeTimestmp)
-
-    
+    spike_times = []
+    for i in range(n_sessions):
+        path_tmp = os.path.join(KS_dirs[i], 'spike_times.npy')
+        spike_times_tmp = np.load(path_tmp)
+        spike_times.append(spike_times_tmp)
+   
     #Load Spike ID's
-    SpikeIDs = []
-    for i in range(nSessions):
-        PathTmp = os.path.join(KSdirs[i], 'spike_clusters.npy')
-        SpikeIDstmp = np.load(PathTmp)
-        SpikeIDs.append(SpikeIDstmp)
+    spike_ids = []
+    for i in range(n_sessions):
+        path_tmp = os.path.join(KS_dirs[i], 'spike_clusters.npy')
+        spike_ids_tmp = np.load(path_tmp)
+        spike_ids.append(spike_ids_tmp)
 
-
-    if ExtractGoodUnitsOnly:
+    if extract_good_units_only:
         #Good unit ID's
-        UnitLabelPaths = []
+        unit_labels_paths = []
 
         # load Good unit Paths
-        for i in range(nSessions):
-            UnitLabelPaths.append( os.path.join(KSdirs[i], 'cluster_group.tsv'))
+        for i in range(n_sessions):
+            unit_labels_paths.append( os.path.join(KS_dirs[i], 'cluster_group.tsv'))
 
-        GoodUnits = util.get_good_units(UnitLabelPaths)
+        good_units = util.get_good_units(unit_labels_paths)
 
-        return SpikeIDs, SpikeTimes, GoodUnits
-    
+        return spike_ids, spike_times, good_units
     else:
-        return SpikeIDs, SpikeTimes, [None for s in range(nSessions)]
+        return spike_ids, spike_times, [None for s in range(n_sessions)]

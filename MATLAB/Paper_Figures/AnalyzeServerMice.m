@@ -31,11 +31,11 @@ if ~exist('UMFiles') || isempty(UMFiles) % When using the example pipeline this 
                 end
                 % Check that these data are not too noisy
               
-                load(fullfile(tmpfile(id).folder,tmpfile(id).name),'UMparam')
-                for rid = 1:numel(UMparam.RawDataPaths)
-                   meta = ReadMeta2(UMparam.RawDataPaths{rid}.folder);
-                   SpGLXV = {SpGLXV{:} meta.appVersion};
-                end
+                % load(fullfile(tmpfile(id).folder,tmpfile(id).name),'UMparam')
+                % for rid = 1:numel(UMparam.RawDataPaths)
+                %    meta = ReadMeta2(UMparam.RawDataPaths{rid}.folder);
+                %    SpGLXV = {SpGLXV{:} meta.appVersion};
+                % end
 
 
                 %             FolderParts = strsplit(tmpfile(id).folder,filesep);
