@@ -149,7 +149,7 @@ for midx = 1:length(MiceOpt)
                 PipelineParams.SaveDir = fullfile(SaveDir,MiceOpt{midx},'AllProbes','AllIMRO');
                 PipelineParams.KSDir = AllKiloSortPaths;
             else
-                PipelineParams.SaveDir = fullfile(SaveDir,MiceOpt{midx},['Probe' num2str(PosComb(1,runid)-1)],['IMRO_' num2str(PosComb(2,runid))]);
+                PipelineParams.SaveDir = fullfile(SaveDir,MiceOpt{midx},['Probe' num2str(ProbeOpt(PosComb(1,runid)))],['IMRO_' num2str(PosComb(2,runid))]);
                 PipelineParams.AllChannelPos = PipelineParams.AllChannelPos(idx);
                 PipelineParams.AllProbeSN = PipelineParams.AllProbeSN(idx);
                 PipelineParams.RawDataPaths = PipelineParams.RawDataPaths(idx);
@@ -183,14 +183,13 @@ for midx = 1:length(MiceOpt)
 
             if isempty(UnitMatchExist) || PipelineParams.RedoUnitMatch || UnitMatchExist.date<FromDate
 
-                UMtime = tic;
                 %% Get clusinfo
                 clusinfo = getClusinfo(UMparam.KSDir);
                 if ~any(clusinfo.Good_ID) || sum(clusinfo.Good_ID)<UMparam.minGoodUnits
                     disp('No good units, continue')
                     continue
                 end
-           
+                UMtime = tic;
                 %% Actual UnitMatch & Unique UnitID assignment
                 [UniqueIDConversion, MatchTable, WaveformInfo, UMparam] = UnitMatch(clusinfo, UMparam);
                 if UMparam.AssignUniqueID

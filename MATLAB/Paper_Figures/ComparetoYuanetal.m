@@ -258,8 +258,8 @@ ylabel('Yuan et al.')
 title('Drift Estimate')
 
 %% Across many days
-datapath = 'H:\MatchingUnits\Yuan\AcrossManyDays';
-datapathUM = 'H:\UnitMatch\AL032\Probe0\IMRO_2\UnitMatch';% 'H:\MatchingUnits\OutputMonthApart'
+datapath =  'H:\MatchingUnits\Yuan\AcrossManyDays';%'H:\MatchingUnits\Yuan\AcrossManyDays';
+datapathUM = 'H:\UnitMatch\AL032\Probe0\IMRO_2\UnitMatch';% 'H:\Ongoing\AL032\Probe0\IMRO_2\UnitMatch';%'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\FullAnimal_KSChanMap\AL032\19011111882\2\UnitMatch';%'H:\MatchingUnits\OutputMonthApart'
 miceopt = {'AL032'};
 ProbThresh = 0.5;
 nRec = 22;
@@ -382,7 +382,7 @@ title('AUC value across many successive days')
 makepretty
 offsetAxes
 
-[h,p] = ttest(AUCsAcrossManyDays(:,2),AUCsAcrossManyDays(:,3));
+[h,p,ci,stats] = ttest(AUCsAcrossManyDays(:,2),AUCsAcrossManyDays(:,3));
 text(0.5,0.95,['p=' num2str(round(p*100)/100)])
 % hold on
 % for modeid = 2:3

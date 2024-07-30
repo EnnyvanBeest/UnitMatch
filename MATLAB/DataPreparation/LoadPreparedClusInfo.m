@@ -17,8 +17,15 @@ for subsesid=1:length(KiloSortPaths)
     addthis=max(clusinfo{subsesid}.RecSesID);
 end
 
+
+
 % Add all cluster information in one 'cluster' struct - can be used for further analysis
 clusinfo = [clusinfo{:}];
+if isempty(clusinfo)
+    clusinfo = [];
+    sp = [];
+    return
+end
 clusinfoNew = struct;
 fields = fieldnames(clusinfo(1));
 for fieldid=1:length(fields)
@@ -114,7 +121,7 @@ if Params.UnitMatch
 end
 Params.RawDataPaths = RawPathsUsed;
 Params.KSDir = KiloSortPaths;
-%% add nans for missing UID values
+%% add nans for missing UID values to not confuse them with other UIDs
 if any(recsesidxIncluded==0)
     clusinfo.UniqueID(ismember(clusinfo.RecSesID,find(recsesidxIncluded==0))) = nan;
     clusinfo.IMROID(ismember(clusinfo.RecSesID,find(recsesidxIncluded==0))) = nan;
