@@ -10,41 +10,49 @@ import os
 
 
 def run_GUI():
-    global CVtkinter
+    """
+    This function runs the GUI, allowing the user to look at the result and manually curate the matches.
+
+    Returns
+    -------
+    List
+        lists for the manually curated matches and non-matches
+    """
+    global CV_tkinter
     global root
-    global EntryA
-    global EntryB
-    global SessionEntryA
-    global SessionEntryB
-    global MatchIdx
-    global FrameTable
-    global ScoreTable
-    global AvgWaveformPlot
-    global TrajectoryPlot
-    global BayesLabel
-    global OriginalIDLabel
-    global RawWaveformPlot
-    global HistPlot
-    global IsMatch
-    global NotMatch
-    global OptionA
-    global OptionB
-    global EntryFrame
-    global ToggleRawVal
-    global ToggleUMScoreVal
+    global entry_a
+    global entry_b
+    global session_entry_a
+    global session_entry_b
+    global match_idx
+    global frame_table
+    global score_table
+    global avg_waveform_plot
+    global trajectory_plot
+    global bayes_label
+    global original_id_label
+    global raw_waveform_plot
+    global hist_plot
+    global is_match
+    global not_match
+    global option_a
+    global option_b
+    global entry_frame
+    global toggle_raw_val
+    global toggle_UM_score_val
 
     rcParams.update({'figure.autolayout': True})
     rcParams.update({'font.size': 10})
-    Color = 'white'
-    rcParams['text.color'] = Color
-    rcParams['axes.labelcolor'] = Color
-    rcParams['xtick.color'] = Color
-    rcParams['ytick.color'] = Color
+    color = 'white'
+    rcParams['text.color'] = color
+    rcParams['axes.labelcolor'] = color
+    rcParams['xtick.color'] = color
+    rcParams['ytick.color'] = color
 
     
     np.set_printoptions(suppress = True)
-    IsMatch = []
-    NotMatch = []
+    is_match = []
+    not_match = []
     root = Tk()
     # downloaded theme from https://sourceforge.net/projects/tcl-awthemes/
     theme_path = os.path.join(os.path.dirname(os.path.abspath(__file__)) , r'TkinterTheme\awthemes-10.4.0')
@@ -58,138 +66,136 @@ def run_GUI():
     background = ttk.Frame(root)
     background.place(x=0, y=0, relwidth=1.0, relheight=1.0)
 
-    FrameTable = ttk.LabelFrame(root)
-    ScoreTable = ttk.LabelFrame(root)
-    AvgWaveformPlot = Canvas(root) 
-    TrajectoryPlot = Canvas(root)
-    BayesLabel = ttk.Label(root)
-    OriginalIDLabel = ttk.Label(root)
-    RawWaveformPlot = Canvas(root)
-    HistPlot = Canvas(root)
+    frame_table = ttk.LabelFrame(root)
+    score_table = ttk.LabelFrame(root)
+    avg_waveform_plot = Canvas(root) 
+    trajectory_plot = Canvas(root)
+    bayes_label = ttk.Label(root)
+    original_id_label = ttk.Label(root)
+    raw_waveform_plot = Canvas(root)
+    hist_plot = Canvas(root)
 
     #Unit entry
     ######################################################################################
     #Will have Unit A - color green and unit B- color Blue
-    EntryFrame = ttk.LabelFrame(root, text = 'Select Units')
-    LabelA = ttk.Label(EntryFrame, text = 'Unit A')
-    LabelA.configure(foreground='green')
-    LabelB = ttk.Label(EntryFrame, text = 'Unit B')
-    LabelB.configure(foreground='blue')
+    entry_frame = ttk.LabelFrame(root, text = 'Select Units')
+    label_a = ttk.Label(entry_frame, text = 'Unit A')
+    label_a.configure(foreground='green')
+    label_b = ttk.Label(entry_frame, text = 'Unit B')
+    label_b.configure(foreground='blue')
 
     #select the session
-    SessionsList = np.arange(1,param['nSessions']+1).tolist()
-    SessionEntryA = ttk.Combobox(EntryFrame, value = SessionsList, width = 2)
-    SessionEntryB = ttk.Combobox(EntryFrame, value = SessionsList, width = 2)
-    SessionEntryA.set(1) #Start wiht session 1,2 if more than 1 session given
-    if len(SessionsList) == 1:
-        SessionEntryB.set(1)
+    sessions_list = np.arange(1,param['n_sessions']+1).tolist()
+    session_entry_a = ttk.Combobox(entry_frame, value = sessions_list, width = 2)
+    session_entry_b = ttk.Combobox(entry_frame, value = sessions_list, width = 2)
+    session_entry_a.set(1) #Start wiht session 1,2 if more than 1 session given
+    if len(sessions_list) == 1:
+        session_entry_b.set(1)
     else:
-        SessionEntryB.set(2)
-    LabelSessionA = ttk.Label(EntryFrame, text = 'Session No.')
-    LabelSessionB = ttk.Label(EntryFrame, text = 'Session No.')
+        session_entry_b.set(2)
+    label_session_a = ttk.Label(entry_frame, text = 'Session No.')
+    label_session_b = ttk.Label(entry_frame, text = 'Session No.')
 
 
     #select CV
-    CVoptions = [('Avg', 0),  ('(1,2)', 1), ('(2,1)',2)]
-    CVtkinter = IntVar()
-    CVtkinter.set(0)
-    LabelCV = ttk.Label(EntryFrame, text = 'Select the cv option')
-    for i, option in enumerate(CVoptions):
-        RadioCV = ttk.Radiobutton(EntryFrame, text = option[0], value =option[1], variable = CVtkinter, command = update_unit_cv).grid(row = i+1, column = 0)
-
-
+    CV_options = [('Avg', 0),  ('(1,2)', 1), ('(2,1)',2)]
+    CV_tkinter = IntVar()
+    CV_tkinter.set(0)
+    label_cv = ttk.Label(entry_frame, text = 'Select the cv option')
+    for i, option in enumerate(CV_options):
+        RadioCV = ttk.Radiobutton(entry_frame, text = option[0], value =option[1], variable = CV_tkinter, command = update_unit_cv).grid(row = i+1, column = 0)
 
     #selecting the unit
-    SessionA = int(SessionEntryA.get())
-    SessionB = int(SessionEntryB.get()) 
+    session_a = int(session_entry_a.get())
+    session_b = int(session_entry_b.get()) 
     CV = get_cv_option()
-    CVoption = CVtkinter.get() - 1 #want 0 for cv (1,2) , want 1 for cv (2,1)
+    CV_option = CV_tkinter.get() - 1 #want 0 for cv (1,2) , want 1 for cv (2,1)
     if CV == 'Avg':
         #Use average CV values
-        TmpIdxA = np.argwhere((SessionSwitch[SessionA -1] <= MatchesAvg[:,0]) * (MatchesAvg[:,0] < SessionSwitch[SessionA]) == True ).squeeze()
-        TmpIdxB = np.argwhere((SessionSwitch[SessionB -1] <= MatchesAvg[:,1]) * (MatchesAvg[:,1] < SessionSwitch[SessionB]) == True).squeeze()
-        InBoth = np.isin(TmpIdxA, TmpIdxB)
-        OptionA = MatchesAvg[TmpIdxA[InBoth],:].tolist()
+        tmp_idx_a = np.argwhere((session_switch[session_a -1] <= matches_avg[:,0]) * (matches_avg[:,0] < session_switch[session_a]) == True ).squeeze()
+        tmp_idx_b = np.argwhere((session_switch[session_b -1] <= matches_avg[:,1]) * (matches_avg[:,1] < session_switch[session_b]) == True).squeeze()
+        in_both = np.isin(tmp_idx_a, tmp_idx_b)
+        option_a = matches_avg[tmp_idx_a[in_both],:].tolist()
 
-        EntryA = ttk.Combobox(EntryFrame, values = OptionA, width = 10)
-        EntryA.set(OptionA[0][0])
+        entry_a = ttk.Combobox(entry_frame, values = option_a, width = 10)
+        entry_a.set(option_a[0][0])
 
-        OptionB = np.flip(np.argsort(OutputAvg[int(EntryA.get()),SessionSwitch[SessionB-1]:SessionSwitch[SessionB]]) + SessionSwitch[SessionB-1])
-        OptionB = OptionB.tolist()
+        option_b = np.flip(np.argsort(output_avg[int(entry_a.get()),session_switch[session_b-1]:session_switch[session_b]]) + session_switch[session_b-1])
+        option_b = option_b.tolist()
 
     else :    
-        TmpIdxA = np.argwhere((SessionSwitch[SessionA -1] <= MatchesGUI[CVoption][:,0]) * ( MatchesGUI[CVoption][:,0] < SessionSwitch[SessionA]) == True ).squeeze()
-        TmpIdxB = np.argwhere((SessionSwitch[SessionB -1] <= MatchesGUI[CVoption][:,1]) * ( MatchesGUI[CVoption][:,1] < SessionSwitch[SessionB]) == True).squeeze()
-        InBoth = np.isin(TmpIdxA, TmpIdxB)
+        tmp_idx_a = np.argwhere((session_switch[session_a -1] <= matches_GUI[CV_option][:,0]) * ( matches_GUI[CV_option][:,0] < session_switch[session_a]) == True ).squeeze()
+        tmp_idx_b = np.argwhere((session_switch[session_b -1] <= matches_GUI[CV_option][:,1]) * ( matches_GUI[CV_option][:,1] < session_switch[session_b]) == True).squeeze()
+        in_both = np.isin(tmp_idx_a, tmp_idx_b)
 
-        OptionA =  MatchesGUI[CVoption][TmpIdxA[InBoth],:].tolist()
-        if CVoption == 0:
-            OptionA = sorted(OptionA)
+        option_a =  matches_GUI[CV_option][tmp_idx_a[in_both],:].tolist()
+        if CV_option == 0:
+            option_a = sorted(option_a)
 
-        EntryA = ttk.Combobox(EntryFrame, values = OptionA, width = 10)
-        EntryA.set(OptionA[0][0])
+        entry_a = ttk.Combobox(entry_frame, values = option_a, width = 10)
+        entry_a.set(option_a[0][0])
 
 
-        OptionB = np.flip(np.argsort(OutputGUI[CVoption][int(EntryA.get()),SessionSwitch[SessionB-1]:SessionSwitch[SessionB]]) + SessionSwitch[SessionB-1])
-        OptionB = OptionB.tolist()
+        option_b = np.flip(np.argsort(output_GUI[CV_option][int(entry_a.get()),session_switch[session_b-1]:session_switch[session_b]]) + session_switch[session_b-1])
+        option_b = option_b.tolist()
 
     ##################
-    EntryB = ttk.Combobox(EntryFrame, values = OptionB, width = 10 )
-    EntryB.set(OptionB[0])
-    EntryA.bind('<<ComboboxSelected>>', Update_Units)
-    EntryB.bind('<<ComboboxSelected>>', update)
+    entry_b = ttk.Combobox(entry_frame, values = option_b, width = 10 )
+    entry_b.set(option_b[0])
+    entry_a.bind('<<ComboboxSelected>>', update_units)
+    entry_b.bind('<<ComboboxSelected>>', update)
 
-    SessionEntryA.bind('<<ComboboxSelected>>', update_unit_entryA)
-    SessionEntryB.bind('<<ComboboxSelected>>', update_unit_entryB)
+    session_entry_a.bind('<<ComboboxSelected>>', update_unit_entryA)
+    session_entry_b.bind('<<ComboboxSelected>>', update_unit_entryB)
 
     #adding a button which swaps unit A and B
-    SwapButton = ttk.Button(EntryFrame, text = 'Swap Units', command = swap_units)
+    swap_button = ttk.Button(entry_frame, text = 'Swap Units', command = swap_units)
 
-    #Clalculate the score histrograms
+    #Calculate the score histograms
     #for each CV pair
-    #make global varibel so the functions can acces the histograms.
-    global HistNamesAvg
-    global HistNames12
-    global HistNames21
-    global HistAvg
-    global Hist12
-    global Hist21
-    global HistMatchesAvg
-    global HistMatches12
-    global HistMatches21
+    #make global variable so the functions can access the histograms.
+    global hist_names_avg
+    global hist_names_12
+    global hist_names_21
+    global hist_avg
+    global hist_12
+    global hist_21
+    global hist_matches_avg
+    global hist_matches_12
+    global hist_matches_21
 
-    HistNamesAvg, HistAvg, HistMatchesAvg =  get_score_histrograms(Scores2IncludeAvg, (OutputAvg > MatchThreshold))
-    HistNames12, Hist12, HistMatches12 =  get_score_histrograms(Scores2IncludeGUI[0], (OutputGUI[0] > MatchThreshold))
-    HistNames21, Hist21, HistMatches21 =  get_score_histrograms(Scores2IncludeGUI[1], (OutputGUI[1] > MatchThreshold))
+    hist_names_avg, hist_avg, hist_matches_avg =  get_score_histograms(scores_to_include_avg, (output_avg > match_threshold))
+    hist_names_12, hist_12, hist_matches_12 =  get_score_histograms(scores_to_include_GUI[0], (output_GUI[0] > match_threshold))
+    hist_names_21, hist_21, hist_matches_21 =  get_score_histograms(scores_to_include_GUI[1], (output_GUI[1] > match_threshold))
 
 
     #place the widgets on the EntryFrame
-    LabelCV.grid(row = 0, column = 0)
-    LabelA.grid(row = 0, column = 1)
-    LabelB.grid(row = 0, column = 3)
-    LabelSessionA.grid(row = 1, column = 1)
-    SessionEntryA.grid(row = 1, column = 2, padx = 15)
-    LabelSessionB.grid(row = 1, column = 3)
-    SessionEntryB.grid(row = 1, column = 4, padx = 15)
-    EntryA.grid(row = 2, column = 1, columnspan = 2, stick = 'WE', padx = 5)
-    EntryB.grid(row = 2, column = 3, columnspan = 2, sticky = 'WE', padx = 5)
-    SwapButton.grid(row = 3, column = 2, columnspan = 2, sticky = 'WE')
+    label_cv.grid(row = 0, column = 0)
+    label_a.grid(row = 0, column = 1)
+    label_b.grid(row = 0, column = 3)
+    label_session_a.grid(row = 1, column = 1)
+    session_entry_a.grid(row = 1, column = 2, padx = 15)
+    label_session_b.grid(row = 1, column = 3)
+    session_entry_b.grid(row = 1, column = 4, padx = 15)
+    entry_a.grid(row = 2, column = 1, columnspan = 2, stick = 'WE', padx = 5)
+    entry_b.grid(row = 2, column = 3, columnspan = 2, sticky = 'WE', padx = 5)
+    swap_button.grid(row = 3, column = 2, columnspan = 2, sticky = 'WE')
     ######################################################################################
 
 
     #MatchButtons
     ######################################################################################
-    MatchButton = ttk.Button(root, text = 'Set as Match', command = set_match)
-    NonMatchButton = ttk.Button(root, text='Set as Non Match', command = set_not_match)
+    match_button = ttk.Button(root, text = 'Set as Match', command = set_match)
+    non_match_button = ttk.Button(root, text='Set as Non Match', command = set_not_match)
 
     #Toggle Plots
     ######################################################################################
-    ToggleRawVal = BooleanVar()
-    ToggleUMScoreVal = BooleanVar()
-    ToggleRawVal.set(False)
-    ToggleUMScoreVal.set(False)
-    ToggleRawPlot = ttk.Checkbutton(root, text ='Hide Raw Data', variable = ToggleRawVal)
-    ToggleUMScorePlot = ttk.Checkbutton(root, text ='Hide UM Score Histograms', variable = ToggleUMScoreVal)
+    toggle_raw_val = BooleanVar()
+    toggle_UM_score_val = BooleanVar()
+    toggle_raw_val.set(False)
+    toggle_UM_score_val.set(False)
+    toggle_raw_plot = ttk.Checkbutton(root, text ='Hide Raw Data', variable = toggle_raw_val)
+    toggle_UM_score_plot = ttk.Checkbutton(root, text ='Hide UM Score Histograms', variable = toggle_UM_score_val)
 
 
 
@@ -198,121 +204,121 @@ def run_GUI():
     root.bind_all('<Return>', update)
     root.bind_all('<Right>', next_pair)
     root.bind_all('<Left>', previous_pair)
-    root.bind_all('<Up>', Up_OptionB_List)
-    root.bind_all('<Down>', Down_OptionB_List)
+    root.bind_all('<Up>', up_options_b_list)
+    root.bind_all('<Down>', down_options_b_list)
     root.bind_all('q', set_match)
     root.bind_all('m', set_match)
     root.bind_all('e', set_not_match)
     root.bind_all('n', set_not_match)
 
     #Grid the units
-    EntryFrame.grid(row = 0, column = 0, pady=5, padx = 5)
-    MatchButton.grid(row = 4, column = 3, sticky = 'E',  padx = 50, pady = 5)
-    NonMatchButton.grid(row = 4, column = 4, sticky = 'W', padx = 50, pady = 5)
-    ToggleUMScorePlot.grid(row = 4, column = 5, sticky = 'W',  padx = 50, pady = 5)
-    ToggleRawPlot.grid(row = 4, column = 6, sticky = 'E',  padx = 50, pady = 5)
+    entry_frame.grid(row = 0, column = 0, pady=5, padx = 5)
+    match_button.grid(row = 4, column = 3, sticky = 'E',  padx = 50, pady = 5)
+    non_match_button.grid(row = 4, column = 4, sticky = 'W', padx = 50, pady = 5)
+    toggle_UM_score_plot.grid(row = 4, column = 5, sticky = 'W',  padx = 50, pady = 5)
+    toggle_raw_plot.grid(row = 4, column = 6, sticky = 'E',  padx = 50, pady = 5)
 
 
     update(None)
-    MatchIdx = 0
+    match_idx = 0
 
     root.mainloop()
 
     #set default plot color back to black
-    Color = 'black'
-    rcParams['text.color'] = Color
-    rcParams['axes.labelcolor'] = Color
-    rcParams['xtick.color'] = Color
-    rcParams['ytick.color'] = Color
+    color = 'black'
+    rcParams['text.color'] = color
+    rcParams['axes.labelcolor'] = color
+    rcParams['xtick.color'] = color
+    rcParams['ytick.color'] = color
 
-    return IsMatch, NotMatch, MatchesGUI
+    return is_match, not_match, matches_GUI
 
-def process_info_for_GUI(Output, MatchThresholdIn, Scores2Include, TotalScore, AmplitudeIn, SpatialDecayIn,
-                         AvgCentroidIn, AvgWaveformIn, AvgWaveformPerTPIn, WaveIdxIn, MaxSiteIn, MaxSiteMeanIn, 
-                         waveformIn, WithinSessionIn, ChannelPosIn, ClusInfoIn, paramIn):
-    """ 
-    This function has two jobs.
-    1. Process data so it is in the correct form for the GUI e.g sperate matricies for CV options.
-    2. Pass variable and make them global in the scope of GUI.py so all function in GUI.py can use them.
+def process_info_for_GUI(output, match_threshold_in, scores_to_include, total_score, amplitude_in, spatial_decay_in,
+                         avg_centroid_in, avg_waveform_in, avg_waveform_per_tp_in, wave_idx_in, max_site_in, max_site_mean_in, 
+                         waveform_in, within_session_in, channel_pos_in, clus_info_in, param_in):
     """
-    global MatchesAvg
-    global MatchesGUI
-    global OutputAvg
-    global OutputGUI
-    global Scores2IncludeAvg
-    global Scores2IncludeGUI
-    global Amplitude
-    global AmplitudeAvg
-    global SpatialDecay
-    global SpatialDecayAvg
-    global AvgCentroid
-    global AvgCentroidAvg
-    global AvgWaveform
-    global AvgWaveformAvg
-    global AvgWaveformPerTP
-    global AvgWaveformPerTPAvg
-    global WaveIdx
-    global MaxSite
-    global MaxSiteMean
+    This function:
+    1 - passes data to the GUI
+    2 - processes the data so it is in a better form for the GUI
+    """
+    global matches_avg
+    global matches_GUI
+    global output_avg
+    global output_GUI
+    global scores_to_include_avg
+    global scores_to_include_GUI
+    global amplitude
+    global amplitude_avg
+    global spatial_decay
+    global spatial_decay_avg
+    global avg_centroid
+    global avg_centroid_avg
+    global avg_waveform
+    global avg_waveform_avg
+    global avg_waveform_per_tp
+    global avg_waveform_per_tp_avg
+    global wave_idx
+    global max_site
+    global max_site_mean
     global waveform
-    global ClusInfo
-    global SessionSwitch
+    global clus_info
+    global session_switch
     global param
-    global MatchThreshold
-    global WithinSession
-    global ChannelPos
+    global match_threshold
+    global within_session
+    global channel_pos
 
-    Amplitude = AmplitudeIn
-    SpatialDecay = SpatialDecayIn
-    AvgCentroid = AvgCentroidIn
-    AvgWaveform = AvgWaveformIn
-    AvgWaveformPerTP = AvgWaveformPerTPIn
-    WaveIdx = WaveIdxIn
-    MaxSite = MaxSiteIn
-    MaxSiteMean = MaxSiteMeanIn
-    waveform = waveformIn
-    ClusInfo = ClusInfoIn
-    SessionSwitch = ClusInfo['SessionSwitch']
-    param = paramIn
-    MatchThreshold = MatchThresholdIn
-    WithinSession = WithinSessionIn
-    ChannelPos = ChannelPosIn
+    amplitude = amplitude_in
+    spatial_decay = spatial_decay_in
+    avg_centroid = avg_centroid_in
+    avg_waveform = avg_waveform_in
+    avg_waveform_per_tp = avg_waveform_per_tp_in
+    wave_idx = wave_idx_in
+    max_site = max_site_in
+    max_site_mean = max_site_mean_in
+    waveform = waveform_in
+    clus_info = clus_info_in
+    session_switch = clus_info['session_switch']
+    param = param_in
+    match_threshold = match_threshold_in
+    within_session = within_session_in
+    channel_pos = channel_pos_in
 
-    OutputThreshold = np.zeros_like(Output)
-    OutputThreshold[Output > MatchThreshold] = 1
+    output_threshold = np.zeros_like(output)
+    output_threshold[output > match_threshold] = 1
 
-    matches = np.argwhere(OutputThreshold == 1) # need all matches including same sessoin for GUI
-
-    # The correct output for different
-    #for the code it is helpful for Mathces to contain both (session 1, session 2) and (session 2, session 1)
-    # so when changin Unit A/B session it can find matches for all permutations
-    Matches12part1 = np.argwhere(np.tril(Output) > MatchThreshold) 
-    Matches12part2 = np.argwhere(np.tril(Output).T > MatchThreshold)
-    Matches12 = np.unique(np.concatenate((Matches12part1,Matches12part2)), axis = 0)
+    matches = np.argwhere(output_threshold == 1) # need all matches including same session for GUI
 
 
-    Matches21part1 = np.argwhere(np.triu(Output) > MatchThreshold) 
-    Matches21part2 = np.argwhere(np.triu(Output).T > MatchThreshold)
-    Matches21 = np.unique(np.concatenate((Matches21part1,Matches21part2)), axis = 0)
+    #for the code it is helpful for matches to contain both (session 1, session 2) and (session 2, session 1)
+    # so when changing Unit A/B session it can find matches for all permutations
+    matches_12_part_1 = np.argwhere(np.tril(output) > match_threshold) 
+    matches_12_part_2 = np.argwhere(np.tril(output).T > match_threshold)
+    matches_12 = np.unique(np.concatenate((matches_12_part_1,matches_12_part_2)), axis = 0)
 
-    MatchesGUI = [Matches12, Matches21]
 
-    OutputGUI1part1 = np.tril(Output)
-    OutputGUI1part2 = np.tril(Output).T
-    np.fill_diagonal(OutputGUI1part2, 0)
-    OutputGUI1 = OutputGUI1part1 + OutputGUI1part2
+    matches_21_part_1 = np.argwhere(np.triu(output) > match_threshold) 
+    matches_21_part_2 = np.argwhere(np.triu(output).T > match_threshold)
+    matches_21 = np.unique(np.concatenate((matches_21_part_1,matches_21_part_2)), axis = 0)
 
-    OutputGUI2part1 = np.triu(Output)
-    OutputGUI2part2 = np.triu(Output).T
-    np.fill_diagonal(OutputGUI2part2, 0)
-    OutputGUI2 = OutputGUI2part1 + OutputGUI2part2
+    matches_GUI = [matches_12, matches_21]
 
-    OutputGUI = [OutputGUI1, OutputGUI2]
+    output_GUI1_part_1 = np.tril(output)
+    output_GUI1_part_2 = np.tril(output).T
+    np.fill_diagonal(output_GUI1_part_2, 0)
+    output_GUI1 = output_GUI1_part_1 + output_GUI1_part_2
 
-    Scores2IncludeGUI = []
-    Scores2Include12 = {}
-    Scores2Include21 = {}
-    for key, value in Scores2Include.items():
+    output_GUI2_part_1 = np.triu(output)
+    output_GUI2_part_2 = np.triu(output).T
+    np.fill_diagonal(output_GUI2_part_2, 0)
+    output_GUI2 = output_GUI2_part_1 + output_GUI2_part_2
+
+    output_GUI = [output_GUI1, output_GUI2]
+
+    scores_to_include_GUI = []
+    scores_to_include_12 = {}
+    scores_to_include_21 = {}
+    for key, value in scores_to_include.items():
         tmp1 = np.tril(value)
         tmp2 = np.tril(value).T
         np.fill_diagonal(tmp2, 0)
@@ -321,129 +327,130 @@ def process_info_for_GUI(Output, MatchThresholdIn, Scores2Include, TotalScore, A
         tmp4 = np.triu(value).T
         np.fill_diagonal(tmp4, 0)
 
-        Scores2Include12[key] = tmp1 + tmp2 
-        Scores2Include21[key] = tmp3 + tmp4  
+        scores_to_include_12[key] = tmp1 + tmp2 
+        scores_to_include_21[key] = tmp3 + tmp4  
 
-    Scores2IncludeGUI = [Scores2Include12, Scores2Include21]
+    scores_to_include_GUI = [scores_to_include_12, scores_to_include_21]
 
 
-    #gettin avg CV data
-    # for the Scores where can do (X + X.T)/2 andtake upper triangular part
-    TotalScoreAvg = np.triu( (TotalScore + TotalScore.T) / 2)
+    #getting avg CV data
+    # for the Scores where can do (X + X.T)/2 and take upper triangular part
+    total_score_avg = np.triu( (total_score + total_score.T) / 2)
 
-    Scores2IncludeAvg = {}
-    for key, value in Scores2Include.items():
-        Scores2IncludeAvg[key] = (value + value.T) / 2
+    scores_to_include_avg = {}
+    for key, value in scores_to_include.items():
+        scores_to_include_avg[key] = (value + value.T) / 2
 
-    OutputAvg = (OutputGUI[0] + OutputGUI[1]) / 2
+    output_avg = (output_GUI[0] + output_GUI[1]) / 2
 
-    MatchesAvgPart1 = np.argwhere( OutputAvg > MatchThreshold )
-    MatchesAvgPart2 = np.argwhere( OutputAvg.T > MatchThreshold )
-    MatchesAvg = np.unique(np.concatenate((MatchesAvgPart1,MatchesAvgPart2)), axis = 0)
+    matches_avg_part_1 = np.argwhere( output_avg > match_threshold )
+    matches_avg_part_2 = np.argwhere( output_avg.T > match_threshold )
+    matches_avg = np.unique(np.concatenate((matches_avg_part_1,matches_avg_part_2)), axis = 0)
 
     # or an simply average over both CV
-    AmplitudeAvg = np.mean(Amplitude, axis = -1)
-    SpatialDecayAvg = np.mean(SpatialDecay, axis = -1)
-    AvgCentroidAvg = np.mean(AvgCentroid, axis = -1)
-    AvgWaveformAvg = np.mean(AvgWaveform, axis = -1)
-    AvgWaveformPerTPAvg = np.mean(AvgWaveformPerTP, axis = -1)
-
-
+    amplitude_avg = np.mean(amplitude, axis = -1)
+    spatial_decay_avg = np.mean(spatial_decay, axis = -1)
+    avg_centroid_avg = np.mean(avg_centroid, axis = -1)
+    avg_waveform_avg = np.mean(avg_waveform, axis = -1)
+    avg_waveform_per_tp_avg = np.mean(avg_waveform_per_tp, axis = -1)
 
 def update(event):
+    """
+    Updates the GUI.
+    """
         
-    UnitA = int(EntryA.get())
-    UnitB = int(EntryB.get())
+    unit_a = int(entry_a.get())
+    unit_b = int(entry_b.get())
 
     CV = get_cv_option() # CV = 'Avg', if AVG is selcted else it equal [0,1] or [1,0]
-    CVoption = CVtkinter.get() - 1
+    CV_option = CV_tkinter.get() - 1
 
-    table = get_table_data(UnitA, UnitB, CV)
+    table = get_table_data(unit_a, unit_b, CV)
     MakeTable(table)
 
-    ScoresTable = get_unit_score_table(UnitA, UnitB, CVoption)
-    make_unit_score_table(ScoresTable)
+    scores_table = get_unit_score_table(unit_a, unit_b, CV_option)
+    make_unit_score_table(scores_table)
 
-    plot_AvgWaveforms(UnitA, UnitB, CV)
-    plot_trajectories(UnitA, UnitB, CV)
+    plot_avg_waveforms(unit_a, unit_b, CV)
+    plot_trajectories(unit_a, unit_b, CV)
 
-    if ToggleRawVal.get() is False:
-        plot_raw_waveforms(UnitA, UnitB, CV)
+    if toggle_raw_val.get() is False:
+        plot_raw_waveforms(unit_a, unit_b, CV)
     else:
-        if RawWaveformPlot.winfo_exists() == 1:
-            RawWaveformPlot.destroy()
+        if raw_waveform_plot.winfo_exists() == 1:
+            raw_waveform_plot.destroy()
 
-    add_probability_label(UnitA, UnitB, CVoption)
-    add_original_ID(UnitA, UnitB)
+    add_probability_label(unit_a, unit_b, CV_option)
+    add_original_ID(unit_a, unit_b)
 
-    if ToggleUMScoreVal.get() is False:
+    if toggle_UM_score_val.get() is False:
         #plot histograms based of off the CV
-        if CVoption == -1:
-            plot_Histograms(HistNamesAvg, HistAvg, HistMatchesAvg, Scores2IncludeAvg, UnitA, UnitB)
-        if CVoption == 0:
-            plot_Histograms(HistNames12, Hist12, HistMatches12, Scores2IncludeGUI[CVoption], UnitA, UnitB)
-        if CVoption == 1:
-            plot_Histograms(HistNames21, Hist21, HistMatches21, Scores2IncludeGUI[CVoption], UnitA, UnitB)
+        if CV_option == -1:
+            plot_histograms(hist_names_avg, hist_avg, hist_matches_avg, scores_to_include_avg, unit_a, unit_b)
+        if CV_option == 0:
+            plot_histograms(hist_names_12, hist_12, hist_matches_12, scores_to_include_GUI[CV_option], unit_a, unit_b)
+        if CV_option == 1:
+            plot_histograms(hist_names_21, hist_21, hist_matches_21, scores_to_include_GUI[CV_option], unit_a, unit_b)
     else:
-        if HistPlot.winfo_exists() == 1:
-            HistPlot.destroy()
+        if hist_plot.winfo_exists() == 1:
+            hist_plot.destroy()
 
-def Up_OptionB_List(event):
+def up_options_b_list(event):
     """  
-    Selects the next highst probaiblty unit w.r.t unit A
+    moves up the option B list, chose the unit with th next highest probabilty of being a match with unit A.
     """
-    global EntryFrame
-    global OptionB
-    global EntryB
+    global entry_frame
+    global option_b
+    global entry_b
 
-    tmpEntryB = int(EntryB.get())
+    tmp_entry_b = int(entry_b.get())
 
-    tmpLs = np.asarray(OptionB)
-    CurrentIdx = int(np.argwhere(tmpLs == tmpEntryB))
-    if CurrentIdx == 0:
+    tmp_list = np.asarray(option_b)
+    current_idx = int(np.argwhere(tmp_list == tmp_entry_b))
+    if current_idx == 0:
         return
     else:
-        CurrentIdx -=1
-        if EntryB.winfo_exists() == 1:
-                EntryB.destroy()
+        current_idx -=1
+        if entry_b.winfo_exists() == 1:
+                entry_b.destroy()
 
-    NewEntryB = tmpLs[CurrentIdx]
+    new_entry_b = tmp_list[current_idx]
 
-    EntryB = ttk.Combobox(EntryFrame, values = OptionB, width = 10 )
-    EntryB.set(NewEntryB )
-    EntryB.bind('<<ComboboxSelected>>', update)  
+    entry_b = ttk.Combobox(entry_frame, values = option_b, width = 10 )
+    entry_b.set(new_entry_b )
+    entry_b.bind('<<ComboboxSelected>>', update)  
 
-    EntryB.grid(row = 2, column = 3, columnspan = 2, sticky = 'WE', padx = 5)
+    entry_b.grid(row = 2, column = 3, columnspan = 2, sticky = 'WE', padx = 5)
 
     update(event)
 
 
-def Down_OptionB_List(event):
+def down_options_b_list(event):
     """  
-    Selects the next highst probaiblty unit w.r.t unit A
+    moves down the option B list, chose the unit with th next highest probabilty of being a match with unit A.
     """
-    global EntryFrame 
-    global OptionB
-    global EntryB
+    global entry_frame 
+    global option_b
+    global entry_b
 
-    tmpEntryB = int(EntryB.get())
+    tmp_entry_b = int(entry_b.get())
 
-    tmpLs = np.asarray(OptionB)
-    CurrentIdx = int(np.argwhere(tmpLs == tmpEntryB))
-    if CurrentIdx == (len(tmpLs) -1):
+    tmp_list = np.asarray(option_b)
+    current_idx = int(np.argwhere(tmp_list == tmp_entry_b))
+    if current_idx == (len(tmp_list) -1):
         return
     else:
-        CurrentIdx +=1
-        if EntryB.winfo_exists() == 1:
-            EntryB.destroy()
+        current_idx +=1
+        if entry_b.winfo_exists() == 1:
+            entry_b.destroy()
 
-    NewEntryB = tmpLs[CurrentIdx]
+    new_entry_b = tmp_list[current_idx]
 
-    EntryB = ttk.Combobox(EntryFrame, values = OptionB, width = 10 )
-    EntryB.set(NewEntryB)
-    EntryB.bind('<<ComboboxSelected>>', update)  
+    entry_b = ttk.Combobox(entry_frame, values = option_b, width = 10 )
+    entry_b.set(new_entry_b)
+    entry_b.bind('<<ComboboxSelected>>', update)  
 
-    EntryB.grid(row = 2, column = 3, columnspan = 2, sticky = 'WE', padx = 5)
+    entry_b.grid(row = 2, column = 3, columnspan = 2, sticky = 'WE', padx = 5)
 
     update(event)
 
@@ -451,10 +458,10 @@ def Down_OptionB_List(event):
 def get_cv_option():
     """
     Will read in the values of the radio button and assign an appropriate value to CV.
-    In general is a list where itis [Unit A cv, UnitB cv], however it could be the string Avg 
+    In general this is a list where itis [Unit A cv, UnitB cv], however it could be the string 'Avg' 
     """
-    global CVtkinter
-    ChosenOption = CVtkinter.get()
+    global CV_tkinter
+    ChosenOption = CV_tkinter.get()
     if ChosenOption == 0:
         CV = 'Avg'
     elif ChosenOption == 1:
@@ -463,80 +470,80 @@ def get_cv_option():
         CV = [1, 0] 
     return CV
 
-#These arethe function used to selct units,including how the CV selctition radio buttons, session selction, unitselection andmoving left and rigthfor next units
+#These are the function used to selct units, including how the CV selctition radio buttons, session selction, unitselection andmoving left and rigthfor next units
 def update_unit_cv():
     """
     When updating the CV we need to do /not do the following:
     - keep the same selected units,
-    - update the options in boxes for unitA and unitB as matches and likely mathces units can change
-    - make it so when scrolling the list #MATCHIDX AUTOMATICALLY UPDATES TO THE CORECT POINT INTHE NEW CV
+    - update the options in boxes for unitA and unitB as matches and likely matches units can change
+    - make it so when scrolling the list #MATCHIDX AUTOMATICALLY UPDATES TO THE CORrECT POINT IN THE NEW CV
     - update the screen to show the new CV
     """
-    global EntryA
-    global EntryB
-    global OptionA
-    global SessionEntryA
-    global SessionEntryB
-    global MatchIdx
+    global entry_a
+    global entry_b
+    global option_a
+    global session_entry_a
+    global session_entry_b
+    global match_idx
     
     #selecting the unit
-    SessionA = int(SessionEntryA.get())
-    SessionB = int(SessionEntryB.get()) 
+    session_a = int(session_entry_a.get())
+    session_b = int(session_entry_b.get()) 
 
     #Keep track of the unit it was before as we dont want to change theunit viewed when changing the CV
-    EntryAtmp = int(EntryA.get())
-    EntryBtmp = int(EntryB.get())
+    entry_a_tmp = int(entry_a.get())
+    entry_b_tmp = int(entry_b.get())
 
-    if EntryA.winfo_exists() == 1:
-        EntryA.destroy()
-    if EntryB.winfo_exists() == 1:
-        EntryB.destroy()
+    if entry_a.winfo_exists() == 1:
+        entry_a.destroy()
+    if entry_b.winfo_exists() == 1:
+        entry_b.destroy()
 
     CV = get_cv_option()
-    CVoption = CVtkinter.get() - 1 #want 0 for cv (1,2) , want 1 for cv (2,1)
+    CV_option = CV_tkinter.get() - 1 #want 0 for cv (1,2) , want 1 for cv (2,1)
     if CV == 'Avg':
         #Use average CV values
-        TmpIdxA = np.argwhere((SessionSwitch[SessionA -1] <= MatchesAvg[:,0]) * (MatchesAvg[:,0] < SessionSwitch[SessionA]) == True ).squeeze()
-        TmpIdxB = np.argwhere((SessionSwitch[SessionB -1] <= MatchesAvg[:,1]) * (MatchesAvg[:,1] < SessionSwitch[SessionB]) == True).squeeze()
-        InBoth = np.isin(TmpIdxA, TmpIdxB)
-        OptionA = MatchesAvg[TmpIdxA[InBoth],:].tolist()
+        tmp_idx_a = np.argwhere((session_switch[session_a -1] <= matches_avg[:,0]) * (matches_avg[:,0] < session_switch[session_a]) == True ).squeeze()
+        tmp_idx_b = np.argwhere((session_switch[session_b -1] <= matches_avg[:,1]) * (matches_avg[:,1] < session_switch[session_b]) == True).squeeze()
+        in_both = np.isin(tmp_idx_a, tmp_idx_b)
+        option_a = matches_avg[tmp_idx_a[in_both],:].tolist()
 
-        EntryA = ttk.Combobox(EntryFrame, values = OptionA, width = 10)
-        EntryA.set(EntryAtmp)
+        entry_a = ttk.Combobox(entry_frame, values = option_a, width = 10)
+        entry_a.set(entry_a_tmp)
 
-        OptionB = np.flip(np.argsort(OutputAvg[int(EntryA.get()),SessionSwitch[SessionB-1]:SessionSwitch[SessionB]]) + SessionSwitch[SessionB-1])
-        OptionB = OptionB.tolist()
+        option_b = np.flip(np.argsort(output_avg[int(entry_a.get()),session_switch[session_b-1]:session_switch[session_b]]) + session_switch[session_b-1])
+        option_b = option_b.tolist()
 
     else :
 
-        TmpIdxA = np.argwhere((SessionSwitch[SessionA -1] <= MatchesGUI[CVoption][:,0]) * ( MatchesGUI[CVoption][:,0] < SessionSwitch[SessionA]) == True).squeeze()
-        TmpIdxB = np.argwhere((SessionSwitch[SessionB -1] <= MatchesGUI[CVoption][:,1]) * ( MatchesGUI[CVoption][:,1] < SessionSwitch[SessionB]) == True).squeeze()
-        InBoth = np.isin(TmpIdxA, TmpIdxB)
+        tmp_idx_a = np.argwhere((session_switch[session_a -1] <= matches_GUI[CV_option][:,0]) * ( matches_GUI[CV_option][:,0] < session_switch[session_a]) == True).squeeze()
+        tmp_idx_b = np.argwhere((session_switch[session_b -1] <= matches_GUI[CV_option][:,1]) * ( matches_GUI[CV_option][:,1] < session_switch[session_b]) == True).squeeze()
+        in_both = np.isin(tmp_idx_a, tmp_idx_b)
 
         #So is orderby unit A
-        OptionA =  MatchesGUI[CVoption][TmpIdxA[InBoth],:].tolist()
-        if CVoption == 0:
-            OptionA = sorted(OptionA)
+        option_a =  matches_GUI[CV_option][tmp_idx_a[in_both],:].tolist()
+        if CV_option == 0:
+            option_a = sorted(option_a)
 
-        EntryA = ttk.Combobox(EntryFrame, values = OptionA, width = 10)
-        EntryA.set(EntryAtmp)
+        entry_a = ttk.Combobox(entry_frame, values = option_a, width = 10)
+        entry_a.set(entry_a_tmp)
 
         ##NOT SORTED FOR CV
-        OptionB = np.flip(np.argsort(OutputGUI[CVoption][int(EntryA.get()),SessionSwitch[SessionB-1]:SessionSwitch[SessionB]]) + SessionSwitch[SessionB-1])
-        OptionB = OptionB.tolist()
+        option_b = np.flip(np.argsort(output_GUI[CV_option][int(entry_a.get()),session_switch[session_b-1]:session_switch[session_b]]) + session_switch[session_b-1])
+        option_b = option_b.tolist()
 
     ##################
-    EntryB = ttk.Combobox(EntryFrame, values = OptionB, width = 10 )
-    EntryB.set(EntryBtmp)
+    entry_b = ttk.Combobox(entry_frame, values = option_b, width = 10 )
+    entry_b.set(entry_b_tmp)
     
-    EntryA.bind('<<ComboboxSelected>>', Update_Units)
-    EntryB.bind('<<ComboboxSelected>>', update)
-    EntryA.grid(row = 2, column = 1, columnspan = 2, stick = 'WE', padx = 5)
-    EntryB.grid(row = 2, column = 3, columnspan = 2, sticky = 'WE', padx = 5)
+    entry_a.bind('<<ComboboxSelected>>', update_units)
+    entry_b.bind('<<ComboboxSelected>>', update)
+    entry_a.grid(row = 2, column = 1, columnspan = 2, stick = 'WE', padx = 5)
+    entry_b.grid(row = 2, column = 3, columnspan = 2, sticky = 'WE', padx = 5)
 
-    tmpList = [int(EntryAtmp), int(EntryBtmp)]
-    if tmpList in OptionA:
-        MatchIdx = OptionA.index(tmpList)
+    tmp_list = [int(entry_a_tmp), int(entry_b_tmp)]
+    if tmp_list in option_a:
+        match_idx = option_a.index(tmp_list)
 
     update(None)
 
@@ -551,59 +558,59 @@ def update_unit_entryA(event):
     - update the options for list B
     - update what is in the screen
     """
-    global EntryA
-    global EntryB
-    global OptionA
-    global MatchIdx
-    global SessionEntryB
+    global entry_a
+    global entry_b
+    global option_a
+    global match_idx
+    global session_entry_b
     
-    SessionA = int(SessionEntryA.get())
-    SessionB = int(SessionEntryB.get()) 
-    EntryBtmp = int(EntryB.get())
+    session_a = int(session_entry_a.get())
+    session_b = int(session_entry_b.get()) 
+    EntryBtmp = int(entry_b.get())
 
-    if EntryA.winfo_exists() == 1:
-        EntryA.destroy()
-    if EntryB.winfo_exists() == 1:
-        EntryB.destroy()
+    if entry_a.winfo_exists() == 1:
+        entry_a.destroy()
+    if entry_b.winfo_exists() == 1:
+        entry_b.destroy()
 
     CV = get_cv_option()
-    CVoption = CVtkinter.get() - 1 #want 0 for cv (1,2) , want 1 for cv (2,1)
+    cv_option = CV_tkinter.get() - 1 #want 0 for cv (1,2) , want 1 for cv (2,1)
     if CV == 'Avg':
         #Use average CV values
-        TmpIdxA = np.argwhere((SessionSwitch[SessionA -1] <= MatchesAvg[:,0]) * (MatchesAvg[:,0] < SessionSwitch[SessionA]) == True ).squeeze()
-        TmpIdxB = np.argwhere((SessionSwitch[SessionB -1] <= MatchesAvg[:,1]) * (MatchesAvg[:,1] < SessionSwitch[SessionB]) == True).squeeze()
-        InBoth = np.isin(TmpIdxA, TmpIdxB)
-        OptionA = MatchesAvg[TmpIdxA[InBoth],:].tolist()
+        tmp_idx_a = np.argwhere((session_switch[session_a -1] <= matches_avg[:,0]) * (matches_avg[:,0] < session_switch[session_a]) == True ).squeeze()
+        tmp_idx_b = np.argwhere((session_switch[session_b -1] <= matches_avg[:,1]) * (matches_avg[:,1] < session_switch[session_b]) == True).squeeze()
+        in_both = np.isin(tmp_idx_a, tmp_idx_b)
+        option_a = matches_avg[tmp_idx_a[in_both],:].tolist()
 
-        EntryA = ttk.Combobox(EntryFrame, values = OptionA, width = 10)
-        EntryA.set(OptionA[0][0])
+        entry_a = ttk.Combobox(entry_frame, values = option_a, width = 10)
+        entry_a.set(option_a[0][0])
 
-        OptionB = np.flip(np.argsort(OutputAvg[int(EntryA.get()),SessionSwitch[SessionB-1]:SessionSwitch[SessionB]]) + SessionSwitch[SessionB-1])
-        OptionB = OptionB.tolist()
+        option_b = np.flip(np.argsort(output_avg[int(entry_a.get()),session_switch[session_b-1]:session_switch[session_b]]) + session_switch[session_b-1])
+        option_b = option_b.tolist()
 
     else :
 
-        TmpIdxA = np.argwhere((SessionSwitch[SessionA -1] <= MatchesGUI[CVoption][:,0]) * ( MatchesGUI[CVoption][:,0] < SessionSwitch[SessionA]) == True ).squeeze()
-        TmpIdxB = np.argwhere((SessionSwitch[SessionB -1] <= MatchesGUI[CVoption][:,1]) * ( MatchesGUI[CVoption][:,1] < SessionSwitch[SessionB]) == True).squeeze()
-        InBoth = np.isin(TmpIdxA, TmpIdxB)
-        OptionA =  MatchesGUI[CVoption][TmpIdxA[InBoth],:].tolist()
-        if CVoption == 0:
-            OptionA = sorted(OptionA)
+        tmp_idx_a = np.argwhere((session_switch[session_a -1] <= matches_GUI[cv_option][:,0]) * ( matches_GUI[cv_option][:,0] < session_switch[session_a]) == True ).squeeze()
+        tmp_idx_b = np.argwhere((session_switch[session_b -1] <= matches_GUI[cv_option][:,1]) * ( matches_GUI[cv_option][:,1] < session_switch[session_b]) == True).squeeze()
+        in_both = np.isin(tmp_idx_a, tmp_idx_b)
+        option_a =  matches_GUI[cv_option][tmp_idx_a[in_both],:].tolist()
+        if cv_option == 0:
+            option_a = sorted(option_a)
 
-        EntryA = ttk.Combobox(EntryFrame, values = OptionA, width = 10)
-        EntryA.set(OptionA[0][0])
+        entry_a = ttk.Combobox(entry_frame, values = option_a, width = 10)
+        entry_a.set(option_a[0][0])
 
-        OptionB = np.flip(np.argsort(OutputGUI[CVoption][int(EntryA.get()),SessionSwitch[SessionB-1]:SessionSwitch[SessionB]]) + SessionSwitch[SessionB-1])
-        OptionB = OptionB.tolist()
+        option_b = np.flip(np.argsort(output_GUI[cv_option][int(entry_a.get()),session_switch[session_b-1]:session_switch[session_b]]) + session_switch[session_b-1])
+        option_b = option_b.tolist()
     ##################
-    EntryB = ttk.Combobox(EntryFrame, values = OptionB, width = 10 )
-    EntryB.set(EntryBtmp)
-    EntryA.bind('<<ComboboxSelected>>', Update_Units)
-    EntryB.bind('<<ComboboxSelected>>', update)
+    entry_b = ttk.Combobox(entry_frame, values = option_b, width = 10 )
+    entry_b.set(EntryBtmp)
+    entry_a.bind('<<ComboboxSelected>>', update_units)
+    entry_b.bind('<<ComboboxSelected>>', update)
 
-    EntryA.grid(row = 2, column = 1, columnspan = 2, stick = 'WE', padx = 5)
-    EntryB.grid(row = 2, column = 3, columnspan = 2, sticky = 'WE', padx = 5)
-    MatchIdx = 0
+    entry_a.grid(row = 2, column = 1, columnspan = 2, stick = 'WE', padx = 5)
+    entry_b.grid(row = 2, column = 3, columnspan = 2, sticky = 'WE', padx = 5)
+    match_idx = 0
 
     update(event)
 
@@ -617,110 +624,110 @@ def update_unit_entryB(event):
     - Set the Match IDX at 0, for the new list of match pairs
     - update what is in the screen
     """
-    global EntryA
-    global EntryB
-    global OptionA
-    global MatchIdx
-    global SessionEntryA
+    global entry_a
+    global entry_b
+    global option_a
+    global match_idx
+    global session_entry_a
     
-    SessionA = int(SessionEntryA.get())
-    SessionB = int(SessionEntryB.get()) 
-    EntryAtmp = int(EntryA.get())
+    session_a = int(session_entry_a.get())
+    session_b = int(session_entry_b.get()) 
+    entry_a_tmp = int(entry_a.get())
 
-    if EntryA.winfo_exists() == 1:
-        EntryA.destroy()
-    if EntryB.winfo_exists() == 1:
-        EntryB.destroy()
+    if entry_a.winfo_exists() == 1:
+        entry_a.destroy()
+    if entry_b.winfo_exists() == 1:
+        entry_b.destroy()
 
     CV = get_cv_option()
-    CVoption = CVtkinter.get() - 1 #want 0 for cv (1,2) , want 1 for cv (2,1)
+    CV_option = CV_tkinter.get() - 1 #want 0 for cv (1,2) , want 1 for cv (2,1)
     if CV == 'Avg':
         #Use average CV values
-        TmpIdxA = np.argwhere((SessionSwitch[SessionA -1] <= MatchesAvg[:,0]) * (MatchesAvg[:,0] < SessionSwitch[SessionA]) == True ).squeeze()
-        TmpIdxB = np.argwhere((SessionSwitch[SessionB -1] <= MatchesAvg[:,1]) * (MatchesAvg[:,1] < SessionSwitch[SessionB]) == True).squeeze()
-        InBoth = np.isin(TmpIdxA, TmpIdxB)
-        OptionA = MatchesAvg[TmpIdxA[InBoth],:].tolist()
+        tmp_idx_a = np.argwhere((session_switch[session_a -1] <= matches_avg[:,0]) * (matches_avg[:,0] < session_switch[session_a]) == True ).squeeze()
+        tmp_idx_b = np.argwhere((session_switch[session_b -1] <= matches_avg[:,1]) * (matches_avg[:,1] < session_switch[session_b]) == True).squeeze()
+        in_both = np.isin(tmp_idx_a, tmp_idx_b)
+        option_a = matches_avg[tmp_idx_a[in_both],:].tolist()
 
-        EntryA = ttk.Combobox(EntryFrame, values = OptionA, width = 10)
-        EntryA.set(EntryAtmp)
+        entry_a = ttk.Combobox(entry_frame, values = option_a, width = 10)
+        entry_a.set(entry_a_tmp)
 
-        OptionB = np.flip(np.argsort(OutputAvg[int(EntryA.get()),SessionSwitch[SessionB-1]:SessionSwitch[SessionB]]) + SessionSwitch[SessionB-1])
-        OptionB = OptionB.tolist()
+        option_b = np.flip(np.argsort(output_avg[int(entry_a.get()),session_switch[session_b-1]:session_switch[session_b]]) + session_switch[session_b-1])
+        option_b = option_b.tolist()
 
     else :
 
-        TmpIdxA = np.argwhere((SessionSwitch[SessionA -1] <= MatchesGUI[CVoption][:,0]) * ( MatchesGUI[CVoption][:,0] < SessionSwitch[SessionA]) == True ).squeeze()
-        TmpIdxB = np.argwhere((SessionSwitch[SessionB -1] <= MatchesGUI[CVoption][:,1]) * ( MatchesGUI[CVoption][:,1] < SessionSwitch[SessionB]) == True).squeeze()
-        InBoth = np.isin(TmpIdxA, TmpIdxB)
-        OptionA =  MatchesGUI[CVoption][TmpIdxA[InBoth],:].tolist()
-        if CVoption == 0:
-            OptionA = sorted(OptionA)
+        tmp_idx_a = np.argwhere((session_switch[session_a -1] <= matches_GUI[CV_option][:,0]) * ( matches_GUI[CV_option][:,0] < session_switch[session_a]) == True ).squeeze()
+        tmp_idx_b = np.argwhere((session_switch[session_b -1] <= matches_GUI[CV_option][:,1]) * ( matches_GUI[CV_option][:,1] < session_switch[session_b]) == True).squeeze()
+        in_both = np.isin(tmp_idx_a, tmp_idx_b)
+        option_a =  matches_GUI[CV_option][tmp_idx_a[in_both],:].tolist()
+        if CV_option == 0:
+            option_a = sorted(option_a)
 
-        EntryA = ttk.Combobox(EntryFrame, values = OptionA, width = 10)
-        EntryA.set(EntryAtmp)
+        entry_a = ttk.Combobox(entry_frame, values = option_a, width = 10)
+        entry_a.set(entry_a_tmp)
 
-        OptionB = np.flip(np.argsort(OutputGUI[CVoption][int(EntryAtmp),SessionSwitch[SessionB-1]:SessionSwitch[SessionB]]) + SessionSwitch[SessionB-1])
-        OptionB = OptionB.tolist()
+        option_b = np.flip(np.argsort(output_GUI[CV_option][int(entry_a_tmp),session_switch[session_b-1]:session_switch[session_b]]) + session_switch[session_b-1])
+        option_b = option_b.tolist()
     
     ##################
-    EntryB = ttk.Combobox(EntryFrame, values = OptionB, width = 10 )
-    EntryB.set(OptionB[0])
-    EntryA.bind('<<ComboboxSelected>>', Update_Units)
-    EntryB.bind('<<ComboboxSelected>>', update)  
+    entry_b = ttk.Combobox(entry_frame, values = option_b, width = 10 )
+    entry_b.set(option_b[0])
+    entry_a.bind('<<ComboboxSelected>>', update_units)
+    entry_b.bind('<<ComboboxSelected>>', update)  
 
-    EntryA.grid(row = 2, column = 1, columnspan = 2, stick = 'WE', padx = 5)
-    EntryB.grid(row = 2, column = 3, columnspan = 2, sticky = 'WE', padx = 5)
-    MatchIdx = 0    
+    entry_a.grid(row = 2, column = 1, columnspan = 2, stick = 'WE', padx = 5)
+    entry_b.grid(row = 2, column = 3, columnspan = 2, sticky = 'WE', padx = 5)
+    match_idx = 0    
 
     update(event)
 
-def Update_Units(event):
+def update_units(event):
     """ 
-    This function is called when a option in the Unit A dropdown is slected (is a pair of units)
+    This function is called when a option in the Unit A dropdown is selected (is a pair of units)
     - split the list of units into two pairs for unit labels for UnitA and UnitB
     - Update the unit B dropdown box to reflect matches for the new Unit A
     - Find the new Match Idx for the new pair which is selected
     """
-    global MatchIdx
-    global EntryA
-    global EntryB
-    global OptionA
-    global SessionEntryB
+    global match_idx
+    global entry_a
+    global entry_b
+    global option_a
+    global session_entry_b
     
 
-    SessionB = int(SessionEntryB.get())
-    selected = EntryA.get()
+    session_b = int(session_entry_b.get())
+    selected = entry_a.get()
 
-    if EntryB.winfo_exists() == 1:
-        EntryB.destroy()
+    if entry_b.winfo_exists() == 1:
+        entry_b.destroy()
     # selected is s string which is xxx yyy , where xxx and yyy are the two units seperates by a space
     tmpA = selected.split()[0]
     tmpB = selected.split()[1]
-    EntryA.set(tmpA)
+    entry_a.set(tmpA)
     
 
     #need to make it so the list for B updates
     CV = get_cv_option()
-    CVoption = CVtkinter.get() - 1 #want 0 for cv (1,2) , want 1 for cv (2,1)
+    CV_option = CV_tkinter.get() - 1 #want 0 for cv (1,2) , want 1 for cv (2,1)
     if CV == 'Avg':
         #Use average CV value
-        OptionB = np.flip(np.argsort(OutputAvg[int(tmpA),SessionSwitch[SessionB-1]:SessionSwitch[SessionB]]) + SessionSwitch[SessionB-1])
-        OptionB = OptionB.tolist()
+        option_b = np.flip(np.argsort(output_avg[int(tmpA),session_switch[session_b-1]:session_switch[session_b]]) + session_switch[session_b-1])
+        option_b = option_b.tolist()
     else :
-        OptionB = np.flip(np.argsort(OutputGUI[CVoption][int(tmpA),SessionSwitch[SessionB-1]:SessionSwitch[SessionB]]) + SessionSwitch[SessionB-1])
-        OptionB = OptionB.tolist()
+        option_b = np.flip(np.argsort(output_GUI[CV_option][int(tmpA),session_switch[session_b-1]:session_switch[session_b]]) + session_switch[session_b-1])
+        option_b = option_b.tolist()
     
     ##################
-    EntryB = ttk.Combobox(EntryFrame, values = OptionB, width = 10 )
-    EntryB.set(tmpB)
-    EntryB.bind('<<ComboboxSelected>>', update)  
+    entry_b = ttk.Combobox(entry_frame, values = option_b, width = 10 )
+    entry_b.set(tmpB)
+    entry_b.bind('<<ComboboxSelected>>', update)  
 
-    EntryB.grid(row = 2, column = 3, columnspan = 2, sticky = 'WE', padx = 5)
+    entry_b.grid(row = 2, column = 3, columnspan = 2, sticky = 'WE', padx = 5)
 
 
     #need to get list index of the selected postion
-    tmpList = [int(tmpA), int(tmpB)]
-    MatchIdx = OptionA.index(tmpList)
+    tmp_list = [int(tmpA), int(tmpB)]
+    match_idx = option_a.index(tmp_list)
     update(event)
 
 def next_pair(event):
@@ -730,37 +737,37 @@ def next_pair(event):
     - update the Units
     - update the dropdown box for unit b to reflect the new Unit A
     """
-    global MatchIdx
-    global EntryA
-    global EntryB
-    global OptionA
-    global SessionEntryB
+    global match_idx
+    global entry_a
+    global entry_b
+    global option_a
+    global session_entry_b
 
-    SessionB = int(SessionEntryB.get())
-    MatchIdx +=1
-    tmpA, tmpB = OptionA[MatchIdx]
-    EntryA.set(tmpA)
+    session_b = int(session_entry_b.get())
+    match_idx +=1
+    tmp_a, tmp_b = option_a[match_idx]
+    entry_a.set(tmp_a)
 
-    if EntryB.winfo_exists() == 1:
-        EntryB.destroy()
+    if entry_b.winfo_exists() == 1:
+        entry_b.destroy()
 
     #Update B, and change it's dropbox
     CV = get_cv_option()
-    CVoption = CVtkinter.get() - 1 #want 0 for cv (1,2) , want 1 for cv (2,1)
+    cv_option = CV_tkinter.get() - 1 #want 0 for cv (1,2) , want 1 for cv (2,1)
     if CV == 'Avg':
         #Use average CV value
-        OptionB = np.flip(np.argsort(OutputAvg[int(tmpA),SessionSwitch[SessionB-1]:SessionSwitch[SessionB]]) + SessionSwitch[SessionB-1])
-        OptionB = OptionB.tolist()
+        option_b = np.flip(np.argsort(output_avg[int(tmp_a),session_switch[session_b-1]:session_switch[session_b]]) + session_switch[session_b-1])
+        option_b = option_b.tolist()
     else :
-        OptionB = np.flip(np.argsort(OutputGUI[CVoption][int(tmpA),SessionSwitch[SessionB-1]:SessionSwitch[SessionB]]) + SessionSwitch[SessionB-1])
-        OptionB = OptionB.tolist()
+        option_b = np.flip(np.argsort(output_GUI[cv_option][int(tmp_a),session_switch[session_b-1]:session_switch[session_b]]) + session_switch[session_b-1])
+        option_b = option_b.tolist()
     
     ##################
-    EntryB = ttk.Combobox(EntryFrame, values = OptionB, width = 10 )
-    EntryB.set(tmpB)
-    EntryB.bind('<<ComboboxSelected>>', update)  
+    entry_b = ttk.Combobox(entry_frame, values = option_b, width = 10 )
+    entry_b.set(tmp_b)
+    entry_b.bind('<<ComboboxSelected>>', update)  
 
-    EntryB.grid(row = 2, column = 3, columnspan = 2, sticky = 'WE', padx = 5)
+    entry_b.grid(row = 2, column = 3, columnspan = 2, sticky = 'WE', padx = 5)
 
     update(event)
 
@@ -771,193 +778,193 @@ def previous_pair(event):
     - update the Units
     - update the dropdown box for unit b to reflect the new Unit A
     """
-    global MatchIdx
-    global EntryA
-    global EntryB
-    global OptionA
-    global SessionEntryB
+    global match_idx
+    global entry_a
+    global entry_b
+    global option_a
+    global session_entry_b
     
-    SessionB = int(SessionEntryB.get())
-    MatchIdx -=1
-    tmpA, tmpB = OptionA[MatchIdx]
-    EntryA.set(tmpA)
+    session_b = int(session_entry_b.get())
+    match_idx -=1
+    tmp_a, tmp_b = option_a[match_idx]
+    entry_a.set(tmp_a)
 
 
-    if EntryB.winfo_exists() == 1:
-        EntryB.destroy()
+    if entry_b.winfo_exists() == 1:
+        entry_b.destroy()
 
     #Update B, and change it's dropbox
     CV = get_cv_option()
-    CVoption = CVtkinter.get() - 1 #want 0 for cv (1,2) , want 1 for cv (2,1)
+    CV_option = CV_tkinter.get() - 1 #want 0 for cv (1,2) , want 1 for cv (2,1)
     if CV == 'Avg':
         #Use average CV value
-        OptionB = np.flip(np.argsort(OutputAvg[int(tmpA),SessionSwitch[SessionB-1]:SessionSwitch[SessionB]]) + SessionSwitch[SessionB-1])
-        OptionB = OptionB.tolist()
+        option_b = np.flip(np.argsort(output_avg[int(tmp_a),session_switch[session_b-1]:session_switch[session_b]]) + session_switch[session_b-1])
+        option_b = option_b.tolist()
     else :
-        OptionB = np.flip(np.argsort(OutputGUI[CVoption][int(tmpA),SessionSwitch[SessionB-1]:SessionSwitch[SessionB]]) + SessionSwitch[SessionB-1])
-        OptionB = OptionB.tolist()
+        option_b = np.flip(np.argsort(output_GUI[CV_option][int(tmp_a),session_switch[session_b-1]:session_switch[session_b]]) + session_switch[session_b-1])
+        option_b = option_b.tolist()
     
     ##################
-    EntryB = ttk.Combobox(EntryFrame, values = OptionB, width = 10 )
-    EntryB.set(tmpB)
-    EntryB.bind('<<ComboboxSelected>>', update)  
+    entry_b = ttk.Combobox(entry_frame, values = option_b, width = 10 )
+    entry_b.set(tmp_b)
+    entry_b.bind('<<ComboboxSelected>>', update)  
 
-    EntryB.grid(row = 2, column = 3, columnspan = 2, sticky = 'WE', padx = 5)
+    entry_b.grid(row = 2, column = 3, columnspan = 2, sticky = 'WE', padx = 5)
 
     update(event)
 
 def swap_units():
-    global EntryFrame
-    global EntryA
-    global EntryB
-    global SessionEntryB
-    global SessionEntryB
-    global MatchIdx
-    global OptionA
+    global entry_frame
+    global entry_a
+    global entry_b
+    global session_entry_b
+    global session_entry_b
+    global match_idx
+    global option_a
 
     #get all initial info
-    EntryATmp = int(EntryA.get())
-    EntryBTmp = int(EntryB.get())
-    SessionATmp = int(SessionEntryA.get())
-    SesssionBTmp = int(SessionEntryB.get())
+    entry_a_tmp = int(entry_a.get())
+    entry_b_tmp = int(entry_b.get())
+    session_a_tmp = int(session_entry_a.get())
+    session_b_tmp = int(session_entry_b.get())
 
     #delte old box a and b
-    if EntryA.winfo_exists() == 1:
-        EntryA.destroy()
-    if EntryB.winfo_exists() == 1:
-        EntryB.destroy()
+    if entry_a.winfo_exists() == 1:
+        entry_a.destroy()
+    if entry_b.winfo_exists() == 1:
+        entry_b.destroy()
 
     #swap allpairs
-    SessionEntryA.set(SesssionBTmp)
-    SessionEntryB.set(SessionATmp)
+    session_entry_a.set(session_b_tmp)
+    session_entry_b.set(session_a_tmp)
     
     #Update A and B dropsown boxs
     CV = get_cv_option()
-    CVoption = CVtkinter.get() - 1 #want 0 for cv (1,2) , want 1 for cv (2,1)
+    cv_option = CV_tkinter.get() - 1 #want 0 for cv (1,2) , want 1 for cv (2,1)
     if CV == 'Avg':
         #Use average CV values
-        TmpIdxA = np.argwhere((SessionSwitch[SesssionBTmp -1] <= MatchesAvg[:,0]) * (MatchesAvg[:,0] < SessionSwitch[SesssionBTmp]) == True ).squeeze()
-        TmpIdxB = np.argwhere((SessionSwitch[SessionATmp -1] <= MatchesAvg[:,1]) * (MatchesAvg[:,1] < SessionSwitch[SessionATmp]) == True).squeeze()
-        InBoth = np.isin(TmpIdxA, TmpIdxB)
-        OptionA = MatchesAvg[TmpIdxA[InBoth],:].tolist()
+        tmp_idx_a = np.argwhere((session_switch[session_b_tmp -1] <= matches_avg[:,0]) * (matches_avg[:,0] < session_switch[session_b_tmp]) == True ).squeeze()
+        tmp_idx_b = np.argwhere((session_switch[session_a_tmp -1] <= matches_avg[:,1]) * (matches_avg[:,1] < session_switch[session_a_tmp]) == True).squeeze()
+        in_both = np.isin(tmp_idx_a, tmp_idx_b)
+        option_a = matches_avg[tmp_idx_a[in_both],:].tolist()
 
-        EntryA = ttk.Combobox(EntryFrame, values = OptionA, width = 10)
-        EntryA.set(EntryBTmp)
+        entry_a = ttk.Combobox(entry_frame, values = option_a, width = 10)
+        entry_a.set(entry_b_tmp)
 
-        OptionB = np.flip(np.argsort(OutputAvg[int(EntryA.get()),SessionSwitch[SessionATmp-1]:SessionSwitch[SessionATmp]]) + SessionSwitch[SessionATmp-1])
-        OptionB = OptionB.tolist()
+        option_b = np.flip(np.argsort(output_avg[int(entry_a.get()),session_switch[session_a_tmp-1]:session_switch[session_a_tmp]]) + session_switch[session_a_tmp-1])
+        option_b = option_b.tolist()
 
     else :
 
-        TmpIdxA = np.argwhere((SessionSwitch[SesssionBTmp -1] <= MatchesGUI[CVoption][:,0]) * ( MatchesGUI[CVoption][:,0] < SessionSwitch[SesssionBTmp]) == True).squeeze()
-        TmpIdxB = np.argwhere((SessionSwitch[SessionATmp -1] <= MatchesGUI[CVoption][:,1]) * ( MatchesGUI[CVoption][:,1] < SessionSwitch[SessionATmp]) == True).squeeze()
-        InBoth = np.isin(TmpIdxA, TmpIdxB)
+        tmp_idx_a = np.argwhere((session_switch[session_b_tmp -1] <= matches_GUI[cv_option][:,0]) * ( matches_GUI[cv_option][:,0] < session_switch[session_b_tmp]) == True).squeeze()
+        tmp_idx_b = np.argwhere((session_switch[session_a_tmp -1] <= matches_GUI[cv_option][:,1]) * ( matches_GUI[cv_option][:,1] < session_switch[session_a_tmp]) == True).squeeze()
+        in_both = np.isin(tmp_idx_a, tmp_idx_b)
 
         #So is orderby unit A
-        OptionA =  MatchesGUI[CVoption][TmpIdxA[InBoth],:].tolist()
-        if CVoption == 0:
-            OptionA = sorted(OptionA)
+        option_a =  matches_GUI[cv_option][tmp_idx_a[in_both],:].tolist()
+        if cv_option == 0:
+            option_a = sorted(option_a)
 
-        EntryA = ttk.Combobox(EntryFrame, values = OptionA, width = 10)
-        EntryA.set(EntryBTmp)
+        entry_a = ttk.Combobox(entry_frame, values = option_a, width = 10)
+        entry_a.set(entry_b_tmp)
 
         ##NOT SORTED FOR CV
-        OptionB = np.flip(np.argsort(OutputGUI[CVoption][int(EntryA.get()),SessionSwitch[SessionATmp-1]:SessionSwitch[SessionATmp]]) + SessionSwitch[SessionATmp-1])
-        OptionB = OptionB.tolist()
+        option_b = np.flip(np.argsort(output_GUI[cv_option][int(entry_a.get()),session_switch[session_a_tmp-1]:session_switch[session_a_tmp]]) + session_switch[session_a_tmp-1])
+        option_b = option_b.tolist()
 
     ##################
-    EntryB = ttk.Combobox(EntryFrame, values = OptionB, width = 10 )
-    EntryB.set(EntryATmp)
+    entry_b = ttk.Combobox(entry_frame, values = option_b, width = 10 )
+    entry_b.set(entry_a_tmp)
     
-    EntryA.bind('<<ComboboxSelected>>', Update_Units)
-    EntryB.bind('<<ComboboxSelected>>', update)
-    EntryA.grid(row = 2, column = 1, columnspan = 2, stick = 'WE', padx = 5)
-    EntryB.grid(row = 2, column = 3, columnspan = 2, sticky = 'WE', padx = 5)
+    entry_a.bind('<<ComboboxSelected>>', update_units)
+    entry_b.bind('<<ComboboxSelected>>', update)
+    entry_a.grid(row = 2, column = 1, columnspan = 2, stick = 'WE', padx = 5)
+    entry_b.grid(row = 2, column = 3, columnspan = 2, sticky = 'WE', padx = 5)
 
-    tmpList = [int(EntryBTmp), int(EntryATmp)]
+    tmp_list = [int(entry_b_tmp), int(entry_a_tmp)]
 
-    MatchIdx = OptionA.index(tmpList)
+    match_idx = option_a.index(tmp_list)
     update(None)
 
-def get_score_histrograms(Scores2Include, OutputThreshold):
+def get_score_histograms(scores_to_include, output_threshold):
     """  
     Scores2Include is the dictionary of all scores.
     ProbThreshold is a nUnits*nUnits array where each index is 0 (Not Match) 1 (Match)
     """
 
     #are lsit of length 6 each list item is 2 np arrays(bins, values)
-    HistNames = []
-    Hist = []
-    HistMatches = []
-    for key, values in Scores2Include.items():
-        HistNames.append(key)
-        Hist.append(np.histogram(values, bins = 100, density = True))
-        HistMatches.append(np.histogram(values[OutputThreshold.astype(bool)], bins = 100, density = True))
+    hist_names = []
+    hist = []
+    hist_matches = []
+    for key, values in scores_to_include.items():
+        hist_names.append(key)
+        hist.append(np.histogram(values, bins = 100, density = True))
+        hist_matches.append(np.histogram(values[output_threshold.astype(bool)], bins = 100, density = True))
 
-    return HistNames, Hist, HistMatches    
+    return hist_names, hist, hist_matches    
 
 def add_original_ID(UnitA, UnitB):
-    global OriginalIDLabel
+    global original_id_label
 
-    if OriginalIDLabel.winfo_exists():
-        OriginalIDLabel.destroy()
+    if original_id_label.winfo_exists():
+        original_id_label.destroy()
 
-    OriginalIDLabel = ttk.Label(root, text = f'The Original Unit IDs are:\nUnit A: {int(ClusInfo["OriginalID"][UnitA].squeeze())}   Unit B: {int(ClusInfo["OriginalID"][UnitB].squeeze())}', borderwidth = 2 , relief= 'groove')
-    OriginalIDLabel.grid( row = 0, column = 2, ipadx = 5, ipady = 5)
+    original_id_label = ttk.Label(root, text = f'The Original Unit IDs are:\nUnit A: {int(clus_info["original_id"][UnitA].squeeze())}   Unit B: {int(clus_info["original_id"][UnitB].squeeze())}', borderwidth = 2 , relief= 'groove')
+    original_id_label.grid( row = 0, column = 2, ipadx = 5, ipady = 5)
 
 
 def add_probability_label(UnitA, UnitB, CVoption):
-    global BayesLabel
+    global bayes_label
 
-    if BayesLabel.winfo_exists():
-        BayesLabel.destroy()
+    if bayes_label.winfo_exists():
+        bayes_label.destroy()
 
     if CVoption == -1:
-        BayesLabel = ttk.Label(root, text = f'The UM probabilty for this match is:\n {np.round(OutputAvg[UnitA, UnitB],5)}', borderwidth = 2 , relief= 'groove' )
-        BayesLabel.grid(row = 0, column = 1, ipadx = 5, ipady = 5)
+        bayes_label = ttk.Label(root, text = f'The UM probabilty for this match is:\n {np.round(output_avg[UnitA, UnitB],5)}', borderwidth = 2 , relief= 'groove' )
+        bayes_label.grid(row = 0, column = 1, ipadx = 5, ipady = 5)
     else:
-        BayesLabel = ttk.Label(root, text = f'The UM probabilty for this match is:\n {np.round(OutputGUI[CVoption][UnitA, UnitB],5)}', borderwidth = 2 , relief= 'groove')
-        BayesLabel.grid(row = 0, column = 1, ipadx = 5, ipady = 5)
+        bayes_label = ttk.Label(root, text = f'The UM probabilty for this match is:\n {np.round(output_GUI[CVoption][UnitA, UnitB],5)}', borderwidth = 2 , relief= 'groove')
+        bayes_label.grid(row = 0, column = 1, ipadx = 5, ipady = 5)
 
 
 def set_match(event = None):
-    global IsMatch
-    UnitA = int(EntryA.get())
-    UnitB = int(EntryB.get())
+    global is_match
+    unit_a = int(entry_a.get())
+    unit_b = int(entry_b.get())
 
-    IsMatch.append( [UnitA, UnitB] )
-    IsMatch.append( [UnitB, UnitA] )
+    is_match.append( [unit_a, unit_b] )
+    is_match.append( [unit_b, unit_a] )
 
     
 
 def set_not_match(event = None):
-    global NotMatch
-    UnitA = int(EntryA.get())
-    UnitB = int(EntryB.get())
+    global not_match
+    unit_a = int(entry_a.get())
+    unit_b = int(entry_b.get())
 
-    NotMatch.append( [UnitA, UnitB] )
-    NotMatch.append( [UnitB, UnitA] )
+    not_match.append( [unit_a, unit_b] )
+    not_match.append( [unit_b, unit_a] )
 
 
 def MakeTable(table):
-    global FrameTable
+    global frame_table
     
-    if FrameTable.winfo_exists() == 1:
-        FrameTable.destroy()
+    if frame_table.winfo_exists() == 1:
+        frame_table.destroy()
 
     total_rows = len(table)
     total_columns = len(table[0])
 
     colors = ['black', 'green', 'blue']
-    FrameTable = ttk.LabelFrame(root, text = 'UnitData')
+    frame_table = ttk.LabelFrame(root, text = 'UnitData')
     for i in range(total_rows):
         for j in range(total_columns):
                 
-            e = ttk.Entry(FrameTable, width=20)
+            e = ttk.Entry(frame_table, width=20)
             e.insert(END, table[i][j])
             e.configure(state='readonly')             
             e.grid(row=i, column=j)
-    FrameTable.grid(row = 3, column = 0, padx = 10, pady = 10)
+    frame_table.grid(row = 3, column = 0, padx = 10, pady = 10)
 
 #get table data #ADD STABILTY - prob of unit with itself accros cv
 def get_table_data(UnitA, UnitB, CV):
@@ -970,7 +977,7 @@ def get_table_data(UnitA, UnitB, CV):
 
     total_rows = len(template)
     total_columns = len(template[0])
-    UnitIdxTmp =[0 , UnitA, UnitB]
+    unit_idx_tmp =[0 , UnitA, UnitB]
     table = template
 
     if CV == 'Avg':
@@ -979,17 +986,17 @@ def get_table_data(UnitA, UnitB, CV):
                 if j == 0 :
                     continue        
                 if i == 0:
-                    table[i][j] = str(UnitIdxTmp[j])
+                    table[i][j] = str(unit_idx_tmp[j])
                 if i == 1:
-                    table[i][j] = str( np.round(AvgCentroidAvg[:,UnitIdxTmp[j]], 2))
+                    table[i][j] = str( np.round(avg_centroid_avg[:,unit_idx_tmp[j]], 2))
                 if  i == 2:
-                    table[i][j] = str( np.round(AmplitudeAvg[UnitIdxTmp[j]], 2))
+                    table[i][j] = str( np.round(amplitude_avg[unit_idx_tmp[j]], 2))
                 if i == 3:
-                    table[i][j] = str( np.round(SpatialDecayAvg[UnitIdxTmp[j]], 3))
+                    table[i][j] = str( np.round(spatial_decay_avg[unit_idx_tmp[j]], 3))
                 if i == 4:
-                    table[i][j] = str(np.argwhere( (WithinSession*OutputAvg)[UnitIdxTmp[j],:] > MatchThreshold)).replace('[', '').replace(']', '')
+                    table[i][j] = str(np.argwhere( (within_session*output_avg)[unit_idx_tmp[j],:] > match_threshold)).replace('[', '').replace(']', '')
                 if i ==5:
-                    table[i][j] = str( np.round(OutputGUI[0][UnitIdxTmp[j], UnitIdxTmp[j]], 3))
+                    table[i][j] = str( np.round(output_GUI[0][unit_idx_tmp[j], unit_idx_tmp[j]], 3))
            
     else:
         for i in range(total_rows):
@@ -997,70 +1004,70 @@ def get_table_data(UnitA, UnitB, CV):
                 if j == 0 :
                     continue        
                 if i == 0:
-                    table[i][j] = str(UnitIdxTmp[j])
+                    table[i][j] = str(unit_idx_tmp[j])
                 if i == 1:
-                    table[i][j] = str( np.round(AvgCentroid[:,UnitIdxTmp[j],CV[j-1]], 2))
+                    table[i][j] = str( np.round(avg_centroid[:,unit_idx_tmp[j],CV[j-1]], 2))
                 if  i == 2:
-                    table[i][j] = str( np.round(Amplitude[UnitIdxTmp[j],CV[j-1]], 2))
+                    table[i][j] = str( np.round(amplitude[unit_idx_tmp[j],CV[j-1]], 2))
                 if i == 3:
-                    table[i][j] = str( np.round(SpatialDecay[UnitIdxTmp[j],CV[j-1]], 3))
+                    table[i][j] = str( np.round(spatial_decay[unit_idx_tmp[j],CV[j-1]], 3))
                 if i == 4:
-                    table[i][j] = str(np.argwhere( (WithinSession*OutputGUI[CV[0]])[UnitIdxTmp[j],:] > MatchThreshold )).replace('[', '').replace(']', '')
+                    table[i][j] = str(np.argwhere( (within_session*output_GUI[CV[0]])[unit_idx_tmp[j],:] > match_threshold )).replace('[', '').replace(']', '')
                 if i ==5:
-                    table[i][j] = str( np.round(OutputGUI[0][UnitIdxTmp[j], UnitIdxTmp[j]], 3))
+                    table[i][j] = str( np.round(output_GUI[0][unit_idx_tmp[j], unit_idx_tmp[j]], 3))
                     
     return table
 
 def get_unit_score_table(UnitA, UnitB, CVoption):
   
-    table = [['tmp'] * 2 for i in range((len(Scores2IncludeAvg) +1))]
+    table = [['tmp'] * 2 for i in range((len(scores_to_include_avg) +1))]
 
     table[0] = ['Score', f'{UnitA} and {UnitB}']
 
     if CVoption == -1:
-        for i in range(len(Scores2IncludeAvg)):
+        for i in range(len(scores_to_include_avg)):
             for j in range(2):
                 if j ==0:
-                    table[i+1][j] = list(Scores2IncludeAvg.keys())[i]
+                    table[i+1][j] = list(scores_to_include_avg.keys())[i]
                 else:
-                    table[i+1][j] = str( np.round(Scores2IncludeAvg[list(Scores2IncludeAvg.keys())[i]][UnitA, UnitB], 3))
+                    table[i+1][j] = str( np.round(scores_to_include_avg[list(scores_to_include_avg.keys())[i]][UnitA, UnitB], 3))
    
     else:
-        for i in range(len(Scores2IncludeAvg)):
+        for i in range(len(scores_to_include_avg)):
             for j in range(2):
                 if j ==0:
-                    table[i+1][j] = list(Scores2IncludeGUI[CVoption].keys())[i]
+                    table[i+1][j] = list(scores_to_include_GUI[CVoption].keys())[i]
                 else:
-                    table[i+1][j] = str( np.round(Scores2IncludeGUI[CVoption][list(Scores2IncludeGUI[CVoption].keys())[i]][UnitA, UnitB], 3))
+                    table[i+1][j] = str( np.round(scores_to_include_GUI[CVoption][list(scores_to_include_GUI[CVoption].keys())[i]][UnitA, UnitB], 3))
 
     return table
 
 def make_unit_score_table(table):
-    global ScoreTable
+    global score_table
     
-    if ScoreTable.winfo_exists() == 1:
-        ScoreTable.destroy()
+    if score_table.winfo_exists() == 1:
+        score_table.destroy()
 
     total_rows = len(table)
     total_columns = len(table[0])
 
     colors = ['black', 'Purple']
-    ScoreTable = ttk.LabelFrame(root, text = 'UM Scores')
+    score_table = ttk.LabelFrame(root, text = 'UM Scores')
     for i in range(total_rows):
         for j in range(total_columns):
                 
-            e = ttk.Entry(ScoreTable, width = 30)
+            e = ttk.Entry(score_table, width = 30)
             e.insert(END, table[i][j])
             e.configure(state='readonly')             
             e.grid(row=i, column=j)
 
-    ScoreTable.grid(row = 3, column = 1, columnspan=2, padx = 10, pady = 10)
+    score_table.grid(row = 3, column = 1, columnspan=2, padx = 10, pady = 10)
 
 
-def plot_AvgWaveforms(UnitA, UnitB, CV):
-    global AvgWaveformPlot
-    if AvgWaveformPlot.winfo_exists() == 1:
-        AvgWaveformPlot.destroy()
+def plot_avg_waveforms(UnitA, UnitB, CV):
+    global avg_waveform_plot
+    if avg_waveform_plot.winfo_exists() == 1:
+        avg_waveform_plot.destroy()
 
     fig = Figure(figsize = (3, 3), 
                  dpi = 100) 
@@ -1075,29 +1082,29 @@ def plot_AvgWaveforms(UnitA, UnitB, CV):
 
 
     if CV =='Avg':
-        plt1.plot(AvgWaveformAvg[:,UnitA], 'g', label=str(UnitA))
-        plt1.plot(AvgWaveformAvg[:,UnitB], 'b', label=str(UnitB))
+        plt1.plot(avg_waveform_avg[:,UnitA], 'g', label=str(UnitA))
+        plt1.plot(avg_waveform_avg[:,UnitB], 'b', label=str(UnitB))
         plt1.set_xlabel('Time')
         plt1.set_ylabel('Amplitude')
         # plt1.set_xlim(left = 0)
         # plt1.set_xticks([])
 
     else:
-        plt1.plot(AvgWaveform[:,UnitA,CV[0]], 'g', label=str(UnitA))
-        plt1.plot(AvgWaveform[:,UnitB,CV[1]], 'b', label=str(UnitB))
+        plt1.plot(avg_waveform[:,UnitA,CV[0]], 'g', label=str(UnitA))
+        plt1.plot(avg_waveform[:,UnitB,CV[1]], 'b', label=str(UnitB))
         plt1.set_xlabel('Time')
         plt1.set_ylabel('Amplitude')
         # plt1.set_xlim(left = 0)
 
-    AvgWaveformPlot=FigureCanvasTkAgg(fig, master = root)
-    AvgWaveformPlot.draw()
-    AvgWaveformPlot = AvgWaveformPlot.get_tk_widget()
-    AvgWaveformPlot.grid(row = 1, column = 0)
+    avg_waveform_plot = FigureCanvasTkAgg(fig, master = root)
+    avg_waveform_plot.draw()
+    avg_waveform_plot = avg_waveform_plot.get_tk_widget()
+    avg_waveform_plot.grid(row = 1, column = 0)
 
 def plot_trajectories(UnitA, UnitB, CV):
-    global TrajectoryPlot
-    if TrajectoryPlot.winfo_exists() == 1:
-        TrajectoryPlot.destroy()
+    global trajectory_plot
+    if trajectory_plot.winfo_exists() == 1:
+        trajectory_plot.destroy()
 
     fig = Figure(figsize = (3,3), 
                  dpi = 100) 
@@ -1113,124 +1120,124 @@ def plot_trajectories(UnitA, UnitB, CV):
     if CV =='Avg':
         
         # AM not doing a time averaged WaveIDX (where you fins goodtimepoints), will just uses CV 0 for both
-        plt2.plot(AvgWaveformPerTPAvg[1,UnitA,WaveIdx[UnitA,:,0].astype(bool)], AvgWaveformPerTPAvg[2,UnitA,WaveIdx[UnitA,:,0].astype(bool)], 'g')
-        plt2.scatter(AvgCentroidAvg[1,UnitA], AvgCentroidAvg[2,UnitA], c = 'g')
+        plt2.plot(avg_waveform_per_tp_avg[1,UnitA,wave_idx[UnitA,:,0].astype(bool)], avg_waveform_per_tp_avg[2,UnitA,wave_idx[UnitA,:,0].astype(bool)], 'g')
+        plt2.scatter(avg_centroid_avg[1,UnitA], avg_centroid_avg[2,UnitA], c = 'g')
 
-        plt2.plot(AvgWaveformPerTPAvg[1,UnitB,WaveIdx[UnitB,:,0].astype(bool)], AvgWaveformPerTPAvg[2,UnitB,WaveIdx[UnitB,:,0].astype(bool)],'b')
-        plt2.scatter(AvgCentroidAvg[1,UnitB], AvgCentroidAvg[2,UnitB], c = 'b')
+        plt2.plot(avg_waveform_per_tp_avg[1,UnitB,wave_idx[UnitB,:,0].astype(bool)], avg_waveform_per_tp_avg[2,UnitB,wave_idx[UnitB,:,0].astype(bool)],'b')
+        plt2.scatter(avg_centroid_avg[1,UnitB], avg_centroid_avg[2,UnitB], c = 'b')
 
         plt2.set_xlabel(r'Xpos ($\mu$m)')
         plt2.set_ylabel(r'Ypos ($\mu$m)')
 
     else:
-        plt2.plot(AvgWaveformPerTP[1,UnitA,WaveIdx[UnitA,:,CV[0]].astype(bool), CV[0]], AvgWaveformPerTP[2,UnitA,WaveIdx[UnitA,:,CV[0]].astype(bool), CV[0]], 'g')
-        plt2.scatter(AvgCentroid[1,UnitA,CV[0]], AvgCentroid[2,UnitA,CV[0]], c = 'g')
+        plt2.plot(avg_waveform_per_tp[1,UnitA,wave_idx[UnitA,:,CV[0]].astype(bool), CV[0]], avg_waveform_per_tp[2,UnitA,wave_idx[UnitA,:,CV[0]].astype(bool), CV[0]], 'g')
+        plt2.scatter(avg_centroid[1,UnitA,CV[0]], avg_centroid[2,UnitA,CV[0]], c = 'g')
 
-        plt2.plot(AvgWaveformPerTP[1,UnitB,WaveIdx[UnitB,:,CV[1]].astype(bool), CV[1]], AvgWaveformPerTP[2,UnitB,WaveIdx[UnitB,:,CV[1]].astype(bool), CV[1]],'b')
-        plt2.scatter(AvgCentroid[1,UnitB,CV[1]], AvgCentroid[2,UnitB,CV[1]], c = 'b')
+        plt2.plot(avg_waveform_per_tp[1,UnitB,wave_idx[UnitB,:,CV[1]].astype(bool), CV[1]], avg_waveform_per_tp[2,UnitB,wave_idx[UnitB,:,CV[1]].astype(bool), CV[1]],'b')
+        plt2.scatter(avg_centroid[1,UnitB,CV[1]], avg_centroid[2,UnitB,CV[1]], c = 'b')
 
         plt2.set_xlabel(r'Xpos ($\mu$m)')
         plt2.set_ylabel(r'Ypos ($\mu$m)')
 
-    TrajectoryPlot=FigureCanvasTkAgg(fig, master = root)
-    TrajectoryPlot.draw()
-    TrajectoryPlot = TrajectoryPlot.get_tk_widget()
+    trajectory_plot=FigureCanvasTkAgg(fig, master = root)
+    trajectory_plot.draw()
+    trajectory_plot = trajectory_plot.get_tk_widget()
 #    TrajectoryPlot.configure(bg = '#33393b')
-    TrajectoryPlot.grid(row = 1, column = 1, columnspan = 2)
+    trajectory_plot.grid(row = 1, column = 1, columnspan = 2)
 
-def order_good_sites(GoodSites, ChannelPos, SessionNo):
-    # make it so y goes from biggest to smallest
-    ReorderedIdx = np.argsort(-ChannelPos[SessionNo][GoodSites,2].squeeze())
-    ReOrderedGoodSites = GoodSites[ReorderedIdx]
+def order_good_sites(good_sites, channel_pos, n_sessions):
+    # make it so it goes from biggest to smallest
+    reordered_idx = np.argsort(-channel_pos[n_sessions][good_sites,2].squeeze())
+    reordered_good_sites = good_sites[reordered_idx]
 
     #re-arange x-axis so it goes (smaller x, bigger x)
     for i in range(9):
-        a,b = ChannelPos[SessionNo][ReOrderedGoodSites[[2*i, 2*i+1]],1]
+        a,b = channel_pos[n_sessions][reordered_good_sites[[2*i, 2*i+1]],1]
 
         if a > b:
             #swap order
-            ReOrderedGoodSites[[2*i + 1, 2*i]] = ReOrderedGoodSites[[2*i, 2*i+1]]
-    return ReOrderedGoodSites
+            reordered_good_sites[[2*i + 1, 2*i]] = reordered_good_sites[[2*i, 2*i+1]]
+    return reordered_good_sites
 
-def nearest_channels(MaxSite, MaxSiteMean, ChannelPos, ClusInfo, Unit, CV):
+def nearest_channels(max_site, max_site_mean, channel_pos, clus_info, unit, CV):
 
-    SessionNo = ClusInfo['SessionID'][Unit]
+    n_sessions = clus_info['session_id'][unit]
     if CV == 'Avg':
-        maxsite = MaxSiteMean[Unit].squeeze()
-        __, x, y = ChannelPos[SessionNo][maxsite,:]
+        maxsite = max_site_mean[unit].squeeze()
+        __, x, y = channel_pos[n_sessions][maxsite,:]
 
-        GoodXsites = np.argwhere( np.logical_and((x-50 < ChannelPos[SessionNo][:,1]) == True, (ChannelPos[SessionNo][:,1] < x+50) == True))
-        yValues = ChannelPos[SessionNo][GoodXsites,2]
+        good_x_sites = np.argwhere( np.logical_and((x-50 < channel_pos[n_sessions][:,1]) == True, (channel_pos[n_sessions][:,1] < x+50) == True))
+        y_values = channel_pos[n_sessions][good_x_sites,2]
 
-        yDist2MaxSite = np.abs(yValues - ChannelPos[SessionNo][maxsite,2])
-        GoodSites = np.argsort(yDist2MaxSite,axis = 0 )[:18]
-        GoodSites = GoodXsites[GoodSites]
-        ReOrderedGoodSites = order_good_sites(GoodSites, ChannelPos, SessionNo)
+        y_dist_to_max_site = np.abs(y_values - channel_pos[n_sessions][maxsite,2])
+        good_sites = np.argsort(y_dist_to_max_site,axis = 0 )[:18]
+        good_sites = good_x_sites[good_sites]
+        reordered_good_sites = order_good_sites(good_sites, channel_pos, n_sessions)
 
     else:
-        maxsite = MaxSite[Unit,CV]
-        __, x, y = ChannelPos[SessionNo][maxsite,:]
+        maxsite = max_site[unit,CV]
+        __, x, y = channel_pos[n_sessions][maxsite,:]
 
-        GoodXsites = np.argwhere( np.logical_and((x-50 < ChannelPos[SessionNo][:,1]) == True, (ChannelPos[SessionNo][:,1] < x+50) == True))
-        yValues = ChannelPos[SessionNo][GoodXsites,2]
+        good_x_sites = np.argwhere( np.logical_and((x-50 < channel_pos[n_sessions][:,1]) == True, (channel_pos[n_sessions][:,1] < x+50) == True))
+        y_values = channel_pos[n_sessions][good_x_sites,2]
 
-        yDist2MaxSite = np.abs(yValues - ChannelPos[SessionNo][maxsite,2])
-        GoodSites = np.argsort(yDist2MaxSite,axis = 0 )[:18]
-        GoodSites = GoodXsites[GoodSites]
-        ReOrderedGoodSites = order_good_sites(GoodSites, ChannelPos, SessionNo)
+        y_dist_to_max_site = np.abs(y_values - channel_pos[n_sessions][maxsite,2])
+        good_sites = np.argsort(y_dist_to_max_site,axis = 0 )[:18]
+        good_sites = good_x_sites[good_sites]
+        reordered_good_sites = order_good_sites(good_sites, channel_pos, n_sessions)
         
-    return ReOrderedGoodSites
+    return reordered_good_sites
 
-def plot_raw_waveforms(UnitA, UnitB, CV):
+def plot_raw_waveforms(unit_a, unit_b, CV):
 
-    SessionNoA = ClusInfo['SessionID'][UnitA]
-    global RawWaveformPlot
-    if RawWaveformPlot.winfo_exists() == 1:
-        RawWaveformPlot.destroy()
+    session_no_a = clus_info['session_id'][unit_a]
+    global raw_waveform_plot
+    if raw_waveform_plot.winfo_exists() == 1:
+        raw_waveform_plot.destroy()
 
     fig = Figure(figsize=(4,6), dpi = 100)
     fig.set_tight_layout(False)
     fig.patch.set_facecolor('#33393b')
 
-    MainAx = fig.add_axes([0.2,0.2,0.8,0.8])
-    MainAx.set_facecolor('#5f6669')
-    MainAxOffset = 0.2
-    MainAxScale = 0.8
+    main_ax = fig.add_axes([0.2,0.2,0.8,0.8])
+    main_ax.set_facecolor('#5f6669')
+    main_ax_offset = 0.2
+    main_ax_scale = 0.8
 
     if CV =='Avg':
-        GoodChannels = nearest_channels(MaxSite, MaxSiteMean, ChannelPos, ClusInfo, UnitA, CV)
+        good_channels = nearest_channels(max_site, max_site_mean, channel_pos, clus_info, unit_a, CV)
 
-        minx, miny = ChannelPos[SessionNoA][GoodChannels[-2],[1,2]].squeeze()
-        maxx, maxy = ChannelPos[SessionNoA][GoodChannels[1],[1,2]].squeeze()
-        deltaX = (maxx - minx) / 2
-        deltaY = (maxy - miny) / 18
+        min_x, min_y = channel_pos[session_no_a][good_channels[-2],[1,2]].squeeze()
+        max_x, maxy = channel_pos[session_no_a][good_channels[1],[1,2]].squeeze()
+        delta_x = (max_x - min_x) / 2
+        delta_y = (maxy - min_y) / 18
 
         #may want to change so it find this for both units and selects the most extreme arguments
         #however i dont think tis will be necessary
-        SubMiny = np.nanmin(waveform[UnitA,:,GoodChannels].mean(axis=-1))
-        SubMaxy = np.nanmax(waveform[UnitA,:,GoodChannels].mean(axis=-1))
+        sub_min_y = np.nanmin(waveform[unit_a,:,good_channels].mean(axis=-1))
+        sub_max_y = np.nanmax(waveform[unit_a,:,good_channels].mean(axis=-1))
         # shift each waveform so 0 is at the channel site, 1/9 is width of a y waveform plot
-        WaveformYoffset = (np.abs(SubMaxy) / (np.abs(SubMiny) + np.abs(SubMaxy)) ) * 1/9
+        waveform_y_offset = (np.abs(sub_max_y) / (np.abs(sub_min_y) + np.abs(sub_max_y)) ) * 1/9
     
     else:
-        GoodChannels = nearest_channels(MaxSite, MaxSiteMean, ChannelPos, ClusInfo, UnitA, CV[0])
+        good_channels = nearest_channels(max_site, max_site_mean, channel_pos, clus_info, unit_a, CV[0])
 
-        minx, miny = ChannelPos[SessionNoA][GoodChannels[-2],[1,2]].squeeze()
-        maxx, maxy = ChannelPos[SessionNoA][GoodChannels[1],[1,2]].squeeze()
-        deltaX = (maxx - minx) / 2
-        deltaY = (maxy - miny) / 18
+        min_x, min_y = channel_pos[session_no_a][good_channels[-2],[1,2]].squeeze()
+        max_x, sub_max_y = channel_pos[session_no_a][good_channels[1],[1,2]].squeeze()
+        delta_x = (max_x - min_x) / 2
+        delta_y = (maxy - min_y) / 18
         #may want to change so it find this for both units and selects the most extreme arguments
         #however i dont think this will be necessary
-        SubMiny = np.nanmin(waveform[UnitA,:,GoodChannels, CV[0]])
-        SubMaxy = np.nanmax(waveform[UnitA,:,GoodChannels, CV[0]])
+        sub_min_y = np.nanmin(waveform[unit_a,:,good_channels, CV[0]])
+        sub_max_y = np.nanmax(waveform[unit_a,:,good_channels, CV[0]])
         # shift each waveform so 0 is at the channel site, 1/9 is width of a y waveform plot
-        WaveformYoffset = (np.abs(SubMaxy) / (np.abs(SubMiny) + np.abs(SubMaxy)) ) * 1/9
+        waveform_y_offset = (np.abs(sub_max_y) / (np.abs(sub_min_y) + np.abs(sub_max_y)) ) * 1/9
 
 
     #make the main scatter positiose site as scatter with opacity 
-    MainAx.scatter(ChannelPos[SessionNoA][GoodChannels,1], ChannelPos[SessionNoA][GoodChannels,2], c = 'grey', alpha = 0.3)
-    MainAx.set_xlim(minx - deltaX, maxx + deltaX)
-    MainAx.set_ylim(miny - deltaY, maxy + deltaY)
+    main_ax.scatter(channel_pos[session_no_a][good_channels,1], channel_pos[session_no_a][good_channels,2], c = 'grey', alpha = 0.3)
+    main_ax.set_xlim(min_x - delta_x, max_x + delta_x)
+    main_ax.set_ylim(min_y - delta_y, maxy + delta_y)
 
     for i in range(9):
         for j in range(2):
@@ -1240,39 +1247,39 @@ def plot_raw_waveforms(UnitA, UnitB, CV):
                 #0.1 and 0.6 so the middle is at 0.25/0.76 however chosen these values so it loks better by eye
 
                 #
-                ax =  fig.add_axes([MainAxOffset + MainAxScale*0.25, MainAxOffset + MainAxScale*(i/9 - 1/18 + WaveformYoffset), MainAxScale*0.25, MainAxScale*1/9])
+                ax =  fig.add_axes([main_ax_offset + main_ax_scale*0.25, main_ax_offset + main_ax_scale*(i/9 - 1/18 + waveform_y_offset), main_ax_scale*0.25, main_ax_scale*1/9])
             if j == 1:
-                ax = fig.add_axes([MainAxOffset + MainAxScale*0.75, MainAxOffset + MainAxScale*(i/9 - 1/18 + WaveformYoffset), MainAxScale*0.25, MainAxScale*1/9])
+                ax = fig.add_axes([main_ax_offset + main_ax_scale*0.75, main_ax_offset + main_ax_scale*(i/9 - 1/18 + waveform_y_offset), main_ax_scale*0.25, main_ax_scale*1/9])
 
             if CV =='Avg':
-                ax.plot(waveform[UnitA,:,GoodChannels[i*2 + j]].mean(axis=-1).squeeze(), color = 'g')             
-                ax.plot(waveform[UnitB,:,GoodChannels[i*2 + j]].mean(axis = -1).squeeze(), color = 'b', lw=0.8)
+                ax.plot(waveform[unit_a,:,good_channels[i*2 + j]].mean(axis=-1).squeeze(), color = 'g')             
+                ax.plot(waveform[unit_b,:,good_channels[i*2 + j]].mean(axis = -1).squeeze(), color = 'b', lw=0.8)
             else:
-                ax.plot(waveform[UnitA,:,GoodChannels[i*2 + j], CV[0]].squeeze(), color = 'g')             
-                ax.plot(waveform[UnitB,:,GoodChannels[i*2 + j],CV[1]].squeeze(), color = 'b', lw=0.8)                
-            ax.set_ylim(SubMiny,SubMaxy)
+                ax.plot(waveform[unit_a,:,good_channels[i*2 + j], CV[0]].squeeze(), color = 'g')             
+                ax.plot(waveform[unit_b,:,good_channels[i*2 + j],CV[1]].squeeze(), color = 'b', lw=0.8)                
+            ax.set_ylim(sub_min_y,sub_max_y)
             ax.set_axis_off()
 
 
-    MainAx.spines.right.set_visible(False)
-    MainAx.spines.top.set_visible(False)
-    MainAx.set_xticks([minx, maxx])
-    MainAx.set_xlabel('Xpos ($\mu$m)', size = 14)
-    MainAx.set_ylabel('Ypos ($\mu$m)', size = 14)
+    main_ax.spines.right.set_visible(False)
+    main_ax.spines.top.set_visible(False)
+    main_ax.set_xticks([min_x, max_x])
+    main_ax.set_xlabel('Xpos ($\mu$m)', size = 14)
+    main_ax.set_ylabel('Ypos ($\mu$m)', size = 14)
 
 
-    RawWaveformPlot = FigureCanvasTkAgg(fig, master = root)
-    RawWaveformPlot.draw()
-    RawWaveformPlot = RawWaveformPlot.get_tk_widget()
+    raw_waveform_plot = FigureCanvasTkAgg(fig, master = root)
+    raw_waveform_plot.draw()
+    raw_waveform_plot = raw_waveform_plot.get_tk_widget()
     #RawWaveformPlot.configure(bg = '#33393b')
 
-    RawWaveformPlot.grid(row = 0, column = 5, columnspan = 2, rowspan = 4, padx = 15, pady = 25, ipadx = 15)
+    raw_waveform_plot.grid(row = 0, column = 5, columnspan = 2, rowspan = 4, padx = 15, pady = 25, ipadx = 15)
 
-def plot_Histograms(HistNames, Hist, HistMatched, Scores2Include, UnitA, UnitB):
+def plot_histograms(hist_names, hist, hist_matched, scores_to_include, unit_a, unit_b):
 
-    global HistPlot
-    if HistPlot.winfo_exists() == 1:
-        HistPlot.destroy()
+    global hist_plot
+    if hist_plot.winfo_exists() == 1:
+        hist_plot.destroy()
 
     fig = Figure(figsize= (4,6), dpi = 100, layout = 'constrained')
     fig.patch.set_facecolor('#33393b')
@@ -1281,18 +1288,18 @@ def plot_Histograms(HistNames, Hist, HistMatched, Scores2Include, UnitA, UnitB):
 
 
     #loop over indexes..
-    for i in range(len(Hist)):
-        axs[i].step(Hist[i][1][:-1], Hist[i][0], color = 'orange')
-        axs[i].step(HistMatched[i][1][:-1], HistMatched[i][0], color = 'magenta')
+    for i in range(len(hist)):
+        axs[i].step(hist[i][1][:-1], hist[i][0], color = 'orange')
+        axs[i].step(hist_matched[i][1][:-1], hist_matched[i][0], color = 'magenta')
         axs[i].set_ylim(bottom=0)
-        axs[i].set_title(HistNames[i], fontsize = 12)
+        axs[i].set_title(hist_names[i], fontsize = 12)
         #axs[i].get_yaxis().set_visible(False)
-        axs[i].axvline(Scores2Include[HistNames[i]][UnitA,UnitB], ls = '--', color = 'grey')
+        axs[i].axvline(scores_to_include[hist_names[i]][unit_a,unit_b], ls = '--', color = 'grey')
         axs[i].set_facecolor('#5f6669')
 
-    HistPlot = FigureCanvasTkAgg(fig, master = root)
-    HistPlot.draw()
-    HistPlot = HistPlot.get_tk_widget()
+    hist_plot = FigureCanvasTkAgg(fig, master = root)
+    hist_plot.draw()
+    hist_plot = hist_plot.get_tk_widget()
 
-    HistPlot.grid(row = 0, column = 3, columnspan = 2, rowspan = 4, padx = 5, pady = 20)
+    hist_plot.grid(row = 0, column = 3, columnspan = 2, rowspan = 4, padx = 5, pady = 20)
 
