@@ -348,7 +348,7 @@ for subsesid = 1:length(KiloSortPaths)
 
         %clusidtmp = clusinfo.cluster_id;
         clusinfo.cluster_id = unique(sp.spikeTemplates);
-        clusidtmp = clusinfo.cluster_id;
+        clusidtmp = int32(clusinfo.cluster_id);
         tmpLabel = char(length(clusinfo.cluster_id));
         KSLabelfile = tdfread(fullfile(KiloSortPaths{subsesid}, 'cluster_KSLabel.tsv'));
         tmpLabel(ismember(clusinfo.cluster_id, KSLabelfile.cluster_id)) = KSLabelfile.KSLabel(ismember(KSLabelfile.cluster_id, clusinfo.cluster_id));
