@@ -139,7 +139,7 @@ for uid = 1:nclus
     spikeMap = readNPY(Path4UnitNPY{uid});
 
     % Detrending
-    spikeMap = detrend(spikeMap,1); % Detrend (linearly) OVER TIME! The README for this function is wrong, it detrends across rows.
+    spikeMap = detrend(spikeMap,1); 
 
     % Interpolate
     if Interpolate

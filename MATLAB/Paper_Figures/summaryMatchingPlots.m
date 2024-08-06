@@ -1,10 +1,18 @@
-function [unitPresence, unitProbaMatch, days, EPosAndNeg, DataSetInfo] = summaryMatchingPlots(UMFiles,UIDtoUse,groupVector,computeFuncScores)
+function [unitPresence, unitProbaMatch, days, EPosAndNeg, DataSetInfo, pSinceAppearance, popCorr_Uni, popAUC_Uni] = summaryMatchingPlots(UMFiles,UIDtoUse,groupVector,computeFuncScores)
 
 %% Settings
 PlotIndividualMice = 0;
 % Drifts2Exclude = 50; % more than 50 micron, expected to lose neurons. This has nothing to do with software but with quality of recordings
 MinNumsUnit = -inf; % should have at least this amount of neurons, otherwise not a good session
-savedir = UMFiles{1}(1:find(UMFiles{1}~=UMFiles{end},1,'first')-1);
+try
+    savedir = UMFiles{1}(1:find(UMFiles{1}~=UMFiles{end},1,'first')-1);
+catch
+    warning('can''t create save dir')
+    savedir = [];
+end
+if isempty(savedir)
+    savedir = fileparts(UMFiles{1});
+end
 RecSes = 0;
 %% Initialize
 if nargin<2
@@ -403,7 +411,7 @@ for uidtype = 1:numel(UIDtoUse)
     nonnanNr = sum(~isnan(pSinceAppearance(:,:,uidtype)),2);
     subplot(2,1,1)
     hold on
-    h(uidtype) = errorbar(1:size(pSinceAppearance,1),nanmean(pSinceAppearance(:,:,uidtype),2),nanstd(pSinceAppearance(:,:,uidtype),[],2)./sqrt(nonnanNr-1),'linestyle','-','color',UIDCols(uidtype,:))
+    h(uidtype) = errorbar(1:size(pSinceAppearance,1),nanmean(pSinceAppearance(:,:,uidtype),2),nanstd(pSinceAppearance(:,:,uidtype),[],2)./sqrt(nonnanNr-1),'linestyle','-','color',UIDCols(uidtype,:));
 
     % shadedErrorBar(1:size(pSinceAppearance,1),nanmean(pSinceAppearance,2),nanstd(pSinceAppearance,[],2)./sqrt(nonnanNr-1),'transparent',1)
     set(gca,'XTick',1:numel(deltaDaysBins)-1,'XTickLabel',yTickLabels)
