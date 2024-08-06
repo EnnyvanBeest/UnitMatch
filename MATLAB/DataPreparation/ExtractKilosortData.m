@@ -320,7 +320,7 @@ for subsesid = 1:length(KiloSortPaths)
     %% Bombcell parameters
     % clear paramBC
     if Params.RunQualityMetrics
-        if any(strfind(KiloSortPaths{subsesid},'KS4')) % Used KS4?
+        if any(strfind(KiloSortPaths{subsesid},'KS4')) || any(strfind(KiloSortPaths{subsesid},'kilosort4')) % Used KS4?
             paramBC = bc_qualityParamValuesForUnitMatch(dir(strrep(fullfile(rawD(1).folder, rawD(1).name), 'cbin', 'meta')), fullfile(Params.tmpdatafolder, strrep(rawD(1).name, 'cbin', 'bin')),KiloSortPaths{subsesid},[],4);
         else
             paramBC = bc_qualityParamValuesForUnitMatch(dir(strrep(fullfile(rawD(1).folder, rawD(1).name), 'cbin', 'meta')), fullfile(Params.tmpdatafolder, strrep(rawD(1).name, 'cbin', 'bin')),KiloSortPaths{subsesid},[],2);
