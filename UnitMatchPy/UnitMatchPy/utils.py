@@ -130,9 +130,11 @@ def load_good_waveforms(wave_paths, unit_label_paths, param, good_units_only = T
         if os.path.split(unit_label_paths[0])[1] == 'cluster_bc_unitType.tsv':
             unit_label = load_tsv(unit_label_paths[i])
             tmp_idx = np.array([s for s in unit_label if 'GOOD' in s or 'NON-SOMA GOOD' in s])[:,0].astype(np.int32)
+            tmp_idx = tmp_idx[:, np.newaxis] # keep the array shape consitant between different methodss
         else:
             unit_label = load_tsv(unit_label_paths[i])
             tmp_idx = np.argwhere(unit_label[:,1] == 'good')
+
 
         n_units_per_session_all.append(unit_label.shape[0])
         good_unit_idx = unit_label[tmp_idx, 0]
@@ -228,6 +230,7 @@ def get_good_units(unit_label_paths, good = True):
                 tmp_idx = np.array([s for s in unit_label if 'GOOD' in s or 'NON-SOMA GOOD' in s])[:,0].astype(np.int32)
             else:
                 tmp_idx = unit_label[:,0].astype(np.int32)
+            tmp_idx = tmp_idx[:, np.newaxis] # keep the array shape consitant between different methodss
         else:
             unit_label = load_tsv(unit_label_paths[i])
             if good == True:
