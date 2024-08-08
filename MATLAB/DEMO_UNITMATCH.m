@@ -35,7 +35,7 @@ addpath(genpath(fullfile(GithubDir,'UnitMatch'))) % Make sure to have this one f
 % This is the path where the results will be saved ('\\path\to\save\UnitMatch'), e.g.:
 UMparam.SaveDir = 'D:\MatchingUnits\Output\UnitMatch'; 
 
-% This is a cell array with a path to each recording, where there should be a subfolder called 'RawWaveforms'. 
+% This is a cell array with a path to each recording's Kilosort output directory, where there should be a subfolder called 'RawWaveforms'. 
 % N.B. if you want to use the functional score evaluation of UnitMatch, 'KSDir' should also contain the Kilosort output (e.g. spike times etc.)/
 % Takes the form of "{'\\path\to\firstrecording','\\path\to\secondrecording','\\path\to\nthrecording'};", e.g.:  
  UMparam.KSDir = {'D:\MatchingUnits\Data\tmp\Mouse1\AL032\2019-11-21\Probe0\1','D:\MatchingUnits\Data\tmp\Mouse1\AL032\2019-11-22\Probe0\1'};  
