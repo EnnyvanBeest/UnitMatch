@@ -409,10 +409,15 @@ def curate_matches(matches_GUI, is_match, not_match, mode = 'and'):
 
     return matches
 
+def isin_2d(test_arr, parent_arr):
+    return  (test_arr[:, None] == parent_arr).all(-1).any(-1)
+
 def fill_missing_pos(KS_dir, n_channels):
     """
     KiloSort (especially in 4.0) may not include channel positions for inactive channels, 
-    as UnitMatch require the full channel_pos array this function will extrapolate it from the given channel positions
+    as UnitMatch require the full channel_pos array this function will extrapolate it from the given channel positions.
+    If there is only one missing positions will fill that in else it will go through each found missing position
+    and attempt to fill them in iteratively, finally it will attempt to find a pattern in the x-coord and fill in positions that way
 
     Parameters
     ----------
@@ -463,10 +468,44 @@ def fill_missing_pos(KS_dir, n_channels):
         channel_pos_column = np.stack((np.full_like(ypos,x), ypos)).T
         channel_pos_new.append(channel_pos_column)
 
+    if pos.shape[0] == n_channels - 1:
+        print('Likely to be correctly filled')
+        missed_pos_idx = np.argwhere(isin_2d(np.vstack(channel_pos_new), pos) == False)
+        channel_pos[np.isnan(channel_pos)[:,0],:] = np.vstack(channel_pos_new)[missed_pos_idx]
+        return channel_pos
+
+    channel_pos_fill = channel_pos.copy()
+    #find all the positions not in the original channel_positions
+    missed_pos_idxs = np.argwhere(isin_2d(np.vstack(channel_pos_new), pos) == False)
+    #find all the empty channel positions indexs
+    empty_idx = np.unique(np.argwhere(np.isnan(channel_pos))[:,0])
+
+    #check to see if there are the same amount of empty positions as found positions
+    if missed_pos_idx.shape[0] == empty_idx.shape[0]:
+        #go through each estimated missing positions
+        for idx in missed_pos_idxs:
+            missed_pos = np.vstack(channel_pos_new)[idx].squeeze()
+            #find the index of the nearest channel to the estimated missing positions
+            distance_to_pos = np.sqrt(np.sum((channel_pos - missed_pos)**2, axis = 1) )
+            nearest_idx = np.nanargmin(distance_to_pos)
+            #assume that the nearest missing index to the nearest positions is the correct index!
+            estimated_missing_idx = empty_idx[np.argmin(np.abs(empty_idx - nearest_idx))]
+            #fill in this index
+            channel_pos_fill[estimated_missing_idx,:] = missed_pos
+            #delete this index from the empty idx_list
+            empty_idx = np.delete(empty_idx, np.argmin(np.abs(empty_idx - nearest_idx)))
+
+        #If all of the original positions are correct
+        if np.sum(channel_pos == channel_pos_fill) //2 == pos.shape[0]:
+            print('Likely to be correctly filled')
+            return channel_pos_fill
 
     n_unique_x = x_unique.shape[0]
-
     channel_pos_fill = np.zeros_like(channel_pos)
+    test_points = []
+    starts = []
+    x_points = []
+    #Often the channel positions is filled in in a periodic fashion in x coord
     for i, x in enumerate(x_unique):
         #find which sequence of positions this x-column fills 
         x_point = np.argwhere(channel_pos[:,0] == x).squeeze()[0]
@@ -476,12 +515,18 @@ def fill_missing_pos(KS_dir, n_channels):
         for j, point in enumerate(points):
             channel_pos_fill[point,:] = channel_pos_new[i][j,:]
 
+        test_points.append(points)
+        starts.append(start)
+        x_points.append(x_point)
+
+    #If all of the original positions are correct
     if np.sum(channel_pos == channel_pos_fill) //2 == pos.shape[0]:
         print('Likely to be correctly filled')
         return channel_pos_fill
     else:
-        print('Error in filling channel positions')
-        return channel_pos_fill
+        print('Error in filling channel positions, please fill in manually \n \
+            Have returned the known channel positions and NaN')
+        return channel_pos
 
 
 def paths_from_KS(KS_dirs):
