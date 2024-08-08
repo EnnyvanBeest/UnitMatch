@@ -239,8 +239,11 @@ if LFP_On
     [sortedchannels,sortid] = unique(channel);
     sorteddepth = depth(sortid);
     
-   
-    imagesc(1:length(FreqNames),sorteddepth, lfpByChannel(sortedchannels+1,:),[-2 2])
+    lfpOrdered = arrayfun(@(X) nanmean(lfpByChannel(sorteddepth==X,:),1),unique(sorteddepth),'Uni',0);
+    lfpOrdered = cat(1,lfpOrdered{:});
+    depthOrdered = arrayfun(@(X) nanmean(sorteddepth(sorteddepth==X)),unique(sorteddepth));
+
+    imagesc(1:length(FreqNames),depthOrdered, lfpOrdered,[-2 2])
 
 %     imagesc(1:length(FreqNames),[0:(nChansInFile-1)]*10,lfpByChannel,[-2 2])
     xlim([1,length(FreqNames)]);
@@ -255,7 +258,7 @@ if LFP_On
 end
 
 %% Get multiunit correlation - Copied from Petersen github
-n_corr_groups = 80;
+n_corr_groups = ceil(abs(endpoint-startpoint)/35); % Every 35 micron or so
 depth_group_edges = linspace(startpoint,endpoint,n_corr_groups+1);
 depth_group = discretize(spikeDepths,depth_group_edges);
 depth_group_centers = depth_group_edges(1:end-1)+(diff(depth_group_edges)/2);
@@ -268,7 +271,7 @@ corr_centers = corr_edges(1:end-1) + diff(corr_edges);
 mua_corr = cell(1,nshanks);
 for shid = 1:nshanks
     binned_spikes_depth = zeros(length(unique_depths),length(corr_edges)-1);
-    parfor curr_depth = 1:length(unique_depths)
+    for curr_depth = 1:length(unique_depths)
         binned_spikes_depth(curr_depth,:) = histcounts(spikeTimes(depth_group == unique_depths(curr_depth) & spikeID==1 & spikeShank'==shid), corr_edges);
     end
     %     % Z-score
@@ -615,7 +618,7 @@ while ~flag
                     set(boundary_lines(minidx,1,shid),'color','b')
                 end
                 delete(roi1)
-                parfor shid=selectedshank
+                for shid=selectedshank
                     set(boundary_lines(minidx,2,shid),'color','y','YData',[areapoints{shid}(newswitchpoints{shid}(minidx)) areapoints{shid}(newswitchpoints{shid}(minidx))])
                     matchedswitchpoints{shid}(2,minidx) = nan;
                 end
