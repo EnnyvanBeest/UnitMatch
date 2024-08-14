@@ -321,9 +321,9 @@ for subsesid = 1:length(KiloSortPaths)
     % clear paramBC
     if Params.RunQualityMetrics
         if any(strfind(KiloSortPaths{subsesid},'KS4')) || any(strfind(KiloSortPaths{subsesid},'kilosort4')) % Used KS4?
-            paramBC = bc_qualityParamValuesForUnitMatch(dir(strrep(fullfile(rawD(1).folder, rawD(1).name), 'cbin', 'meta')), fullfile(Params.tmpdatafolder, strrep(rawD(1).name, 'cbin', 'bin')),KiloSortPaths{subsesid},[],4);
+            paramBC = bc.qm.qualityParamValuesForUnitMatch(dir(strrep(fullfile(rawD(1).folder, rawD(1).name), 'cbin', 'meta')), fullfile(Params.tmpdatafolder, strrep(rawD(1).name, 'cbin', 'bin')),KiloSortPaths{subsesid},[],4);
         else
-            paramBC = bc_qualityParamValuesForUnitMatch(dir(strrep(fullfile(rawD(1).folder, rawD(1).name), 'cbin', 'meta')), fullfile(Params.tmpdatafolder, strrep(rawD(1).name, 'cbin', 'bin')),KiloSortPaths{subsesid},[],2);
+            paramBC = bc.qm.qualityParamValuesForUnitMatch(dir(strrep(fullfile(rawD(1).folder, rawD(1).name), 'cbin', 'meta')), fullfile(Params.tmpdatafolder, strrep(rawD(1).name, 'cbin', 'bin')),KiloSortPaths{subsesid},[],2);
         end
     else
         paramBC.minNumSpikes = 300;
@@ -520,11 +520,11 @@ for subsesid = 1:length(KiloSortPaths)
             end
             if ~qMetricsExist || Params.RedoQM
                 % First check if we want to use python for compressed data. If not, uncompress data first
-                if any(strfind(rawD(id).name, 'cbin')) && Params.DecompressLocal
+                if any(strfind(rawD(id).name, 'cbin')) && Params.DecompressLocal && isempty(dir(fullfile(savePath, '**', 'RawWaveforms')))
                     % detect whether data is compressed, decompress locally if necessary
                     if ~exist(fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'bin')))
                         disp('This is compressed data and we do not want to use Python integration... uncompress temporarily')
-                        decompDataFile = bc_extractCbinData(fullfile(rawD(id).folder, rawD(id).name), ...
+                        decompDataFile = bc.dcomp.extractCbinData(fullfile(rawD(id).folder, rawD(id).name), ...
                             [], [], 0, fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'bin')));
                         statusCopy = copyfile(strrep(fullfile(rawD(id).folder, rawD(id).name), 'cbin', 'meta'), strrep(fullfile(Params.tmpdatafolder, rawD(id).name), 'cbin', 'meta')); %QQ doesn't work on linux
                     end
@@ -545,7 +545,7 @@ for subsesid = 1:length(KiloSortPaths)
                 else
                     spfeat = sp.pcFeat(idx, :, :);
                 end
-                [qMetric, unitType] = bc_runAllQualityMetrics(paramBC, sp.st(idx)*sp.sample_rate, sp.spikeTemplates(idx)+1, ...
+                [qMetric, unitType] = bc.qm.runAllQualityMetrics(paramBC, sp.st(idx)*sp.sample_rate, sp.spikeTemplates(idx)+1, ...
                     templateWaveforms, sp.tempScalingAmps(idx), spfeat, sp.pcFeatInd+1, channelpostmp, savePath); % Be careful, bombcell needs 1-indexed!
 
             else
@@ -555,8 +555,8 @@ for subsesid = 1:length(KiloSortPaths)
                 end
                 d = dir(fullfile(savePath, '**', 'templates._bc_qMetrics.parquet'));
                 qMetricsPath = d.folder;
-                [~, qMetric, fractionRPVs_allTauR] = bc_loadSavedMetrics(qMetricsPath);
-                unitType = bc_getQualityUnitType(paramBC, qMetric);
+                [~, qMetric, fractionRPVs_allTauR] = bc.load.loadSavedMetrics(qMetricsPath);
+                unitType = bc.qm.getQualityUnitType(paramBC, qMetric);
                 %                 unitType(:) = 1; ???
 
 
@@ -569,7 +569,7 @@ for subsesid = 1:length(KiloSortPaths)
                 try
                     tmpfile = dir(fullfile(savePath,'**','templates.qualityMetricDetailsforGUI.mat'));
                     tmpGUI = load(fullfile(tmpfile.folder,tmpfile.name));
-                    bc_plotGlobalQualityMetric(qMetric, paramBC, unitType, uniqueTemplates, tmpGUI.forGUI.tempWv);
+                    bc.qm.plotGlobalQualityMetric(qMetric, paramBC, unitType, uniqueTemplates, tmpGUI.forGUI.tempWv);
                 catch ME
                     disp(ME)
                 end
@@ -582,7 +582,7 @@ for subsesid = 1:length(KiloSortPaths)
             unitTypeAcrossRec{id} = unitType;
 
             if InspectionFlag % Doesn't currently work: Julie will update bombcell
-                bc_loadMetricsForGUI
+                bc.load.loadMetricsForGUI
 
                 %% Inspect the results?
                 % GUI guide:
@@ -592,7 +592,7 @@ for subsesid = 1:length(KiloSortPaths)
                 % n : go to next noise unit
                 % up/down arrow: toggle between time chunks in the raw data
                 % u: brings up a input dialog to enter the unit you want to go to
-                unitQualityGuiHandle = bc_unitQualityGUI(memMapData, ephysData, qMetric, forGUI, rawWaveforms, ...
+                unitQualityGuiHandle = bc.viz.unitQualityGUI(memMapData, ephysData, qMetric, forGUI, rawWaveforms, ...
                     param, probeLocation, unitType, loadRawTraces);
                 %                 bc_unitQualityGUI(memMapData, ephysData, qMetric, rawWaveforms, paramBC,...
                 %                     probeLocation, unitType, plotRaw);
