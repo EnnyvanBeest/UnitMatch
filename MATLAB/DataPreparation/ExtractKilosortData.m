@@ -347,6 +347,7 @@ for subsesid = 1:length(KiloSortPaths)
         [clusinfo, sp, emptyclus] = RemovingEmptyClusters(clusinfo, sp);
 
         %clusidtmp = clusinfo.cluster_id;
+        sp.clu = int32(sp.clu);
         clusinfo.cluster_id = unique(sp.spikeTemplates);
         clusidtmp = int32(clusinfo.cluster_id);
         tmpLabel = char(length(clusinfo.cluster_id));
