@@ -290,7 +290,7 @@ for midx = 1:length(MiceOpt)
 
                     if ~exist(fullfile(tmpdatafolder, strrep(tmpfile(sesid).name, 'cbin', 'bin')))
                         disp('This is compressed data and need to uncompress... uncompress temporarily')
-                        decompDataFile = bc_extractCbinData(fullfile(tmpfile(sesid).folder, tmpfile(sesid).name), ...
+                        decompDataFile = bc.dcomp.extractCbinData(fullfile(tmpfile(sesid).folder, tmpfile(sesid).name), ...
                             [], [], 0, fullfile(tmpdatafolder, strrep(tmpfile(sesid).name, 'cbin', 'bin')));
                         statusCopy = copyfile(strrep(fullfile(tmpfile(sesid).folder, tmpfile(sesid).name), 'cbin', 'meta'), strrep(fullfile(tmpdatafolder, tmpfile(sesid).name), 'cbin', 'meta')); %QQ doesn't work on linux
                     end

@@ -618,7 +618,7 @@ while ~flag
                     set(boundary_lines(minidx,1,shid),'color','b')
                 end
                 delete(roi1)
-                parfor shid=selectedshank
+                for shid=selectedshank
                     set(boundary_lines(minidx,2,shid),'color','y','YData',[areapoints{shid}(newswitchpoints{shid}(minidx)) areapoints{shid}(newswitchpoints{shid}(minidx))])
                     matchedswitchpoints{shid}(2,minidx) = nan;
                 end

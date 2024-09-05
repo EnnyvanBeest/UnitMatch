@@ -387,12 +387,12 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'natImRespCorr')) || recom
     corrTimecourse_big = nan(sum(nClu),sum(nClu));
     for ss1 = 1:nRec
         if ~isempty(spikeData_cv{1,ss1})
-            meanResp1 = zscore(squeeze(nanmean(spikeData_cv{1,ss1}(:,bins<proc.window(2)+0.2 & bins>0,:,:),[2 4])));
-            timecourse1 = zscore(squeeze(nanmean(spikeData_cv{1,ss1}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),[1 4])));
+            meanResp1 = zscore(permute(nanmean(spikeData_cv{1,ss1}(:,bins<proc.window(2)+0.2 & bins>0,:,:),[2 4]), [1 3 2]));
+            timecourse1 = zscore(permute(nanmean(spikeData_cv{1,ss1}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),[1 4]),[2 3 1]));
             for ss2 = 1:nRec
                 if ~isempty(spikeData_cv{2,ss2})
-                    meanResp2 = zscore(squeeze(nanmean(spikeData_cv{2,ss2}(:,bins<proc.window(2)+0.2 & bins>0,:,:),[2 4])));
-                    timecourse2 = zscore(squeeze(nanmean(spikeData_cv{2,ss2}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),[1 4])));
+                    meanResp2 = zscore(permute(nanmean(spikeData_cv{2,ss2}(:,bins<proc.window(2)+0.2 & bins>0,:,:),[2 4]), [1 3 2]));
+                    timecourse2 = zscore(permute(nanmean(spikeData_cv{2,ss2}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),[1 4]),[2 3 1]));
                     corrMeanResp_big(sum(nClu(1:ss1-1))+1:sum(nClu(1:ss1)), sum(nClu(1:ss2-1))+1:sum(nClu(1:ss2))) = corr(meanResp1,meanResp2);
                     corrTimecourse_big(sum(nClu(1:ss1-1))+1:sum(nClu(1:ss1)), sum(nClu(1:ss2-1))+1:sum(nClu(1:ss2))) = corr(timecourse1, timecourse2);
                 end

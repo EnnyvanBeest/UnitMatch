@@ -40,6 +40,7 @@ UMparam.SaveDir = 'D:\MatchingUnits\Output\UnitMatch';
 % Takes the form of "{'\\path\to\firstrecording','\\path\to\secondrecording','\\path\to\nthrecording'};", e.g.:  
  UMparam.KSDir = {'D:\MatchingUnits\Data\tmp\Mouse1\AL032\2019-11-21\Probe0\1','D:\MatchingUnits\Data\tmp\Mouse1\AL032\2019-11-22\Probe0\1'};  
 
+ 
 %% Get recording information
 
 % In this part, you will provide the paths for the raw data, and the channel position, for each recording.
@@ -50,6 +51,10 @@ UMparam.SaveDir = 'D:\MatchingUnits\Output\UnitMatch';
 % and will generate a "PreparedData.mat" file that will be useful in the next section. 
 % RawDataPaths and AllChannelPos will be found automatically.
 % Optionally, it will decompresse cbin to bin data and can use BOMBCELL quality metric to define good single units. 
+UMparam.RunQualityMetrics = 1 % This assumes you run Bombcell, if not please set this to 0.
+ % For other Default parameters, please see
+ % DefaultParametersExtractKSData.m. Specifify all UMparam that should be
+ % different from the default before running ExtractKilosortData
 UMparam = ExtractKilosortData(UMparam.KSDir, UMparam);
 
 % You can also force the raw data paths as a 3rd argument: UMparam = ExtractKilosortData(KiloSortPaths, UMparam, RawDataPaths);
@@ -86,8 +91,9 @@ clusinfo = getClusinfo(UMparam.KSDir);
 % (Note that waveform extraction will take place in UnitMatch.m if not performed before)
 
 %% Load default parameters:
-
-UMparam = DefaultParametersUnitMatch(UMparam);
+% UMparam.[xxxx] = xx % Specificy all parameters that should be different
+% form the default before you run DefaultParametersUnitMatch.
+UMparam = DefaultParametersUnitMatch(UMparam); 
 
 %% UnitMatch algorithm:
 
