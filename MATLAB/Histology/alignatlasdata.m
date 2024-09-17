@@ -178,25 +178,36 @@ coordinateflag =0;
 if nargin>8
     coordinateflag = 1;
     figure
-    % Sometimes trackcoordinates are saved in a weird order by
 
     
     cols = lines(length(trackcoordinates));
     DistProbe = nan(1,length(trackcoordinates));
     for trid = 1:length(trackcoordinates)
-        % brainglobe. Try to correct that here:
+       
+        % Sometimes trackcoordinates are saved in a weird order by
+        % brainglobe. Try to correct that here:        
         [~,maxid]=max(nanvar(trackcoordinates{trid},[],1)); %Sort in the dimension with largest variance
         [~,sortidx]=sort(trackcoordinates{trid}(:,maxid),'descend');
-        
+
         trackcoordinates{trid} = trackcoordinates{trid}(sortidx,:);
         histinfo{trid} = histinfo{trid}(sortidx,:);
-        
+
+        % Now sort further on area (to group areas)
+        AreaOpt = unique(histinfo{trid}.RegionAcronym,'stable');
+        [~,id] = ismember(histinfo{trid}.RegionAcronym,AreaOpt);
+        [~,sortidx] = sort(id,'ascend');
+
+        trackcoordinates{trid} = trackcoordinates{trid}(sortidx,:);
+        histinfo{trid} = histinfo{trid}(sortidx,:);
+
+        % Redo this SVD after sorting
         X_ave=mean(trackcoordinates{trid},1);            % mean; line of best fit will pass through this point
         dX=bsxfun(@minus,trackcoordinates{trid},X_ave);  % residuals
         C=(dX'*dX)/(size(trackcoordinates{trid},1)-1);           % variance-covariance matrix of X
         [R,DProbe]=svd(C,0);             % singular value decomposition of C; C=R*D*R'
-        
+
         DProbe=diag(DProbe);
+
         R2=DProbe(1)/sum(DProbe);
         disp(['Linear fit R2 = ' num2str(round(R2*1000)/10) '%'])
         
@@ -215,6 +226,8 @@ if nargin>8
         % Distance line:
         DistProbe(trid) = norm(trackcoordinates{trid}(1,:)-trackcoordinates{trid}(end,:));
         hold on
+
+     
     end
     legend([h(:)],arrayfun(@(X) ['Shank ' num2str(X-1)],1:length(trackcoordinates),'UniformOutput',0))
     title('These Shanks should be in the right order, if not order histinfo accordingly')

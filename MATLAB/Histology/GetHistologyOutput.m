@@ -25,7 +25,7 @@ if ~histodone %Just in case it's not done yet
     if isempty(histofile)
         histofile = dir(fullfile(myKsDir,'*.csv'));
         if isempty(histofile)
-            % Try the histology folder 
+            % Try the histology folder
             histofile = dir(fullfile(HistoFolder,MiceOpt{midx},'ProbeTracks',thisdate,thisprobe,'*.csv'));
         end
         if isempty(histofile)
@@ -33,7 +33,7 @@ if ~histodone %Just in case it's not done yet
             MetaFileDir = dir(fullfile(myLFDir,'**',['*' strrep(thisprobe,'Probe','imec')]));
             ImecMeta =ReadMeta2(fullfile(MetaFileDir(1).folder,MetaFileDir(1).name));
             ProbeSN = ImecMeta.imDatPrb_sn;
-           
+
             histofile = dir(fullfile(HistoFolder,MiceOpt{midx},'ProbeTracks',['*' ProbeSN],'*.csv')); % Use Probe Serial Number is safest!
             if isempty(histofile)
                 histofile = dir(fullfile(HistoFolder,MiceOpt{midx},'ProbeTracks',thisprobe,'*.csv'));
@@ -54,15 +54,15 @@ if ~histodone %Just in case it's not done yet
                 histoflag = 1;
                 histinfo =load(fullfile(histofile(1).folder,histofile(1).name));
                 fullfile(fullfile(histofile(1).folder,histofile(1).name))
-                
+
                 % Align ephys data with probe
                 Depth2Area  = alignatlasdata(histinfo,AllenCCFPath,sp,clusinfo,1,1,2);
-                
+
             end
         else % Automatic alignment with brain globe output
             histoflag = 1;
             histinfo = arrayfun(@(X) readtable(fullfile(histofile(X).folder,histofile(X).name),'ReadVariableNames',1,'Delimiter',','),1:length(histofile),'UniformOutput',0);
-            
+
             % If available; find actual depth in brain
             % corresponding to this:
             trackcoordinates = arrayfun(@(X) readNPY(fullfile(histofile(X).folder,strrep(histofile(X).name,'.csv','.npy'))),1:length(histofile),'UniformOutput',0);
@@ -77,7 +77,7 @@ if ~histodone %Just in case it's not done yet
         histoflag=1;
         histinfo = fileread(fullfile(histofile(1).folder,histofile(1).name)); %Read json file
         histinfo = jsondecode(histinfo);% Decode json text
-        
+
         % Make new type table of this
         AllCh = fieldnames(histinfo);
         histinfonew = cell(length(AllCh)-1,4);
@@ -87,7 +87,7 @@ if ~histodone %Just in case it's not done yet
             end
             eval(['histinfonew(id,1) = {' num2str(id) '};'])
             eval(['histinfonew(id,2) = {histinfo.' AllCh{id} '.brain_region_id};'])
-            eval(['histinfonew(id,3) = {histinfo.' AllCh{id} '.brain_region};']) 
+            eval(['histinfonew(id,3) = {histinfo.' AllCh{id} '.brain_region};'])
             eval(['histinfonew(id,4) = {histinfo.' AllCh{id} '.brain_region};'])
         end
         histinfonew = cell2table(histinfonew);
@@ -108,4 +108,70 @@ if exist('clusinfo','var') & ~isempty(Depth2Area)
     clusinfo.Area = Depth2Area.Area(DistIdx);
     clusinfo.Color = cell2mat(arrayfun(@(X) hex2rgb(Depth2Area.Color{X}),DistIdx,'Uni',0));
     clusinfo.Coordinates = cell2mat(Depth2Area.Coordinates(DistIdx));
+
+
+    %% I only care about certain levels of histology - not layer specificity at this point
+    % Group some areas
+    Area= strrep(clusinfo.Area,'/','');
+
+    areaopt = unique(Area,'stable');
+    uniquearean = length(areaopt);
+    % Use Allen Brain Atlas to find all areas in the recordings
+    % Add units to area specific cell
+    % Area = Area(~cellfun(@isempty,Area));
+    atlastable = readtable('structure_tree_safe_2017.csv');
+    AutomaticAREASOfInterest = {};
+    AutomaticAREASOfInterestFullName = {};
+    ccfIdx = {};
+    ColPerFullArea = nan(0,3);
+    automaticareasofinterestid = nan(1,uniquearean); %Index for which area
+    newareaname = cell(1,length(Area));
+    newareaabrev = cell(1,length(Area));
+    % Make names in table similar to those used here
+    atlastable.acronym = lower(atlastable.acronym);
+    atlastable.acronym= strrep(atlastable.acronym,'/','');
+    for areaid=1:length(areaopt)
+        %Find structure_id_path of area
+        structure_id_path = atlastable.structure_id_path{find(ismember(lower(atlastable.acronym),areaopt{areaid}))};
+        % Cut off last part
+        parts = strsplit(structure_id_path,'/');
+        %     parts(cellfun(@isempty,parts))=[];
+        if length(parts)<=4 || any(strfind(areaopt{areaid},'ca'))%if we cannot go further up or hippocampal area
+            tmpareaname = areaopt{areaid}; %if we cannot go further up
+            newstructure_id_path = structure_id_path;
+        else
+            newstructure_id_path = fullfile(parts{2:end-2});
+            newstructure_id_path = ['/' strrep(newstructure_id_path,'\','/') '/'];
+            % Find area with this new structure id
+            tmpareaname = atlastable.acronym{find(ismember(atlastable.structure_id_path,newstructure_id_path))};
+        end
+        %Does this one already exist in Automatic AREAS Of Interest?
+        if ~any(ismember(AutomaticAREASOfInterest,tmpareaname))
+            %no, then create
+            AutomaticAREASOfInterest = {AutomaticAREASOfInterest{:} tmpareaname};
+            AutomaticAREASOfInterestFullName = {AutomaticAREASOfInterestFullName{:} atlastable.name{find(ismember(atlastable.structure_id_path,newstructure_id_path))}};
+            % Use average color scheme
+            ColPerFullArea = cat(1,ColPerFullArea,nanmean(clusinfo.Color(ismember(Area,areaopt{areaid}),:),1));
+            ccfIdx = {ccfIdx{:} find(ismember(lower(atlastable.acronym),areaopt{areaid}))};
+
+        else
+            ccfIdx{find(ismember(AutomaticAREASOfInterest,tmpareaname))} = [ccfIdx{find(ismember(AutomaticAREASOfInterest,tmpareaname))} find(ismember(lower(atlastable.acronym),areaopt{areaid}))];
+        end
+        % Index correctly
+        automaticareasofinterestid(areaid) = find(ismember(AutomaticAREASOfInterest,tmpareaname));
+        newareaabrev(ismember(Area,areaopt{areaid})) = {tmpareaname};
+        newareaname(ismember(Area,areaopt{areaid}))={atlastable.name{find(ismember(atlastable.structure_id_path,newstructure_id_path))}}; %Save out per unit
+
+
+    end
+    if any(ismember(AutomaticAREASOfInterest,{'root','vs','fiber tracts','cc','fxs'})) % make these void
+        AutomaticAREASOfInterestFullName(ismember(AutomaticAREASOfInterest,{'root','vs','fiber tracts','cc','fxs'}))={'root'};
+        AutomaticAREASOfInterest(ismember(AutomaticAREASOfInterest,{'root','vs','fiber tracts','cc','fxs'}))={'root'};
+    end
+    [~,colidx] = ismember(newareaname,AutomaticAREASOfInterestFullName);
+    [~,sortareaidx] = sortrows(ColPerFullArea);
+
+    clusinfo.Area = newareaabrev';
+    clusinfo.AreaFN = newareaname';
+
 end
