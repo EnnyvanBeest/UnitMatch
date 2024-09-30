@@ -12,7 +12,7 @@ We also thank Anna Lebedeva, Flora Takacs, Pip Coen, Kenneth Harris, and Matteo 
 For this work, van Beest was supported by a Marie Sklodowska-Curie fellowship (van Beest, 101022757), Bimbard by a European Molecular Biology Organization (ALTF 740-2019), and Carandini and Harris by a Wellcome Investigator Award.
 
 
-Preprint: https://www.biorxiv.org/content/10.1101/2023.10.12.562040v1
+Paper to cite: https://www.nature.com/articles/s41592-024-02440-1
 
 Video: https://www.youtube.com/watch?v=4c_dgTZcBaQ&list=PLfhWmWntvjl7kljKozClpjS29DoY8V5pB&index=23&t=21s
 
