@@ -3,7 +3,7 @@ Ephys toolbox to match single units (electrophysiology) either within the same r
 
 If you have questions about UnitMatch, please use the 'Q&A' in the Discussions tab or raise an issue for bugs or code requests.
 
-![image](https://github.com/EnnyvanBeest/UnitMatch/blob/main/MATLAB/LogoAndExamples/Logo.svg)
+![image](https://github.com/EnnyvanBeest/UnitMatch/blob/main/MATLAB/LogoAndExamples/unitMatchLogo.png)
 
 This toolbox was initially created between August 2022-January 2023 by Enny H. van Beest as a tool to match units across multiple recording(day)s, and/or merge oversplit units within the same day. The toolbox was further optimized between February-October 2023 in collaboration with Célian Bimbard.
 A python version was created between November 2023 and January 2024 by Sam Dodgson. The python version only contains core UnitMatch code. Other functionality such as computing functional scores etc. for now is only available in the Matlab version.
