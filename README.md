@@ -5,7 +5,8 @@ If you have questions about UnitMatch, please use the 'Q&A' in the Discussions t
 
 ![image](https://github.com/EnnyvanBeest/UnitMatch/blob/main/MATLAB/LogoAndExamples/unitMatchLogo.png)
 
-Original code: Enny H. van Beest, Célian Bimbard
+Original code: Enny H. van Beest, Célian Bimbard.
+
 Python version: Sam Dodgson. 
 
 We thank Julie Fabre, who implemented some changes to Bombcell - a toolbox for quality metrics and automated curation.
