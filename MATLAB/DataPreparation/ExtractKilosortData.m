@@ -173,6 +173,14 @@ for subsesid = 1:length(KiloSortPaths)
     % Some KS versions do not store empty channels?
     channelpos = nan(Params.nSavedChans-Params.nSyncChans,2);
     channelpos(channelmaptmp+1,:) = channelpostmp;
+
+    % Also make channelmap appropriate size
+    channeltmpnew = nan(Params.nSavedChans-Params.nSyncChans,1);
+    channeltmpnew(channelmaptmp+1) = channelmaptmp;
+
+    channelmaptmp = channeltmpnew; % Replace
+    % Usually can just fill the missing channels easily
+    channelmaptmp = round(fillmissing(channelmaptmp,'linear'));
     try
         channelpostmp = fillmissingprobe(channelpos);
     catch ME
@@ -386,26 +394,26 @@ for subsesid = 1:length(KiloSortPaths)
         CurationDone = 1;
         save(fullfile(KiloSortPaths{subsesid}, 'CuratedResults.mat'), 'CurationDone')
         clusinfo = tdfread(fullfile(myClusFile(1).folder, myClusFile(1).name));
+        if ~isfield(clusinfo,'cluster_id')
+            clusinfo.cluster_id = clusinfo.id;
+        end
         % Convert sp data to correct cluster according to phy (clu and
         % template are not necessarily the same after  splitting/merging)
         [clusinfo, sp, emptyclus] = RemovingEmptyClusters(clusinfo, sp);
-
         if ~any(~isnan(clusinfo.group))
             disp('clusinfo.group is empty, taking KS labels')
             clusinfo.group = clusinfo.KSLabel;
         end
-        curratedflag = 1;
-        if isfield(clusinfo, 'id')
-            clusidtmp = clusinfo.id;
-            cluster_id = [cluster_id, clusinfo.id];
-        elseif isfield(clusinfo, 'cluster_id')
+        curratedflag = 1;     
+        if isfield(clusinfo, 'cluster_id')
             clusidtmp = clusinfo.cluster_id;
-
             cluster_id = [cluster_id, clusinfo.cluster_id];
         else
             keyboard
             disp('Someone thought it was nice to change the name again...')
-        end
+        end 
+     
+
         KSLabel = clusinfo.KSLabel;
         Label = [Label, clusinfo.group]; % You want the group, not the KSLABEL!
         % Find depth and channel
@@ -429,12 +437,9 @@ for subsesid = 1:length(KiloSortPaths)
             sp.spikeDepths(ismember(sp.clu, clusidtmp(clusid))) = depthtmp(clusid);
 
         end
-
         depth = [depth, depthtmp];
-
-        channel = [channel, clusinfo.ch];
+        channel = [channel, channeltmp];
         Good_IDtmp = ismember(cellstr(clusinfo.group), 'good');
-        channeltmp = clusinfo.ch;
     end
     % channelpostmp = channelpostmpconv;
     ypostmp = channelpostmp(:, 2);
@@ -498,9 +503,9 @@ for subsesid = 1:length(KiloSortPaths)
             if isempty(dir(fullfile(savePath, '**', 'RawWaveforms'))) || rerunEx  % if raw waveforms have not been extract, decompress data for extraction
                 disp('Extracting sync file...')
                 % detect whether data is compressed, decompress locally if necessary
-                if ~exist(fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'bin')))
+                if ~exist(fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'bin'))) && ~contains(rawD(1).name,'.dat') && ~contains(rawD(1).name,'.raw')
                     disp('This is compressed data and we do not want to use Python integration... uncompress temporarily')
-                    decompDataFile = bc_extractCbinData(fullfile(rawD(id).folder, rawD(id).name), ...
+                    decompDataFile = bc.dcomp.extractCbinData(fullfile(rawD(id).folder, rawD(id).name), ...
                         [], [], 0, fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'bin')));
                     statusCopy = copyfile(strrep(fullfile(rawD(id).folder, rawD(id).name), 'cbin', 'meta'), strrep(fullfile(Params.tmpdatafolder, rawD(id).name), 'cbin', 'meta')); %QQ doesn't work on linux
                 end
@@ -523,7 +528,7 @@ for subsesid = 1:length(KiloSortPaths)
                 % First check if we want to use python for compressed data. If not, uncompress data first
                 if any(strfind(rawD(id).name, 'cbin')) && Params.DecompressLocal && isempty(dir(fullfile(savePath, '**', 'RawWaveforms')))
                     % detect whether data is compressed, decompress locally if necessary
-                    if ~exist(fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'bin')))
+                    if ~exist(fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'bin'))) && ~contains(rawD(1).name,'.dat') && ~contains(rawD(1).name,'.raw')
                         disp('This is compressed data and we do not want to use Python integration... uncompress temporarily')
                         decompDataFile = bc.dcomp.extractCbinData(fullfile(rawD(id).folder, rawD(id).name), ...
                             [], [], 0, fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'bin')));
@@ -741,16 +746,18 @@ if Params.DecompressLocal && Params.CleanUpTemporary
         CleanUpCheckFlag = 0;
     end
 
-    if CleanUpCheckFlag
+    if CleanUpCheckFlag 
         clear memMapData
         clear ap_data
         try
             for id = 1:length(RawDataPaths)
-                delete(fullfile(Params.tmpdatafolder, strrep(RawDataPaths{id}.name, 'cbin', 'bin')))
-                delete(fullfile(Params.tmpdatafolder, strrep(RawDataPaths{id}.name, 'cbin', 'meta')))
-                delete(fullfile(Params.tmpdatafolder, strrep(RawDataPaths{id}.name, '.ap.cbin', '_kilosortChanMap.mat')))
-                delete(fullfile(Params.tmpdatafolder, strrep(RawDataPaths{id}.name, '.cbin', '_sync.dat')))
-                delete(fullfile(Params.tmpdatafolder, RawDataPaths{id}.name))
+                if ~isempty(RawDataPaths{id})
+                    delete(fullfile(Params.tmpdatafolder, strrep(RawDataPaths{id}.name, 'cbin', 'bin')))
+                    delete(fullfile(Params.tmpdatafolder, strrep(RawDataPaths{id}.name, 'cbin', 'meta')))
+                    delete(fullfile(Params.tmpdatafolder, strrep(RawDataPaths{id}.name, '.ap.cbin', '_kilosortChanMap.mat')))
+                    delete(fullfile(Params.tmpdatafolder, strrep(RawDataPaths{id}.name, '.cbin', '_sync.dat')))
+                    delete(fullfile(Params.tmpdatafolder, RawDataPaths{id}.name))
+                end
             end
         catch ME
             keyboard
