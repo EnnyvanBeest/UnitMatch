@@ -29,6 +29,10 @@ OriID = UniqueIDConversion.OriginalClusID(GoodId);
 OriIDAll = UniqueIDConversion.OriginalClusID;
 recses = UniqueIDConversion.recsesAll(GoodId);
 recsesall = UniqueIDConversion.recsesAll;
+if size(recsesall) ~= size(Good_ID)
+    recsesall = recsesall';
+end
+
 
 AllKSDir = UMparam.KSDir; %original KS Dir
 nclus = length(UniqueID);
@@ -73,7 +77,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'refPopCorr')) || recomput
     for rid = 1:nRec
         % Define edges for this dataset
         edges = floor(min(sp.st(sp.RecSes == RecOpt(rid)))) - UMparam.binsz / 2:UMparam.binsz:ceil(max(sp.st(sp.RecSes == RecOpt(rid)))) + UMparam.binsz / 2;
-        Good_Idx = find(GoodId & recsesall' == RecOpt(rid)); % Only care about good units at this point
+        Good_Idx = find(GoodId & recsesall == RecOpt(rid)); % Only care about good units at this point
 
         % bin data to create PSTH
         sr = nan(numel(Good_Idx), numel(edges)-1);
@@ -221,6 +225,10 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'ISICorr')) || recompute %
         for cv = 1:2
             idx1 = find(sp.spikeTemplates == OriID(clusid) & sp.RecSes == recses(clusid));
             if ~isempty(idx1)
+
+                if numel(idx1)<50 && cv == 1
+                    warning(['Less than 100 spikes for neuron ' num2str(clusid) ', please check your inclusion criteria'])
+                end
                 if cv == 1
                     idx1 = idx1(1:floor(length(idx1)/2));
                 else

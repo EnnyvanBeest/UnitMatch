@@ -631,7 +631,7 @@ for subsesid = 1:length(KiloSortPaths)
         AllUniqueTemplates = cat(1, AllUniqueTemplates(:), cat(1, theseuniqueTemplates{:}));
 
     else
-        AllUniqueTemplates = cat(1, AllUniqueTemplates, unique(sp.spikeTemplates));
+        AllUniqueTemplates = cat(1, AllUniqueTemplates, clusinfo.cluster_id);
         Good_ID = [Good_ID, Good_IDtmp]; %Identify good clusters
 
         %         NoiseUnit = false(size(Good_IDtmp));

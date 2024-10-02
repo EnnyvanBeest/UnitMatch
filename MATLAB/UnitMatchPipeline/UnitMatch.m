@@ -52,7 +52,7 @@ stepsize = 0.01;
 Allchannelpos = param.AllChannelPos;
 RunPyKSChronicStitched = param.RunPyKSChronicStitched;
 SaveDir = param.SaveDir;
-param.nChannels = length(Allchannelpos{1})+1; %First assume there's a sync channel as well.
+param.nChannels = length(Allchannelpos{1})+param.nSyncChans; %First assume there's a sync channel as well.
 
 
 % best option
