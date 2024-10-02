@@ -3,16 +3,16 @@ Ephys toolbox to match single units (electrophysiology) either within the same r
 
 If you have questions about UnitMatch, please use the 'Q&A' in the Discussions tab or raise an issue for bugs or code requests.
 
-![image](https://github.com/EnnyvanBeest/UnitMatch/blob/main/MATLAB/LogoAndExamples/Logo.svg)
+![image](https://github.com/EnnyvanBeest/UnitMatch/blob/main/MATLAB/LogoAndExamples/unitMatchLogo.png)
 
-This toolbox was initially created between August 2022-January 2023 by Enny H. van Beest as a tool to match units across multiple recording(day)s, and/or merge oversplit units within the same day. The toolbox was further optimized between February-October 2023 in collaboration with Célian Bimbard.
-A python version was created between November 2023 and January 2024 by Sam Dodgson. The python version only contains core UnitMatch code. Other functionality such as computing functional scores etc. for now is only available in the Matlab version.
+Original code: Enny H. van Beest, Célian Bimbard.
+
+Python version: Sam Dodgson. 
 
 We thank Julie Fabre, who implemented some changes to Bombcell - a toolbox for quality metrics and automated curation.
 We also thank Anna Lebedeva, Flora Takacs, Pip Coen, Kenneth Harris, and Matteo Carandini, as well as the rest of the Carandini-Harris laboratory for their feedback and contributions.
 
 For this work, van Beest was supported by a Marie Sklodowska-Curie fellowship (van Beest, 101022757), Bimbard by a European Molecular Biology Organization (ALTF 740-2019), and Carandini and Harris by a Wellcome Investigator Award.
-
 
 Paper to cite: https://www.nature.com/articles/s41592-024-02440-1
 
