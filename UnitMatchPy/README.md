@@ -2,12 +2,12 @@
 
 ## Run UMPy
 
-To run UMPy, standard spike sorting data is needed; channel positions and 2 extracted raw waveforms for each unit. The raw waveforms can be extracted from compressed or raw data using [BombCell](https://github.com/Julie-Fabre/bombcell) or *ExtractRawDataDemo.ipynb*. There is also a [SpikeInterface](https://spikeinterface.readthedocs.io/en/latest/) integrated notebook *UMPy_spike_interface_demo.ipynb* which uses SpikeInterface to get this data.
-Be careful not to mix and match the different ways of exrtacting raw waveforms, as there are differences between the methods.
+To run UMPy standard spike sorting data is needed; channel positions and 2 extracted raw waveforms for each unit. This can be calculated externally [BombCell](https://github.com/Julie-Fabre/bombcell) or using *extract_raw_demo.ipynb* to extract these waveforms from compressed data (.cbin and .ch) or raw data. There is also a [Spike Interface](https://spikeinterface.readthedocs.io/en/latest/) integrated notebook *UMPy_spike_interface_demo.ipynb* which uses spike interface to get this data.
+Be careful not to mix and match the different ways of extracting raw waveforms, as there are difference between the methods.
 
-There are two example notebooks for running UMPy: *UMPyExample.ipynb* and *UMPyExampleBrief.ipynb*. These notebooks will guide you through running UnitMatch, and all you need to supply is paths to the data. *UMPyExampleBried.ipynb* is recommended to use first as it is simpler. However, *UMPyExample.ipynb* is more modular and may thus be useful in specific cases.
+There are to example notebooks for running UMPy *UMPy_example.ipynb* and *UMPy_example_detailed.ipynb*. These notebooks will guide you through running Unit Match all you need to supply is paths to the data. *UMPy_example.ipynb* is recommended to use first as it is simpler, however *UMPy_example_detailed.ipynb* may be useful in unique cases as it is more modular.
 
-The GUI is an optional step to curate and investigate the neuron pairs found by UnitMatch. For efficient usage of the GUI, please look at *GUI_Reference_Guide.md* in the Demo Notebooks folder.
+The GUI is a optional step to curated and investigate the information Unit Match has calculated; for efficient usage of the GUI please look at *GUI_Reference_Guide.md* in the Demo Notebooks folder.
 
 ## Dependencies
 

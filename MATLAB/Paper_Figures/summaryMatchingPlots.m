@@ -101,6 +101,15 @@ for midx = 1:length(UMFiles)
         UMparam.RawDataPaths = cellfun(@(x) dir(x), UMparam.RawDataPaths, 'uni', 0);
     end
     days{midx} = cellfun(@(y) datenum(y), cellfun(@(x) regexp(x.folder,'\\\d*-\d*-\d*\\','match'), UMparam.RawDataPaths, 'uni', 0), 'uni', 0);
+    if all(cell2mat(cellfun(@(x) isempty(x), days{midx}, 'uni', 0)))
+        days{midx} = cellfun(@(y) datenum(y), cellfun(@(x) regexp(x.folder,'\\\d*-\d*-\d*$','match'), UMparam.RawDataPaths, 'uni', 0), 'uni', 0);
+    end
+    if all(cell2mat(cellfun(@(x) isempty(x), days{midx}, 'uni', 0)))
+        days{midx} = cellfun(@(y) datenum(y{1}(2:end-1)), cellfun(@(x) regexp(x.folder,'\/\d*-\d*-\d*\/','match'), UMparam.RawDataPaths, 'uni', 0), 'uni', 0);
+    end
+    if all(cell2mat(cellfun(@(x) isempty(x), days{midx}, 'uni', 0)))
+        days{midx} = cellfun(@(y) datenum(y{1}(2:end-1)), cellfun(@(x) regexp(x.folder,'\/\d*-\d*-\d*$','match'), UMparam.RawDataPaths, 'uni', 0), 'uni', 0);
+    end
     days{midx} = cell2mat(days{midx}) - days{midx}{1};
     deltaDays{midx} = days{midx} - days{midx}';
     deltaDaysUni{midx} = unique(deltaDays{midx});

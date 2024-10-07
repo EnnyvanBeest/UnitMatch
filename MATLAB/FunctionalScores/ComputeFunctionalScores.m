@@ -20,15 +20,19 @@ end
 
 % Extract cluster information
 if UMparam.GoodUnitsOnly
-    GoodId = logical(UniqueIDConversion.GoodID);
+    GoodID = logical(UniqueIDConversion.GoodID);
 else
-    GoodId = true(1, length(UniqueIDConversion.GoodID));
+    GoodID = true(1, length(UniqueIDConversion.GoodID));
 end
-UniqueID = UniqueIDConversion.UniqueID(GoodId);
-OriID = UniqueIDConversion.OriginalClusID(GoodId);
+UniqueID = UniqueIDConversion.UniqueID(GoodID);
+OriID = UniqueIDConversion.OriginalClusID(GoodID);
 OriIDAll = UniqueIDConversion.OriginalClusID;
-recses = UniqueIDConversion.recsesAll(GoodId);
+recses = UniqueIDConversion.recsesAll(GoodID);
 recsesall = UniqueIDConversion.recsesAll;
+if size(recsesall) ~= size(GoodID)
+    recsesall = recsesall';
+end
+
 
 AllKSDir = UMparam.KSDir; %original KS Dir
 nclus = length(UniqueID);
@@ -73,7 +77,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'refPopCorr')) || recomput
     for rid = 1:nRec
         % Define edges for this dataset
         edges = floor(min(sp.st(sp.RecSes == RecOpt(rid)))) - UMparam.binsz / 2:UMparam.binsz:ceil(max(sp.st(sp.RecSes == RecOpt(rid)))) + UMparam.binsz / 2;
-        Good_Idx = find(GoodId & recsesall' == RecOpt(rid)); % Only care about good units at this point
+        Good_Idx = find(GoodID & recsesall == RecOpt(rid)); % Only care about good units at this point
 
         % bin data to create PSTH
         sr = nan(numel(Good_Idx), numel(edges)-1);
@@ -221,6 +225,10 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'ISICorr')) || recompute %
         for cv = 1:2
             idx1 = find(sp.spikeTemplates == OriID(clusid) & sp.RecSes == recses(clusid));
             if ~isempty(idx1)
+
+                if numel(idx1)<50 && cv == 1
+                    warning(['Less than 100 spikes for neuron ' num2str(clusid) ', please check your inclusion criteria'])
+                end
                 if cv == 1
                     idx1 = idx1(1:floor(length(idx1)/2));
                 else
@@ -387,12 +395,12 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'natImRespCorr')) || recom
     corrTimecourse_big = nan(sum(nClu),sum(nClu));
     for ss1 = 1:nRec
         if ~isempty(spikeData_cv{1,ss1})
-            meanResp1 = zscore(squeeze(nanmean(spikeData_cv{1,ss1}(:,bins<proc.window(2)+0.2 & bins>0,:,:),[2 4])));
-            timecourse1 = zscore(squeeze(nanmean(spikeData_cv{1,ss1}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),[1 4])));
+            meanResp1 = zscore(permute(nanmean(spikeData_cv{1,ss1}(:,bins<proc.window(2)+0.2 & bins>0,:,:),[2 4]), [1 3 2]));
+            timecourse1 = zscore(permute(nanmean(spikeData_cv{1,ss1}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),[1 4]),[2 3 1]));
             for ss2 = 1:nRec
                 if ~isempty(spikeData_cv{2,ss2})
-                    meanResp2 = zscore(squeeze(nanmean(spikeData_cv{2,ss2}(:,bins<proc.window(2)+0.2 & bins>0,:,:),[2 4])));
-                    timecourse2 = zscore(squeeze(nanmean(spikeData_cv{2,ss2}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),[1 4])));
+                    meanResp2 = zscore(permute(nanmean(spikeData_cv{2,ss2}(:,bins<proc.window(2)+0.2 & bins>0,:,:),[2 4]), [1 3 2]));
+                    timecourse2 = zscore(permute(nanmean(spikeData_cv{2,ss2}(:,bins<proc.window(2)+0.2 & bins>-0.2,:,:),[1 4]),[2 3 1]));
                     corrMeanResp_big(sum(nClu(1:ss1-1))+1:sum(nClu(1:ss1)), sum(nClu(1:ss2-1))+1:sum(nClu(1:ss2))) = corr(meanResp1,meanResp2);
                     corrTimecourse_big(sum(nClu(1:ss1-1))+1:sum(nClu(1:ss1)), sum(nClu(1:ss2-1))+1:sum(nClu(1:ss2))) = corr(timecourse1, timecourse2);
                 end

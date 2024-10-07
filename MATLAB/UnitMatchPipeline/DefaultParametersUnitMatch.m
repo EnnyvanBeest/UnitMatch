@@ -30,6 +30,9 @@ if ~isfield(UMparam,'AllChannelPos')
     error('ChannelPositions not given. TIP: Use UMparam = ExtractKilosortData(KiloSortPaths, UMparam) to automatically extract these')
 end
 
+if ~isfield(UMparam,'nSyncChans')
+    UMparam.nSyncChans = 1; % Assuming a sync channel
+end
 
 %% Parameters for extracting raw waveforms
 if ~isfield(UMparam,'sampleamount')

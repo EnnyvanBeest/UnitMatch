@@ -173,30 +173,47 @@ end
 acronyms = lower(tmp.acronym);
 color_hex = tmp.color_hex_triplet;
 
+% Add # if missing from color_hex
+if ~contains(color_hex{1},'#')
+    color_hex = cellfun(@(X) ['#' X],color_hex,'Uni',0);
+end
+
+
 %% Actual coordinates known? - coordinates of track in Allen Brain space
 coordinateflag =0;
 if nargin>8
     coordinateflag = 1;
     figure
-    % Sometimes trackcoordinates are saved in a weird order by
 
     
     cols = lines(length(trackcoordinates));
     DistProbe = nan(1,length(trackcoordinates));
     for trid = 1:length(trackcoordinates)
-        % brainglobe. Try to correct that here:
+       
+        % Sometimes trackcoordinates are saved in a weird order by
+        % brainglobe. Try to correct that here:        
         [~,maxid]=max(nanvar(trackcoordinates{trid},[],1)); %Sort in the dimension with largest variance
         [~,sortidx]=sort(trackcoordinates{trid}(:,maxid),'descend');
-        
+
         trackcoordinates{trid} = trackcoordinates{trid}(sortidx,:);
         histinfo{trid} = histinfo{trid}(sortidx,:);
-        
+
+        % Now sort further on area (to group areas)
+        AreaOpt = unique(histinfo{trid}.RegionAcronym,'stable');
+        [~,id] = ismember(histinfo{trid}.RegionAcronym,AreaOpt);
+        [~,sortidx] = sort(id,'ascend');
+
+        trackcoordinates{trid} = trackcoordinates{trid}(sortidx,:);
+        histinfo{trid} = histinfo{trid}(sortidx,:);
+
+        % Redo this SVD after sorting
         X_ave=mean(trackcoordinates{trid},1);            % mean; line of best fit will pass through this point
         dX=bsxfun(@minus,trackcoordinates{trid},X_ave);  % residuals
         C=(dX'*dX)/(size(trackcoordinates{trid},1)-1);           % variance-covariance matrix of X
         [R,DProbe]=svd(C,0);             % singular value decomposition of C; C=R*D*R'
-        
+
         DProbe=diag(DProbe);
+
         R2=DProbe(1)/sum(DProbe);
         disp(['Linear fit R2 = ' num2str(round(R2*1000)/10) '%'])
         
@@ -215,6 +232,8 @@ if nargin>8
         % Distance line:
         DistProbe(trid) = norm(trackcoordinates{trid}(1,:)-trackcoordinates{trid}(end,:));
         hold on
+
+     
     end
     legend([h(:)],arrayfun(@(X) ['Shank ' num2str(X-1)],1:length(trackcoordinates),'UniformOutput',0))
     title('These Shanks should be in the right order, if not order histinfo accordingly')
@@ -340,7 +359,7 @@ end
 
 while ~flag
     %Now divide position of probe along this track
-    if any(ismember(histinfo.Properties.VariableNames,'DistanceFromFirstPosition_um_'))
+    if isfield(histinfo,'Properties') && any(ismember(histinfo.Properties.VariableNames,'DistanceFromFirstPosition_um_'))
         histinfo.Position = histinfo.DistanceFromFirstPosition_um_; % Renaming variables in software is so nice..
     end
     if istable(histinfo) && any(histinfo.Position)
@@ -365,14 +384,17 @@ while ~flag
         end
     elseif isstruct(histinfo)&& isfield(histinfo,'probe_ccf')
         warning('Not yet adapted for multiple shanks')
-        if ~surfacefirst
-            areapoints{shid} = (linspace(startpoint,endpoint,length(histinfo.probe_ccf.trajectory_coords)));
-        else
-            areapoints{shid} = (linspace(endpoint,startpoint,length(histinfo.probe_ccf.trajectory_coords)));
+        for shid = 1:nshanks
+            histinfo(histinfo.shank==shid)
+            if ~surfacefirst
+                areapoints{shid} = (linspace(startpoint,endpoint,length(histinfo(histinfo.shank==shid).probe_ccf.trajectory_coords)));
+            else
+                areapoints{shid} = (linspace(endpoint,startpoint,length(histinfo(histinfo.shank==shid).probe_ccf.trajectory_coords)));
+            end
+            histinfo(histinfo.shank==shid).probe_ccf.trajectory_acronyms = acronyms(histinfo(histinfo.shank==shid).probe_ccf.trajectory_areas);
+            [UniqueAreas{shid},IA{shid},IC{shid}] = unique(histinfo(histinfo.shank==shid).probe_ccf.trajectory_acronyms,'stable');
         end
-        histinfo.probe_ccf.trajectory_acronyms = acronyms(histinfo.probe_ccf.trajectory_areas);
-        [UniqueAreas{shid},IA{shid},IC{shid}] = unique(histinfo.probe_ccf.trajectory_acronyms,'stable');
-        histinfo.RegionAcronym = histinfo.probe_ccf.trajectory_acronyms;
+        histinfo(histinfo.shank==shid).RegionAcronym = histinfo.probe_ccf.trajectory_acronyms;
     else
         error('Not yet adapted for multiple shanks')
         areapoints = nan(1,max(channel)+1);
@@ -777,7 +799,7 @@ for shid=1:nshanks
     else
         ShIdx = find(ShankID==shid);
         [~,Id1,~] = unique(depth(ShIdx));
-        Depth2Area{shid} = table(depth(ShIdx(Id1)),ShankID(ShIdx(Id1)),clusterarea(Id1)',clustercolor(Id1)','VariableNames',{'Cluster_ID','Depth','Shank','Area','Color'});
+        Depth2Area{shid} = table(depth(ShIdx(Id1)),ShankID(ShIdx(Id1)),clusterarea(Id1)',clustercolor(Id1)','VariableNames',{'Depth','Shank','Area','Color'});
     end
 end
 Depth2Area=cat(1,Depth2Area{:});

@@ -26,6 +26,11 @@ for xid = 1:numel(xUnique)
     [~,Idx2] = min(abs(numel(yUnique{xid})-cellfun(@numel,yUnique(SameIdx)))); % Most similar column
     yAllPosSim = yUnique{SameIdx(Idx2)};
 
+    if length(unique(diff(yAllPosSim)))>1
+        % Also missing a channel, fill in
+        yAllPosSim = [min(yAllPosSim):min(diff(yAllPosSim)):max(yAllPosSim)]';
+    end
+
     if any(~ismember(yAllPosSim,yAllPos))
         MissingChan = cat(1,MissingChan,[repmat(xUnique(xid),sum(~ismember(yAllPosSim,yAllPos)),1),yAllPosSim(~ismember(yAllPosSim,yAllPos))]);
         TheseChs = find(chOrder==xid);

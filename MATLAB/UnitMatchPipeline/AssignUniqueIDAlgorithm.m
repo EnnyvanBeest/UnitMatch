@@ -66,8 +66,17 @@ Pairs = unique(Pairs,'stable','rows');
 
 %% Cut down on the pairs that do not exceed ProbabilityThreshold on both cross validations
 % Average of two cross-validations and sort by that
-MatchProbabilityOri = diag(MatchProb(Pairs(:,1),Pairs(:,2)));
-MatchProbabilityFlip = diag(MatchProb(Pairs(:,2),Pairs(:,1)));
+MatchProbabilityOri = nan(0,1);
+MatchProbabilityFlip = nan(0,1);
+batchsz = 1000;
+numBatch = ceil(size(Pairs,1)./batchsz);
+for batchid = 1:numBatch % In batches to prevent memory issues
+    idx = (batchid-1)*batchsz+1:batchid*batchsz;
+    idx(idx>size(Pairs,1)) = [];
+
+    MatchProbabilityOri = cat(1,MatchProbabilityOri,diag(MatchProb(Pairs(idx,1),Pairs(idx,2))));
+    MatchProbabilityFlip = cat(1,MatchProbabilityFlip,diag(MatchProb(Pairs(idx,2),Pairs(idx,1))));
+end
 NonSurvivalIdx = MatchProbabilityOri<UMparam.UsedProbability|MatchProbabilityFlip<UMparam.UsedProbability;
 Pairs(NonSurvivalIdx,:) = []; % don't bother with these
 if ~isempty(Pairs)

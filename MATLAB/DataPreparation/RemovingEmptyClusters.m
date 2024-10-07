@@ -16,17 +16,17 @@ waveforms = nan(nclus,size(sp.waveforms,2));
 
 emptyclus = [];
 for clusid=1:nclus
-    oriclusid = unique(sp.spikeTemplates(find(sp.clu == clusid-1))); %0-indexed!
+    oriclusid = unique(sp.spikeTemplates(find(sp.clu == clusinfo.cluster_id(clusid))));
     if isempty(oriclusid)
         emptyclus = [emptyclus clusid];
-    elseif length(oriclusid)==1
+    elseif numel(oriclusid)==1
         temps(clusid,:,:)=sp.temps(oriclusid+1,:,:);
         try
             pcFeatInd(clusid,:)=sp.pcFeatInd(oriclusid+1,:);
         catch ME
-            
+
         end
-        templateDepths(clusid) = sp.templateDepths(oriclusid+1);
+        templateDepths(clusid) = sp.templateDepths(oriclusid+1); % 0-indexed!
         templateXpos(clusid) = sp.templateXpos(oriclusid+1);
         tempAmps(clusid) = sp.tempAmps(oriclusid+1);
         tempsUnW(clusid,:,:) = sp.tempsUnW(oriclusid+1,:,:);
@@ -53,28 +53,27 @@ sp.tempsUnW = tempsUnW(takeclus,:,:);
 sp.templateDuration = templateDuration(takeclus);
 sp.waveforms = waveforms(takeclus,:);
 if any(emptyclus)
+    disp(['Found ' num2str(length(emptyclus)) ' empty clusters. Removing from clusinfo'])
 
-disp(['Found ' num2str(length(emptyclus)) ' empty clusters. Removing from clusinfo'])
+    %% Remove the empty clusters
+    fields = fieldnames(clusinfo);
+    for id = 1:length(fields)
+        clusinfo.(fields{id})(emptyclus,:)=[];
+    end
+
+    %% Remove empty clusters from sp
+    removeidx = ismember(sp.clu,clusinfo.cluster_id(emptyclus));
+    fields = fieldnames(sp);
+    for id = 1:length(fields)
+        if numel(sp.(fields{id})) == numel(removeidx)
+            sp.(fields{id})(removeidx) = [];
+        end
+    end
+else
+    disp(['Found no empty clusters.'])
 end
 
-%% Remove the empty clusters
-fields = fieldnames(clusinfo);
-for id = 1:length(fields)
-    eval(['clusinfo.' fields{id} '(emptyclus,:)=[];'])
-    %cluster_id(emptyclus)=[];
-%     clusinfo.Amplitude(emptyclus)=[];
-%     clusinfo.ContamPct(emptyclus)=[];
-%     clusinfo.KSLabel(emptyclus,:)=[];
-%     clusinfo.amp(emptyclus)=[];
-%     clusinfo.ch(emptyclus)=[];
-% 
-%     clusinfo.depth(emptyclus)=[];
-%     clusinfo.fr(emptyclus)=[];
-%     clusinfo.group(emptyclus,:)=[];
-%     clusinfo.n_spikes(emptyclus)=[];
-%     clusinfo.sh(emptyclus)=[];
 
-end
 
 
 

@@ -19,26 +19,27 @@ end
 
 % Add all cluster information in one 'cluster' struct - can be used for further analysis
 % Apparently sometimes clusinfo does not have the same fields (KS version?)
-fields = fieldnames(clusinfo{1});
-IncludeField = true(1,length(fields));
-for sesid=2:length(clusinfo)
-    IncludeField(~ismember(fields,fieldnames(clusinfo{sesid}))) = false;
-end
-for sesid=1:length(clusinfo)
+allfieldNames = cellfun(@fieldnames,clusinfo,'Uni',0);
+[unqFields,~,unqID] = unique(vertcat(allfieldNames{:}));
+% find common fields
+match_ID = find(accumarray(unqID(:),1) == numel(allfieldNames));
+commonFields = unqFields(match_ID);
+% remove unshared fields
+for sesid = 1:length(clusinfo)
     thesefields = fieldnames(clusinfo{sesid});
-    clusinfo{sesid} = rmfield(clusinfo{sesid},thesefields(ismember(thesefields,fields(find(~IncludeField))))); % REmove fields
+    clusinfo{sesid} = rmfield(clusinfo{sesid},thesefields(~ismember(thesefields,commonFields))); % REmove fields
 end
+
 
 % Continue adding them together
 clusinfo = [clusinfo{:}];
 clusinfoNew = struct;
-fields = {fields{find(IncludeField)}}';
-for fieldid = 1:length(fields)
+for fieldid = 1:length(commonFields)
     try
-        eval(['clusinfoNew.', fields{fieldid}, '= cat(1,clusinfo(:).', fields{fieldid} ');'])
+        eval(['clusinfoNew.', commonFields{fieldid}, '= cat(1,clusinfo(:).', commonFields{fieldid} ');'])
     catch ME
         try
-            eval(['clusinfoNew.', fields{fieldid}, '= cat(2,clusinfo(:).', fields{fieldid}, ');'])
+            eval(['clusinfoNew.', commonFields{fieldid}, '= cat(2,clusinfo(:).', commonFields{fieldid}, ');'])
         catch ME
         end
     end

@@ -108,7 +108,13 @@ function res = summaryFunctionalPlots(UMFiles, whichMetric, groupVector, UseKSLa
         end
         days{midx} = cellfun(@(y) datenum(y), cellfun(@(x) regexp(x.folder,'\\\d*-\d*-\d*\\','match'), UMparam.RawDataPaths, 'uni', 0), 'uni', 0);
         if all(cell2mat(cellfun(@(x) isempty(x), days{midx}, 'uni', 0)))
+            days{midx} = cellfun(@(y) datenum(y), cellfun(@(x) regexp(x.folder,'\\\d*-\d*-\d*$','match'), UMparam.RawDataPaths, 'uni', 0), 'uni', 0);
+        end
+        if all(cell2mat(cellfun(@(x) isempty(x), days{midx}, 'uni', 0)))
             days{midx} = cellfun(@(y) datenum(y{1}(2:end-1)), cellfun(@(x) regexp(x.folder,'\/\d*-\d*-\d*\/','match'), UMparam.RawDataPaths, 'uni', 0), 'uni', 0);
+        end
+        if all(cell2mat(cellfun(@(x) isempty(x), days{midx}, 'uni', 0)))
+            days{midx} = cellfun(@(y) datenum(y{1}(2:end-1)), cellfun(@(x) regexp(x.folder,'\/\d*-\d*-\d*$','match'), UMparam.RawDataPaths, 'uni', 0), 'uni', 0);
         end
         days{midx} = cell2mat(days{midx}) - days{midx}{1};
         deltaDays{midx} = nan(numel(sessIDs)-1,numel(sessIDs));

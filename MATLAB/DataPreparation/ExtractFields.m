@@ -16,7 +16,7 @@ if exist('clu','var')
     spikeShank = nan(length(clu),1);
     ShankOpt = unique(Shank);
     for shid = 1:length(ShankOpt)
-        spikeShank(ismember(clu,cluster_id(Shank==ShankOpt(shid)))&ismember(RecSes,RecSesID(Shank==ShankOpt(shid)))) = ShankOpt(shid);
+        spikeShank(ismember(double(clu),double(cluster_id(Shank==ShankOpt(shid))))&ismember(RecSes,RecSesID(Shank==ShankOpt(shid)))) = ShankOpt(shid);
     end
     assignin('caller','spikeShank',spikeShank)
 end
