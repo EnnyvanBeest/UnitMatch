@@ -20,16 +20,16 @@ end
 
 % Extract cluster information
 if UMparam.GoodUnitsOnly
-    GoodId = logical(UniqueIDConversion.GoodID);
+    GoodID = logical(UniqueIDConversion.GoodID);
 else
-    GoodId = true(1, length(UniqueIDConversion.GoodID));
+    GoodID = true(1, length(UniqueIDConversion.GoodID));
 end
-UniqueID = UniqueIDConversion.UniqueID(GoodId);
-OriID = UniqueIDConversion.OriginalClusID(GoodId);
+UniqueID = UniqueIDConversion.UniqueID(GoodID);
+OriID = UniqueIDConversion.OriginalClusID(GoodID);
 OriIDAll = UniqueIDConversion.OriginalClusID;
-recses = UniqueIDConversion.recsesAll(GoodId);
+recses = UniqueIDConversion.recsesAll(GoodID);
 recsesall = UniqueIDConversion.recsesAll;
-if size(recsesall) ~= size(Good_ID)
+if size(recsesall) ~= size(GoodID)
     recsesall = recsesall';
 end
 
@@ -77,7 +77,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'refPopCorr')) || recomput
     for rid = 1:nRec
         % Define edges for this dataset
         edges = floor(min(sp.st(sp.RecSes == RecOpt(rid)))) - UMparam.binsz / 2:UMparam.binsz:ceil(max(sp.st(sp.RecSes == RecOpt(rid)))) + UMparam.binsz / 2;
-        Good_Idx = find(GoodId & recsesall == RecOpt(rid)); % Only care about good units at this point
+        Good_Idx = find(GoodID & recsesall == RecOpt(rid)); % Only care about good units at this point
 
         % bin data to create PSTH
         sr = nan(numel(Good_Idx), numel(edges)-1);

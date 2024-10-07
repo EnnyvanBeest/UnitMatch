@@ -33,6 +33,18 @@ end
 
 % Continue adding them together
 clusinfo = [clusinfo{:}];
-
+clusinfoNew = struct;
+for fieldid = 1:length(commonFields)
+    try
+        eval(['clusinfoNew.', commonFields{fieldid}, '= cat(1,clusinfo(:).', commonFields{fieldid} ');'])
+    catch ME
+        try
+            eval(['clusinfoNew.', commonFields{fieldid}, '= cat(2,clusinfo(:).', commonFields{fieldid}, ');'])
+        catch ME
+        end
+    end
+end
+clusinfo = clusinfoNew;
+clear clusinfoNew
 
 return
