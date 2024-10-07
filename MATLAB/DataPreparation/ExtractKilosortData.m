@@ -499,7 +499,7 @@ for subsesid = 1:length(KiloSortPaths)
                 % detect whether data is compressed, decompress locally if necessary
                 if ~exist(fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'bin')))
                     disp('This is compressed data and we do not want to use Python integration... uncompress temporarily')
-                    decompDataFile = bc_extractCbinData(fullfile(rawD(id).folder, rawD(id).name), ...
+                    decompDataFile = bc.dcomp.extractCbinData(fullfile(rawD(id).folder, rawD(id).name), ...
                         [], [], 0, fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'bin')));
                     statusCopy = copyfile(strrep(fullfile(rawD(id).folder, rawD(id).name), 'cbin', 'meta'), strrep(fullfile(Params.tmpdatafolder, rawD(id).name), 'cbin', 'meta')); %QQ doesn't work on linux
                 end
