@@ -909,7 +909,7 @@ def add_original_ID(UnitA, UnitB):
     if original_id_label.winfo_exists():
         original_id_label.destroy()
 
-    original_id_label = ttk.Label(root, text = f'The Original Unit IDs are:\nUnit A: {int(clus_info["original_id"][UnitA].squeeze())}   Unit B: {int(clus_info["original_id"][UnitB].squeeze())}', borderwidth = 2 , relief= 'groove')
+    original_id_label = ttk.Label(root, text = f'The Original Unit IDs are:\nUnit A: {int(clus_info["original_ids"][UnitA].squeeze())}   Unit B: {int(clus_info["original_ids"][UnitB].squeeze())}', borderwidth = 2 , relief= 'groove')
     original_id_label.grid( row = 0, column = 2, ipadx = 5, ipady = 5)
 
 
