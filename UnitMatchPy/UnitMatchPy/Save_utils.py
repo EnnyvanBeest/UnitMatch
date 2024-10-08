@@ -46,8 +46,8 @@ def make_match_table(scores_to_include, matches, output_prob, total_score, outpu
     unit_a_list = xx.reshape(n_units*n_units)
     unit_b_list = yy.reshape(n_units*n_units)
 
-    sessions_ids = clus_info['sessions_id']
-    xx, yy = np.meshgrid(sessions_ids, sessions_ids)
+    session_id = clus_info['session_id']
+    xx, yy = np.meshgrid(session_id, session_id)
     unit_a_session_list = xx.reshape(n_units*n_units) + 1 # Add one here so it counts from one not 0
     unit_b_session_list = yy.reshape(n_units*n_units) + 1
 
