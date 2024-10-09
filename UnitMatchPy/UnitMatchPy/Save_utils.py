@@ -5,7 +5,7 @@ import numpy as np
 
 def make_match_table(scores_to_include, matches, output_prob, total_score, output_threshold, clus_info, param, UIDs = None, matches_curated = None):
     """
-    Creates the match table showing information for every pair of units
+    Creates the match table showing information for every pair of units.
 
     Parameters
     ----------
