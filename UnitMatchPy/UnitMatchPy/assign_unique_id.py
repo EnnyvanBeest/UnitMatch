@@ -42,7 +42,7 @@ def assign_unique_id(output_prob_array, param, clus_info):
     List
         A list of arrays which gives each unit its group ID for each case
     """
-    all_cluster_ids = clus_info['original_id'] # each units has unique ID
+    all_cluster_ids = clus_info['original_ids'] # each units has unique ID
 
     #create arrays for the unique ids
     unique_id_liberal = np.arange(all_cluster_ids.shape[0])
