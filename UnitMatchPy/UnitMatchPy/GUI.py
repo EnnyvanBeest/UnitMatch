@@ -55,14 +55,17 @@ def run_GUI():
     not_match = []
     root = Tk()
     # downloaded theme from https://sourceforge.net/projects/tcl-awthemes/
-    theme_path = os.path.join(os.path.dirname(os.path.abspath(__file__)) , r'TkinterTheme\awthemes-10.4.0')
+    theme_path_rel = os.path.normpath(r'TkinterTheme\awthemes-10.4.0')
+    theme_path = os.path.join(os.path.dirname(os.path.abspath(__file__)) , theme_path_rel)
+
     root.tk.call('lappend', 'auto_path', theme_path)
     root.tk.call('package', 'require', 'awdark')
     s = ttk.Style(root)
     s.theme_use('awdark')
     root.title('UMPy - Manual Curation')
     #root.geometry('800x800')
-    root.iconbitmap(os.path.join(os.path.dirname(os.path.abspath(__file__)) , r'UM Logo.ico'))
+    icon = PhotoImage(file = os.path.join(os.path.dirname(os.path.abspath(__file__)) , 'GUI_icon.png'))
+    root.iconphoto(False, icon)
     background = ttk.Frame(root)
     background.place(x=0, y=0, relwidth=1.0, relheight=1.0)
 

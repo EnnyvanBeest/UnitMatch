@@ -5,7 +5,7 @@ with open('README.md', 'r') as f:
 
 setup(
     name="UnitMatchPy",
-    version="2.16",
+    version="2.18b",
     descriptin="Description of the package",
     author="Enny van Beest, Celian Bimbard and Sam Dodgson",
     author_email="e.beest@ucl.ac.uk",
