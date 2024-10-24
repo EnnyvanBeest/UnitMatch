@@ -11,3 +11,4 @@ testpy.py
 *.eggs/
 *.egg-info/
 .coverage
+/UnitMatchPy/build
