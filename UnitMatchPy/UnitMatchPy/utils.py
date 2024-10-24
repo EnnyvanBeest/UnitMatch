@@ -124,6 +124,7 @@ def load_good_waveforms(wave_paths, unit_label_paths, param, good_units_only = T
 
     good_units = []
     n_units_per_session_all = []
+    all_units = []
 
     for i in range(len(unit_label_paths)):
     #see if bombcell unit labels
@@ -139,6 +140,7 @@ def load_good_waveforms(wave_paths, unit_label_paths, param, good_units_only = T
         n_units_per_session_all.append(unit_label.shape[0])
         good_unit_idx = unit_label[tmp_idx, 0]
         good_units.append(good_unit_idx)
+        all_units.append(unit_label[:,0]) #get all the unit labels 
 
     waveforms = []
     if good_units_only:
@@ -162,16 +164,17 @@ def load_good_waveforms(wave_paths, unit_label_paths, param, good_units_only = T
     else:
         for ls in range(len(wave_paths)):
             #load in the first good unit, to get the shape of each waveform
-            p_file = os.path.join(wave_paths[ls],f'Unit{int(good_units[ls][0].squeeze())}_RawSpikes.npy')
+            p_file = os.path.join(wave_paths[ls],f'Unit{int(all_units[ls][0])}_RawSpikes.npy')
             tmp = np.load(p_file)
             tmp_waveform = np.zeros( (len(os.listdir(wave_paths[ls])), tmp.shape[0], tmp.shape[1], tmp.shape[2]))
 
             for i in range(len(os.listdir(wave_paths[ls]))):
                 #loads in all GoodUnits for that session
-                p_file_good = os.path.join(wave_paths[ls], f'Unit{int(good_units[ls][0].squeeze())}_RawSpikes.npy')
+                p_file_good = os.path.join(wave_paths[ls], f'Unit{int(all_units[ls][i])}_RawSpikes.npy')
                 tmp_waveform[i] = np.load(p_file_good)
             #adds that session to the list
             waveforms.append(tmp_waveform)
+            print(f'UnitMatch is treating all the units as good and including all units from {wave_paths[ls]}, we recommended using curated data!')
 
         del tmp_waveform
         del tmp
@@ -606,3 +609,49 @@ def paths_from_KS(KS_dirs):
             raise Exception('Could not find RawWaveforms folder')
     
     return wave_paths, unit_label_paths, channel_pos
+
+def get_probe_geometry(channel_pos, param, verbose = False):
+    """
+    From the channel positions, estimate the number of shanks and there spacing used to 
+    identify a unit to a probe.
+    needmin_new_shank_distance from param.
+
+    Parameters
+    ----------
+    channel_pos : ndarray
+        The channel positions of a session 
+    param : dict
+        The param dict
+    verbose : bool, optional
+        If True will print the calculated results, by default False
+
+    Returns
+    -------
+    param
+        The param dictionary updated with the calculated params
+    """
+    min_new_shank_distance = param['min_new_shank_distance']
+    x_val = np.unique(channel_pos[:,0])
+    x_val = np.sort(x_val) #make sure they are in ascending order 
+    x_spacing = np.diff(x_val)
+    too_close = np.argwhere(x_spacing < min_new_shank_distance)
+
+    #remove when shanks are two close
+    x_val = np.delete(x_val, too_close + 1)
+
+    n_shanks = x_val.size
+    if n_shanks == 1:
+        shank_spacing = 100 #make it cover the full possible range
+    else:
+        shank_spacing = np.abs(np.diff(x_val))[0]
+
+    #NOTE this shank_dist is the distance within a centroid would be assigned to a shank!
+    shank_dist = shank_spacing * 0.9 #the area from the start which is assigned to each probe
+    #e.g 0 -> 0.9to shank 1, 0.9-1.8 to shank 2...
+    #NOTE current shank identification doesn't work for 9+ shanks
+
+    param['no_shanks'] = n_shanks
+    param['shank_dist'] = shank_dist
+    if verbose == True:
+        print(f'We have found {n_shanks} with spacing ~ {shank_spacing}')
+    return param
