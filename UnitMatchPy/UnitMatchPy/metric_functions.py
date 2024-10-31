@@ -597,7 +597,11 @@ def apply_drift_correction_per_shank(pairs, sid, session_switch, avg_centroid, a
 
         if np.all(correct_shank_a == correct_shank_b) != True:
             print(f'These pairs may be bad {np.argwhere(correct_shank_a != correct_shank_b)}')
+            #delete pairs which are on different shanks ##sam's fix
+            correct_shank_a = np.delete(correct_shank_a, np.argwhere(correct_shank_a != correct_shank_b))
+            correct_shank_b = np.delete(correct_shank_b, np.argwhere(correct_shank_a != correct_shank_b))
 
+            
         drifts = centroid_a[:,correct_shank_a] - centroid_b[:,correct_shank_b]
         drift =  np.nanmedian(drifts, axis = 1)
         drift_per_shank[i,:] = drift
@@ -701,7 +705,7 @@ def test_matches_per_shank(pairs, avg_centroid, sid, param):
             correct_shank_b = np.logical_and(centroid_b[1,:] < max_dist,  centroid_b[1,:] > min_dist)
 
             if np.all(correct_shank_a == correct_shank_b) != True:
-                #print(f'These pairs may be bad {np.argwhere(correct_shank_a != correct_shank_b)}')
+                print(f'These pairs may be bad {np.argwhere(correct_shank_a != correct_shank_b)}')
                 #delete pairs which are one different shanks
                 correct_shank_a = np.delete(correct_shank_a, np.argwhere(correct_shank_a != correct_shank_b))
                 correct_shank_b = np.delete(correct_shank_b, np.argwhere(correct_shank_a != correct_shank_b))
@@ -772,10 +776,11 @@ def drift_n_sessions(candidate_pairs, session_switch, avg_centroid, avg_waveform
                 drifts = np.zeros( (n_sessions - 1, param['no_shanks'], 3))
                 drifts[did,:,:], avg_waveform_per_tp, avg_centroid = apply_drift_correction_per_shank(pairs, did, session_switch, avg_centroid, avg_waveform_per_tp, param)
                 print(f'Done drift correction per shank for session pair {did+1} and {did+2}')
-            else:
+            elif len(pairs)>0: #if there exist pairs across sessions:
                 drifts = np.zeros( (n_sessions - 1, 3))
                 drifts[did,:], avg_waveform_per_tp, avg_centroid = apply_drift_correction_basic(pairs, did, session_switch, avg_centroid, avg_waveform_per_tp)
-
+            elif len(pairs)==0:
+                print('No pairs across sessions to perform drift correction.')
     return drifts, avg_centroid, avg_waveform_per_tp
 
 

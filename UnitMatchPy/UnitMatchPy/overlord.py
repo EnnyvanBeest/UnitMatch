@@ -124,7 +124,7 @@ def extract_metric_scores(extracted_wave_properties, session_switch, within_sess
     thrs_opt = mf.get_threshold(total_score, within_session, euclid_dist, param, is_first_pass = False)
     param['n_expected_matches'] = np.sum( (total_score > thrs_opt).astype(int))
     prior_match = 1 - ( param['n_expected_matches'] / len(include_these_pairs))
-
+    print(prior_match)
     thrs_opt = np.quantile(total_score[include_these_pairs_idx.astype(bool)], prior_match)
     candidate_pairs = total_score > thrs_opt
 
