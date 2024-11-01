@@ -598,8 +598,9 @@ def apply_drift_correction_per_shank(pairs, sid, session_switch, avg_centroid, a
         if np.all(correct_shank_a == correct_shank_b) != True:
             print(f'These pairs may be bad {np.argwhere(correct_shank_a != correct_shank_b)}')
             #delete pairs which are on different shanks ##sam's fix
-            correct_shank_a = np.delete(correct_shank_a, np.argwhere(correct_shank_a != correct_shank_b))
-            correct_shank_b = np.delete(correct_shank_b, np.argwhere(correct_shank_a != correct_shank_b))
+                bad_idxs = np.argwhere(correct_shank_a != correct_shank_b)
+                correct_shank_a = np.delete(correct_shank_a, bad_idxs)
+                correct_shank_b = np.delete(correct_shank_b, bad_idxs)
 
             
         drifts = centroid_a[:,correct_shank_a] - centroid_b[:,correct_shank_b]
@@ -707,8 +708,9 @@ def test_matches_per_shank(pairs, avg_centroid, sid, param):
             if np.all(correct_shank_a == correct_shank_b) != True:
                 print(f'These pairs may be bad {np.argwhere(correct_shank_a != correct_shank_b)}')
                 #delete pairs which are one different shanks
-                correct_shank_a = np.delete(correct_shank_a, np.argwhere(correct_shank_a != correct_shank_b))
-                correct_shank_b = np.delete(correct_shank_b, np.argwhere(correct_shank_a != correct_shank_b))
+                bad_idxs = np.argwhere(correct_shank_a != correct_shank_b)
+                correct_shank_a = np.delete(correct_shank_a, bad_idxs)
+                correct_shank_b = np.delete(correct_shank_b, bad_idxs)
                 
             shank_id_tmp[correct_shank_a] = i
 
