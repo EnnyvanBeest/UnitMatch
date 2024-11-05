@@ -209,6 +209,10 @@ for uid = 1:nclus
     catch
         keyboard;
     end
+    if isempty(OriChanIdx)
+        disp('Warning, could not find proper channels.. try another channel')
+        OriChanIdx = find(cell2mat(arrayfun(@(Y) vecnorm(channelpos(MaxChanneltmp+1,:)-channelpos(Y,:)),1:size(channelpos,1),'UniformOutput',0))<param.TakeChannelRadius); %Averaging over 10 channels helps with drift
+    end
     OriLocs = channelpos(OriChanIdx,:);
 
     % Extract unit parameters -

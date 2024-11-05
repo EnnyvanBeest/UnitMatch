@@ -116,6 +116,12 @@ if Params.UnitMatch
             sp.UniqClu(sp.clu==clusinfo.cluster_id(TheseClus(clusid)) & sp.RecSes==clusinfo.RecSesID(TheseClus(clusid))) = clusinfo.UniqueID(clusid);
         end
         recsesidxIncluded(recsesidx2) = 1;
+        for rrid = 1:numel(recsesidx)
+            if isstruct(UMparam.RawDataPaths{recsesidx(rrid)})
+                UMparam.RawDataPaths{recsesidx(rrid)} = fullfile(UMparam.RawDataPaths{recsesidx(rrid)}.folder,UMparam.RawDataPaths{recsesidx(rrid)}.name);
+            end
+        end
+
         RawPathsUsed = {RawPathsUsed{:} UMparam.RawDataPaths{recsesidx}};
     end
 end
