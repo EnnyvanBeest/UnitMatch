@@ -254,6 +254,7 @@ for midx = 1:length(MiceOpt)
            
             %%
             disp(['Preprocessed data for ' MiceOpt{midx} ' run  ' num2str(runid) '/' num2str(nRuns)])
+            close all
         catch ME
             disp([MiceOpt{midx} ' run  ' num2str(runid) '/' num2str(nRuns) ' crashed... continue with others'])
 

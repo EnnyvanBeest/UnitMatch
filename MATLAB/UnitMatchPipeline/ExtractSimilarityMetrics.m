@@ -1066,6 +1066,7 @@ if 0 % THis can be used to look at some example projections
     Pairs = sortrows(Pairs);
     Pairs = unique(Pairs,'rows');
     Pairs(Pairs(:,1) == Pairs(:,2),:)=[];
+    cv = 2;
     %% Plot
     % Pairs = [198, 469, 47] % Example (AL032, take 10)
 
@@ -1095,10 +1096,10 @@ if 0 % THis can be used to look at some example projections
         hold on
 
         takesamples = param.waveidx;
-        takesamples = unique(takesamples(~isnan(squeeze(ProjectedLocationPerTP(2,uid,takesamples,1)))));
-        h(1) = plot(squeeze(ProjectedLocationPerTP(2,uid,takesamples,1)),squeeze(ProjectedLocationPerTP(3,uid,takesamples,1)),'-','color',cols(uidx,:));
-        scatter(squeeze(ProjectedLocationPerTP(2,uid,takesamples(1),1)),squeeze(ProjectedLocationPerTP(3,uid,takesamples(1),1)),30,cols(uidx,:),'filled')
-        plot(ProjectedLocation(2,uid,1),ProjectedLocation(3,uid,1),'.','MarkerSize',25,'color',cols(uidx,:))
+        takesamples = unique(takesamples(~isnan(squeeze(ProjectedLocationPerTP(2,uid,takesamples,cv)))));
+        h(1) = plot(squeeze(ProjectedLocationPerTP(2,uid,takesamples,cv)),squeeze(ProjectedLocationPerTP(3,uid,takesamples,cv)),'-','color',cols(uidx,:));
+        scatter(squeeze(ProjectedLocationPerTP(2,uid,takesamples(1),cv)),squeeze(ProjectedLocationPerTP(3,uid,takesamples(1),cv)),30,cols(uidx,:),'filled')
+        plot(ProjectedLocation(2,uid,cv),ProjectedLocation(3,uid,cv),'.','MarkerSize',25,'color',cols(uidx,:))
 
     end
 
@@ -1134,7 +1135,7 @@ if 0 % THis can be used to look at some example projections
         uid = Pairs(uidx);
 
         hold on
-        plot(-(1/30)*(41-(1:size(ProjectedWaveform,1))),squeeze(ProjectedWaveform(:,uid,1)),'color',cols(uidx,:))
+        plot(-(1/30)*(41-(1:size(ProjectedWaveform,1))),squeeze(ProjectedWaveform(:,uid,cv)),'color',cols(uidx,:))
     end
     hold on
     axis square
@@ -1198,7 +1199,7 @@ if 0 % THis can be used to look at some example projections
         scatter(Locs(:,1),Locs(:,2),20,[0.5 0.5 0.5],'filled','marker','s')
         hold on
         for chanid = 1:length(ChanIdx)
-            plot(Locs(chanid,1)+0.1*[1:size(ProjectedWaveform,1)],Locs(chanid,2)+0.1*spikeMap(:,ChanIdx(chanid),1),'color',cols(uidx,:))
+            plot(Locs(chanid,1)+0.1*[1:size(ProjectedWaveform,1)],Locs(chanid,2)+0.1*spikeMap(:,ChanIdx(chanid),cv),'color',cols(uidx,:))
         end
     end
 
@@ -1206,7 +1207,7 @@ if 0 % THis can be used to look at some example projections
     ylabel('Ypos (\mum)')
     ylims = [min(Locs(:,2))-15 max(Locs(:,2))+15];
 
-    xlims = [min(ProjectedLocation(2,Pairs,1))-diff(ylims)/2 min(ProjectedLocation(2,Pairs,1))+diff(ylims)/2];
+    xlims = [min(ProjectedLocation(2,Pairs,cv))-diff(ylims)/2 min(ProjectedLocation(2,Pairs,cv))+diff(ylims)/2];
     set(gca,'xlim',xlims,'ylim',ylims)
     axis square
     title('all waveforms')
