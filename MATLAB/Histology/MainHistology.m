@@ -204,7 +204,7 @@ for midx = 1:length(MiceOpt)
             end
 
 
-            if strcmp(RecordingType{midx},'Chronic') && ~NewHistologyNeeded
+            if strcmp(RecordingType{midx},'Chronic')
                 histfile = dir(fullfile(SaveDir,MiceOpt{midx},'**',[num2str(SN) '_HistoEphysAlignment.mat']));
                 if ~isempty(histfile)
                     if ~exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))

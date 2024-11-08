@@ -109,10 +109,10 @@ if Params.UnitMatch
         end
         UniqueIDConversion = UMOutput.UniqueIDConversion;
         
-        TheseClus = find(ismember(clusinfo.RecSesID,StoreRecSesID{recsesidx2}));
+        TheseClus = find(ismember(clusinfo.RecSesID,[StoreRecSesID{recsesidx2}]));
         if ~isempty(TheseClus)
             clusinfo.UniqueID(TheseClus) = UniqueIDConversion.UniqueID(ismember(UniqueIDConversion.recsesAll,recsesidx))'; %Assign correct UniqueID
-            clusinfo.IMROID(TheseClus) = repmat(IMROId,sum(ismember(clusinfo.RecSesID,StoreRecSesID{recsesidx2})),1);
+            clusinfo.IMROID(TheseClus) = repmat(IMROId,sum(ismember(clusinfo.RecSesID,[StoreRecSesID{recsesidx2}])),1);
         end
         for clusid=1:length(TheseClus)
             sp.UniqClu(sp.clu==clusinfo.cluster_id(TheseClus(clusid)) & sp.RecSes==clusinfo.RecSesID(TheseClus(clusid))) = clusinfo.UniqueID(clusid);
