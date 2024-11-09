@@ -86,8 +86,10 @@ recsesidxIncluded = false(1,length(KiloSortPaths));
 nclus = length(clusinfo.cluster_id);
 RawPathsUsed = {};
 sp.UniqClu = sp.clu;
+sp.SpikeOnProbe = nan(size(sp.clu));
 clusinfo.UniqueID = (1:length(clusinfo.cluster_id))';
 clusinfo.IMROID = repmat(0,length(clusinfo.cluster_id),1);
+
 if Params.UnitMatch
     disp('Assigning correct unique ID')
     PartsPath = strsplit(Params.SaveDir,'\');
@@ -116,6 +118,7 @@ if Params.UnitMatch
         end
         for clusid=1:length(TheseClus)
             sp.UniqClu(sp.clu==clusinfo.cluster_id(TheseClus(clusid)) & sp.RecSes==clusinfo.RecSesID(TheseClus(clusid))) = clusinfo.UniqueID(clusid);
+            sp.SpikeOnProbe(sp.clu==clusinfo.cluster_id(TheseClus(clusid)) & sp.RecSes==clusinfo.RecSesID(TheseClus(clusid))) = clusinfo.ProbeID(clusid);
         end
         recsesidxIncluded(recsesidx2) = 1;
         for rrid = 1:numel(recsesidx)
