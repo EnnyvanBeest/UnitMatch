@@ -48,6 +48,7 @@ if UMparam.UseDatadrivenProbThrs
 
     %     find sudden increase and take that as probability threshold
     UMparam.UsedProbability = plotvec(diff(hw)>0.1);
+    disp(['Used Probability = ' num2str(UMparam.UsedProbability)])
     %
     %     figure; plot(plotvec,hw,'g-')
     %     hold on; plot(plotvec,ha,'r-')

@@ -49,7 +49,11 @@ UMparam.SaveDir = 'D:\MatchingUnits\Output\UnitMatch';
 
 % If you use Kilosort, you can use the following. It extracts KS data and do some noise removal, 
 % and will generate a "PreparedData.mat" file that will be useful in the next section. 
-% RawDataPaths and AllChannelPos will be found automatically.
+% RawDataPaths and AllChannelPos will be found automatically, but please
+% note data dat_path in params.py should be accurate. Otherwise, please
+% define: % UMparam.RawDataPaths = {'\\path\to\firstrecording.cbin','\\path\to\secondrecording.cbin','\\path\to\nthrecording.cbin'};  
+% % A cell array with info on where to find the decompressed recording (.bin files) -- typically a temporary folder: 
+% UMparam.AllDecompPaths = {'\\path\to\firstrecording.bin','\\path\to\secondrecording.bin','\\path\to\nthrecording.bin'};  
 % Optionally, it will decompresse cbin to bin data and can use BOMBCELL quality metric to define good single units. 
 UMparam.RunQualityMetrics = 1 % This assumes you run Bombcell, if not please set this to 0.
  % For other Default parameters, please see

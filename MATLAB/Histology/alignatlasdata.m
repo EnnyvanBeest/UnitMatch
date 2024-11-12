@@ -359,10 +359,10 @@ end
 
 while ~flag
     %Now divide position of probe along this track
-    if isfield(histinfo,'Properties') && any(ismember(histinfo.Properties.VariableNames,'DistanceFromFirstPosition_um_'))
+    if istable(histinfo) && any(ismember(histinfo.Properties.VariableNames,'DistanceFromFirstPosition_um_'))
         histinfo.Position = histinfo.DistanceFromFirstPosition_um_; % Renaming variables in software is so nice..
     end
-    if istable(histinfo) && any(histinfo.Position)
+    if istable(histinfo) && any(ismember(histinfo.Properties.VariableNames,'Position'))
         histinfo.RegionAcronym(ismember(histinfo.RegionAcronym,'Not found in brain')| ismember(histinfo.RegionAcronym,'void')) = {'root'};
            for shid = 1:nshanks
             if ~surfacefirst

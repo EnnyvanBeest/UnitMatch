@@ -7,6 +7,8 @@ DateOpt = arrayfun(@(X) dir(fullfile(DataDir{DataDir2Use(X)},MiceOpt{X},'*-*')),
 DateOpt = cellfun(@(X) X([X.isdir]),DateOpt,'UniformOutput',0);
 DateOpt = cellfun(@(X) {X.name},DateOpt,'UniformOutput',0);
 
+RemoveOldCopies = 0;
+
 LogError = {}; % Keep track of which runs didn't work
 if ~exist('PipelineParamsOri','var')
     PipelineParamsOri = PipelineParams;
@@ -88,6 +90,14 @@ for midx = 1:length(MiceOpt)
         continue
     end
 
+    %% Remove old copies?
+    UnitMatchExist = dir(fullfile(SaveDir,MiceOpt{midx},'**','UnitMatch.mat'));
+    for id = 1:numel(UnitMatchExist)
+        if RemoveOldCopies && UnitMatchExist(id).date<FromDate
+            delete(fullfile(UnitMatchExist(id).folder,'**'))
+            rmdir(UnitMatchExist(id).folder)
+        end
+    end
     %% Prepare cluster information
     if exist('FromDate','var')
         PipelineParams.FromDate = FromDate;
@@ -244,6 +254,7 @@ for midx = 1:length(MiceOpt)
            
             %%
             disp(['Preprocessed data for ' MiceOpt{midx} ' run  ' num2str(runid) '/' num2str(nRuns)])
+            close all
         catch ME
             disp([MiceOpt{midx} ' run  ' num2str(runid) '/' num2str(nRuns) ' crashed... continue with others'])
 
