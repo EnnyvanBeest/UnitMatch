@@ -246,7 +246,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'ISICorr')) || recompute %
 
     %% Correlation between ISIs
     ISICorr = corr(squeeze(ISIMat(:, 1, :)), squeeze(ISIMat(:, 2, :)));
-    ISICorr = tanh(.5*atanh(ISICorr) + .5*atanh(ISICorr)); %%% added after biorxiv
+    ISICorr = tanh(.5*atanh(ISICorr) + .5*atanh(ISICorr')); %%% added after biorxiv
     ISICorr = ISICorr'; % getRank expects different input
     [ISIRank, ISISig] = getRank(atanh(ISICorr),SessionSwitch);    % Normalize correlation (z-transformed)
 

@@ -3,8 +3,9 @@ function [clusinfo, sp, Params, recsesidxIncluded] = LoadPreparedClusInfo(KiloSo
 %% Here we're going to actually load in all the sessions requested - only clusinfo to save memory for unitmatch
 clusinfo = cell(1,length(KiloSortPaths));
 addthis=0;
+StoreRecSesID = cell(1,length(KiloSortPaths));
 for subsesid=1:length(KiloSortPaths)
-    if isempty(dir(fullfile(KiloSortPaths{subsesid},'*.npy'))) || ~exist(fullfile(KiloSortPaths{subsesid},'PreparedData.mat'))
+     if isempty(dir(fullfile(KiloSortPaths{subsesid},'*.npy'))) || ~exist(fullfile(KiloSortPaths{subsesid},'PreparedData.mat'))
         continue
     end
 
@@ -14,6 +15,7 @@ for subsesid=1:length(KiloSortPaths)
 
     % Replace recsesid with subsesid
     clusinfo{subsesid}.RecSesID = clusinfo{subsesid}.RecSesID+addthis;
+    StoreRecSesID{subsesid} = unique(clusinfo{subsesid}.RecSesID);
     addthis=max(clusinfo{subsesid}.RecSesID);
 end
 
@@ -84,8 +86,10 @@ recsesidxIncluded = false(1,length(KiloSortPaths));
 nclus = length(clusinfo.cluster_id);
 RawPathsUsed = {};
 sp.UniqClu = sp.clu;
+sp.SpikeOnProbe = nan(size(sp.clu));
 clusinfo.UniqueID = (1:length(clusinfo.cluster_id))';
 clusinfo.IMROID = repmat(0,length(clusinfo.cluster_id),1);
+
 if Params.UnitMatch
     disp('Assigning correct unique ID')
     PartsPath = strsplit(Params.SaveDir,'\');
@@ -107,15 +111,22 @@ if Params.UnitMatch
         end
         UniqueIDConversion = UMOutput.UniqueIDConversion;
         
-        TheseClus = find(ismember(clusinfo.RecSesID,recsesidx2));
+        TheseClus = find(ismember(clusinfo.RecSesID,[StoreRecSesID{recsesidx2}]));
         if ~isempty(TheseClus)
             clusinfo.UniqueID(TheseClus) = UniqueIDConversion.UniqueID(ismember(UniqueIDConversion.recsesAll,recsesidx))'; %Assign correct UniqueID
-            clusinfo.IMROID(TheseClus) = repmat(IMROId,sum(ismember(clusinfo.RecSesID,recsesidx2)),1);
+            clusinfo.IMROID(TheseClus) = repmat(IMROId,sum(ismember(clusinfo.RecSesID,[StoreRecSesID{recsesidx2}])),1);
         end
         for clusid=1:length(TheseClus)
             sp.UniqClu(sp.clu==clusinfo.cluster_id(TheseClus(clusid)) & sp.RecSes==clusinfo.RecSesID(TheseClus(clusid))) = clusinfo.UniqueID(clusid);
+            sp.SpikeOnProbe(sp.clu==clusinfo.cluster_id(TheseClus(clusid)) & sp.RecSes==clusinfo.RecSesID(TheseClus(clusid))) = clusinfo.ProbeID(clusid);
         end
         recsesidxIncluded(recsesidx2) = 1;
+        for rrid = 1:numel(recsesidx)
+            if isstruct(UMparam.RawDataPaths{recsesidx(rrid)})
+                UMparam.RawDataPaths{recsesidx(rrid)} = fullfile(UMparam.RawDataPaths{recsesidx(rrid)}.folder,UMparam.RawDataPaths{recsesidx(rrid)}.name);
+            end
+        end
+
         RawPathsUsed = {RawPathsUsed{:} UMparam.RawDataPaths{recsesidx}};
     end
 end
@@ -125,7 +136,15 @@ Params.KSDir = KiloSortPaths;
 if any(recsesidxIncluded==0)
     clusinfo.UniqueID(ismember(clusinfo.RecSesID,find(recsesidxIncluded==0))) = nan;
     clusinfo.IMROID(ismember(clusinfo.RecSesID,find(recsesidxIncluded==0))) = nan;
+else % Organize units; only one entry per UID to avoid double counts of neurons
+    [UOpt,ID1,ID2] = unique(cat(2,clusinfo.UniqueID,clusinfo.IMROID),'rows','stable'); % Look for unique ID/IMRO pairs
+
+    thesefields = fieldnames(clusinfo);
+    for fid = 1:numel(thesefields)
+        clusinfo.(thesefields{fid}) =  clusinfo.(thesefields{fid})(ID1);
+    end
 end
+
 
 
 

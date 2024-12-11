@@ -64,7 +64,7 @@ for midx = 1:length(MiceOpt)
     subksdirs = dir(fullfile(myKsDir,'*','Probe*')); %This changed because now I suddenly had 2 probes per recording
     multidate = cellfun(@(X) strsplit(X,'\'),{subksdirs(:).folder},'UniformOutput',0);
     multidate = cellfun(@(X) X{end},multidate,'UniformOutput',0);
-    if length(unique(multidate))>1
+    if length(unique(multidate))>1 && strcmp(RecordingType{midx},'Chronic')
         multidate=1;
     else
         multidate=0;
@@ -204,11 +204,31 @@ for midx = 1:length(MiceOpt)
             end
 
 
+            if strcmp(RecordingType{midx},'Chronic')
+                histfile = dir(fullfile(SaveDir,MiceOpt{midx},'**',[num2str(SN) '_HistoEphysAlignment.mat']));
+                if ~isempty(histfile)
+                    if ~exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
+                        mkdir(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
+                    end
+                    copyfile(fullfile(histfile(1).folder,histfile(1).name),fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,histfile(1).name))
+
+                    continue
+                end
+            end
+
             %% Get cluster information
             PipelineParams.thisdate = thisdate;
             PipelineParams.SaveDir = fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe);
-            myKsDir = dir(fullfile(myKsDir,'**','spike_clusters.npy'));
+            if multidate
+                myKsDir = dir(fullfile(KilosortDir,MiceOpt{midx},'**',thisprobe,'**','spike_clusters.npy'));
+            else
+                myKsDir = dir(fullfile(myKsDir,'**','spike_clusters.npy'));
+            end
             myKsDir = arrayfun(@(X) X.folder,myKsDir,'UniformOutput',0);
+            if numel(myKsDir)>20
+                myKsDir = myKsDir(1:20);
+            end
+
             try
                 [clusinfo, sp, Params]  = LoadPreparedClusInfo(myKsDir,PipelineParams);
             catch ME
@@ -233,21 +253,12 @@ for midx = 1:length(MiceOpt)
                 lfpD = lfpD(probeid);
             end
 
-            if strcmp(RecordingType{midx},'Chronic')
-                histfile = dir(fullfile(SaveDir,MiceOpt{midx},'**',[num2str(SN) '_HistoEphysAlignment.mat']));
-                if ~isempty(histfile)
-                    if ~exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
-                        mkdir(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
-                    end
-                    copyfile(fullfile(histfile(1).folder,histfile(1).name),fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,histfile(1).name))
-
-                    continue
-                end
-            end
-
+          
             %% Get Histology output
             if numel(myKsDir) == 1
                 myKsDir = myKsDir{1};
+            elseif multidate
+                disp('Multidate')
             else
                 keyboard
             end
