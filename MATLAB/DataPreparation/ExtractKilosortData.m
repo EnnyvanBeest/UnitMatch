@@ -121,7 +121,7 @@ for subsesid = 1:length(KiloSortPaths)
                 rawD = rawD(strfind(rawD,'../')+3:end);
             end
             tmpdr = rawD;
-            rawD = dir(rawD);
+            rawD = dir(strrep(rawD, '/', filesep));
             if isempty(rawD)
                 rawD = dir(strrep(tmpdr, 'bin', 'cbin'));
             end
@@ -302,7 +302,11 @@ for subsesid = 1:length(KiloSortPaths)
     sp = loadKSdir_UM(KiloSortPaths{subsesid}, Params); % Load Spikes with PCs
     [sp.spikeAmps, sp.spikeDepths, sp.templateDepths, sp.templateXpos, sp.tempAmps, sp.tempsUnW, sp.templateDuration, sp.waveforms] = ...
         templatePositionsAmplitudes(sp.temps, sp.winv, sp.ycoords, sp.xcoords, sp.spikeTemplates, sp.tempScalingAmps); %from the spikes toolbox
-    templateWaveforms = sp.temps;
+    % Align with bombcell
+    templateWaveforms = zeros(size(sp.temps));
+    for t = 1:size(templateWaveforms, 1)
+        templateWaveforms(t, :, :) = squeeze(sp.temps(t, :, :)) * sp.winv;
+    end
 
     %% Check for spike hole bug in kilosort
     stderiv = [diff(sp.st)];
@@ -322,7 +326,6 @@ for subsesid = 1:length(KiloSortPaths)
     end
 
 
-
     %% Remove noise; spikes across all channels'
     if ~isfield(Params, 'deNoise')
         Params.deNoise = 1;
@@ -335,9 +338,18 @@ for subsesid = 1:length(KiloSortPaths)
     % clear paramBC
     if Params.RunQualityMetrics
         if any(strfind(KiloSortPaths{subsesid},'KS4')) || any(strfind(KiloSortPaths{subsesid},'kilosort4')) % Used KS4?
-            paramBC = bc.qm.qualityParamValuesForUnitMatch(dir(strrep(fullfile(rawD(1).folder, rawD(1).name), 'cbin', 'meta')), fullfile(Params.tmpdatafolder, strrep(rawD(1).name, 'cbin', 'bin')),KiloSortPaths{subsesid},[],4);
+            if ~isempty(rawD)
+                paramBC = bc.qm.qualityParamValuesForUnitMatch(dir(strrep(fullfile(rawD(1).folder, rawD(1).name), 'cbin', 'meta')), fullfile(Params.tmpdatafolder, strrep(rawD(1).name, 'cbin', 'bin')),KiloSortPaths{subsesid},[],4);
+            else
+                paramBC = bc.qm.qualityParamValuesForUnitMatch([], [],KiloSortPaths{subsesid},[],4);
+            end
         else
-            paramBC = bc.qm.qualityParamValuesForUnitMatch(dir(strrep(fullfile(rawD(1).folder, rawD(1).name), 'cbin', 'meta')), fullfile(Params.tmpdatafolder, strrep(rawD(1).name, 'cbin', 'bin')),KiloSortPaths{subsesid},[],2);
+            if ~isempty(rawD)
+                paramBC = bc.qm.qualityParamValuesForUnitMatch(dir(strrep(fullfile(rawD(1).folder, rawD(1).name), 'cbin', 'meta')), fullfile(Params.tmpdatafolder, strrep(rawD(1).name, 'cbin', 'bin')),KiloSortPaths{subsesid},[],2);
+
+            else
+                paramBC = bc.qm.qualityParamValuesForUnitMatch([],[],KiloSortPaths{subsesid},[],2);
+            end
         end
     else
         paramBC.minNumSpikes = 300;
@@ -358,11 +370,11 @@ for subsesid = 1:length(KiloSortPaths)
 
         % Convert sp data to correct cluster according to phy (clu and
         % template are not necessarily the same after splitting/merging)
-        [clusinfo, sp, emptyclus] = RemovingEmptyClusters(clusinfo, sp);
+        % [clusinfo, sp, emptyclus] = RemovingEmptyClusters(clusinfo, sp);
 
         %clusidtmp = clusinfo.cluster_id;
         sp.clu = int32(sp.clu);
-        clusinfo.cluster_id = unique(sp.spikeTemplates);
+        % clusinfo.cluster_id = unique(sp.spikeTemplates);
         clusidtmp = int32(clusinfo.cluster_id);
         tmpLabel = char(length(clusinfo.cluster_id));
         KSLabelfile = tdfread(fullfile(KiloSortPaths{subsesid}, 'cluster_KSLabel.tsv'));
@@ -399,13 +411,14 @@ for subsesid = 1:length(KiloSortPaths)
         disp('You did manual curation. You champion. If you have not enough time, maybe consider some automated algorithm...')
         CurationDone = 1;
         save(fullfile(KiloSortPaths{subsesid}, 'CuratedResults.mat'), 'CurationDone')
+        myClusFile = dir(fullfile(KiloSortPaths{subsesid}, 'cluster_group.tsv'));
         clusinfo = tdfread(fullfile(myClusFile(1).folder, myClusFile(1).name));
         if ~isfield(clusinfo,'cluster_id')
             clusinfo.cluster_id = clusinfo.id;
         end
         % Convert sp data to correct cluster according to phy (clu and
         % template are not necessarily the same after  splitting/merging)
-        [clusinfo, sp, emptyclus] = RemovingEmptyClusters(clusinfo, sp);
+        % [clusinfo, sp, emptyclus] = RemovingEmptyClusters(clusinfo, sp);
         if ~any(~isnan(clusinfo.group))
             disp('clusinfo.group is empty, taking KS labels')
             clusinfo.group = clusinfo.KSLabel;
@@ -420,7 +433,6 @@ for subsesid = 1:length(KiloSortPaths)
         end
 
 
-        KSLabel = clusinfo.KSLabel;
         Label = [Label, clusinfo.group]; % You want the group, not the KSLABEL!
         % Find depth and channel
         depthtmp = nan(length(clusidtmp), 1);
@@ -505,8 +517,7 @@ for subsesid = 1:length(KiloSortPaths)
             end
 
             InspectionFlag = 0;
-            rerunEx = false;
-            if isempty(dir(fullfile(savePath, '**', 'RawWaveforms'))) || rerunEx  % if raw waveforms have not been extract, decompress data for extraction
+            if isempty(dir(fullfile(rawD(id).folder, strrep(rawD(id).name, '.cbin', '_sync.dat')))) 
                 disp('Extracting sync file...')
                 % detect whether data is compressed, decompress locally if necessary
                 if ~exist(fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'bin'))) && ~contains(rawD(1).name,'.dat') && ~contains(rawD(1).name,'.raw')
@@ -532,7 +543,7 @@ for subsesid = 1:length(KiloSortPaths)
             end
             if ~qMetricsExist || Params.RedoQM
                 % First check if we want to use python for compressed data. If not, uncompress data first
-                if any(strfind(rawD(id).name, 'cbin')) && Params.DecompressLocal && isempty(dir(fullfile(savePath, '**', 'RawWaveforms')))
+                if any(strfind(rawD(id).name, 'cbin')) && Params.DecompressLocal && (isempty(dir(fullfile(savePath, '**', 'RawWaveforms'))) || (Params.RedoQM && paramBC.reextractRaw))  % if raw waveforms have not been extract, decompress data for extraction
                     % detect whether data is compressed, decompress locally if necessary
                     if ~exist(fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'bin'))) && ~contains(rawD(1).name,'.dat') && ~contains(rawD(1).name,'.raw')
                         disp('This is compressed data and we do not want to use Python integration... uncompress temporarily')
@@ -548,7 +559,6 @@ for subsesid = 1:length(KiloSortPaths)
                 end
 
                 paramBC.rawFile = fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'bin'));
-
                 paramBC.ephysMetaFile = (strrep(fullfile(rawD(id).folder, rawD(id).name), 'cbin', 'meta'));
 
                 %             idx = ismember(sp.spikeTemplates,clusidtmp(Good_IDtmp)); %Only include good units
@@ -558,7 +568,7 @@ for subsesid = 1:length(KiloSortPaths)
                 else
                     spfeat = sp.pcFeat(idx, :, :);
                 end
-                [qMetric, unitType] = bc.qm.runAllQualityMetrics(paramBC, sp.st(idx)*sp.sample_rate, sp.spikeTemplates(idx)+1, ...
+                [qMetric, unitType] = bc.qm.runAllQualityMetrics(paramBC, sp.st(idx)*sp.sample_rate, sp.clu(idx)+1, ...
                     templateWaveforms, sp.tempScalingAmps(idx), spfeat, sp.pcFeatInd+1, channelpostmp, savePath); % Be careful, bombcell needs 1-indexed!
 
             else
@@ -717,10 +727,12 @@ for subsesid = 1:length(KiloSortPaths)
             disp(ME)
         end
         % Store all figures
-        figHandles = findall(0,'Type','figure');
-        for figid = 1:numel(figHandles)
-            saveas(figHandles(figid),fullfile(KiloSortPaths{subsesid},['Fig' num2str(figid) '.fig']))
-            saveas(figHandles(figid),fullfile(KiloSortPaths{subsesid},['Fig' num2str(figid) '.bmp']))
+        if Params.RunQualityMetrics
+            figHandles = findall(0,'Type','figure');
+            for figid = 1:numel(figHandles)
+                saveas(figHandles(figid),fullfile(KiloSortPaths{subsesid},['Fig' num2str(figid) '.fig']))
+                saveas(figHandles(figid),fullfile(KiloSortPaths{subsesid},['Fig' num2str(figid) '.bmp']))
+            end
         end
 
 
