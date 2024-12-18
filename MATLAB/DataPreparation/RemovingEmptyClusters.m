@@ -16,7 +16,7 @@ waveforms = nan(nclus,size(sp.waveforms,2));
 
 emptyclus = [];
 for clusid=1:nclus
-    oriclusid = unique(sp.spikeTemplates(find(sp.clu == clusinfo.cluster_id(clusid))));
+    oriclusid = unique(sp.clu(find(sp.clu == clusinfo.cluster_id(clusid))));
     if isempty(oriclusid)
         emptyclus = [emptyclus clusid];
     elseif numel(oriclusid)==1
@@ -66,12 +66,7 @@ sp.waveforms = waveforms(takeclus,:);
 if any(emptyclus)
     disp(['Found ' num2str(length(emptyclus)) ' empty clusters. Removing from clusinfo'])
 
-    %% Remove the empty clusters
-    fields = fieldnames(clusinfo);
-    for id = 1:length(fields)
-        clusinfo.(fields{id})(emptyclus,:)=[];
-    end
-
+  
     %% Remove empty clusters from sp
     removeidx = ismember(sp.clu,clusinfo.cluster_id(emptyclus));
     fields = fieldnames(sp);
@@ -79,7 +74,14 @@ if any(emptyclus)
         if numel(sp.(fields{id})) == numel(removeidx)
             sp.(fields{id})(removeidx) = [];
         end
+    end  
+    
+    %% Remove the empty clusters
+    fields = fieldnames(clusinfo);
+    for id = 1:length(fields)
+        clusinfo.(fields{id})(emptyclus,:)=[];
     end
+
 else
     disp(['Found no empty clusters.'])
 end
