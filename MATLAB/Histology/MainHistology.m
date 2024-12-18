@@ -204,14 +204,13 @@ for midx = 1:length(MiceOpt)
             end
 
 
-            if strcmp(RecordingType{midx},'Chronic')
+            if strcmp(RecordingType{midx},'Chronic') && ~NewHistologyNeeded
                 histfile = dir(fullfile(SaveDir,MiceOpt{midx},'**',[num2str(SN) '_HistoEphysAlignment.mat']));
                 if ~isempty(histfile)
                     if ~exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
                         mkdir(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
                     end
                     copyfile(fullfile(histfile(1).folder,histfile(1).name),fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,histfile(1).name))
-
                     continue
                 end
             end
@@ -225,8 +224,8 @@ for midx = 1:length(MiceOpt)
                 myKsDir = dir(fullfile(myKsDir,'**','spike_clusters.npy'));
             end
             myKsDir = arrayfun(@(X) X.folder,myKsDir,'UniformOutput',0);
-            if numel(myKsDir)>20
-                myKsDir = myKsDir(1:20);
+            if numel(myKsDir)>30
+                myKsDir = myKsDir(1:30);
             end
 
             try
@@ -253,6 +252,20 @@ for midx = 1:length(MiceOpt)
                 lfpD = lfpD(probeid);
             end
 
+            if isempty(lfpD)
+                % get AP data
+                lfpD = dir(fullfile([myLFDir '*'], '**\*.ap.*bin')); % lf file from spikeGLX specifically
+                if isempty(lfpD)
+                    disp('No LFP data found')
+                elseif length(lfpD)~=length(subksdirs)
+                    disp('Should be a different amount of probes?')
+                    lfpD = lfpD(end);
+
+                else
+                    lfpD = lfpD(end);
+                end
+            end
+
           
             %% Get Histology output
             if numel(myKsDir) == 1
@@ -270,6 +283,9 @@ for midx = 1:length(MiceOpt)
                 continue
             end
 
+            if multidate
+                NewHistologyNeeded = 0;
+            end
 
             %% Plot in atlas space
             try
