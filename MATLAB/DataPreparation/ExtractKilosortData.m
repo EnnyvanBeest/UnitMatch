@@ -121,7 +121,7 @@ for subsesid = 1:length(KiloSortPaths)
                 rawD = rawD(strfind(rawD,'../')+3:end);
             end
             tmpdr = rawD;
-            rawD = dir(rawD);
+            rawD = dir(strrep(rawD, '/', filesep));
             if isempty(rawD)
                 rawD = dir(strrep(tmpdr, 'bin', 'cbin'));
             end
@@ -190,12 +190,12 @@ for subsesid = 1:length(KiloSortPaths)
 
 
     %% Load existing?
-    if exist(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat')) && ~Params.RedoQM && ~Params.ReLoadAlways
+    if exist(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat')) && Params.ReLoadAlways~=1
         % Check if parameters are the same, of not we have to redo it
         % anyway
         dateViolationflag = 0;
         FileInfo = dir(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat'));
-        if isfield(Params,'FromDate') && datetime(FileInfo(1).date) < Params.FromDate
+        if isfield(Params,'FromDate') && datetime(FileInfo(1).date) < Params.FromDate && Params.ReLoadAlways==2
             dateViolationflag = 1;
         end
 
@@ -259,13 +259,7 @@ for subsesid = 1:length(KiloSortPaths)
             if ~ExtractChannelMapThenContinue
                 continue
             end
-        end
-    elseif exist(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat')) && Params.ReLoadAlways == 2
-        dateViolationflag = 0;
-        FileInfo = dir(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat'));
-        if isfield(Params,'FromDate') && datetime(FileInfo(1).date) >= Params.FromDate
-            continue
-        end
+        end    
     end
 
 
@@ -302,7 +296,11 @@ for subsesid = 1:length(KiloSortPaths)
     sp = loadKSdir_UM(KiloSortPaths{subsesid}, Params); % Load Spikes with PCs
     [sp.spikeAmps, sp.spikeDepths, sp.templateDepths, sp.templateXpos, sp.tempAmps, sp.tempsUnW, sp.templateDuration, sp.waveforms] = ...
         templatePositionsAmplitudes(sp.temps, sp.winv, sp.ycoords, sp.xcoords, sp.spikeTemplates, sp.tempScalingAmps); %from the spikes toolbox
-    templateWaveforms = sp.temps;
+    % Align with bombcell
+    templateWaveforms = zeros(size(sp.temps));
+    for t = 1:size(templateWaveforms, 1)
+        templateWaveforms(t, :, :) = squeeze(sp.temps(t, :, :)) * sp.winv;
+    end
 
     %% Check for spike hole bug in kilosort
     stderiv = [diff(sp.st)];
@@ -322,7 +320,6 @@ for subsesid = 1:length(KiloSortPaths)
     end
 
 
-
     %% Remove noise; spikes across all channels'
     if ~isfield(Params, 'deNoise')
         Params.deNoise = 1;
@@ -335,9 +332,18 @@ for subsesid = 1:length(KiloSortPaths)
     % clear paramBC
     if Params.RunQualityMetrics
         if any(strfind(KiloSortPaths{subsesid},'KS4')) || any(strfind(KiloSortPaths{subsesid},'kilosort4')) % Used KS4?
-            paramBC = bc.qm.qualityParamValuesForUnitMatch(dir(strrep(fullfile(rawD(1).folder, rawD(1).name), 'cbin', 'meta')), fullfile(Params.tmpdatafolder, strrep(rawD(1).name, 'cbin', 'bin')),KiloSortPaths{subsesid},[],4);
+            if ~isempty(rawD)
+                paramBC = bc.qm.qualityParamValuesForUnitMatch(dir(strrep(fullfile(rawD(1).folder, rawD(1).name), 'cbin', 'meta')), fullfile(Params.tmpdatafolder, strrep(rawD(1).name, 'cbin', 'bin')),KiloSortPaths{subsesid},[],4);
+            else
+                paramBC = bc.qm.qualityParamValuesForUnitMatch([], [],KiloSortPaths{subsesid},[],4);
+            end
         else
-            paramBC = bc.qm.qualityParamValuesForUnitMatch(dir(strrep(fullfile(rawD(1).folder, rawD(1).name), 'cbin', 'meta')), fullfile(Params.tmpdatafolder, strrep(rawD(1).name, 'cbin', 'bin')),KiloSortPaths{subsesid},[],2);
+            if ~isempty(rawD)
+                paramBC = bc.qm.qualityParamValuesForUnitMatch(dir(strrep(fullfile(rawD(1).folder, rawD(1).name), 'cbin', 'meta')), fullfile(Params.tmpdatafolder, strrep(rawD(1).name, 'cbin', 'bin')),KiloSortPaths{subsesid},[],2);
+
+            else
+                paramBC = bc.qm.qualityParamValuesForUnitMatch([],[],KiloSortPaths{subsesid},[],2);
+            end
         end
     else
         paramBC.minNumSpikes = 300;
@@ -362,13 +368,13 @@ for subsesid = 1:length(KiloSortPaths)
 
         %clusidtmp = clusinfo.cluster_id;
         sp.clu = int32(sp.clu);
-        clusinfo.cluster_id = unique(sp.spikeTemplates);
+        % clusinfo.cluster_id = unique(sp.spikeTemplates);
         clusidtmp = int32(clusinfo.cluster_id);
         tmpLabel = char(length(clusinfo.cluster_id));
         KSLabelfile = tdfread(fullfile(KiloSortPaths{subsesid}, 'cluster_KSLabel.tsv'));
         tmpLabel(ismember(clusinfo.cluster_id, KSLabelfile.cluster_id)) = KSLabelfile.KSLabel(ismember(KSLabelfile.cluster_id, clusinfo.cluster_id));
         Label = [Label, tmpLabel];
-        totSpkNum = histc(sp.spikeTemplates, clusinfo.cluster_id);
+        totSpkNum = histc(sp.clu, clusinfo.cluster_id);
         Good_IDtmp = ismember(tmpLabel, 'g') & totSpkNum' > paramBC.minNumSpikes; %Identify good clusters
 
         % Find depth and channel
@@ -399,6 +405,7 @@ for subsesid = 1:length(KiloSortPaths)
         disp('You did manual curation. You champion. If you have not enough time, maybe consider some automated algorithm...')
         CurationDone = 1;
         save(fullfile(KiloSortPaths{subsesid}, 'CuratedResults.mat'), 'CurationDone')
+        myClusFile = dir(fullfile(KiloSortPaths{subsesid}, 'cluster_group.tsv'));
         clusinfo = tdfread(fullfile(myClusFile(1).folder, myClusFile(1).name));
         if ~isfield(clusinfo,'cluster_id')
             clusinfo.cluster_id = clusinfo.id;
@@ -420,7 +427,6 @@ for subsesid = 1:length(KiloSortPaths)
         end
 
 
-        KSLabel = clusinfo.KSLabel;
         Label = [Label, clusinfo.group]; % You want the group, not the KSLABEL!
         % Find depth and channel
         depthtmp = nan(length(clusidtmp), 1);
@@ -447,6 +453,11 @@ for subsesid = 1:length(KiloSortPaths)
         channel = [channel, channeltmp];
         Good_IDtmp = ismember(cellstr(clusinfo.group), 'good');
     end
+
+    if any(emptyclus) % TEmporarily
+        paramBC.reextractRaw = 1;
+    end
+
     % channelpostmp = channelpostmpconv;
     ypostmp = channelpostmp(:, 2);
     xpostmp = channelpostmp(:, 1);
@@ -505,8 +516,7 @@ for subsesid = 1:length(KiloSortPaths)
             end
 
             InspectionFlag = 0;
-            rerunEx = false;
-            if isempty(dir(fullfile(savePath, '**', 'RawWaveforms'))) || rerunEx  % if raw waveforms have not been extract, decompress data for extraction
+            if isempty(dir(fullfile(rawD(id).folder, strrep(rawD(id).name, '.cbin', '_sync.dat')))) 
                 disp('Extracting sync file...')
                 % detect whether data is compressed, decompress locally if necessary
                 if ~exist(fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'bin'))) && ~contains(rawD(1).name,'.dat') && ~contains(rawD(1).name,'.raw')
@@ -531,8 +541,19 @@ for subsesid = 1:length(KiloSortPaths)
 
             end
             if ~qMetricsExist || Params.RedoQM
+                % Check if all waveforms are extracted
+                if ~isempty(dir(fullfile(savePath, 'templates._bc_rawWaveforms_kilosort_format.npy')))
+                    rawWaveformsFull = readNPY(fullfile(savePath, 'templates._bc_rawWaveforms_kilosort_format.npy'));
+
+                    % Find empty rows (where all elements are zero)
+                    row_sums = squeeze(sum(sum(abs(rawWaveformsFull), 2), 3));
+                    empty_row_indices = find(isnan(row_sums));
+                else
+                    empty_row_indices = [];
+                end
+             
                 % First check if we want to use python for compressed data. If not, uncompress data first
-                if any(strfind(rawD(id).name, 'cbin')) && Params.DecompressLocal && isempty(dir(fullfile(savePath, '**', 'RawWaveforms')))
+                if any(strfind(rawD(id).name, 'cbin')) && Params.DecompressLocal && (isempty(dir(fullfile(savePath, '**', 'RawWaveforms'))) || (Params.RedoQM && paramBC.reextractRaw) || any(empty_row_indices))  % if raw waveforms have not been extract, decompress data for extraction
                     % detect whether data is compressed, decompress locally if necessary
                     if ~exist(fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'bin'))) && ~contains(rawD(1).name,'.dat') && ~contains(rawD(1).name,'.raw')
                         disp('This is compressed data and we do not want to use Python integration... uncompress temporarily')
@@ -548,7 +569,6 @@ for subsesid = 1:length(KiloSortPaths)
                 end
 
                 paramBC.rawFile = fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'bin'));
-
                 paramBC.ephysMetaFile = (strrep(fullfile(rawD(id).folder, rawD(id).name), 'cbin', 'meta'));
 
                 %             idx = ismember(sp.spikeTemplates,clusidtmp(Good_IDtmp)); %Only include good units
@@ -558,7 +578,7 @@ for subsesid = 1:length(KiloSortPaths)
                 else
                     spfeat = sp.pcFeat(idx, :, :);
                 end
-                [qMetric, unitType] = bc.qm.runAllQualityMetrics(paramBC, sp.st(idx)*sp.sample_rate, sp.spikeTemplates(idx)+1, ...
+                [qMetric, unitType] = bc.qm.runAllQualityMetrics(paramBC, sp.st(idx)*sp.sample_rate, sp.clu(idx)+1, ...
                     templateWaveforms, sp.tempScalingAmps(idx), spfeat, sp.pcFeatInd+1, channelpostmp, savePath); % Be careful, bombcell needs 1-indexed!
 
             else
@@ -574,7 +594,7 @@ for subsesid = 1:length(KiloSortPaths)
 
 
                 % Commmented by CB for now
-                spike_templates_0idx = readNPY([kilosortPath filesep 'spike_templates.npy']); % changed back 20230920 JF
+                spike_templates_0idx = readNPY([kilosortPath filesep 'spike_clusters.npy']); % changed back 20230920 JF
 
                 spikeTemplates = spike_templates_0idx + 1;
                 uniqueTemplates = unique(spikeTemplates);
@@ -589,7 +609,7 @@ for subsesid = 1:length(KiloSortPaths)
 
                 %                 load(fullfile(savePath, 'qMetric.mat'))
             end
-            theseuniqueTemplates{id} = unique(sp.spikeTemplates);
+            theseuniqueTemplates{id} = unique(sp.clu);
             qMetricclusterID = qMetric.clusterID;
 
             unitTypeAcrossRec{id} = unitType;
@@ -663,6 +683,9 @@ for subsesid = 1:length(KiloSortPaths)
     for shankid = 1:length(ShankOpt)
         ShankID(Shank == ShankOpt(shankid)) = shankid;
     end
+    if numel(Shank)~=numel(AllUniqueTemplates)
+        keyboard
+    end
     clusinfo.Shank = Shank;
     clusinfo.ProbeID = ProbeAll;
     clusinfo.ShankID = ShankID;
@@ -717,10 +740,15 @@ for subsesid = 1:length(KiloSortPaths)
             disp(ME)
         end
         % Store all figures
-        figHandles = findall(0,'Type','figure');
-        for figid = 1:numel(figHandles)
-            saveas(figHandles(figid),fullfile(KiloSortPaths{subsesid},['Fig' num2str(figid) '.fig']))
-            saveas(figHandles(figid),fullfile(KiloSortPaths{subsesid},['Fig' num2str(figid) '.bmp']))
+        if Params.RunQualityMetrics
+            figHandles = findall(0,'Type','figure');
+            for figid = 1:numel(figHandles)
+                try
+                saveas(figHandles(figid),fullfile(KiloSortPaths{subsesid},['Fig' num2str(figid) '.fig']))
+                saveas(figHandles(figid),fullfile(KiloSortPaths{subsesid},['Fig' num2str(figid) '.bmp']))
+                catch
+                end
+            end
         end
 
 

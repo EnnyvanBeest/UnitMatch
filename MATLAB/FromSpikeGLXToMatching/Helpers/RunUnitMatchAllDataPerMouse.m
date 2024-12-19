@@ -92,11 +92,22 @@ for midx = 1:length(MiceOpt)
 
     %% Remove old copies?
     UnitMatchExist = dir(fullfile(SaveDir,MiceOpt{midx},'**','UnitMatch.mat'));
+    if ~isempty(UnitMatchExist)
+        MouseAllDone = 1;
+    else 
+        MouseAllDone = 0;
+    end
     for id = 1:numel(UnitMatchExist)
         if RemoveOldCopies && UnitMatchExist(id).date<FromDate
             delete(fullfile(UnitMatchExist(id).folder,'**'))
             rmdir(UnitMatchExist(id).folder)
+
+            MouseAllDone = 0;
         end
+    end
+
+    if MouseAllDone
+        continue
     end
     %% Prepare cluster information
     if exist('FromDate','var')

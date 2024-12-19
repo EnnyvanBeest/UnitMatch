@@ -16,7 +16,7 @@ waveforms = nan(nclus,size(sp.waveforms,2));
 
 emptyclus = [];
 for clusid=1:nclus
-    oriclusid = unique(sp.spikeTemplates(find(sp.clu == clusinfo.cluster_id(clusid))));
+    oriclusid = unique(sp.clu(find(sp.clu == clusinfo.cluster_id(clusid))));
     if isempty(oriclusid)
         emptyclus = [emptyclus clusid];
     elseif numel(oriclusid)==1
@@ -32,8 +32,19 @@ for clusid=1:nclus
         tempsUnW(clusid,:,:) = sp.tempsUnW(oriclusid+1,:,:);
         templateDuration(clusid) = sp.templateDuration(oriclusid+1);
         waveforms(clusid,:) = sp.waveforms(oriclusid+1,:);
-    else
-        keyboard
+    else % Average them together
+        temps(clusid,:,:)=nanmean(sp.temps(oriclusid+1,:,:),1);
+        try
+            pcFeatInd(clusid,:)=nanmean(sp.pcFeatInd(oriclusid+1,:),1);
+        catch ME
+
+        end
+        templateDepths(clusid) = nanmean(sp.templateDepths(oriclusid+1),1); % 0-indexed!
+        templateXpos(clusid) = nanmean(sp.templateXpos(oriclusid+1),1);
+        tempAmps(clusid) = nanmean(sp.tempAmps(oriclusid+1),1);
+        tempsUnW(clusid,:,:) = nanmean(sp.tempsUnW(oriclusid+1,:,:),1);
+        templateDuration(clusid) = nanmean(sp.templateDuration(oriclusid+1),1);
+        waveforms(clusid,:) = nanmean(sp.waveforms(oriclusid+1,:),1);
     end
 end
 takeclus = 1:nclus;
@@ -55,12 +66,7 @@ sp.waveforms = waveforms(takeclus,:);
 if any(emptyclus)
     disp(['Found ' num2str(length(emptyclus)) ' empty clusters. Removing from clusinfo'])
 
-    %% Remove the empty clusters
-    fields = fieldnames(clusinfo);
-    for id = 1:length(fields)
-        clusinfo.(fields{id})(emptyclus,:)=[];
-    end
-
+  
     %% Remove empty clusters from sp
     removeidx = ismember(sp.clu,clusinfo.cluster_id(emptyclus));
     fields = fieldnames(sp);
@@ -68,7 +74,14 @@ if any(emptyclus)
         if numel(sp.(fields{id})) == numel(removeidx)
             sp.(fields{id})(removeidx) = [];
         end
+    end  
+    
+    %% Remove the empty clusters
+    fields = fieldnames(clusinfo);
+    for id = 1:length(fields)
+        clusinfo.(fields{id})(emptyclus,:)=[];
     end
+
 else
     disp(['Found no empty clusters.'])
 end

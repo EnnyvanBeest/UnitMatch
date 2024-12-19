@@ -22,13 +22,13 @@ PipelineParams.DecompressLocal = 1; % If 1, uncompress data first if it's curren
 
 % Storing preprocessed data?
 PipelineParams.ExtractNewDataNow = 0; % If data is not (yet) extracted, don't bother for now if 0
-PipelineParams.ReLoadAlways = 0; % If 1, SP & Clusinfo are always loaded from KS output
+PipelineParams.ReLoadAlways = 0;% If 1, SP & Clusinfo are always loaded from KS output, if 2 , only when date is from before FromDate
 PipelineParams.saveSp = 1; % Save SP struct for easy loading of preprocessed data
 PipelineParams.binsz = 0.01; %Bin size for PSTHs in seconds
 
 % Quality Metrics
 PipelineParams.RunQualityMetrics = 1; % If 1, Run the quality metrics (Bombcell @JulieFabre)
-PipelineParams.RedoQM = 0; %if 1, redo quality metrics if it already exists
+PipelineParams.RedoQM = 0; %if 1, redo quality metrics if it already exists (N.B. only if reloading data!)
 PipelineParams.InspectQualityMetrics = 0; % If 1, Inspect the quality matrix/data set using the GUI (manual inspection)
 PipelineParams.loadPCs = 0; % Only necessary when computiong isoluation metrics/drift in QM. You save a lot of time keeping this at 0
 

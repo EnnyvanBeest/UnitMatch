@@ -45,6 +45,7 @@ end
 
 %% LFP?
 LFP_On = 0;
+LFPCut = 200;% in Hz
 if nargin>7 && exist(LFPDir) && ~isempty(LFPDir)
     freqBands = {[1.5 4], [4 12], [12 20], [20 30], [25 100],[150 200]};
     FreqNames = {'Delta','Theta','Alpha','Beta','Gamma','Ripples'};
@@ -60,13 +61,23 @@ if nargin>7 && exist(LFPDir) && ~isempty(LFPDir)
         try
             [lfpByChannel, allPowerEst, F, allPowerVar] = ...
                 lfpBandPower(fullfile(lfpD.folder,lfpD.name), lfpFs, nChansInFile, freqBands);
-            allPowerEst = allPowerEst(:,1:nChansInFile)'; % now nChans x nFreq
+            allPowerEst = allPowerEst(F<LFPCut,1:nChansInFile)'; % now nChans x nFreq (take lower than 300Hz (below FR)
             
             LFP_On =1;
+            F = F(F<LFPCut);
+
+
+            % Smooth across channels
+            allPowerEst = smoothdata(allPowerEst,1, "gaussian" ,3);
+            allPowerEst = smoothdata(allPowerEst,2, "gaussian" ,3);
+
+
+            % Correct the power law 1/F
+            allPowerEst = allPowerEst.*F'.^2;
             %normalize LFP per frequency
-            lfpByChannel = (lfpByChannel-nanmean(lfpByChannel,1))./nanstd(lfpByChannel,[],1);
-                %normalize LFP per channel
-            lfpByChannel = (lfpByChannel-nanmean(lfpByChannel,2))./nanstd(lfpByChannel,[],2);
+            allPowerEst = (allPowerEst-nanmean(allPowerEst,1))./nanstd(allPowerEst,[],1);
+            %normalize LFP per channel
+            % allPowerEst = (allPowerEst-nanmean(allPowerEst,2))./nanstd(allPowerEst,[],2);
         catch ME
             disp(ME)
             LFP_On =0;
@@ -74,17 +85,41 @@ if nargin>7 && exist(LFPDir) && ~isempty(LFPDir)
         end
           
     elseif ~isempty(strfind(LFPDir,'.ap')) % Saved out in .ap for NP1
-        [lfpByChannel, allPowerEst, F, allPowerVar] = lfpBandPowerNP2(LFPDir,freqBands);
+        lfpD = dir(LFPDir);
+
+        [Imecmeta] = ReadMeta2(lfpD.folder,'lf');
+        lfpFs = str2num(Imecmeta.imSampRate);
+        nChansInFile = strsplit(Imecmeta.acqApLfSy,',');  % neuropixels phase3a, from spikeGLX
+        nChansInFile = str2num(nChansInFile{1})+1; %add one for sync
+    
+        try
+            [lfpByChannel, allPowerEst, F, allPowerVar] = lfpBandPowerNP2(LFPDir,freqBands);
+        catch ME
+            disp(ME)
+            disp('Probably not the correct python environment for this? Try PythonEXE = C:\Users\EnnyB\anaconda3\envs\pyks2_MatlabCompatible\pythonw.exe')
+            keyboard
+        end
+        allPowerEst = allPowerEst(F<LFPCut,1:nChansInFile)'; % now nChans x nFreq (take lower than 300Hz (below FR)
         LFP_On=1;
+        F = F(F<LFPCut);
+
+        % Smooth across channels
+        allPowerEst = smoothdata(allPowerEst,1, "gaussian" ,3);
+        allPowerEst = smoothdata(allPowerEst,2, "gaussian" ,3);
+
+        % Correct the power law 1/F
+        allPowerEst = allPowerEst.*F'.^2;
         %normalize LFP per frequency
-        lfpByChannel = (lfpByChannel-nanmean(lfpByChannel,1))./nanstd(lfpByChannel,[],1);
-        lfpByChannel = (lfpByChannel-nanmean(lfpByChannel,2))./nanstd(lfpByChannel,[],2);                %normalize LFP per channel
+        allPowerEst = (allPowerEst-nanmean(allPowerEst,1))./nanstd(allPowerEst,[],1);
+        %normalize LFP per channel
+        % allPowerEst = (allPowerEst-nanmean(allPowerEst,2))./nanstd(allPowerEst,[],2);
 
     else
         disp('No file found...')
         LFP_On=0;
     end
-    clear allPowerEst allPowerVar
+
+    clear lfpByChannel allPowerVar
 end
 
 %% Extract all fields in sp
@@ -149,7 +184,7 @@ else
         spikeID(ismember(spikeCluster,cluster_id(clusinfo.ContamPct>=quantile(clusinfo.ContamPct,0.99))))=0; %ridiculous Contamination percentage
         spikeID(ismember(spikeCluster,cluster_id(ismember(cellstr(Label),'noise'))))=0; %noise should not count, only MUA and good unit
     catch
-        disp('This is non curated data, using only good units from kilosort output')
+        disp('Taking all spikes')
 %         spikeID = ismember(spikeCluster,Good_ID);
     end
 end
@@ -257,21 +292,23 @@ if LFP_On
     %Infer depth per channel
     [sortedchannels,sortid] = unique(channel);
     sorteddepth = depth(sortid);
-    
-    lfpOrdered = arrayfun(@(X) nanmean(lfpByChannel(sorteddepth==X,:),1),unique(sorteddepth),'Uni',0);
-    lfpOrdered = cat(1,lfpOrdered{:});
-    depthOrdered = arrayfun(@(X) nanmean(sorteddepth(sorteddepth==X)),unique(sorteddepth));
 
-    imagesc(1:length(FreqNames),depthOrdered, lfpOrdered,[-2 2])
+    lfpOrdered = allPowerEst(sortedchannels+1,:); % 0-indexed
 
-%     imagesc(1:length(FreqNames),[0:(nChansInFile-1)]*10,lfpByChannel,[-2 2])
-    xlim([1,length(FreqNames)]);
-    set(gca, 'YDir', 'normal','XTick',1:length(FreqNames),'XTicklabel',FreqNames,'XTickLabelRotation',25);
+    imagesc(F,sorteddepth, lfpOrdered,[-5 5])
+
+    %     imagesc(1:length(FreqNames),[0:(nChansInFile-1)]*10,lfpByChannel,[-2 2])
+    xlim([min(F) max(F)])
+    ylim([min(sorteddepth) max(sorteddepth)])
+    xlabel('frequency');
+    set(gca,'Ydir','normal','xscale','log');
     ylabel('depth on probe (µm)');
     % h = colorbar;
     % h.Label.String = 'power (dB)';
-    colormap hot
     title('LFP')
+    colormap(redblue)
+    freezeColors
+
     makepretty
     
 end
@@ -286,27 +323,32 @@ unique_depths = 1:length(depth_group_edges)-1;
 spike_binning = 0.5; % seconds
 corr_edges = nanmin(spikeTimes(spikeID==1)):spike_binning:nanmax(spikeTimes(spikeID==1));
 corr_centers = corr_edges(1:end-1) + diff(corr_edges);
-
+FiringRates = cell(1,nshanks);
 mua_corr = cell(1,nshanks);
 for shid = 1:nshanks
     binned_spikes_depth = zeros(length(unique_depths),length(corr_edges)-1);
+    nSpikeClusters = zeros(length(unique_depths),1);
     for curr_depth = 1:length(unique_depths)
         binned_spikes_depth(curr_depth,:) = histcounts(spikeTimes(depth_group == unique_depths(curr_depth) & spikeID==1 & spikeShank'==shid), corr_edges);
+        nSpikeClusters(curr_depth) = numel(unique(spikeCluster(depth_group == unique_depths(curr_depth) & spikeID==1 & spikeShank'==shid)));
+
     end
     %     % Z-score
     %     binned_spikes_depth = (binned_spikes_depth - nanmean(binned_spikes_depth(:)))./nanstd(binned_spikes_depth(:));
     
     binned_spikes_depth(:,nansum(binned_spikes_depth,1)>quantile(nansum(binned_spikes_depth,1),0.95))=0;
     mua_corr{shid} = smooth2a(corrcoef(binned_spikes_depth'),3);
+
+    FiringRates{shid} = sum(binned_spikes_depth,2)./nSpikeClusters;
 end
 mua_corr = cat(3,mua_corr{:});
 mua_corr = reshape(mua_corr,size(mua_corr,1),[]);
 limup = [quantile(mua_corr(:),0.1) quantile(mua_corr(:),0.95)];
 % Plot multiunit correlation
 if LFP_On
-    multiunit_ax = subplot(3,9,[3:5,12:14,21:23]);
+    multiunit_ax = subplot(3,9,[3:4,12:13,21:22]);
 else
-    multiunit_ax = subplot(3,9,[1:5,10:14,19:23]);
+    multiunit_ax = subplot(3,9,[1:4,10:13,19:22]);
 end
 h=imagesc(1:length(depth_group_centers)*nshanks,depth_group_centers,mua_corr,limup);
 caxis([0,max(mua_corr(mua_corr~=1))]); colormap(hot);
@@ -320,6 +362,23 @@ ylim([startpoint,endpoint]);
 xlim([1,length(depth_group_centers)*nshanks]);
 set(gca,'XTickLabel','')
 DChannels = endpoint-startpoint;
+
+% Cluster MUA signal
+maxClusters = numel(unique((histinfo{1}.RegionAcronym),'stable'));
+silScores = zeros(maxClusters, 1);
+
+for k = 3:maxClusters
+    clusterLabels = kmeans(binned_spikes_depth, k, 'Replicates', 5);
+    silScores(k) = mean(silhouette(binned_spikes_depth, clusterLabels));
+end
+
+[~, numClusters] = max(silScores);
+fprintf('Optimal number of clusters: %d\n', numClusters);
+
+clusterLabels = kmeans(binned_spikes_depth, numClusters); % Or other clustering methods
+ChangeAreaMUA = find(diff(clusterLabels)~=0)+1;
+% hold on
+% arrayfun(@(X) line([1 length(depth_group_centers)*nshanks],[depth_group_centers(X) depth_group_centers(X)],'color',[0 0.2 1]),ChangeAreaMUA,'Uni',0)
 
 if coordinateflag
     ScaleChannelsToProbe = endpoint./DProbe;
@@ -335,6 +394,15 @@ ylabel(multiunit_ax,'Multiunit depth');
 if LFP_On
     set(LFP_axis,'ylim',[startpoint,endpoint])
 end
+
+FR_ax = subplot(3,9,[5,14,23]);
+hold on
+cellfun(@(X) plot(X,depth_group_centers,'k-'),FiringRates);
+title('Avg Firing per Unit')
+set(FR_ax,'ylim',[startpoint,endpoint])
+
+
+
 %% Put histinfo in new shap with all shanks below each other
 for shid = 1:length(histinfo)
     npoints = size(histinfo{shid},1);
@@ -496,8 +564,12 @@ while ~flag
                 repmat(areapoints{shid}(switchpoints{shid}(curr_boundary)),1,2),'color','b','linewidth',1);
             boundary_lines(curr_boundary,2,shid) = line(multiunit_ax,[size(mua_corr,1)*(shid-1) size(mua_corr,1)*shid], ...
                 repmat(areapoints{shid}(switchpoints{shid}(curr_boundary)),1,2),'color','y','linewidth',1,'LineStyle','--');
+            boundary_lines(curr_boundary,3,shid) = line(FR_ax,get(FR_ax,'xlim'), ...
+                repmat(areapoints{shid}(switchpoints{shid}(curr_boundary)),1,2),'color','k','linewidth',1,'LineStyle','--');
+
         end
     end
+
     %% Interface
     matchedswitchpoints = cell(nshanks,1);%nan(2,length(switchpoints),nshanks);
     for shid  =1:nshanks
@@ -614,6 +686,8 @@ while ~flag
                     for curr_boundary = 1:length(newswitchpoints{shid})
                         set(boundary_lines(curr_boundary,1,shid),'color','b')
                         set(boundary_lines(curr_boundary,2,shid),'color','y')
+                        set(boundary_lines(curr_boundary,3,shid),'color','k')
+
                     end
                 end
             case 'a' %Add reference line
@@ -629,6 +703,8 @@ while ~flag
                 roi2 = drawpoint;
                 for shid=selectedshank
                     set(boundary_lines(minidx,2,shid),'color','r','YData',[roi2.Position(2) roi2.Position(2)])
+                    set(boundary_lines(minidx,3,shid),'color','r','YData',[roi2.Position(2) roi2.Position(2)])
+
                     matchedswitchpoints{shid}(2,minidx) = roi2.Position(2);
                 end
                 delete(roi2)
@@ -642,6 +718,8 @@ while ~flag
                 delete(roi1)
                 for shid=selectedshank
                     set(boundary_lines(minidx,2,shid),'color','y','YData',[areapoints{shid}(newswitchpoints{shid}(minidx)) areapoints{shid}(newswitchpoints{shid}(minidx))])
+                    set(boundary_lines(minidx,3,shid),'color','k','YData',[areapoints{shid}(newswitchpoints{shid}(minidx)) areapoints{shid}(newswitchpoints{shid}(minidx))])
+
                     matchedswitchpoints{shid}(2,minidx) = nan;
                 end
                 delete(roi2)
@@ -726,6 +804,7 @@ while ~flag
                     for curr_boundary = 1:length(newswitchpoints{shid})
                         set(boundary_lines(curr_boundary,1,shid),'color','b')
                         set(boundary_lines(curr_boundary,2,shid),'color','y')
+                        set(boundary_lines(curr_boundary,3,shid),'color','k')
                     end
                 end
                 
@@ -742,6 +821,8 @@ while ~flag
                 for curr_boundary = 1:length(newswitchpoints{shid})
                     set(boundary_lines(curr_boundary,1,shid),'YData',repmat(newareapoints{shid}(newswitchpoints{shid}(curr_boundary)),1,2))
                     set(boundary_lines(curr_boundary,2,shid),'YData',repmat(newareapoints{shid}(newswitchpoints{shid}(curr_boundary)),1,2))
+                    set(boundary_lines(curr_boundary,3,shid),'YData',repmat(newareapoints{shid}(newswitchpoints{shid}(curr_boundary)),1,2))
+
                 end
                 
                 if coordinateflag
