@@ -190,7 +190,7 @@ for subsesid = 1:length(KiloSortPaths)
 
 
     %% Load existing?
-    if exist(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat')) && ~Params.RedoQM && Params.ReLoadAlways~=1
+    if exist(fullfile(KiloSortPaths{subsesid}, 'PreparedData.mat')) && Params.ReLoadAlways~=1
         % Check if parameters are the same, of not we have to redo it
         % anyway
         dateViolationflag = 0;
@@ -541,8 +541,19 @@ for subsesid = 1:length(KiloSortPaths)
 
             end
             if ~qMetricsExist || Params.RedoQM
+                % Check if all waveforms are extracted
+                if ~isempty(dir(fullfile(savePath, 'templates._bc_rawWaveforms_kilosort_format.npy')))
+                    rawWaveformsFull = readNPY(fullfile(savePath, 'templates._bc_rawWaveforms_kilosort_format.npy'));
+
+                    % Find empty rows (where all elements are zero)
+                    row_sums = squeeze(sum(sum(abs(rawWaveformsFull), 2), 3));
+                    empty_row_indices = find(isnan(row_sums));
+                else
+                    empty_row_indices = [];
+                end
+             
                 % First check if we want to use python for compressed data. If not, uncompress data first
-                if any(strfind(rawD(id).name, 'cbin')) && Params.DecompressLocal && (isempty(dir(fullfile(savePath, '**', 'RawWaveforms'))) || (Params.RedoQM && paramBC.reextractRaw))  % if raw waveforms have not been extract, decompress data for extraction
+                if any(strfind(rawD(id).name, 'cbin')) && Params.DecompressLocal && (isempty(dir(fullfile(savePath, '**', 'RawWaveforms'))) || (Params.RedoQM && paramBC.reextractRaw) || any(empty_row_indices))  % if raw waveforms have not been extract, decompress data for extraction
                     % detect whether data is compressed, decompress locally if necessary
                     if ~exist(fullfile(Params.tmpdatafolder, strrep(rawD(id).name, 'cbin', 'bin'))) && ~contains(rawD(1).name,'.dat') && ~contains(rawD(1).name,'.raw')
                         disp('This is compressed data and we do not want to use Python integration... uncompress temporarily')
