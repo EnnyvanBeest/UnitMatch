@@ -158,7 +158,7 @@ def extract_a_unit_KS4(sample_idx, data, samples_before, samples_after, spike_wi
         #gaussian smooth, over time gaussian window = 5, sigma = window size / 5
         tmp = gaussian_filter(tmp, 1, radius = 2, axes = 0) #edges are handled differently to ML
         # window ~ radius *2 + 1
-        tmp = tmp - np.mean(tmp[:20,:], axis = 0)
+        tmp = tmp - np.mean(tmp[:samples_before,:], axis = 0)
         all_sample_waveforms[i] = tmp
 
     #median and split CV's
