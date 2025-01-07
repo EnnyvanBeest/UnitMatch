@@ -243,7 +243,6 @@ for midx = 1:length(MiceOpt)
 
                 continue
             elseif multidate & thefirstperprobe(probeid)
-                thefirstperprobe(probeid) = 1;
                 continue
             end
             thefirstperprobe(probeid) = 1;

@@ -100,7 +100,7 @@ def extract_a_unit(sample_idx, data, half_width, spike_width, n_channels, sample
     channels = np.arange(0,n_channels)
 
     all_sample_waveforms = np.zeros( (sample_amount, spike_width, n_channels))
-    for i, idx in enumerate(data[:]):
+    for i, idx in enumerate(sample_idx[:]):
         if np.isnan(idx):
             continue 
         tmp = data[ int(idx - half_width - 1): int(idx + half_width - 1), channels] # -1, to better fit with ML
