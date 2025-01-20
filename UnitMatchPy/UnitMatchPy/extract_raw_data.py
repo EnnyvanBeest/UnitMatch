@@ -100,7 +100,7 @@ def extract_a_unit(sample_idx, data, half_width, spike_width, n_channels, sample
     channels = np.arange(0,n_channels)
 
     all_sample_waveforms = np.zeros( (sample_amount, spike_width, n_channels))
-    for i, idx in enumerate(data[:]):
+    for i, idx in enumerate(sample_idx[:]):
         if np.isnan(idx):
             continue 
         tmp = data[ int(idx - half_width - 1): int(idx + half_width - 1), channels] # -1, to better fit with ML
@@ -158,7 +158,7 @@ def extract_a_unit_KS4(sample_idx, data, samples_before, samples_after, spike_wi
         #gaussian smooth, over time gaussian window = 5, sigma = window size / 5
         tmp = gaussian_filter(tmp, 1, radius = 2, axes = 0) #edges are handled differently to ML
         # window ~ radius *2 + 1
-        tmp = tmp - np.mean(tmp[:20,:], axis = 0)
+        tmp = tmp - np.mean(tmp[:samples_before,:], axis = 0)
         all_sample_waveforms[i] = tmp
 
     #median and split CV's

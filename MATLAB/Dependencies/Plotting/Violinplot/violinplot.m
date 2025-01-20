@@ -176,7 +176,11 @@ if not(hascategories) && isvector(data{1})
 elseif ismatrix(data{1})
     for n=1:size(data{1}, 2)
         thisData = cellfun(@(x)x(:,n),data,'UniformOutput',false);
-        violins(n) = Violin(thisData, n, varargin{:});
+        try
+            violins(n) = Violin(thisData, n, varargin{:});
+        catch ME
+            warning(['Could not plot ' num2str(n)])
+        end
     end
     set(gca, 'XTick', 1:size(data{1}, 2));
     if hascategories && length(cats) == size(data{1}, 2)

@@ -28,12 +28,13 @@ DateOpt = arrayfun(@(X) dir(fullfile(DataDir{DataDir2Use(X)},MiceOpt{X},'*-*')),
 DateOpt = cellfun(@(X) X([X.isdir]),DateOpt,'UniformOutput',0);
 DateOpt = cellfun(@(X) {X.name},DateOpt,'UniformOutput',0);
 NewHistologyNeededOri = NewHistologyNeeded;
+RedoUserInputOri = RedoUserInput;
 
 % load the reference brain annotations
-if ~exist('av','var') || ~exist('st','var')
+if ~exist('av','var') || ~exist('st_allen','var')
     disp('loading reference atlas...')
     av = readNPY(annotation_volume_location);
-    st = loadStructureTree(structure_tree_location);
+    st_allen = loadStructureTree(structure_tree_location);
 end
 
 % select the plane for the viewer
@@ -69,11 +70,22 @@ for midx = 1:length(MiceOpt)
     else
         multidate=0;
     end
+    % if NewHistologyNeededOri || RedoUserInput
+        thefirstperprobe = zeros(1,2);
+    % else
 
+        % thefirstperprobe = ones(1,2);
+    % end
+    NewHistologyNeeded = NewHistologyNeededOri;
+    RedoUserInput = RedoUserInputOri;
     % For every date a different dataset
     Dates4Mouse = DateOpt{midx};
     for didx = 1:length(Dates4Mouse)
         
+        if ~multidate
+            NewHistologyNeeded = NewHistologyNeededOri;
+            RedoUserInput = RedoUserInputOri;
+        end
 
         % Within folders, look for 'RF mapping sessions'
         thisdate = Dates4Mouse{didx};
@@ -131,7 +143,11 @@ for midx = 1:length(MiceOpt)
                 [channelpostmpconv, SN, recordingduration] = ChannelIMROConversion(rawD(1).folder, 0); % For conversion when not automatically done
             end
 
-           
+
+            if multidate && thefirstperprobe(probeid)
+                RedoUserInput = 0;
+            end
+
             %Saving directory
             thisprobe = subksdirs(probeid).name
             if (~NewHistologyNeeded && exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment.mat']))) && (~RedoAfterClustering || exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,'CuratedResults.mat')))
@@ -150,7 +166,7 @@ for midx = 1:length(MiceOpt)
                         nMiceIncluded(midx) = true;
                         continue
                     end
-                else
+                elseif ~multidate
 
 
                     disp('Skip')
@@ -204,7 +220,7 @@ for midx = 1:length(MiceOpt)
             end
 
 
-            if strcmp(RecordingType{midx},'Chronic') && ~NewHistologyNeeded
+            if multidate & NewHistologyNeeded & thefirstperprobe(probeid)
                 histfile = dir(fullfile(SaveDir,MiceOpt{midx},'**',[num2str(SN) '_HistoEphysAlignment.mat']));
                 if ~isempty(histfile)
                     if ~exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
@@ -213,7 +229,23 @@ for midx = 1:length(MiceOpt)
                     copyfile(fullfile(histfile(1).folder,histfile(1).name),fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,histfile(1).name))
                     continue
                 end
+
+            elseif multidate & ~thefirstperprobe(probeid)
+                disp('Skip')
+                try
+                    DrawProbeInBrain
+                catch ME
+
+                end
+                nInsertionsIncluded = nInsertionsIncluded + 1;
+                nMiceIncluded(midx) = true;
+                thefirstperprobe(probeid) = 1;
+
+                continue
+            elseif multidate & thefirstperprobe(probeid)
+                continue
             end
+            thefirstperprobe(probeid) = 1;
 
             %% Get cluster information
             PipelineParams.thisdate = thisdate;
@@ -276,16 +308,14 @@ for midx = 1:length(MiceOpt)
                 keyboard
             end
             GetHistologyOutput      %I created an extra function to have one line of code in the different scripts
-            NewHistologyNeeded = NewHistologyNeededOri;
+          
 
             if ~histoflag
                 disp([MiceOpt{midx} ' ' thisdate ' ' thisprobe 'No histology data, skip...'])
                 continue
             end
 
-            if multidate
-                NewHistologyNeeded = 0;
-            end
+         
 
             %% Plot in atlas space
             try

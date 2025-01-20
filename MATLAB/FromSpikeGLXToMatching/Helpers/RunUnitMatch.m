@@ -86,23 +86,21 @@ if Params.UnitMatch
         end
 
         %% Run UnitMatch
-<<<<<<< HEAD:Dependencies/UnitMatchPipeline/RunUnitMatch.m
         GlobalUnitMatchClock = tic;
         if numel(UMparam.KSDir) > numel(UMparam.AllDecompPaths)
             UMparam.KSDir = UMparam.KSDir(UMparam.N)
         end
         [UniqueIDConversion, MatchTable, WaveformInfo, UMparam] = UnitMatch(clusinfo, UMparam);
-        UMrunTime = toc(GlobalUnitMatchClock);
+        
         save(fullfile(UMparam.SaveDir, 'UnitMatch.mat'), 'UniqueIDConversion', 'MatchTable', 'WaveformInfo', 'UMparam', 'UMrunTime', '-v7.3')
-        DataSizeParam = CalculateDuration(UMparam.SaveDir, ephys_dirs);
-        disp(['UnitMatch took ', num2str(round(UMrunTime/60*10)/10), ' minute(s) to run'])
-=======
-        [UniqueIDConversion, MatchTable, WaveformInfo, UMparam] = UnitMatch(clusinfo, UMparam);
         tmpfile = dir(fullfile(UMparam.SaveDir,'UnitMatch.mat'));
         if UMparam.AssignUniqueID
             AssignUniqueID(fullfile(tmpfile.folder,tmpfile.name));
         end
->>>>>>> dca7e71cf759b2d5e95a9e84c1d1007e1c35336d:MATLAB/FromSpikeGLXToMatching/Helpers/RunUnitMatch.m
+        DataSizeParam = CalculateDuration(UMparam.SaveDir, ephys_dirs);
+        UMrunTime = toc(GlobalUnitMatchClock);
+
+        disp(['UnitMatch took ', num2str(round(UMrunTime/60*10)/10), ' minute(s) to run'])
 
     end
 elseif Params.DecompressionFlag % You might want to at least save out averaged waveforms for every session to get back to later, if they were saved out by bomcell
