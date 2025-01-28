@@ -172,7 +172,7 @@ def extract_a_unit_KS4(sample_idx, data, samples_before, samples_after, spike_wi
     return avg_waveforms
 
 
-def save_avg_waveforms(avg_waveforms, save_dir, good_units, extract_good_units_only = False):
+def save_avg_waveforms(avg_waveforms, save_dir, all_unit_ids, good_units, extract_good_units_only = False):
     """
     Saves the average waveforms as a unique .npy file called "UnitX_RawSpikes.npy" in a folder called 
     RawWaveforms in the save_dir.
@@ -201,14 +201,14 @@ def save_avg_waveforms(avg_waveforms, save_dir, good_units, extract_good_units_o
 
     #ALL waveforms from 0->nUnits
     if extract_good_units_only == False:
-        for i in range(avg_waveforms.shape[0]):
-            np.save(f'Unit{i}_RawSpikes.npy', avg_waveforms[i,:,:,:])
+        for i, idx in enumerate(all_unit_ids):
+            np.save(f'Unit{idx[0]}_RawSpikes.npy', avg_waveforms[i,:,:,:])
         print(f'Saved {avg_waveforms.shape[0] + 1} units to RawWaveforms directory, saving all units')
 
     #If only extracting GoodUnits
     else:
         for i, idx in enumerate(good_units):
-            # ironically need idx[0], to select value so saves with correct name
+            #  need idx[0], to select value so saves with correct name
             np.save(f'Unit{idx[0]}_RawSpikes.npy', avg_waveforms[i,:,:,:])
         print(f'Saved {good_units.shape[0] + 1} units to RawWaveforms directory, only saving good units')
     os.chdir(current_dir)
@@ -279,10 +279,13 @@ def extract_KS_data(KS_dirs, extract_good_units_only = False):
    
     #Load Spike ID's
     spike_ids = []
+    all_unit_ids = []
     for i in range(n_sessions):
         path_tmp = os.path.join(KS_dirs[i], 'spike_clusters.npy')
         spike_ids_tmp = np.load(path_tmp)
         spike_ids.append(spike_ids_tmp)
+        all_unit_ids.append(np.unique(spike_ids_tmp))
+
 
     if extract_good_units_only:
         #Good unit ID's
@@ -294,6 +297,6 @@ def extract_KS_data(KS_dirs, extract_good_units_only = False):
 
         good_units = util.get_good_units(unit_labels_paths)
 
-        return spike_ids, spike_times, good_units
+        return spike_ids, spike_times, good_units, all_unit_ids
     else:
-        return spike_ids, spike_times, [None for s in range(n_sessions)]
+        return spike_ids, spike_times, [None for s in range(n_sessions)], all_unit_ids
