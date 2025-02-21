@@ -7,7 +7,7 @@ DateOpt = arrayfun(@(X) dir(fullfile(DataDir{DataDir2Use(X)},MiceOpt{X},'*-*')),
 DateOpt = cellfun(@(X) X([X.isdir]),DateOpt,'UniformOutput',0);
 DateOpt = cellfun(@(X) {X.name},DateOpt,'UniformOutput',0);
 
-RemoveOldCopies = 1;
+RemoveOldCopies = 0;
 
 LogError = {}; % Keep track of which runs didn't work
 if ~exist('PipelineParamsOri','var')
@@ -93,7 +93,7 @@ for midx = 1:length(MiceOpt)
     %% Remove old copies?
     UnitMatchExist = dir(fullfile(SaveDir,MiceOpt{midx},'**','UnitMatch.mat'));
     if ~isempty(UnitMatchExist)
-        MouseAllDone = 1;
+        MouseAllDone = 0;
     else 
         MouseAllDone = 0;
     end
@@ -201,8 +201,13 @@ for midx = 1:length(MiceOpt)
             %% Load other (Default) parameters
             UMparam = DefaultParametersUnitMatch(PipelineParams);
             UnitMatchExist = dir(fullfile(UMparam.SaveDir,'UnitMatch.mat'));
-
-            if isempty(UnitMatchExist) || PipelineParams.RedoUnitMatch || UnitMatchExist.date<FromDate
+            if ~isempty(UnitMatchExist)
+                tmpParam = load(fullfile(UnitMatchExist.folder,UnitMatchExist.name),'UMparam');
+                RedoThisOne = ~(all(ismember(tmpParam.UMparam.KSDir, UMparam.KSDir)) & all(ismember(UMparam.KSDir,tmpParam.UMparam.KSDir)));
+            else
+                RedoThisOne = 1;
+            end
+            if RedoThisOne || PipelineParams.RedoUnitMatch || UnitMatchExist.date<FromDate
 
                 %% Get clusinfo
                 clusinfo = getClusinfo(UMparam.KSDir);

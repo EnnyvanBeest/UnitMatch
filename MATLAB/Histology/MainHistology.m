@@ -2,7 +2,7 @@
 NewHistologyNeeded = 0; %Automatically to 1 after RedoAfterClustering
 RedoAfterClustering=0;
 RedoUserInput = 0;
-
+UseLFP = 0;
 % directory of reference atlas files
 ann = 10; %Steps in micron that's used
 annotation_volume_location = 'annotation_volume_10um_by_index.npy';
@@ -33,8 +33,8 @@ RedoUserInputOri = RedoUserInput;
 % load the reference brain annotations
 if ~exist('av','var') || ~exist('st_allen','var')
     disp('loading reference atlas...')
-    av = readNPY(annotation_volume_location);
-    st_allen = loadStructureTree(structure_tree_location);
+    av = readNPY(fullfile(AllenCCFPath,annotation_volume_location));
+    st_allen = readtable(fullfile(AllenCCFPath, structure_tree_location));
 end
 
 % select the plane for the viewer
@@ -59,7 +59,7 @@ if length(ProbeColors)<length(MiceOpt)
     ProbeColors = distinguishable_colors(length(MiceOpt));
 end
 
-for midx = 1:length(MiceOpt)
+for midx = 13:length(MiceOpt)
     %% which probes?
     myKsDir = fullfile(KilosortDir,MiceOpt{midx});
     subksdirs = dir(fullfile(myKsDir,'*','Probe*')); %This changed because now I suddenly had 2 probes per recording
@@ -70,18 +70,16 @@ for midx = 1:length(MiceOpt)
     else
         multidate=0;
     end
-    % if NewHistologyNeededOri || RedoUserInput
+    if NewHistologyNeededOri || RedoUserInput
         thefirstperprobe = zeros(1,2);
-    % else
-
-        % thefirstperprobe = ones(1,2);
-    % end
-    NewHistologyNeeded = NewHistologyNeededOri;
-    RedoUserInput = RedoUserInputOri;
+    else
+        thefirstperprobe = ones(1,2);
+    end
     % For every date a different dataset
     Dates4Mouse = DateOpt{midx};
     for didx = 1:length(Dates4Mouse)
-        
+      
+
         if ~multidate
             NewHistologyNeeded = NewHistologyNeededOri;
             RedoUserInput = RedoUserInputOri;
@@ -114,7 +112,8 @@ for midx = 1:length(MiceOpt)
             if ~isdir(myKsDir)
                 continue
             end
-
+            RedoUserInput = RedoUserInputOri;
+            NewHistologyNeeded = NewHistologyNeededOri;
 
             % Copy to other folders with same probe SN
             tmp = dir(fullfile(subksdirs(probeid).folder,subksdirs(probeid).name,'**','PreparedData.mat'));
@@ -150,9 +149,9 @@ for midx = 1:length(MiceOpt)
 
             %Saving directory
             thisprobe = subksdirs(probeid).name
-            if (~NewHistologyNeeded && exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment.mat']))) && (~RedoAfterClustering || exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,'CuratedResults.mat')))
+            if (~NewHistologyNeeded && exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment_Auto.mat']))) && (~RedoAfterClustering || exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,'CuratedResults.mat')))
                 if RedoUserInput
-                    tmpfig = open(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment.fig']));
+                    tmpfig = open(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment_Auto.fig']));
                     answer = questdlg(['Would you like to redo or keep this alignment? '  MiceOpt{midx} ' ' thisdate ' Probe' thisprobe], ...
                         'Redo Alignment', ...
                         'Redo','Keep','Keep');
@@ -181,14 +180,14 @@ for midx = 1:length(MiceOpt)
 
                     continue
                 end
-            elseif RedoAfterClustering || NewHistologyNeeded || ~exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment.mat']))
+            elseif RedoAfterClustering || NewHistologyNeeded || ~exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment_Auto.mat']))
                 myKsDir = fullfile(KilosortDir,MiceOpt{midx},thisdate,thisprobe);
                 myClusFile = dir(fullfile(myKsDir,'cluster_info.tsv'));
                 if isempty(myClusFile)
                     disp([MiceOpt{midx} ' ' thisdate 'is not yet curated with phy!!'])
-                    if (~NewHistologyNeeded && exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment.mat'])))
+                    if (~NewHistologyNeeded && exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment_Auto.mat'])))
                         if RedoUserInput
-                            tmpfig = open(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment.fig']));
+                            tmpfig = open(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment_Auto.fig']));
                             answer = questdlg(['Would you like to redo or keep this alignment? '  MiceOpt{midx} ' ' thisdate ' Probe' thisprobe], ...
                                 'Redo Alignment', ...
                                 'Redo','Keep','Keep');
@@ -220,8 +219,8 @@ for midx = 1:length(MiceOpt)
             end
 
 
-            if multidate & NewHistologyNeeded & thefirstperprobe(probeid)
-                histfile = dir(fullfile(SaveDir,MiceOpt{midx},'**',[num2str(SN) '_HistoEphysAlignment.mat']));
+            if multidate & thefirstperprobe(probeid) & NewHistologyNeeded
+                histfile = dir(fullfile(SaveDir,MiceOpt{midx},'**',[num2str(SN) '_HistoEphysAlignment_Auto.mat']));
                 if ~isempty(histfile)
                     if ~exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
                         mkdir(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
@@ -229,8 +228,9 @@ for midx = 1:length(MiceOpt)
                     copyfile(fullfile(histfile(1).folder,histfile(1).name),fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,histfile(1).name))
                     continue
                 end
-
-            elseif multidate & ~thefirstperprobe(probeid)
+            elseif multidate & thefirstperprobe(probeid) & ~NewHistologyNeeded
+                continue
+            elseif multidate & ~thefirstperprobe(probeid) & ~NewHistologyNeeded
                 disp('Skip')
                 try
                     DrawProbeInBrain
@@ -241,9 +241,7 @@ for midx = 1:length(MiceOpt)
                 nMiceIncluded(midx) = true;
                 thefirstperprobe(probeid) = 1;
 
-                continue
-            elseif multidate & thefirstperprobe(probeid)
-                continue
+                continue          
             end
             thefirstperprobe(probeid) = 1;
 
@@ -271,31 +269,39 @@ for midx = 1:length(MiceOpt)
             % struct for further analysis
             ExtractFields({sp,clusinfo})
             Good_IDx = find(Good_ID');
-
-            %% Get LFP?
-            myLFDir = fullfile(DataDir{DataDir2Use(midx)},MiceOpt{midx},thisdate,'ephys');
-            lfpD = dir(fullfile([myLFDir '*'], '**\*.lf.*bin')); % lf file from spikeGLX specifically
-            if isempty(lfpD)
-                disp('No LFP data found')
-            elseif length(lfpD)~=length(subksdirs)
-                disp('Should be a different amount of probes?')
-                keyboard
-            else
-                lfpD = lfpD(probeid);
+            if isempty(Good_IDx)
+                disp(['No good units for ' MiceOpt{midx} ' ' thisdate ' ' thisprobe ', continue'])
+                continue
             end
 
-            if isempty(lfpD)
-                % get AP data
-                lfpD = dir(fullfile([myLFDir '*'], '**\*.ap.*bin')); % lf file from spikeGLX specifically
+            %% Get LFP?
+            if UseLFP
+                myLFDir = fullfile(DataDir{DataDir2Use(midx)},MiceOpt{midx},thisdate,'ephys');
+                lfpD = dir(fullfile([myLFDir '*'], '**\*.lf.*bin')); % lf file from spikeGLX specifically
                 if isempty(lfpD)
                     disp('No LFP data found')
                 elseif length(lfpD)~=length(subksdirs)
                     disp('Should be a different amount of probes?')
-                    lfpD = lfpD(end);
-
+                    keyboard
                 else
-                    lfpD = lfpD(end);
+                    lfpD = lfpD(probeid);
                 end
+
+                if isempty(lfpD)
+                    % get AP data
+                    lfpD = dir(fullfile([myLFDir '*'], '**\*.ap.*bin')); % lf file from spikeGLX specifically
+                    if isempty(lfpD)
+                        disp('No LFP data found')
+                    elseif length(lfpD)~=length(subksdirs)
+                        disp('Should be a different amount of probes?')
+                        lfpD = lfpD(end);
+
+                    else
+                        lfpD = lfpD(end);
+                    end
+                end
+            else
+                lfpD = [];
             end
 
           
