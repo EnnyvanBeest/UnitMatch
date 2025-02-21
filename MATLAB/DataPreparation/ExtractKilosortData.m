@@ -454,10 +454,6 @@ for subsesid = 1:length(KiloSortPaths)
         Good_IDtmp = ismember(cellstr(clusinfo.group), 'good');
     end
 
-    if any(emptyclus) % TEmporarily
-        paramBC.reextractRaw = 1;
-    end
-
     % channelpostmp = channelpostmpconv;
     ypostmp = channelpostmp(:, 2);
     xpostmp = channelpostmp(:, 1);
