@@ -2,8 +2,7 @@ from tkinter import *
 from tkinter import ttk
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure 
-from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg,  
-NavigationToolbar2Tk) 
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk 
 import numpy as np
 from matplotlib import rcParams
 import os
@@ -50,10 +49,12 @@ def run_GUI():
     rcParams['ytick.color'] = color
 
     
-    np.set_printoptions(suppress = True)
+    np.set_printoptions(suppress=True)
     is_match = []
     not_match = []
     root = Tk()
+    root.attributes('-fullscreen', True)  # Set the window to full screen
+
     # downloaded theme from https://sourceforge.net/projects/tcl-awthemes/
     theme_path_rel = os.path.normpath(r'TkinterTheme\awthemes-10.4.0')
     theme_path = os.path.join(os.path.dirname(os.path.abspath(__file__)) , theme_path_rel)
@@ -64,8 +65,22 @@ def run_GUI():
     s.theme_use('awdark')
     root.title('UMPy - Manual Curation')
     #root.geometry('800x800')
-    icon = PhotoImage(file = os.path.join(os.path.dirname(os.path.abspath(__file__)) , 'GUI_icon.png'))
-    root.iconphoto(False, icon)
+
+    # Construct the file path to the icon
+    icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'GUI_icon.png')
+
+    # Debugging print statements
+    print(f"Icon path: {icon_path}")
+    print(f"File exists: {os.path.exists(icon_path)}")
+
+    # Load the icon
+    try:
+        icon = PhotoImage(file=icon_path)
+        # Set the icon photo
+        root.iconphoto(False, icon)
+    except Exception as e:
+        print(f"Error loading icon: {e}")
+
     background = ttk.Frame(root)
     background.place(x=0, y=0, relwidth=1.0, relheight=1.0)
 
@@ -908,13 +923,21 @@ def get_score_histograms(scores_to_include, output_threshold):
 
 def add_original_ID(UnitA, UnitB):
     global original_id_label
+    global root
+    global clus_info
 
     if original_id_label.winfo_exists():
         original_id_label.destroy()
 
-    original_id_label = ttk.Label(root, text = f'The Original Unit IDs are:\nUnit A: {int(clus_info["original_ids"][UnitA].squeeze())}   Unit B: {int(clus_info["original_ids"][UnitB].squeeze())}', borderwidth = 2 , relief= 'groove')
-    original_id_label.grid( row = 0, column = 2, ipadx = 5, ipady = 5)
+    try:
+        original_id_a = int(clus_info["original_ids"][UnitA].squeeze())
+        original_id_b = int(clus_info["original_ids"][UnitB].squeeze())
+        original_id_label = ttk.Label(root, text=f'The Original Unit IDs are:\nUnit A: {original_id_a}   Unit B: {original_id_b}', borderwidth=2, relief='groove')
+    except IndexError as e:
+        print(f"Error: {e}")
+        original_id_label = ttk.Label(root, text='Error: Unit ID out of bounds', borderwidth=2, relief='groove')
 
+    original_id_label.grid(row=0, column=2, ipadx=5, ipady=5)
 
 def add_probability_label(UnitA, UnitB, CVoption):
     global bayes_label
@@ -1290,7 +1313,7 @@ def plot_histograms(hist_names, hist, hist_matched, scores_to_include, unit_a, u
     axs = axs.flat
 
 
-    #loop over indexes..
+    #loop over indexes.. 
     for i in range(len(hist)):
         axs[i].step(hist[i][1][:-1], hist[i][0], color = 'orange')
         axs[i].step(hist_matched[i][1][:-1], hist_matched[i][0], color = 'magenta')

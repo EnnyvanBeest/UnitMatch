@@ -172,7 +172,7 @@ def extract_a_unit_KS4(sample_idx, data, samples_before, samples_after, spike_wi
     return avg_waveforms
 
 
-def save_avg_waveforms(avg_waveforms, save_dir, all_unit_ids, good_units, extract_good_units_only = False):
+def save_avg_waveforms(avg_waveforms, save_dir, all_unit_ids, good_units, extract_good_units_only=False):
     """
     Saves the average waveforms as a unique .npy file called "UnitX_RawSpikes.npy" in a folder called 
     RawWaveforms in the save_dir.
@@ -199,18 +199,18 @@ def save_avg_waveforms(avg_waveforms, save_dir, all_unit_ids, good_units, extrac
 
     os.chdir(tmp_path)
 
-    #ALL waveforms from 0->nUnits
+    # ALL waveforms from 0->nUnits
     if extract_good_units_only == False:
         for i, idx in enumerate(all_unit_ids):
-            np.save(f'Unit{idx[0]}_RawSpikes.npy', avg_waveforms[i,:,:,:])
-        print(f'Saved {avg_waveforms.shape[0] + 1} units to RawWaveforms directory, saving all units')
+            np.save(f'Unit{idx}_RawSpikes.npy', avg_waveforms[i,:,:,:])
+        print(f'Saved {avg_waveforms.shape[0]} units to RawWaveforms directory, saving all units')
 
-    #If only extracting GoodUnits
+    # If only extracting GoodUnits
     else:
         for i, idx in enumerate(good_units):
-            #  need idx[0], to select value so saves with correct name
-            np.save(f'Unit{idx[0]}_RawSpikes.npy', avg_waveforms[i,:,:,:])
-        print(f'Saved {good_units.shape[0] + 1} units to RawWaveforms directory, only saving good units')
+            # need idx, to select value so saves with correct name
+            np.save(f'Unit{idx}_RawSpikes.npy', avg_waveforms[i,:,:,:])
+        print(f'Saved {good_units.shape[0]} units to RawWaveforms directory, only saving good units')
     os.chdir(current_dir)
 
 

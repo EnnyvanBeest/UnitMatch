@@ -236,7 +236,11 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'ISICorr')) || recompute %
                 end
 
                 % Compute Firing rate
-                nspkspersec = histcounts(sp.st(idx1), [min(sp.st(idx1)):1:max(sp.st(idx1))]);
+                try
+                    nspkspersec = histcounts(sp.st(idx1), [min(sp.st(idx1)):1:max(sp.st(idx1))]);
+                catch
+                    nspkspersec = 0;
+                end
                 FR(cv, clusid) = nanmean(nspkspersec);
 
                 ISIMat(:, cv, clusid) = histcounts(diff(double(sp.st(idx1))),ISIbins);

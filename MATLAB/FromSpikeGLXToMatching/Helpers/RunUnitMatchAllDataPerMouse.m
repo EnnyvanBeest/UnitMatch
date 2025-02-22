@@ -7,7 +7,7 @@ DateOpt = arrayfun(@(X) dir(fullfile(DataDir{DataDir2Use(X)},MiceOpt{X},'*-*')),
 DateOpt = cellfun(@(X) X([X.isdir]),DateOpt,'UniformOutput',0);
 DateOpt = cellfun(@(X) {X.name},DateOpt,'UniformOutput',0);
 
-RemoveOldCopies = 0;
+RemoveOldCopies = 1;
 
 LogError = {}; % Keep track of which runs didn't work
 if ~exist('PipelineParamsOri','var')
@@ -73,7 +73,6 @@ for midx = 1:length(MiceOpt)
             disp('Unit matching in Matlab')
             AllKiloSortPaths(cell2mat(cellfun(@(X) any(strfind(X,'Chronic')),AllKiloSortPaths,'UniformOutput',0))) = []; %Use separate days and match units via matlab script
             AllKiloSortPaths(cell2mat(cellfun(@(X) any(strfind(X,'Chrc2Sessions')),AllKiloSortPaths,'UniformOutput',0))) = []; %Use separate days and match units via matlab script
-
         else
             disp('Using chronic pyks option')
             AllKiloSortPaths = AllKiloSortPaths(cell2mat(cellfun(@(X) any(strfind(X,'Chronic')),AllKiloSortPaths,'UniformOutput',0))); %Use chronic output from pyks
