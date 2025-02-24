@@ -140,8 +140,9 @@ function [activityClusters, MUACorr, firingRates, depthEdges] = computeFunctiona
 nDepthBins = height(histinfo);
 depthEdges = linspace(min(spikeDepths), max(spikeDepths), nDepthBins + 1);
 timeEdges = min(spikeTimes):1:max(spikeTimes);
-
+nSmooth = ceil(40./nanmedian(diff(depthEdges))); % smooth for MUA corr with 50 micron
 spikeHist = histcounts2(spikeDepths, spikeTimes, depthEdges, timeEdges);
+spikeHist = smoothdata(spikeHist,1,'gaussian',nSmooth);
 MUACorr = corr(spikeHist');
 
 nAreas = numel(unique(histinfo.RegionAcronym));

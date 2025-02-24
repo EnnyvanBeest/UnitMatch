@@ -1,5 +1,5 @@
 %% User Input
-NewHistologyNeeded = 0; %Automatically to 1 after RedoAfterClustering
+NewHistologyNeeded = 1; %Automatically to 1 after RedoAfterClustering
 RedoAfterClustering=0;
 RedoUserInput = 0;
 UseLFP = 0;
@@ -59,7 +59,12 @@ if length(ProbeColors)<length(MiceOpt)
     ProbeColors = distinguishable_colors(length(MiceOpt));
 end
 
-for midx = 13:length(MiceOpt)
+for midx = 1:length(MiceOpt)
+
+    figs = findall(0, 'Type', 'figure'); % Get all figures
+    figs(figs == fwireframe) = []; % Remove the figure you want to keep
+    close(figs); % Close the rest
+
     %% which probes?
     myKsDir = fullfile(KilosortDir,MiceOpt{midx});
     subksdirs = dir(fullfile(myKsDir,'*','Probe*')); %This changed because now I suddenly had 2 probes per recording
