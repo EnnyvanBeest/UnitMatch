@@ -53,7 +53,14 @@ def run_GUI():
     is_match = []
     not_match = []
     root = Tk()
-    root.attributes('-fullscreen', True)  # Set the window to full screen
+    # Get screen width and height
+    screen_width = root.winfo_screenwidth()
+    screen_height = root.winfo_screenheight()
+
+    # Set window size to fit the screen with some padding
+    window_width = screen_width - 100
+    window_height = screen_height - 100
+    root.geometry(f"{window_width}x{window_height}+50+50")
 
     # downloaded theme from https://sourceforge.net/projects/tcl-awthemes/
     theme_path_rel = os.path.normpath(r'TkinterTheme\awthemes-10.4.0')
@@ -236,6 +243,11 @@ def run_GUI():
     toggle_UM_score_plot.grid(row = 4, column = 5, sticky = 'W',  padx = 50, pady = 5)
     toggle_raw_plot.grid(row = 4, column = 6, sticky = 'E',  padx = 50, pady = 5)
 
+    # Configure grid weights to auto-adjust subpanels
+    root.grid_rowconfigure(0, weight=1)
+    root.grid_columnconfigure(0, weight=1)
+    entry_frame.grid_rowconfigure(0, weight=1)
+    entry_frame.grid_columnconfigure(0, weight=1)
 
     update(None)
     match_idx = 0
