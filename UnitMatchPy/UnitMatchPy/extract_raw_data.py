@@ -123,7 +123,7 @@ def extract_a_unit(sample_idx, data, half_width, spike_width, n_channels, sample
 
 def extract_a_unit_KS4(sample_idx, data, samples_before, samples_after, spike_width, n_channels, sample_amount):
     """
-    Extract a single units average waveform from KS4 data
+    Extract a single unit's average waveform from KS4 data
 
     Parameters
     ----------
@@ -140,35 +140,50 @@ def extract_a_unit_KS4(sample_idx, data, samples_before, samples_after, spike_wi
     n_channels : int
         The number of channels to extract (to exclude sync channels)
     sample_amount : int
-        The number of spike to extract for each unit
+        The number of spikes to extract for each unit
 
     Returns
     -------
     ndarray (spike_width, n_channels, 2)
         Two average waveforms for each unit
     """
-    channels = np.arange(0,n_channels)
+    channels = np.arange(0, n_channels)
 
-    all_sample_waveforms = np.zeros( (sample_amount, spike_width, n_channels))
+    all_sample_waveforms = np.zeros((sample_amount, spike_width, n_channels))
     for i, idx in enumerate(sample_idx[:]):
         if np.isnan(idx):
-            continue 
-        tmp = data[ int(idx - samples_before - 1): int(idx + samples_after - 1), channels] # -1, to better fit with ML
-        tmp.astype(np.float32)
-        #gaussian smooth, over time gaussian window = 5, sigma = window size / 5
-        tmp = gaussian_filter(tmp, 1, radius = 2, axes = 0) #edges are handled differently to ML
-        # window ~ radius *2 + 1
-        tmp = tmp - np.mean(tmp[:samples_before,:], axis = 0)
+            continue
+        
+        start_idx = int(idx - samples_before - 1)
+        end_idx = int(idx + samples_after - 1)
+        
+        # Extract the data segment
+        tmp = data[max(0, start_idx):min(data.shape[0], end_idx), channels]
+        tmp = tmp.astype(np.float32)
+        
+        # Pad the data if necessary
+        if start_idx < 0:
+            pad_width = (-start_idx, 0)
+            tmp = np.pad(tmp, ((pad_width[0], 0), (0, 0)), mode='constant', constant_values=0)
+        if end_idx > data.shape[0]:
+            pad_width = (0, end_idx - data.shape[0])
+            tmp = np.pad(tmp, ((0, pad_width[1]), (0, 0)), mode='constant', constant_values=0)
+        
+        # Gaussian smooth, over time gaussian window = 5, sigma = window size / 5
+        tmp = gaussian_filter(tmp, 1, radius=2, axes=0)  # edges are handled differently to ML
+        # window ~ radius * 2 + 1
+        tmp = tmp - np.mean(tmp[:samples_before, :], axis=0)
+
         all_sample_waveforms[i] = tmp
 
-    #median and split CV's
+    # Median and split CVs
     n_waves = np.sum(~np.isnan(sample_idx[:]))
     cv_lim = np.floor(n_waves / 2).astype(int)
 
-    #find median over samples
+    # Find median over samples
     avg_waveforms = np.zeros((spike_width, n_channels, 2))
-    avg_waveforms[:, :, 0] = np.median(all_sample_waveforms[:cv_lim, :, :], axis = 0) #median over samples
-    avg_waveforms[:, :, 1] = np.median(all_sample_waveforms[cv_lim:n_waves, :, :], axis = 0) #median over samples
+    avg_waveforms[:, :, 0] = np.median(all_sample_waveforms[:cv_lim, :, :], axis=0)  # median over samples
+    avg_waveforms[:, :, 1] = np.median(all_sample_waveforms[cv_lim:n_waves, :, :], axis=0)  # median over samples
     return avg_waveforms
 
 
