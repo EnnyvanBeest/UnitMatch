@@ -123,10 +123,19 @@ if exist('tmp') && isstruct(tmp) && isfield(tmp,'VRDat')
                 mostlikely(kid) = 1;
             end                
         end
-        if sum(mostlikely==1)
+        if sum(mostlikely)==1
             myKsDir = myKsDir(find(mostlikely));
-        else
-            keyboard
+        elseif sum(mostlikely) == 0
+            for ksid = 1:numel(myKsDir)
+                tmpload = load(fullfile(myKsDir(ksid).folder,myKsDir(ksid).name),'SessionParams');
+                PipelineParams.SaveDir = tmpload.SessionParams.SaveDir;
+                [clusinfo, ~, ~]  = LoadPreparedClusInfo({myKsDir(ksid).folder},PipelineParams);
+
+                if all(ismember(tmp.VRDat.clusid,clusinfo.cluster_id))
+                    mostlikely(ksid)=1;
+                end
+            end
+            myKsDir = myKsDir(mostlikely);
         end
     end
     tmpload = load(fullfile(myKsDir.folder,myKsDir.name),'SessionParams');
@@ -212,4 +221,5 @@ if exist('tmp') && isstruct(tmp) && isfield(tmp,'VRDat')
         tmp.VRDat.Color(cid,:) = clusinfo.Color(idx,:);
         tmp.VRDat.Coordinates(cid,:) = clusinfo.Coordinates(idx,:);
     end
+
 end
