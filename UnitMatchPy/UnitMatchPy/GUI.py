@@ -63,8 +63,8 @@ def run_GUI():
     root.geometry(f"{window_width}x{window_height}+50+50")
 
     # downloaded theme from https://sourceforge.net/projects/tcl-awthemes/
-    theme_path_rel = os.path.normpath(r'TkinterTheme\awthemes-10.4.0')
-    theme_path = os.path.join(os.path.dirname(os.path.abspath(__file__)) , theme_path_rel)
+    theme_path_rel = os.path.join('TkinterTheme', 'awthemes-10.4.0')
+    theme_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), theme_path_rel)
 
     root.tk.call('lappend', 'auto_path', theme_path)
     root.tk.call('package', 'require', 'awdark')
@@ -87,6 +87,7 @@ def run_GUI():
         root.iconphoto(False, icon)
     except Exception as e:
         print(f"Error loading icon: {e}")
+
 
     background = ttk.Frame(root)
     background.place(x=0, y=0, relwidth=1.0, relheight=1.0)
