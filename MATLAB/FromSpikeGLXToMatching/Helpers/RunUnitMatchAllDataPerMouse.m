@@ -73,7 +73,6 @@ for midx = 1:length(MiceOpt)
             disp('Unit matching in Matlab')
             AllKiloSortPaths(cell2mat(cellfun(@(X) any(strfind(X,'Chronic')),AllKiloSortPaths,'UniformOutput',0))) = []; %Use separate days and match units via matlab script
             AllKiloSortPaths(cell2mat(cellfun(@(X) any(strfind(X,'Chrc2Sessions')),AllKiloSortPaths,'UniformOutput',0))) = []; %Use separate days and match units via matlab script
-
         else
             disp('Using chronic pyks option')
             AllKiloSortPaths = AllKiloSortPaths(cell2mat(cellfun(@(X) any(strfind(X,'Chronic')),AllKiloSortPaths,'UniformOutput',0))); %Use chronic output from pyks
@@ -93,7 +92,7 @@ for midx = 1:length(MiceOpt)
     %% Remove old copies?
     UnitMatchExist = dir(fullfile(SaveDir,MiceOpt{midx},'**','UnitMatch.mat'));
     if ~isempty(UnitMatchExist)
-        MouseAllDone = 1;
+        MouseAllDone = 0;
     else 
         MouseAllDone = 0;
     end
@@ -201,8 +200,13 @@ for midx = 1:length(MiceOpt)
             %% Load other (Default) parameters
             UMparam = DefaultParametersUnitMatch(PipelineParams);
             UnitMatchExist = dir(fullfile(UMparam.SaveDir,'UnitMatch.mat'));
-
-            if isempty(UnitMatchExist) || PipelineParams.RedoUnitMatch || UnitMatchExist.date<FromDate
+            if ~isempty(UnitMatchExist)
+                tmpParam = load(fullfile(UnitMatchExist.folder,UnitMatchExist.name),'UMparam');
+                RedoThisOne = ~(all(ismember(tmpParam.UMparam.KSDir, UMparam.KSDir)) & all(ismember(UMparam.KSDir,tmpParam.UMparam.KSDir)));
+            else
+                RedoThisOne = 1;
+            end
+            if RedoThisOne || PipelineParams.RedoUnitMatch || UnitMatchExist.date<FromDate
 
                 %% Get clusinfo
                 clusinfo = getClusinfo(UMparam.KSDir);

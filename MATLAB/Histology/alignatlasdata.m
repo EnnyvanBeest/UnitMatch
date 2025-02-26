@@ -325,6 +325,7 @@ corr_edges = nanmin(spikeTimes(spikeID==1)):spike_binning:nanmax(spikeTimes(spik
 corr_centers = corr_edges(1:end-1) + diff(corr_edges);
 FiringRates = cell(1,nshanks);
 mua_corr = cell(1,nshanks);
+NMF_Res = cell(1,nshanks);
 for shid = 1:nshanks
     binned_spikes_depth = zeros(length(unique_depths),length(corr_edges)-1);
     nSpikeClusters = zeros(length(unique_depths),1);
@@ -340,6 +341,26 @@ for shid = 1:nshanks
     mua_corr{shid} = smooth2a(corrcoef(binned_spikes_depth'),3);
 
     FiringRates{shid} = sum(binned_spikes_depth,2)./nSpikeClusters;
+
+  
+    % Choose number of components (K)
+    K = ceil(numel(unique(histinfo{shid}.RegionAcronym))/1.5); % usually a good estimate
+
+    % Perform NMF
+    [W, H] = nnmf(binned_spikes_depth, K);
+    NMF_Res{shid} = W;
+    % % Visualizing the results
+    % figure;
+    % subplot(2,1,1);
+    % imagesc(W); colormap hot;
+    % xlabel('Components'); ylabel('Depths');
+    % title('Depth Weights (W)');
+    % 
+    % subplot(2,1,2);
+    % imagesc(H); colormap hot;
+    % xlabel('Timepoints'); ylabel('Components');
+    % title('Component Timecourses (H)');
+
 end
 mua_corr = cat(3,mua_corr{:});
 mua_corr = reshape(mua_corr,size(mua_corr,1),[]);
@@ -397,8 +418,9 @@ end
 
 FR_ax = subplot(3,9,[5,14,23]);
 hold on
-cellfun(@(X) plot(X,depth_group_centers,'k-'),FiringRates);
-title('Avg Firing per Unit')
+cellfun(@(X) plot(smoothdata(X,1,'gaussian',5),depth_group_centers),NMF_Res);
+makepretty
+title('Depth weights on Time')
 set(FR_ax,'ylim',[startpoint,endpoint])
 
 

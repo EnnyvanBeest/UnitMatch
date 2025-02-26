@@ -47,35 +47,25 @@ for clusid=1:nclus
         waveforms(clusid,:) = nanmean(sp.waveforms(oriclusid+1,:),1);
     end
 end
-takeclus = 1:nclus;
-takeclus(emptyclus)=[];
 
-% Save out
-if length(sp.cgs)~=length(takeclus)
-    sp.cgs = sp.cgs(takeclus);
-    sp.cids = sp.cids(takeclus);
-end
-sp.temps=temps(takeclus,:,:);
-sp.pcFeatInd = pcFeatInd(takeclus,:);
-sp.templateDepths = templateDepths(takeclus);
-sp.templateXpos = templateXpos(takeclus);
-sp.tempAmps = tempAmps(takeclus);
-sp.tempsUnW = tempsUnW(takeclus,:,:);
-sp.templateDuration = templateDuration(takeclus);
-sp.waveforms = waveforms(takeclus,:);
+
 if any(emptyclus)
     disp(['Found ' num2str(length(emptyclus)) ' empty clusters. Removing from clusinfo'])
 
-  
+
     %% Remove empty clusters from sp
     removeidx = ismember(sp.clu,clusinfo.cluster_id(emptyclus));
     fields = fieldnames(sp);
     for id = 1:length(fields)
         if numel(sp.(fields{id})) == numel(removeidx)
             sp.(fields{id})(removeidx) = [];
+        elseif size(sp.(fields{id}),1) == nclus
+            sp.(fields{id})(emptyclus,:) = [];
+        elseif size(sp.(fields{id}),2) == nclus
+            sp.(fields{id})(:,emptyclus) = []; % Some entries will be transposed
         end
-    end  
-    
+    end
+
     %% Remove the empty clusters
     fields = fieldnames(clusinfo);
     for id = 1:length(fields)
@@ -85,25 +75,4 @@ if any(emptyclus)
 else
     disp(['Found no empty clusters.'])
 end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 end

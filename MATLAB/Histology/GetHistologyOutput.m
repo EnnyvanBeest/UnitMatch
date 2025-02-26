@@ -5,7 +5,7 @@ AllenCCFPath = fullfile(GithubDir,'allenCCF');
 if ~exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
     mkdir(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
 end
-tmphistfile = dir(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,'*HistoEphysAlignment.mat'));
+tmphistfile = dir(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,'*HistoEphysAlignment_Auto.mat'));
 if ~isempty(tmphistfile) && ~NewHistologyNeeded
     tmpfile = load(fullfile(tmphistfile.folder,tmphistfile.name));
     try
@@ -30,7 +30,8 @@ if ~histodone %Just in case it's not done yet
         end
         if isempty(histofile)
             % Maybe chronic?
-            MetaFileDir = dir(fullfile(myLFDir,'**',['*' strrep(thisprobe,'Probe','imec')]));
+            myLFDir = dir(Params.RawDataPaths{1});
+            MetaFileDir = dir(fullfile(myLFDir.folder,'*.meta'));
             ImecMeta =ReadMeta2(fullfile(MetaFileDir(1).folder,MetaFileDir(1).name));
             ProbeSN = ImecMeta.imDatPrb_sn;
 
@@ -56,7 +57,7 @@ if ~histodone %Just in case it's not done yet
                 fullfile(fullfile(histofile(1).folder,histofile(1).name))
 
                 % Align ephys data with probe
-                Depth2Area  = alignatlasdata(histinfo,AllenCCFPath,sp,clusinfo,1,1,2);
+                Depth2Area  = alignatlasdata_automated(histinfo,AllenCCFPath,sp,clusinfo,1,1,2);
 
             end
         else % Automatic alignment with brain globe output
@@ -68,9 +69,10 @@ if ~histodone %Just in case it's not done yet
             trackcoordinates = arrayfun(@(X) readNPY(fullfile(histofile(X).folder,strrep(histofile(X).name,'.csv','.npy'))),1:length(histofile),'UniformOutput',0);
             % Align ephys data with probe
             if exist('lfpD') && ~isempty(lfpD)
-                Depth2Area  = alignatlasdata(histinfo,AllenCCFPath,sp,clusinfo,0,0,fullfile(lfpD.folder,lfpD.name),2,trackcoordinates);
+                Depth2Area  = alignatlasdata_automated(histinfo,AllenCCFPath,sp,clusinfo,0,0,fullfile(lfpD.folder,lfpD.name),2,trackcoordinates);
             else
-                Depth2Area  = alignatlasdata(histinfo,AllenCCFPath,sp,clusinfo,0,0,[],2,trackcoordinates);
+                 Depth2Area  = alignatlasdata_automated(histinfo,AllenCCFPath,sp,clusinfo,0,trackcoordinates);
+                % alignatlasdata_automated(histinfo, AllenCCFPath, sp, clusinfo, removenoise, trackcoordinates)
             end
         end
     else
@@ -94,20 +96,57 @@ if ~histodone %Just in case it's not done yet
         histinfonew.Properties.VariableNames = {'Position','RegionID','RegionAcronym','RegionName'};
 
         % Align ephys data with probe
-        Depth2Area  = alignatlasdata(histinfonew,AllenCCFPath,sp,clusinfo,0,0,fullfile(lfpD.folder,lfpD.name),2);
+        Depth2Area  = alignatlasdata_automated(histinfonew,AllenCCFPath,sp,clusinfo,0,0,fullfile(lfpD.folder,lfpD.name),2);
     end
 end
 if histoflag && ~histodone
-    saveas(gcf,fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment.fig']))
-    save(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment.mat']),'Depth2Area')
+    set(gcf,'name',sprintf('%s %s %s',MiceOpt{midx},thisdate,thisprobe))
+    saveas(gcf,fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment_Auto.fig']))
+    saveas(gcf,fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment_Auto.bmp']))
+
+    save(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment_Auto.mat']),'Depth2Area')
 end
 
 % Add information to clusinfo
+
+if exist('tmp') && isstruct(tmp) && isfield(tmp,'VRDat')
+    myKsDir = dir(fullfile(SaveDir,tmp.VRDat.Mouse(1,:),tmp.VRDat.Date(1,:),tmp.VRDat.Session(1,:),thisprobe,'SpikeData.mat'));
+    tmpload = load(fullfile(myKsDir.folder,myKsDir.name));
+    clusinfo = tmpload.clusinfo;
+
+    myKsDir = dir(fullfile(KilosortDir,tmp.VRDat.Mouse(1,:),tmp.VRDat.Date(1,:),thisprobe,'**','PreparedData.mat'));
+    if numel(myKsDir)>1
+        mostlikely = false(1,numel(myKsDir));
+        for kid = 1:numel(myKsDir)
+            tmpspl = strsplit(myKsDir(kid).folder,filesep);
+            if strcmp(tmpspl{end},'s')
+                mostlikely(kid) = 1;
+            end                
+        end
+        if sum(mostlikely)==1
+            myKsDir = myKsDir(find(mostlikely));
+        elseif sum(mostlikely) == 0
+            for ksid = 1:numel(myKsDir)
+                tmpload = load(fullfile(myKsDir(ksid).folder,myKsDir(ksid).name),'SessionParams');
+                PipelineParams.SaveDir = tmpload.SessionParams.SaveDir;
+                [clusinfo, ~, ~]  = LoadPreparedClusInfo({myKsDir(ksid).folder},PipelineParams);
+
+                if all(ismember(tmp.VRDat.clusid,clusinfo.cluster_id))
+                    mostlikely(ksid)=1;
+                end
+            end
+            myKsDir = myKsDir(mostlikely);
+        end
+    end
+    tmpload = load(fullfile(myKsDir.folder,myKsDir.name),'SessionParams');
+    PipelineParams.SaveDir = tmpload.SessionParams.SaveDir;
+    [clusinfo, ~, ~]  = LoadPreparedClusInfo({myKsDir.folder},PipelineParams);
+end
 if exist('clusinfo','var') & ~isempty(Depth2Area)
-    [mindist,DistIdx] = nanmin(abs(clusinfo.depth - Depth2Area.Depth')+abs(clusinfo.Shank-Depth2Area.Shank')*1000,[],2);
-    clusinfo.Area = Depth2Area.Area(DistIdx);
+    [mindist,DistIdx] = nanmin(abs(clusinfo.AdjustedDepth - Depth2Area.Depth')+abs(clusinfo.Shank-Depth2Area.Shank')*1000,[],2);
+    clusinfo.Area = lower(Depth2Area.Area(DistIdx));
     clusinfo.Color = cell2mat(arrayfun(@(X) hex2rgb(Depth2Area.Color{X}),DistIdx,'Uni',0));
-    clusinfo.Coordinates = cell2mat(Depth2Area.Coordinates(DistIdx));
+    clusinfo.Coordinates = Depth2Area.Coordinates(DistIdx,:);
 
 
     %% I only care about certain levels of histology - not layer specificity at this point
@@ -161,8 +200,6 @@ if exist('clusinfo','var') & ~isempty(Depth2Area)
         automaticareasofinterestid(areaid) = find(ismember(AutomaticAREASOfInterest,tmpareaname));
         newareaabrev(ismember(Area,areaopt{areaid})) = {tmpareaname};
         newareaname(ismember(Area,areaopt{areaid}))={atlastable.name{find(ismember(atlastable.structure_id_path,newstructure_id_path))}}; %Save out per unit
-
-
     end
     if any(ismember(AutomaticAREASOfInterest,{'root','vs','fiber tracts','cc','fxs'})) % make these void
         AutomaticAREASOfInterestFullName(ismember(AutomaticAREASOfInterest,{'root','vs','fiber tracts','cc','fxs'}))={'root'};
@@ -173,5 +210,16 @@ if exist('clusinfo','var') & ~isempty(Depth2Area)
 
     clusinfo.Area = newareaabrev';
     clusinfo.AreaFN = newareaname';
+
+end
+
+if exist('tmp') && isstruct(tmp) && isfield(tmp,'VRDat')
+    clustershere = tmp.VRDat.clusid;
+    for cid = 1:numel(clustershere)
+        idx = find(clusinfo.cluster_id == tmp.VRDat.clusid(cid),1,'first');
+        tmp.VRDat.Area(cid) = clusinfo.Area(idx);
+        tmp.VRDat.Color(cid,:) = clusinfo.Color(idx,:);
+        tmp.VRDat.Coordinates(cid,:) = clusinfo.Coordinates(idx,:);
+    end
 
 end
