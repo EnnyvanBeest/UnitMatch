@@ -148,11 +148,7 @@ if exist('tmp') && isstruct(tmp) && isfield(tmp,'VRDat')
 end
 if exist('clusinfo','var') & ~isempty(Depth2Area)
     rgbColors = cell2mat(cellfun(@hex2rgb, Depth2Area.Color, 'Uni', 0));
-    grayMask = vecnorm(rgbColors - 0.5, 2, 2) < 0.1;  % tweak threshold as needed
-
-    if any(grayMask)
-        keyboard
-    end
+    grayMask = std(rgbColors, 0, 2) < 0.05;  % threshold can be adjusted
 
     % Calculate all distances
     allDists = abs(clusinfo.AdjustedDepth - Depth2Area.Depth') + abs(clusinfo.Shank - Depth2Area.Shank') * 1000;
