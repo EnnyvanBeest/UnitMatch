@@ -1,6 +1,6 @@
 %% User Input
 NewHistologyNeeded = 1; %Automatically to 1 after RedoAfterClustering
-RedoAfterClustering=0;
+RedoAfterClustering = 0;
 RedoUserInput = 0;
 UseLFP = 0;
 % directory of reference atlas files
@@ -20,6 +20,7 @@ show_region_table = true;
 % black brain?
 black_brain = false;
 AllenCCFPath = fullfile(GithubDir,'allenCCF');
+InclNrecordings = 8; % we typically have 8 mapping sessions at the start
 %% Automated
 % Load all data
 % Find available datasets (always using dates as folders)
@@ -218,7 +219,6 @@ for midx = 1:length(MiceOpt)
 
                     else
                         NewHistologyNeeded = 1; %Automatically to 1 after RedoAfterClustering
-
                     end
                 end
             end
@@ -254,13 +254,29 @@ for midx = 1:length(MiceOpt)
             PipelineParams.thisdate = thisdate;
             PipelineParams.SaveDir = fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe);
             if multidate
-                myKsDir = dir(fullfile(KilosortDir,MiceOpt{midx},'**',thisprobe,'**','spike_clusters.npy'));
+                % Find all recording sessions
+                myKsDir = dir(fullfile(KilosortDir,MiceOpt{midx},thisdate,'**','spike_clusters.npy'));
+                IncludeThese = false(1,numel(myKsDir));
+
+                for ksid = 1:numel(myKsDir) % Only include the ones with the same SN for the probe
+                    tmp = dir(fullfile(myKsDir(ksid).folder,'PreparedData.mat'));
+                    if ~isempty(tmp)
+                        tmp = load(fullfile(tmp(1).folder,tmp(1).name),'SessionParams');
+                        if tmp.SessionParams.AllProbeSN{1} == SN
+                            IncludeThese(ksid) = 1;
+                        end
+                    elseif any(strfind(myKsDir(ksid).folder,thisdate)) && any(strfind(myKsDir(ksid).folder,thisprobe))
+                        IncludeThese(ksid) = 1;
+                    end
+
+                end
+                myKsDir = myKsDir(IncludeThese);
             else
                 myKsDir = dir(fullfile(myKsDir,'**','spike_clusters.npy'));
             end
             myKsDir = arrayfun(@(X) X.folder,myKsDir,'UniformOutput',0);
-            if numel(myKsDir)>30
-                myKsDir = myKsDir(1:30);
+            if numel(myKsDir)>InclNrecordings
+                myKsDir = myKsDir(1:InclNrecordings);
             end
 
             try
