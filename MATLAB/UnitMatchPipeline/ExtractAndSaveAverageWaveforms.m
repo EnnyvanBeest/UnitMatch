@@ -41,10 +41,13 @@ Currentlyloaded = 0;
 for uid = 1:nclus
     fprintf(1,'\b\b\b\b%3.0f%%',uid/nclus*100)
     if length(param.KSDir)>1 || length(param.RawDataPaths) == 1
-        tmppath = dir(fullfile(param.KSDir{GoodRecSesID(uid)},'**','RawWaveforms*'));
+        tmppath = dir(fullfile(param.KSDir{GoodRecSesID(uid)},'**','RawWaveforms'));
+        tmppath = tmppath([tmppath.isdir]); % Keep only directories
     else %Stitched KS
-        tmppath = dir(fullfile(param.KSDir{1},'**','RawWaveforms*'));
+        tmppath = dir(fullfile(param.KSDir{1},'**','RawWaveforms'));
+        tmppath = tmppath([tmppath.isdir]); % Keep only directories
     end
+    
     if length(tmppath)>1
         % Probably stitched:
         tmppath = tmppath(GoodRecSesID(uid));
@@ -53,7 +56,7 @@ for uid = 1:nclus
         mkdir(fullfile(param.KSDir{GoodRecSesID(uid)},'RawWaveforms'));
         tmppath = dir(fullfile(param.KSDir{GoodRecSesID(uid)},'**','RawWaveforms*'));
     end
-    Path4UnitNPY{uid} = fullfile(tmppath.folder,tmppath.name,['Unit' num2str(AllClusterIDs(Good_Idx(uid))) '_RawSpikes.npy']); %0-indexed
+    Path4UnitNPY{uid} = fullfile(tmppath.folder,['Unit' num2str(AllClusterIDs(Good_Idx(uid))) '_RawSpikes.npy']); %0-indexed
 
     if exist(Path4UnitNPY{uid}) && ~RedoExtraction
         continue

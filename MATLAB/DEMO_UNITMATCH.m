@@ -1,6 +1,8 @@
 %% DEMO UNIT MATCH 
 
-% Example data can be found here: https://doi.org/10.6084/m9.figshare.24305758.v1
+% Example data can be found here:
+% https://doi.org/10.6084/m9.figshare.24305758.v1 - note this data is
+% already preprocessed, so you can skip the extractkilosortdata step.
 
 %% README
 
@@ -10,10 +12,6 @@
 % for every half of a recording for that cluster (spikeWidth x nRecordingChannels x 2).
 
 % If you use spikeGLX or OpenEphys, the UnitMatch pipeline will extract those waveforms for you (using ExtractAndSaveAverageWaveforms.m). 
-
-%% -- Preprocessing ---
-
-% First, let's preprocess the data. 
 
 %% Add required and optional paths and subpaths
 
@@ -33,15 +31,17 @@ addpath(genpath(fullfile(GithubDir,'UnitMatch'))) % Make sure to have this one f
 %% User input
 
 % This is the path where the results will be saved ('\\path\to\save\UnitMatch'), e.g.:
-UMparam.SaveDir = 'D:\MatchingUnits\Output\UnitMatch'; 
+UMparam.SaveDir = 'H:\UnitMatch\Output'; 
 
 % This is a cell array with a path to each recording's Kilosort output directory, where there should be a subfolder called 'RawWaveforms'. 
 % N.B. if you want to use the functional score evaluation of UnitMatch, 'KSDir' should also contain the Kilosort output (e.g. spike times etc.)/
 % Takes the form of "{'\\path\to\firstrecording','\\path\to\secondrecording','\\path\to\nthrecording'};", e.g.:  
- UMparam.KSDir = {'D:\MatchingUnits\Data\tmp\Mouse1\AL032\2019-11-21\Probe0\1','D:\MatchingUnits\Data\tmp\Mouse1\AL032\2019-11-22\Probe0\1'};  
+ UMparam.KSDir = {'D:\UnitMatch\Data\tmp\Mouse1\AL032\2019-11-21\Probe0\1','D:\UnitMatch\Data\tmp\Mouse1\AL032\2019-11-22\Probe0\1'};  
 
  
 %% Get recording information
+% Note: DEMO data already contains the resulting files from this step. Skip
+% to next step.
 
 % In this part, you will provide the paths for the raw data, and the channel position, for each recording.
 
@@ -55,7 +55,7 @@ UMparam.SaveDir = 'D:\MatchingUnits\Output\UnitMatch';
 % % A cell array with info on where to find the decompressed recording (.bin files) -- typically a temporary folder: 
 % UMparam.AllDecompPaths = {'\\path\to\firstrecording.bin','\\path\to\secondrecording.bin','\\path\to\nthrecording.bin'};  
 % Optionally, it will decompresse cbin to bin data and can use BOMBCELL quality metric to define good single units. 
-UMparam.RunQualityMetrics = 1 % This assumes you run Bombcell, if not please set this to 0.
+UMparam.RunQualityMetrics = 0 % This assumes you run Bombcell, if not please set this to 0.
  % For other Default parameters, please see
  % DefaultParametersExtractKSData.m. Specifify all UMparam that should be
  % different from the default before running ExtractKilosortData
