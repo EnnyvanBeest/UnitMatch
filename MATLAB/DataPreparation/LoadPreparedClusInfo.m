@@ -97,7 +97,11 @@ if Params.UnitMatch
     for imroid = 1:length(UMOutputAll)
         IMROId = strsplit(UMOutputAll(imroid).folder,'\');
         IMROId = strsplit(IMROId{end-1},'_');
-        IMROId = str2num(IMROId{end});
+        if strcmp(IMROId,'AllIMRO')
+            IMROId = 0;
+        else
+            IMROId = str2num(IMROId{end});
+        end
         if Params.separateIMRO & isempty(IMROId)
             continue
         end
