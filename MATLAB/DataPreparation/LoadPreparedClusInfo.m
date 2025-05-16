@@ -97,7 +97,7 @@ if Params.UnitMatch
     for imroid = 1:length(UMOutputAll)
         IMROId = strsplit(UMOutputAll(imroid).folder,'\');
         IMROId = strsplit(IMROId{end-1},'_');
-        if strcmp(IMROId,'AllIMRO')
+        if strcmp(IMROId,'AllIMRO') & ~Params.separateIMRO
             IMROId = 0;
         else
             IMROId = str2num(IMROId{end});
@@ -131,9 +131,9 @@ if Params.UnitMatch
         end
         sp.AdjustedspikeDepth = sp.spikeDepths;
         for clusid=1:length(TheseClus)
-            sp.UniqClu(sp.clu==clusinfo.cluster_id(TheseClus(clusid)) & sp.RecSes==clusinfo.RecSesID(TheseClus(clusid))) = clusinfo.UniqueID(clusid);
-            sp.SpikeOnProbe(sp.clu==clusinfo.cluster_id(TheseClus(clusid)) & sp.RecSes==clusinfo.RecSesID(TheseClus(clusid))) = clusinfo.ProbeID(clusid);
-            sp.AdjustedspikeDepth(sp.clu==clusinfo.cluster_id(TheseClus(clusid)) & sp.RecSes==clusinfo.RecSesID(TheseClus(clusid))) = clusinfo.AdjustedDepth(clusid);
+            sp.UniqClu(sp.clu==clusinfo.cluster_id(TheseClus(clusid)) & sp.RecSes==clusinfo.RecSesID(TheseClus(clusid))) = clusinfo.UniqueID(TheseClus(clusid));
+            sp.SpikeOnProbe(sp.clu==clusinfo.cluster_id(TheseClus(clusid)) & sp.RecSes==clusinfo.RecSesID(TheseClus(clusid))) = clusinfo.ProbeID(TheseClus(clusid));
+            sp.AdjustedspikeDepth(sp.clu==clusinfo.cluster_id(TheseClus(clusid)) & sp.RecSes==clusinfo.RecSesID(TheseClus(clusid))) = clusinfo.AdjustedDepth(TheseClus(clusid));
 
         end
         recsesidxIncluded(recsesidx2) = 1;
