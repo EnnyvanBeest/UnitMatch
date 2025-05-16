@@ -313,7 +313,7 @@ while flag<2
 
     clear x1 x2 tmpEu
     % Average location
-    CentroidDist = squeeze(nanmin(squeeze(EuclDist(:,param.NewPeakLoc-param.waveidx==0,:,:)),[],2));%
+    CentroidDist = squeeze(nanmin(EuclDist(:,param.NewPeakLoc-param.waveidx==0,:,:),[],3));%
 
 
     % Normalize each of them from 0 to 1, 1 being the 'best'
@@ -329,7 +329,7 @@ while flag<2
 
     % Variance in error, corrected by average error. This captures whether
     % the trajectory is consistenly separate
-    CentroidVar = squeeze(min(squeeze(nanvar(EuclDist,[],2)),[],2));%./nanmean(EuclDist,2)+nanmean(EuclDist,2));
+    CentroidVar = squeeze(min(nanvar(EuclDist,[],2),[],3));%./nanmean(EuclDist,2)+nanmean(EuclDist,2));
     CentroidVar = sqrt(CentroidVar);
     CentroidVar = 1-((CentroidVar-nanmin(CentroidVar(:)))./(quantile(CentroidVar(:),0.99)-nanmin(CentroidVar(:)))); %Average difference
     CentroidVar(CentroidVar<0) = 0;
@@ -635,7 +635,7 @@ while flag<2
 
     disp(['Extracting projected location took ' num2str(toc(timercounter)) ' seconds for ' num2str(nclus) ' units'])
     % Average EuclDist
-    EuclDist = squeeze(nanmin(squeeze(EuclDist(:,param.NewPeakLoc-param.waveidx==0,:,:)),[],2));%
+    EuclDist = squeeze(nanmin(EuclDist(:,param.NewPeakLoc-param.waveidx==0,:,:),[],3));%
 
     % Plotting order (sort units based on distance)
     [~,SortingOrder] = arrayfun(@(X) sort(EuclDist(1,SessionSwitch(X):SessionSwitch(X+1)-1)),1:ndays,'Uni',0);

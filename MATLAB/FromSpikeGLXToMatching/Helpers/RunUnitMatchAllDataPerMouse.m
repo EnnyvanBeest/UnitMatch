@@ -157,6 +157,8 @@ for midx = 1:length(MiceOpt)
 
     ORIParams = PipelineParams; % RESET
 
+    StartUID = 1; % To continue UIDs over an entire dataset (per mouse)
+
     %% Run UnitMatch
     for runid = 1:nRuns
         try
@@ -218,9 +220,12 @@ for midx = 1:length(MiceOpt)
                 %% Actual UnitMatch & Unique UnitID assignment
                 [UniqueIDConversion, MatchTable, WaveformInfo, UMparam] = UnitMatch(clusinfo, UMparam);
                 if UMparam.AssignUniqueID
-                    [UniqueIDConversion, MatchTable] = AssignUniqueID(UMparam.SaveDir);
+                    [UniqueIDConversion, MatchTable] = AssignUniqueID(UMparam.SaveDir,StartUID);
                 end
                 UMtime = toc(UMtime)
+
+                % Update:
+                StartUID = StartUID+max(UniqueIDConversion.UniqueID);
 
                 % Save phy similarity info for individual sessions
                 SaveWithinSessionProba_forPhy(UMparam.SaveDir)

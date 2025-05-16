@@ -67,6 +67,9 @@ if ~histodone %Just in case it's not done yet
             % If available; find actual depth in brain
             % corresponding to this:
             trackcoordinates = arrayfun(@(X) readNPY(fullfile(histofile(X).folder,strrep(histofile(X).name,'.csv','.npy'))),1:length(histofile),'UniformOutput',0);
+            for shid = 1:numel(histinfo)
+                trackcoordinates{shid} = trackcoordinates{shid}(1:size(histinfo{shid},1),:);
+            end
             % Align ephys data with probe
             if exist('lfpD') && ~isempty(lfpD)
                 Depth2Area  = alignatlasdata_automated(histinfo,AllenCCFPath,sp,clusinfo,0,0,fullfile(lfpD.folder,lfpD.name),2,trackcoordinates);
@@ -116,7 +119,7 @@ if exist('tmp') && isstruct(tmp) && isfield(tmp,'VRDat')
 
     myKsDir = dir(fullfile(KilosortDir,tmp.VRDat.Mouse(1,:),tmp.VRDat.Date(1,:),thisprobe,'**','PreparedData.mat'));
     if numel(myKsDir)>1
-        mostlikely = false(1,numel(myKsDir));
+        mostlikely = zeros(1,numel(myKsDir));
         for kid = 1:numel(myKsDir)
             tmpspl = strsplit(myKsDir(kid).folder,filesep);
             if strcmp(tmpspl{end},'s')
@@ -131,11 +134,12 @@ if exist('tmp') && isstruct(tmp) && isfield(tmp,'VRDat')
                 PipelineParams.SaveDir = tmpload.SessionParams.SaveDir;
                 [clusinfo, ~, ~]  = LoadPreparedClusInfo({myKsDir(ksid).folder},PipelineParams);
 
-                if all(ismember(tmp.VRDat.clusid,clusinfo.cluster_id))
-                    mostlikely(ksid)=1;
+                if all(ismember(tmp.VRDat.clusid,clusinfo.cluster_id(logical(clusinfo.Good_ID))))
+                    mostlikely(ksid)=sum(ismember(clusinfo.cluster_id(logical(clusinfo.Good_ID)),tmp.VRDat.clusid))./numel(clusinfo.cluster_id(logical(clusinfo.Good_ID)));
                 end
             end
-            myKsDir = myKsDir(mostlikely);
+            [~,maxid] = max(mostlikely);
+            myKsDir = myKsDir(maxid);
         end
     end
     tmpload = load(fullfile(myKsDir.folder,myKsDir.name),'SessionParams');
@@ -143,10 +147,23 @@ if exist('tmp') && isstruct(tmp) && isfield(tmp,'VRDat')
     [clusinfo, ~, ~]  = LoadPreparedClusInfo({myKsDir.folder},PipelineParams);
 end
 if exist('clusinfo','var') & ~isempty(Depth2Area)
-    [mindist,DistIdx] = nanmin(abs(clusinfo.AdjustedDepth - Depth2Area.Depth')+abs(clusinfo.Shank-Depth2Area.Shank')*1000,[],2);
+    rgbColors = cell2mat(cellfun(@hex2rgb, Depth2Area.Color, 'Uni', 0));
+    grayMask = std(rgbColors, 0, 2) < 0.05;  % threshold can be adjusted
+
+    % Calculate all distances
+    allDists = abs(clusinfo.AdjustedDepth - Depth2Area.Depth') + abs(clusinfo.Shank - Depth2Area.Shank') * 1000;
+
+    % Set distances to gray areas to Inf
+    allDists(:, grayMask) = Inf;
+
+    % Get closest non-gray region
+    [mindist, DistIdx] = nanmin(allDists, [], 2);
+
+    % Assign
     clusinfo.Area = lower(Depth2Area.Area(DistIdx));
-    clusinfo.Color = cell2mat(arrayfun(@(X) hex2rgb(Depth2Area.Color{X}),DistIdx,'Uni',0));
-    clusinfo.Coordinates = Depth2Area.Coordinates(DistIdx,:);
+    clusinfo.Color = cell2mat(arrayfun(@(X) hex2rgb(Depth2Area.Color{X}), DistIdx, 'Uni', 0));
+    clusinfo.Coordinates = Depth2Area.Coordinates(DistIdx, :);
+
 
 
     %% I only care about certain levels of histology - not layer specificity at this point

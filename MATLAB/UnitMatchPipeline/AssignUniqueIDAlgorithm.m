@@ -1,4 +1,7 @@
-function [MatchTable, UniqueIDConversion] = AssignUniqueIDAlgorithm(MatchTable, UniqueIDConversion, UMparam)
+function [MatchTable, UniqueIDConversion] = AssignUniqueIDAlgorithm(MatchTable, UniqueIDConversion, UMparam, StartUID)
+if nargin<4
+    StartUID = 1;
+end
 %% Input:
 % UniqueIDConversion (struct) with at east per cluster: OriginalClusID, GoodID & recsesAll
 % A MatchTable (output table from UnitMatch)
@@ -8,7 +11,7 @@ disp('Assigning correct Unique ID values now')
 
 %% Extract cluster information
 AllClusterIDs = UniqueIDConversion.OriginalClusID;
-UniqueIDLiberal = 1:length(AllClusterIDs); % Initial assumption: All clusters are unique
+UniqueIDLiberal = StartUID:StartUID+length(AllClusterIDs)-1; % Initial assumption: All clusters are unique
 OriUniqueID = UniqueIDLiberal; % original
 UniqueIDConservative = UniqueIDLiberal;% Conservative equivalent
 UniqueID = UniqueIDLiberal; %Intermediate;
