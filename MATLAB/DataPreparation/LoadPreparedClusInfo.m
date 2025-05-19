@@ -94,7 +94,11 @@ if Params.UnitMatch
     disp('Assigning correct unique ID')
     PartsPath = strsplit(Params.SaveDir,'\');
     UMOutputAll = dir(fullfile(PartsPath{1},PartsPath{2},PartsPath{3},'**','UnitMatch','UnitMatch.mat'));
+    nAssigned = 0;
     for imroid = 1:length(UMOutputAll)
+        if nAssigned >= numel(KiloSortPaths) % Already have all information
+            break
+        end
         IMROId = strsplit(UMOutputAll(imroid).folder,'\');
         IMROId = strsplit(IMROId{end-1},'_');
         if strcmp(IMROId,'AllIMRO') & ~Params.separateIMRO
@@ -112,7 +116,10 @@ if Params.UnitMatch
         recsesidx2 = find(ismember(KiloSortPaths,UMparam.KSDir));
         if ~any(recsesidx)
             continue
+        else
+            nAssigned = nAssigned + 1;
         end
+
         UMOutput = load(fullfile(UMOutputAll(imroid).folder,UMOutputAll(imroid).name),'UMparam','UniqueIDConversion');       
         UniqueIDConversion = UMOutput.UniqueIDConversion;
         

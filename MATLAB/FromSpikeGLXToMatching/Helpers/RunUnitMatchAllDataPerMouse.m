@@ -92,7 +92,7 @@ for midx = 1:length(MiceOpt)
     %% Remove old copies?
     UnitMatchExist = dir(fullfile(SaveDir,MiceOpt{midx},'**','UnitMatch.mat'));
     if ~isempty(UnitMatchExist)
-        MouseAllDone = 0;
+        MouseAllDone = 1;
     else 
         MouseAllDone = 0;
     end

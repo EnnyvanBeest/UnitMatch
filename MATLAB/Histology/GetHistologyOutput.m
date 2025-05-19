@@ -30,6 +30,7 @@ if ~histodone %Just in case it's not done yet
         end
         if isempty(histofile)
             % Maybe chronic?
+            try
             myLFDir = dir(Params.RawDataPaths{1});
             MetaFileDir = dir(fullfile(myLFDir.folder,'*.meta'));
             ImecMeta =ReadMeta2(fullfile(MetaFileDir(1).folder,MetaFileDir(1).name));
@@ -38,6 +39,10 @@ if ~histodone %Just in case it's not done yet
             histofile = dir(fullfile(HistoFolder,MiceOpt{midx},'ProbeTracks',['*' ProbeSN],'*.csv')); % Use Probe Serial Number is safest!
             if isempty(histofile)
                 histofile = dir(fullfile(HistoFolder,MiceOpt{midx},'ProbeTracks',thisprobe,'*.csv'));
+            end
+            catch ME
+                disp(ME)
+
             end
         end
         if length(histofile)>1
