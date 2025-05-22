@@ -37,16 +37,24 @@ activityClusters = cell(numShanks, 1);
 MUACorr = cell(numShanks, 1);
 depthEdges = cell(numShanks, 1);
 for shank = 1:numShanks
+
+    % Autocorrelation of spikes
+    [autocorr{shank}, depthCenters{shank}] = computeAutocorrByDepth(spikeTimes, spikeDepths, 1, 50, 50);
+    % Activity per bin
     [activityClusters{shank}, MUACorr{shank}, firingRates{shank}, depthEdges{shank}] = computeFunctionalClusters(spikeTimes(spikeID), spikeDepths(spikeID), histinfo{shank});
     % Identify valid depths:
     minDepth = min(spikeDepths); %always the tip
     firingRates{shank} = smoothdata(firingRates{shank},'gaussian',floor(500./nanmedian(unique(diff(depthEdges{shank})))));
     firstactivity = find(firingRates{shank}>0.1,1,'first');
-    maxDepthtmp =  depthEdges{shank}(find(firingRates{shank}(firstactivity:end)<1,1,'first')+firstactivity-1);
+    maxDepthtmp1 =  depthEdges{shank}(find(firingRates{shank}(firstactivity:end)<1,1,'first')+firstactivity-1);
+    autoCorrVar = smoothdata(nanvar(autocorr{shank},[],2),'gaussian',floor(500./nanmedian(unique(diff(depthCenters{shank})))));
+    autoCorrVar = autoCorrVar./nanmax(autoCorrVar);
+    maxDepthtmp2 = depthCenters{shank}(find(autoCorrVar>0.1,1,'last'));
+    maxDepthtmp = min([maxDepthtmp1,maxDepthtmp2]);
     if isempty(maxDepthtmp)
         maxDepthtmp = depthEdges{shank}(end)./2;
     end
-    maxDepth{shank} = max(maxDepthtmp,max(clusinfo.depth(logical(clusinfo.Good_ID))));
+    maxDepth{shank} = maxDepthtmp;
 end
 maxDepth = nanmean(cat(1,maxDepth{:}));
 
@@ -169,6 +177,68 @@ firingRates = mean(spikeHist, 2);
 activityClusters = cat(2,activityClusters,firingRates/ max(mean(spikeHist, 2)));
 end
 
+function [autocorrMatrix, depthCenters] = computeAutocorrByDepth(spikeTimes, spikeDepths, binSizeMs, maxLagMs, depthBinSize)
+% Compute and plot spike autocorrelation across probe depth bins
+%
+% Inputs:
+%   spikeTimes     - vector of spike times (in seconds)
+%   spikeDepths    - vector of spike depths (in microns)
+%   binSizeMs      - temporal bin size for autocorrelation (ms)
+%   maxLagMs       - max lag for autocorrelation (ms)
+%   depthBinSize   - depth bin size (microns)
+
+% Set up depth bins
+minDepth = floor(min(spikeDepths));
+maxDepth = ceil(max(spikeDepths));
+depthEdges = minDepth:depthBinSize:maxDepth;
+depthCenters = depthEdges(1:end-1) + depthBinSize/2;
+
+% Preallocate
+maxLagBins = round(maxLagMs / binSizeMs);
+lagRange = -maxLagBins:maxLagBins;
+nLags = length(lagRange);
+nBins = length(depthCenters);
+autocorrMatrix = nan(nBins, nLags);
+
+% Loop through depth bins
+for i = 1:nBins
+    depthRange = [depthEdges(i), depthEdges(i+1)];
+    
+    % Filter spike times
+    inRange = spikeDepths >= depthRange(1) & spikeDepths < depthRange(2);
+    times = spikeTimes(inRange);
+    
+    if numel(times) < 50
+        continue; % Skip bins with too few spikes
+    end
+
+    % Bin spikes
+    binSizeSec = binSizeMs / 1000;
+    minTime = min(times);
+    maxTime = max(times);
+    edges = minTime:binSizeSec:maxTime;
+    binnedSpikes = histcounts(times, edges);
+    
+    % Compute autocorrelation
+    [ac, ~] = xcorr(binnedSpikes, maxLagBins, 'coeff');
+    
+    % Remove zero-lag if desired
+    ac(maxLagBins+1) = 0;
+    
+    % Store
+    autocorrMatrix(i, :) = ac;
+end
+
+% Plot
+figure;
+imagesc(lagRange * binSizeMs, depthCenters, autocorrMatrix);
+xlabel('Lag (ms)');
+ylabel('Depth (µm)');
+title('Spike Autocorrelation Across Depth');
+colormap turbo;
+colorbar;
+set(gca, 'YDir', 'normal'); % depth upwards
+end
 
 function alignedHistology = stretchHistology(histinfo, activityClusters, MUACorr, histDepths, firingRates, trackcoordinates, structureTree)
 % Compute functional area transitions using both NMF and MUA correlations
@@ -223,7 +293,7 @@ for parid = 1:numel(uniqueParentArea)
     ThisAreaidx = find(ismember(parentArea,uniqueParentArea(parid)) & ~alreadyused,1,'first');%identify first occurance of this area
 
     if ~grayLike(ThisAreaidx)
-        
+
         numPerParent(parid) = numel(histinfo.Position(find(ismember(histinfo.RegionAcronym(startidx:stopidx),uniqueAreas(ismember(parentArea,parentArea(ThisAreaidx)))))+startidx-1));
         EFRPerParent(parid) = nanmean(EFR(ismember(parentArea,parentArea(ThisAreaidx))));
         alreadyused(1:NextAreaidx-1) = true;
@@ -336,7 +406,7 @@ newDepths(newDepths<0) = 0; % Remove extremes
 newDepths(newDepths>max(histDepths)) = max(histDepths);
 
 for dimid = 1:size(newTrackcoordinates,2)
-    newTrackcoordinates(:,dimid) = fillmissing(newTrackcoordinates(:,dimid),'linear')
+    newTrackcoordinates(:,dimid) = fillmissing(newTrackcoordinates(:,dimid),'linear');
 end
 % [newDepths,sortidx] = sort(newDepths,'ascend');
 histinfo.Depth = newDepths';
