@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.signal import detrend
 import h5py, os
+from pathlib import Path
 from utils.myutil import get_default_param
 
 def detrend_waveform(waveform):
@@ -138,7 +139,24 @@ def extract_Rwaveforms(waveform, ChannelPos,ChannelMap, param):
     
     return MaxSiteMean, MaxSitepos, sorted_goodChannelMap, sorted_goodpos, Rwaveform
 
-def get_snippets(waveforms, ChannelPos):
+def save_waveforms_hdf5(file_name, Rwaveform, MaxSitepos, session):
+    """
+    Saves the preprocessed, reduced waveform and the max site position as a HDF5 file.
+    """
+    current_dir = Path(__file__).parent.parent
+    dest_path = os.path.join(current_dir, "processed_waveforms", str(session), file_name)
+    dest_directory = os.path.dirname(dest_path)
+    os.makedirs(dest_directory, exist_ok=True)
+
+    new_data = {
+        "waveform": Rwaveform,          # (60,30,2) 
+        "MaxSitepos": MaxSitepos
+    }
+    with h5py.File(dest_path, 'w') as f:
+        for key, value in new_data.items():
+            f.create_dataset(key, data=value)
+
+def get_snippets(waveforms, ChannelPos, session_id):
     """
     Convert raw waveforms from a pair of sessions (waveforms) to snippets with shape (60,30,2).
 
@@ -177,6 +195,8 @@ def get_snippets(waveforms, ChannelPos):
             # Clean data - go ahead as normal
             MaxSiteMean, MaxSitepos, sorted_goodChannelMap, sorted_goodpos, Rwaveform = extract_Rwaveforms(unit, ChannelPos, ChannelMap, params)
         
+        save_waveforms_hdf5(f'Unit{i}.npy', Rwaveform, MaxSitepos, session_id[i])
+    
         processed_waveforms.append(Rwaveform)
         positions.append(MaxSitepos)
 
