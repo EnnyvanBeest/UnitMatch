@@ -15,8 +15,6 @@ import pandas as pd
 from pathlib import Path
 # from testing.isi_corr import plot_edf5, get_corrections, vectorized_drift_corrected_dist, remove_conflicts, avg_across_directions
 # from testing.func_match import func_matches, get_matches, AUC
-from utils.myutil import mtpath_to_expids, read_pos
-
 
 def load_trained_model(device="cpu"):
 
@@ -84,39 +82,39 @@ def inference(model, data_dir):
 
     return result
 
-def spatial_filter(mt_path:str, matches:pd.DataFrame, dist_thresh=None, drift_corr=True, plot_drift=False):
-    """
-    Input is a dataframe of potential matches (according to some threshold, e.g. DNNSim)
-    Output is a reduced dataframe after filtering out matches that are spatially distant.
-    dist_thresh can take a numerical value, or set it to None to just reject the 50% of matches 
-    with greatest Euclidean distance.
+# def spatial_filter(mt_path:str, matches:pd.DataFrame, dist_thresh=None, drift_corr=True, plot_drift=False):
+#     """
+#     Input is a dataframe of potential matches (according to some threshold, e.g. DNNSim)
+#     Output is a reduced dataframe after filtering out matches that are spatially distant.
+#     dist_thresh can take a numerical value, or set it to None to just reject the 50% of matches 
+#     with greatest Euclidean distance.
 
-    Args:
-        mt_path (str): Path to the matchtable.
-        matches (pd.DataFrame): DataFrame containing potential matches.
-        dist_thresh (Optional[float]): Maximum allowed Euclidean distance. If None, filters out the 50% most distant matches.
-        drift_corr (bool): Whether to apply drift correction. Defaults to True.
-        plot_drift (bool): Whether to plot drift correction visualization. Defaults to False.
-    """
-    if len(matches) < 1:
-        return matches
-    exp_ids, metadata = mtpath_to_expids(mt_path, matches)
-    test_data_root = mt_path[:mt_path.find(metadata["mouse"])]
-    positions = {}
-    for recses, exp_id in exp_ids.items():
-        fp = os.path.join(test_data_root, metadata["mouse"], metadata["probe"], 
-                          metadata["loc"], exp_id, "processed_waveforms")
-        pos_dict = read_pos(fp)
-        positions[recses] = pd.DataFrame(pos_dict)
-    if drift_corr:
-        corrections = get_corrections(matches, positions)
-    # plot_distances(matches, positions, corrections=corrections)
-    matches_with_dist = vectorized_drift_corrected_dist(corrections, positions, matches)
-    if not dist_thresh:
-        matches_with_dist.sort_values(by = "dist", inplace=True)
-        return matches_with_dist.head(len(matches)//2)
-    else:
-        return matches_with_dist.loc[matches_with_dist["dist"]<dist_thresh]
+#     Args:
+#         mt_path (str): Path to the matchtable.
+#         matches (pd.DataFrame): DataFrame containing potential matches.
+#         dist_thresh (Optional[float]): Maximum allowed Euclidean distance. If None, filters out the 50% most distant matches.
+#         drift_corr (bool): Whether to apply drift correction. Defaults to True.
+#         plot_drift (bool): Whether to plot drift correction visualization. Defaults to False.
+#     """
+#     if len(matches) < 1:
+#         return matches
+#     exp_ids, metadata = mtpath_to_expids(mt_path, matches)
+#     test_data_root = mt_path[:mt_path.find(metadata["mouse"])]
+#     positions = {}
+#     for recses, exp_id in exp_ids.items():
+#         fp = os.path.join(test_data_root, metadata["mouse"], metadata["probe"], 
+#                           metadata["loc"], exp_id, "processed_waveforms")
+#         pos_dict = read_pos(fp)
+#         positions[recses] = pd.DataFrame(pos_dict)
+#     if drift_corr:
+#         corrections = get_corrections(matches, positions)
+#     # plot_distances(matches, positions, corrections=corrections)
+#     matches_with_dist = vectorized_drift_corrected_dist(corrections, positions, matches)
+#     if not dist_thresh:
+#         matches_with_dist.sort_values(by = "dist", inplace=True)
+#         return matches_with_dist.head(len(matches)//2)
+#     else:
+#         return matches_with_dist.loc[matches_with_dist["dist"]<dist_thresh]
 
 def directional_filter(matches: pd.DataFrame):
     filtered_matches = matches.copy()

@@ -7,16 +7,8 @@ from pathlib import Path
 import random
 import numpy as np
 import h5py
-import torch
-import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader,Sampler
+from torch.utils.data import Dataset, Sampler
 
-
-if __name__ == '__main__':
-    from myutil import read_good_id_from_mat, select_good_units_files,is_date_filename, read_good_ids, read_good_files
-else:
-    from utils.myutil import read_good_id_from_mat,select_good_units_files,is_date_filename, read_good_ids, read_good_files
-    
 class NeuropixelsDataset(Dataset):
     def __init__(self, data_dir:str, batch_size=1, mode='val'):
         """
