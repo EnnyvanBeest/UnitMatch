@@ -46,7 +46,7 @@ for shank = 1:numShanks
     minDepth = min(spikeDepths); %always the tip
     firingRates{shank} = smoothdata(firingRates{shank},'gaussian',floor(500./nanmedian(unique(diff(depthEdges{shank})))));
     firstactivity = find(firingRates{shank}>0.1,1,'first');
-    maxDepthtmp1 =  depthEdges{shank}(find(firingRates{shank}(firstactivity:end)<1,1,'first')+firstactivity-1);
+    maxDepthtmp1 =  depthEdges{shank}(find(firingRates{shank}(firstactivity:end)>1,1,'last')+firstactivity-1);
     autoCorrVar = smoothdata(nanvar(autocorr{shank},[],2),'gaussian',floor(500./nanmedian(unique(diff(depthCenters{shank})))));
     autoCorrVar = autoCorrVar./nanmax(autoCorrVar);
     maxDepthtmp2 = depthCenters{shank}(find(autoCorrVar>0.1,1,'last'));
@@ -57,6 +57,7 @@ for shank = 1:numShanks
     maxDepth{shank} = maxDepthtmp;
 end
 maxDepth = nanmean(cat(1,maxDepth{:}));
+DepthRange = maxDepth - minDepth;
 
 % Compute functional clustering (NMF, firing rates, correlation) for each shank
 % Adjust histinfo
@@ -71,10 +72,11 @@ for shank = 1:numShanks
     probeLengths{shank} = sqrt(sum(trackcoordinates{shank}-trackcoordinates{shank}(end,:),2).^2); % Distance per segment
     totalProbeLength{shank} = max(probeLengths{shank}); % Total depth from the brain surface
 
-    if totalProbeLength{shank}>maxDepth
-        histinfo{shank}(1:sum(probeLengths{shank}>maxDepth),:) = [];% Remove these entries - more likely to remove from the bottom
-        trackcoordinates{shank}(1:sum(probeLengths{shank}>maxDepth),:) = [];
-        probeLengths{shank}(1:sum(probeLengths{shank}>maxDepth)) = [];
+    if totalProbeLength{shank}>DepthRange
+        removeId = probeLengths{shank}>maxDepth | probeLengths{shank}<minDepth;  %  Remove these entries 
+        histinfo{shank}(removeId,:) = [];%- 
+        trackcoordinates{shank}(removeId,:) = [];
+        probeLengths{shank}(removeId) = [];
     end
 
 end
@@ -306,7 +308,7 @@ for parid = 1:numel(uniqueParentArea)
 
 end
 % Convert this into distance
-CoveragePerParent = numPerParent.*max(histDepths)/height(histinfo);
+CoveragePerParent = numPerParent.*(max(histDepths)-min(histDepths))/height(histinfo);
 
 % Identify low firing depths
 % smoothFiringRates = smoothdata(firingRates, 'gaussian', 4);
@@ -335,6 +337,9 @@ SaveStopID = [];
 PeakVal = quantile(Borders,1-sum(isnan(CoveragePerParent))./numel(Borders));
 while stopid<numel(histDepths)
     stopid = find(Borders(starterid+2:end) >= PeakVal, 1, 'first') + starterid + 1;
+    if isempty(stopid)
+        break
+    end
     SaveStopID = [SaveStopID stopid];
     if isempty(stopid), stopid = numel(histDepths); end
     CoverageBetweenLowFRs = [CoverageBetweenLowFRs histDepths(stopid) - histDepths(starterid)];
@@ -399,14 +404,43 @@ for id = 1:max(assignment)
         end
     end
 end
+PosOrNeg = sign(nanmean(diff(histDepths)));
 
-
-newDepths = fillmissing(newDepths,'linear');
+if isnan(newDepths(1))
+    if PosOrNeg>0
+        newDepths(1) = min(histDepths);
+    else
+        newDepths(1) = max(histDepths);
+    end
+end
+if isnan(newDepths(end))
+    if PosOrNeg>0
+        newDepths(end) = max(histDepths);
+    else
+        newDepths(end) = min(histDepths);
+    end
+end
+newDepths = fillmissing(newDepths,'linear','EndValues','none');
 newDepths(newDepths<0) = 0; % Remove extremes
 newDepths(newDepths>max(histDepths)) = max(histDepths);
 
 for dimid = 1:size(newTrackcoordinates,2)
-    newTrackcoordinates(:,dimid) = fillmissing(newTrackcoordinates(:,dimid),'linear');
+    PosOrNeg = sign(nanmean(diff(trackcoordinates(:,dimid))));
+    if isnan( newTrackcoordinates(1,dimid))
+        if PosOrNeg>0
+            newTrackcoordinates(1,dimid) = min(trackcoordinates(:,dimid));
+        else
+            newTrackcoordinates(1,dimid) = max(trackcoordinates(:,dimid));
+        end
+    end
+    if isnan( newTrackcoordinates(end,dimid))
+        if PosOrNeg>0
+            newTrackcoordinates(end,dimid) = max(trackcoordinates(:,dimid));
+        else
+            newTrackcoordinates(end,dimid) = min(trackcoordinates(:,dimid));
+        end
+    end
+    newTrackcoordinates(:,dimid) = fillmissing(newTrackcoordinates(:,dimid),'linear','EndValues','none');
 end
 % [newDepths,sortidx] = sort(newDepths,'ascend');
 histinfo.Depth = newDepths';

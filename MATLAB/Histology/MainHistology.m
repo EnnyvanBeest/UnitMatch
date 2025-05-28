@@ -1,7 +1,7 @@
 %% User Input
-NewHistologyNeeded = 0; %Automatically to 1 after RedoAfterClustering
+NewHistologyNeeded = 1; %Automatically to 1 after RedoAfterClustering
 RedoAfterClustering = 0;
-RedoUserInput = 0;
+RedoUserInput = 1;
 UseLFP = 0;
 % directory of reference atlas files
 ann = 10; %Steps in micron that's used
@@ -169,6 +169,7 @@ for midx = 1:length(MiceOpt)
                         DrawProbeInBrain
                         nInsertionsIncluded = nInsertionsIncluded + 1;
                         nMiceIncluded(midx) = true;
+                        thefirstperprobe(probeid) = 1;
                         continue
                     end
                 elseif ~multidate
@@ -367,7 +368,7 @@ set(fwireframe,'Units','normalized','Position',[0 0 1 1])
 
 disp([num2str(nInsertionsIncluded) ' insertions included in ' num2str(sum(nMiceIncluded)) ' mice'])
 
-spinningGIF(fullfile(SaveDir,'ProbeInsertionsAcrossMice.gif'))
+% spinningGIF(fullfile(SaveDir,'ProbeInsertionsAcrossMice.gif'))
 
 
 
