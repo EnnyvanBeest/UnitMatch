@@ -4,6 +4,7 @@ dependencies:
   - python>3.7,<3.11
   - numpy
   - matplotlib
+  - pip
   - pip:
     - scipy
     - pandas
@@ -13,3 +14,6 @@ dependencies:
     - tqdm
     - spikeinterface
     - h5py
+    - scikit-learn
+    - pytorch
+    - ipykernel
