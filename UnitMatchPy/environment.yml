@@ -12,3 +12,4 @@ dependencies:
     - tk
     - tqdm
     - spikeinterface
+    - h5py
