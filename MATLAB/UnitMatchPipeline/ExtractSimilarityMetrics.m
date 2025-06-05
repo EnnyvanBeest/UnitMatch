@@ -890,7 +890,7 @@ while flag<2
     %     scatter(find(SortingOrder==Pairs(1)),find(SortingOrder==Pairs(2)),5,cols(2,:),'filled')
 
 
-    param.nExpectedMatches = sum(TotalScore(:)>ThrsOpt);
+    param.nExpectedMatches = sum(TotalScore(IncludeThesePairs)>ThrsOpt);
 
     priorMatch = 1-(param.nExpectedMatches./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days) % Times 2 for symmetry
     if param.nExpectedMatches==0 || priorMatch == 1

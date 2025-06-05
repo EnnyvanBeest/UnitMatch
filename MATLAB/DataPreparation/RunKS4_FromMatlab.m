@@ -303,6 +303,7 @@ for midx = 1:length(MiceOpt)
                     catch ME
                         disp(ME)
                         disp([fullfile(tmpdatafolder,tmpfile(sesid).name) ' not successfull... skip'])
+                        
                         continue
                     end
 

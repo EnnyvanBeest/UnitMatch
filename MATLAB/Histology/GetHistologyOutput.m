@@ -117,7 +117,7 @@ end
 
 % Add information to clusinfo
 
-if exist('tmp') && isstruct(tmp) && isfield(tmp,'VRDat')
+if exist('tmp') && isstruct(tmp) && isfield(tmp,'VRDat') && ~isfield(tmp,'clusinfo')
     myKsDir = dir(fullfile(SaveDir,tmp.VRDat.Mouse(1,:),tmp.VRDat.Date(1,:),tmp.VRDat.Session(1,:),thisprobe,'SpikeData.mat'));
     tmpload = load(fullfile(myKsDir.folder,myKsDir.name));
     clusinfo = tmpload.clusinfo;

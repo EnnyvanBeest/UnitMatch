@@ -1,5 +1,5 @@
 %% User Input
-NewHistologyNeeded = 1; %Automatically to 1 after RedoAfterClustering
+NewHistologyNeeded = 0; %Automatically to 1 after RedoAfterClustering
 RedoAfterClustering = 0;
 RedoUserInput = 1;
 UseLFP = 0;
@@ -368,7 +368,7 @@ set(fwireframe,'Units','normalized','Position',[0 0 1 1])
 
 disp([num2str(nInsertionsIncluded) ' insertions included in ' num2str(sum(nMiceIncluded)) ' mice'])
 
-% spinningGIF(fullfile(SaveDir,'ProbeInsertionsAcrossMice.gif'))
+spinningGIF(fullfile(SaveDir,'ProbeInsertionsAcrossMice.gif'))
 
 
 
