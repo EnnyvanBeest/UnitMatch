@@ -1200,16 +1200,16 @@ def plot_avg_waveforms(UnitA, UnitB, CV):
     if CV =='Avg':
         plt1.plot(avg_waveform_avg[:,UnitA], 'g', label=f'Unit A ({UnitA})')
         plt1.plot(avg_waveform_avg[:,UnitB], 'b', label=f'Unit B ({UnitB})')
-        plt1.set_xlabel('Time')
-        plt1.set_ylabel('Amplitude')
+        plt1.set_xlabel('Time (ms)')
+        plt1.set_ylabel('Amplitude (µV)')
         # plt1.set_xlim(left = 0)
         # plt1.set_xticks([])
 
     else:
         plt1.plot(avg_waveform[:,UnitA,CV[0]], 'g', label=f'Unit A ({UnitA})')
         plt1.plot(avg_waveform[:,UnitB,CV[1]], 'b', label=f'Unit B ({UnitB})')
-        plt1.set_xlabel('Time')
-        plt1.set_ylabel('Amplitude')
+        plt1.set_xlabel('Time (ms)')
+        plt1.set_ylabel('Amplitude (µV)')
         # plt1.set_xlim(left = 0)
 
     avg_waveform_plot = FigureCanvasTkAgg(fig, master = root)
@@ -1242,8 +1242,8 @@ def plot_trajectories(UnitA, UnitB, CV):
         plt2.plot(avg_waveform_per_tp_avg[1,UnitB,wave_idx[UnitB,:,0].astype(bool)], avg_waveform_per_tp_avg[2,UnitB,wave_idx[UnitB,:,0].astype(bool)],'b', label=f'Unit B ({UnitB})')
         plt2.scatter(avg_centroid_avg[1,UnitB], avg_centroid_avg[2,UnitB], c = 'b')
 
-        plt2.set_xlabel(r'Xpos ($\mu$m)')
-        plt2.set_ylabel(r'Ypos ($\mu$m)')
+        plt2.set_xlabel(r'X position ($\mu$m)')
+        plt2.set_ylabel(r'Y position ($\mu$m)')
 
     else:
         plt2.plot(avg_waveform_per_tp[1,UnitA,wave_idx[UnitA,:,CV[0]].astype(bool), CV[0]], avg_waveform_per_tp[2,UnitA,wave_idx[UnitA,:,CV[0]].astype(bool), CV[0]], 'g', label=f'Unit A ({UnitA})')
@@ -1252,8 +1252,8 @@ def plot_trajectories(UnitA, UnitB, CV):
         plt2.plot(avg_waveform_per_tp[1,UnitB,wave_idx[UnitB,:,CV[1]].astype(bool), CV[1]], avg_waveform_per_tp[2,UnitB,wave_idx[UnitB,:,CV[1]].astype(bool), CV[1]],'b', label=f'Unit B ({UnitB})')
         plt2.scatter(avg_centroid[1,UnitB,CV[1]], avg_centroid[2,UnitB,CV[1]], c = 'b')
 
-        plt2.set_xlabel(r'Xpos ($\mu$m)')
-        plt2.set_ylabel(r'Ypos ($\mu$m)')
+        plt2.set_xlabel(r'X position ($\mu$m)')
+        plt2.set_ylabel(r'Y position ($\mu$m)')
 
     trajectory_plot=FigureCanvasTkAgg(fig, master = root)
     trajectory_plot.draw()
@@ -1380,8 +1380,8 @@ def plot_raw_waveforms(unit_a, unit_b, CV):
     main_ax.spines.right.set_visible(False)
     main_ax.spines.top.set_visible(False)
     main_ax.set_xticks([min_x, max_x])
-    main_ax.set_xlabel('Xpos ($\mu$m)', size = 14)
-    main_ax.set_ylabel('Ypos ($\mu$m)', size = 14)
+    main_ax.set_xlabel('X position ($\mu$m)', size = 14)
+    main_ax.set_ylabel('Y position ($\mu$m)', size = 14)
     
 
 
@@ -1404,13 +1404,29 @@ def plot_histograms(hist_names, hist, hist_matched, scores_to_include, unit_a, u
     axs = axs.flat
 
 
+    # Create title mapping
+    title_mapping = {
+        'amp_score': 'Amplitude score',
+        'spatial_decay_score': 'Spatial decay score', 
+        'centroid_overlord_score': "C'oid overlord score",
+        'centroid_dist': "C'oid distance score",
+        'waveform_score': 'Waveform score',
+        'trajectory_score': 'Trajectory score'
+    }
+    
     #loop over indexes.. 
     for i in range(len(hist)):
         axs[i].step(hist[i][1][:-1], hist[i][0], color = 'orange', label='All scores' if i == 0 else "")
         axs[i].step(hist_matched[i][1][:-1], hist_matched[i][0], color = 'magenta', label='Expected matches' if i == 0 else "")
         axs[i].set_ylim(bottom=0)
-        axs[i].set_title(hist_names[i], fontsize = 12)
-        #axs[i].get_yaxis().set_visible(False)
+        
+        # Use improved title from mapping
+        plot_title = title_mapping.get(hist_names[i], hist_names[i])
+        axs[i].set_title(plot_title, fontsize = 12)
+        
+        # Add ylabel
+        axs[i].set_ylabel('% units', fontsize=10)
+        
         axs[i].axvline(scores_to_include[hist_names[i]][unit_a,unit_b], ls = '--', color = 'white', label='Current match pair' if i == 0 else "")
         axs[i].set_facecolor('#2d2d2d')
     
