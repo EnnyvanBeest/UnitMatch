@@ -1390,7 +1390,7 @@ def plot_raw_waveforms(unit_a, unit_b, CV):
     raw_waveform_plot = raw_waveform_plot.get_tk_widget()
     #RawWaveformPlot.configure(bg = '#33393b')
 
-    raw_waveform_plot.grid(row = 3, column = 5, columnspan = 2, rowspan = 4, padx = 15, pady = 25, ipadx = 15)
+    raw_waveform_plot.grid(row = 3, column = 2, columnspan = 2, rowspan = 4, padx = 15, pady = 25, ipadx = 15)
 
 def plot_histograms(hist_names, hist, hist_matched, scores_to_include, unit_a, unit_b):
 
@@ -1435,5 +1435,5 @@ def plot_histograms(hist_names, hist, hist_matched, scores_to_include, unit_a, u
     hist_plot.draw()
     hist_plot = hist_plot.get_tk_widget()
 
-    hist_plot.grid(row = 3, column = 3, columnspan = 2, rowspan = 4, padx = 5, pady = 20)
+    hist_plot.grid(row = 3, column = 4, columnspan = 2, rowspan = 4, padx = 5, pady = 20)
 
