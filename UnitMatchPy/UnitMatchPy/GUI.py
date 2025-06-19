@@ -264,8 +264,8 @@ def run_GUI():
     create_unit_legend()
     create_hist_legend()
     
-    unit_legend_plot.grid(row = 5, column = 0, columnspan = 3, sticky = 'W', padx = 10, pady = 5)
-    hist_legend_plot.grid(row = 5, column = 3, columnspan = 4, sticky = 'W', padx = 10, pady = 5)
+    unit_legend_plot.grid(row = 0, column = 7, sticky = 'W', padx = 10, pady = 5)
+    hist_legend_plot.grid(row = 1, column = 7, sticky = 'W', padx = 10, pady = 5)
 
     # Configure grid weights to auto-adjust subpanels
     root.grid_rowconfigure(0, weight=1)
@@ -408,6 +408,59 @@ def process_info_for_GUI(output, match_threshold_in, scores_to_include, total_sc
     avg_waveform_avg = np.mean(avg_waveform, axis = -1)
     avg_waveform_per_tp_avg = np.mean(avg_waveform_per_tp, axis = -1)
 
+def create_unit_legend():
+    """Create visual legend for unit colors"""
+    global unit_legend_plot
+    
+    fig = Figure(figsize=(6, 0.5), dpi=100)
+    fig.patch.set_facecolor('#33393b')
+    
+    ax = fig.add_subplot(111)
+    ax.set_facecolor('#33393b')
+    
+    # Draw legend lines and text
+    ax.plot([0, 0.15], [0.5, 0.5], 'g-', lw=3)
+    ax.text(0.18, 0.5, 'Unit A (Green)', color='white', fontsize=12, va='center')
+    
+    ax.plot([0.6, 0.75], [0.5, 0.5], 'b-', lw=3)
+    ax.text(0.78, 0.5, 'Unit B (Blue)', color='white', fontsize=12, va='center')
+    
+    ax.set_xlim(0, 1.2)
+    ax.set_ylim(0, 1)
+    ax.axis('off')
+    
+    unit_legend_plot = FigureCanvasTkAgg(fig, master=root)
+    unit_legend_plot.draw()
+    unit_legend_plot = unit_legend_plot.get_tk_widget()
+
+def create_hist_legend():
+    """Create visual legend for histogram colors"""
+    global hist_legend_plot
+    
+    fig = Figure(figsize=(8, 0.5), dpi=100)
+    fig.patch.set_facecolor('#33393b')
+    
+    ax = fig.add_subplot(111)
+    ax.set_facecolor('#33393b')
+    
+    # Draw legend elements
+    ax.plot([0, 0.1], [0.5, 0.5], 'orange', lw=3)
+    ax.text(0.12, 0.5, 'All scores', color='white', fontsize=10, va='center')
+    
+    ax.plot([0.35, 0.45], [0.5, 0.5], 'magenta', lw=3)
+    ax.text(0.47, 0.5, 'Expected matches', color='white', fontsize=10, va='center')
+    
+    ax.plot([0.75, 0.85], [0.5, 0.5], 'white', lw=2, linestyle='--')
+    ax.text(0.87, 0.5, 'Current pair', color='white', fontsize=10, va='center')
+    
+    ax.set_xlim(0, 1.2)
+    ax.set_ylim(0, 1)
+    ax.axis('off')
+    
+    hist_legend_plot = FigureCanvasTkAgg(fig, master=root)
+    hist_legend_plot.draw()
+    hist_legend_plot = hist_legend_plot.get_tk_widget()
+
 def update(event):
     """
     Updates the GUI.
@@ -449,29 +502,6 @@ def update(event):
         if hist_plot.winfo_exists() == 1:
             hist_plot.destroy()
     
-    # Update unit legend with session information
-    update_unit_legend(unit_a, unit_b)
-
-def update_unit_legend(unit_a, unit_b):
-    """Update the unit legend with current unit information"""
-    global unit_legend_label
-    global clus_info
-    
-    if unit_legend_label.winfo_exists():
-        # Get session information
-        session_a = clus_info['session_id'][unit_a]
-        session_b = clus_info['session_id'][unit_b]
-        
-        # Get original IDs
-        try:
-            orig_id_a = int(clus_info["original_ids"][unit_a].squeeze())
-            orig_id_b = int(clus_info["original_ids"][unit_b].squeeze())
-        except:
-            orig_id_a = unit_a
-            orig_id_b = unit_b
-        
-        legend_text = f'Green = Unit A (ID={orig_id_a}, Session={session_a+1}), Blue = Unit B (ID={orig_id_b}, Session={session_b+1})'
-        unit_legend_label.config(text=legend_text)
 
 def up_options_b_list(event):
     """  
