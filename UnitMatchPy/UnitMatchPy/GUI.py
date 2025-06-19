@@ -252,11 +252,11 @@ def run_GUI():
     root.bind_all('n', set_not_match)
 
     #Grid the units
-    entry_frame.grid(row = 0, column = 0, pady=5, padx = 5)
-    match_button.grid(row = 4, column = 3, sticky = 'E',  padx = 50, pady = 5)
-    non_match_button.grid(row = 4, column = 4, sticky = 'W', padx = 50, pady = 5)
-    toggle_UM_score_plot.grid(row = 4, column = 5, sticky = 'W',  padx = 50, pady = 5)
-    toggle_raw_plot.grid(row = 4, column = 6, sticky = 'E',  padx = 50, pady = 5)
+    entry_frame.grid(row = 2, column = 0, pady=5, padx = 5)
+    match_button.grid(row = 1, column = 0, sticky = 'W',  padx = 10, pady = 5)
+    non_match_button.grid(row = 1, column = 1, sticky = 'W', padx = 10, pady = 5)
+    toggle_UM_score_plot.grid(row = 1, column = 2, sticky = 'W',  padx = 10, pady = 5)
+    toggle_raw_plot.grid(row = 1, column = 3, sticky = 'W',  padx = 10, pady = 5)
     
     # Create visual legend plots outside plots
     global unit_legend_plot
@@ -264,8 +264,8 @@ def run_GUI():
     create_unit_legend()
     create_hist_legend()
     
-    unit_legend_plot.grid(row = 0, column = 7, sticky = 'W', padx = 10, pady = 5)
-    hist_legend_plot.grid(row = 1, column = 7, sticky = 'W', padx = 10, pady = 5)
+    unit_legend_plot.grid(row = 0, column = 1, columnspan = 2, sticky = 'W', padx = 10, pady = 5)
+    hist_legend_plot.grid(row = 0, column = 3, columnspan = 4, sticky = 'W', padx = 10, pady = 5)
 
     # Configure grid weights to auto-adjust subpanels
     root.grid_rowconfigure(0, weight=1)
@@ -1027,7 +1027,7 @@ def add_original_ID(UnitA, UnitB):
         print(f"Error: {e}")
         original_id_label = ttk.Label(root, text='Error: Unit ID out of bounds', borderwidth=2, relief='groove')
 
-    original_id_label.grid(row=0, column=2, ipadx=5, ipady=5)
+    original_id_label.grid(row=2, column=2, ipadx=5, ipady=5)
 
 def add_probability_label(UnitA, UnitB, CVoption):
     global bayes_label
@@ -1037,10 +1037,10 @@ def add_probability_label(UnitA, UnitB, CVoption):
 
     if CVoption == -1:
         bayes_label = ttk.Label(root, text = f'The UM probabilty for this match is:\n {np.round(output_avg[UnitA, UnitB],5)}', borderwidth = 2 , relief= 'groove' )
-        bayes_label.grid(row = 0, column = 1, ipadx = 5, ipady = 5)
+        bayes_label.grid(row = 2, column = 1, ipadx = 5, ipady = 5)
     else:
         bayes_label = ttk.Label(root, text = f'The UM probabilty for this match is:\n {np.round(output_GUI[CVoption][UnitA, UnitB],5)}', borderwidth = 2 , relief= 'groove')
-        bayes_label.grid(row = 0, column = 1, ipadx = 5, ipady = 5)
+        bayes_label.grid(row = 2, column = 1, ipadx = 5, ipady = 5)
 
 
 def set_match(event = None):
@@ -1080,7 +1080,7 @@ def MakeTable(table):
             e.insert(END, table[i][j])
             e.configure(state='readonly')             
             e.grid(row=i, column=j)
-    frame_table.grid(row = 3, column = 0, padx = 10, pady = 10)
+    frame_table.grid(row = 4, column = 0, padx = 10, pady = 10)
 
 #get table data #ADD STABILTY - prob of unit with itself accros cv
 def get_table_data(UnitA, UnitB, CV):
@@ -1177,7 +1177,7 @@ def make_unit_score_table(table):
             e.configure(state='readonly')             
             e.grid(row=i, column=j)
 
-    score_table.grid(row = 3, column = 1, columnspan=2, padx = 10, pady = 10)
+    score_table.grid(row = 4, column = 1, columnspan=2, padx = 10, pady = 10)
 
 
 def plot_avg_waveforms(UnitA, UnitB, CV):
@@ -1215,7 +1215,7 @@ def plot_avg_waveforms(UnitA, UnitB, CV):
     avg_waveform_plot = FigureCanvasTkAgg(fig, master = root)
     avg_waveform_plot.draw()
     avg_waveform_plot = avg_waveform_plot.get_tk_widget()
-    avg_waveform_plot.grid(row = 1, column = 0)
+    avg_waveform_plot.grid(row = 3, column = 0)
 
 def plot_trajectories(UnitA, UnitB, CV):
     global trajectory_plot
@@ -1259,7 +1259,7 @@ def plot_trajectories(UnitA, UnitB, CV):
     trajectory_plot.draw()
     trajectory_plot = trajectory_plot.get_tk_widget()
 #    TrajectoryPlot.configure(bg = '#33393b')
-    trajectory_plot.grid(row = 1, column = 1, columnspan = 2)
+    trajectory_plot.grid(row = 3, column = 1, columnspan = 2)
 
 def order_good_sites(good_sites, channel_pos, n_sessions):
     # make it so it goes from biggest to smallest
@@ -1390,7 +1390,7 @@ def plot_raw_waveforms(unit_a, unit_b, CV):
     raw_waveform_plot = raw_waveform_plot.get_tk_widget()
     #RawWaveformPlot.configure(bg = '#33393b')
 
-    raw_waveform_plot.grid(row = 0, column = 5, columnspan = 2, rowspan = 4, padx = 15, pady = 25, ipadx = 15)
+    raw_waveform_plot.grid(row = 3, column = 5, columnspan = 2, rowspan = 4, padx = 15, pady = 25, ipadx = 15)
 
 def plot_histograms(hist_names, hist, hist_matched, scores_to_include, unit_a, unit_b):
 
@@ -1419,5 +1419,5 @@ def plot_histograms(hist_names, hist, hist_matched, scores_to_include, unit_a, u
     hist_plot.draw()
     hist_plot = hist_plot.get_tk_widget()
 
-    hist_plot.grid(row = 0, column = 3, columnspan = 2, rowspan = 4, padx = 5, pady = 20)
+    hist_plot.grid(row = 3, column = 3, columnspan = 2, rowspan = 4, padx = 5, pady = 20)
 
