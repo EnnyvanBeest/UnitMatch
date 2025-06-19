@@ -39,9 +39,12 @@ def run_GUI():
     global entry_frame
     global toggle_raw_val
     global toggle_UM_score_val
+    global unit_legend_plot
+    global hist_legend_plot
 
     rcParams.update({'figure.autolayout': True})
-    rcParams.update({'font.size': 10})
+    rcParams.update({'font.size': 14})
+    rcParams.update({'font.family': 'DejaVu Sans'})
     color = 'white'
     rcParams['text.color'] = color
     rcParams['axes.labelcolor'] = color
@@ -70,6 +73,17 @@ def run_GUI():
     root.tk.call('package', 'require', 'awdark')
     s = ttk.Style(root)
     s.theme_use('awdark')
+    
+    # Configure fonts for all TTK widgets to use DejaVu Sans
+    s.configure('.', font=('DejaVu Sans', 12))
+    s.configure('TLabel', font=('DejaVu Sans', 12))
+    s.configure('TButton', font=('DejaVu Sans', 12))
+    s.configure('TEntry', font=('DejaVu Sans', 10))
+    s.configure('TCombobox', font=('DejaVu Sans', 10))
+    s.configure('TCheckbutton', font=('DejaVu Sans', 12))
+    s.configure('TRadiobutton', font=('DejaVu Sans', 12))
+    s.configure('TLabelFrame.Label', font=('DejaVu Sans', 12, 'bold'))
+    
     root.title('UMPy - Manual Curation')
     #root.geometry('800x800')
 
@@ -243,6 +257,15 @@ def run_GUI():
     non_match_button.grid(row = 4, column = 4, sticky = 'W', padx = 50, pady = 5)
     toggle_UM_score_plot.grid(row = 4, column = 5, sticky = 'W',  padx = 50, pady = 5)
     toggle_raw_plot.grid(row = 4, column = 6, sticky = 'E',  padx = 50, pady = 5)
+    
+    # Create visual legend plots outside plots
+    global unit_legend_plot
+    global hist_legend_plot
+    create_unit_legend()
+    create_hist_legend()
+    
+    unit_legend_plot.grid(row = 5, column = 0, columnspan = 3, sticky = 'W', padx = 10, pady = 5)
+    hist_legend_plot.grid(row = 5, column = 3, columnspan = 4, sticky = 'W', padx = 10, pady = 5)
 
     # Configure grid weights to auto-adjust subpanels
     root.grid_rowconfigure(0, weight=1)
@@ -425,6 +448,30 @@ def update(event):
     else:
         if hist_plot.winfo_exists() == 1:
             hist_plot.destroy()
+    
+    # Update unit legend with session information
+    update_unit_legend(unit_a, unit_b)
+
+def update_unit_legend(unit_a, unit_b):
+    """Update the unit legend with current unit information"""
+    global unit_legend_label
+    global clus_info
+    
+    if unit_legend_label.winfo_exists():
+        # Get session information
+        session_a = clus_info['session_id'][unit_a]
+        session_b = clus_info['session_id'][unit_b]
+        
+        # Get original IDs
+        try:
+            orig_id_a = int(clus_info["original_ids"][unit_a].squeeze())
+            orig_id_b = int(clus_info["original_ids"][unit_b].squeeze())
+        except:
+            orig_id_a = unit_a
+            orig_id_b = unit_b
+        
+        legend_text = f'Green = Unit A (ID={orig_id_a}, Session={session_a+1}), Blue = Unit B (ID={orig_id_b}, Session={session_b+1})'
+        unit_legend_label.config(text=legend_text)
 
 def up_options_b_list(event):
     """  
@@ -1116,21 +1163,21 @@ def plot_avg_waveforms(UnitA, UnitB, CV):
     #plt1.spines[["left", "bottom"]].set_position(("data", 0))
     plt1.spines[["bottom"]].set_position(("data", 0))
     plt1.spines[["top", "right"]].set_visible(False)
-    plt1.patch.set_facecolor('#5f6669')
+    plt1.patch.set_facecolor('#2d2d2d')
     plt1.xaxis.set_label_coords(0.9,0)
 
 
     if CV =='Avg':
-        plt1.plot(avg_waveform_avg[:,UnitA], 'g', label=str(UnitA))
-        plt1.plot(avg_waveform_avg[:,UnitB], 'b', label=str(UnitB))
+        plt1.plot(avg_waveform_avg[:,UnitA], 'g', label=f'Unit A ({UnitA})')
+        plt1.plot(avg_waveform_avg[:,UnitB], 'b', label=f'Unit B ({UnitB})')
         plt1.set_xlabel('Time')
         plt1.set_ylabel('Amplitude')
         # plt1.set_xlim(left = 0)
         # plt1.set_xticks([])
 
     else:
-        plt1.plot(avg_waveform[:,UnitA,CV[0]], 'g', label=str(UnitA))
-        plt1.plot(avg_waveform[:,UnitB,CV[1]], 'b', label=str(UnitB))
+        plt1.plot(avg_waveform[:,UnitA,CV[0]], 'g', label=f'Unit A ({UnitA})')
+        plt1.plot(avg_waveform[:,UnitB,CV[1]], 'b', label=f'Unit B ({UnitB})')
         plt1.set_xlabel('Time')
         plt1.set_ylabel('Amplitude')
         # plt1.set_xlim(left = 0)
@@ -1151,7 +1198,7 @@ def plot_trajectories(UnitA, UnitB, CV):
 
     
     plt2 = fig.add_subplot(111)
-    plt2.patch.set_facecolor('#5f6669')
+    plt2.patch.set_facecolor('#2d2d2d')
     plt2.set_aspect(0.5)
     plt2.spines[['right', 'top']].set_visible(False)
     
@@ -1159,20 +1206,20 @@ def plot_trajectories(UnitA, UnitB, CV):
     if CV =='Avg':
         
         # AM not doing a time averaged WaveIDX (where you fins goodtimepoints), will just uses CV 0 for both
-        plt2.plot(avg_waveform_per_tp_avg[1,UnitA,wave_idx[UnitA,:,0].astype(bool)], avg_waveform_per_tp_avg[2,UnitA,wave_idx[UnitA,:,0].astype(bool)], 'g')
+        plt2.plot(avg_waveform_per_tp_avg[1,UnitA,wave_idx[UnitA,:,0].astype(bool)], avg_waveform_per_tp_avg[2,UnitA,wave_idx[UnitA,:,0].astype(bool)], 'g', label=f'Unit A ({UnitA})')
         plt2.scatter(avg_centroid_avg[1,UnitA], avg_centroid_avg[2,UnitA], c = 'g')
 
-        plt2.plot(avg_waveform_per_tp_avg[1,UnitB,wave_idx[UnitB,:,0].astype(bool)], avg_waveform_per_tp_avg[2,UnitB,wave_idx[UnitB,:,0].astype(bool)],'b')
+        plt2.plot(avg_waveform_per_tp_avg[1,UnitB,wave_idx[UnitB,:,0].astype(bool)], avg_waveform_per_tp_avg[2,UnitB,wave_idx[UnitB,:,0].astype(bool)],'b', label=f'Unit B ({UnitB})')
         plt2.scatter(avg_centroid_avg[1,UnitB], avg_centroid_avg[2,UnitB], c = 'b')
 
         plt2.set_xlabel(r'Xpos ($\mu$m)')
         plt2.set_ylabel(r'Ypos ($\mu$m)')
 
     else:
-        plt2.plot(avg_waveform_per_tp[1,UnitA,wave_idx[UnitA,:,CV[0]].astype(bool), CV[0]], avg_waveform_per_tp[2,UnitA,wave_idx[UnitA,:,CV[0]].astype(bool), CV[0]], 'g')
+        plt2.plot(avg_waveform_per_tp[1,UnitA,wave_idx[UnitA,:,CV[0]].astype(bool), CV[0]], avg_waveform_per_tp[2,UnitA,wave_idx[UnitA,:,CV[0]].astype(bool), CV[0]], 'g', label=f'Unit A ({UnitA})')
         plt2.scatter(avg_centroid[1,UnitA,CV[0]], avg_centroid[2,UnitA,CV[0]], c = 'g')
 
-        plt2.plot(avg_waveform_per_tp[1,UnitB,wave_idx[UnitB,:,CV[1]].astype(bool), CV[1]], avg_waveform_per_tp[2,UnitB,wave_idx[UnitB,:,CV[1]].astype(bool), CV[1]],'b')
+        plt2.plot(avg_waveform_per_tp[1,UnitB,wave_idx[UnitB,:,CV[1]].astype(bool), CV[1]], avg_waveform_per_tp[2,UnitB,wave_idx[UnitB,:,CV[1]].astype(bool), CV[1]],'b', label=f'Unit B ({UnitB})')
         plt2.scatter(avg_centroid[1,UnitB,CV[1]], avg_centroid[2,UnitB,CV[1]], c = 'b')
 
         plt2.set_xlabel(r'Xpos ($\mu$m)')
@@ -1239,7 +1286,7 @@ def plot_raw_waveforms(unit_a, unit_b, CV):
     fig.patch.set_facecolor('#33393b')
 
     main_ax = fig.add_axes([0.2,0.2,0.8,0.8])
-    main_ax.set_facecolor('#5f6669')
+    main_ax.set_facecolor('#2d2d2d')
     main_ax_offset = 0.2
     main_ax_scale = 0.8
 
@@ -1305,6 +1352,7 @@ def plot_raw_waveforms(unit_a, unit_b, CV):
     main_ax.set_xticks([min_x, max_x])
     main_ax.set_xlabel('Xpos ($\mu$m)', size = 14)
     main_ax.set_ylabel('Ypos ($\mu$m)', size = 14)
+    
 
 
     raw_waveform_plot = FigureCanvasTkAgg(fig, master = root)
@@ -1328,13 +1376,14 @@ def plot_histograms(hist_names, hist, hist_matched, scores_to_include, unit_a, u
 
     #loop over indexes.. 
     for i in range(len(hist)):
-        axs[i].step(hist[i][1][:-1], hist[i][0], color = 'orange')
-        axs[i].step(hist_matched[i][1][:-1], hist_matched[i][0], color = 'magenta')
+        axs[i].step(hist[i][1][:-1], hist[i][0], color = 'orange', label='All scores' if i == 0 else "")
+        axs[i].step(hist_matched[i][1][:-1], hist_matched[i][0], color = 'magenta', label='Expected matches' if i == 0 else "")
         axs[i].set_ylim(bottom=0)
         axs[i].set_title(hist_names[i], fontsize = 12)
         #axs[i].get_yaxis().set_visible(False)
-        axs[i].axvline(scores_to_include[hist_names[i]][unit_a,unit_b], ls = '--', color = 'grey')
-        axs[i].set_facecolor('#5f6669')
+        axs[i].axvline(scores_to_include[hist_names[i]][unit_a,unit_b], ls = '--', color = 'white', label='Current match pair' if i == 0 else "")
+        axs[i].set_facecolor('#2d2d2d')
+    
 
     hist_plot = FigureCanvasTkAgg(fig, master = root)
     hist_plot.draw()
