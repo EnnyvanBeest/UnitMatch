@@ -1,7 +1,7 @@
 %% User Input
-NewHistologyNeeded = 0; %Automatically to 1 after RedoAfterClustering
+NewHistologyNeeded = 1; %Automatically to 1 after RedoAfterClustering
 RedoAfterClustering = 0;
-RedoUserInput = 1;
+RedoUserInput = 0;
 UseLFP = 0;
 % directory of reference atlas files
 ann = 10; %Steps in micron that's used
@@ -55,10 +55,7 @@ fwireframe = plotBrainGrid([], [], fwireframe, black_brain);
 hold on;
 fwireframe.InvertHardcopy = 'off';
 
-ProbeColors = .75*[1.3 1.3 1.3; 1 .75 0;  .3 1 1; .4 .6 .2; 1 .35 .65; .7 .7 .9; .65 .4 .25; .7 .95 .3; .7 0 0; .6 0 .7; 1 .6 0];
-if length(ProbeColors)<length(MiceOpt)
-    ProbeColors = distinguishable_colors(length(MiceOpt));
-end
+ProbeColors = distinguishable_colors(length(MiceOpt)+1);
 
 for midx = 1:length(MiceOpt)
 
@@ -71,11 +68,11 @@ for midx = 1:length(MiceOpt)
     subksdirs = dir(fullfile(myKsDir,'*','Probe*')); %This changed because now I suddenly had 2 probes per recording
     multidate = cellfun(@(X) strsplit(X,'\'),{subksdirs(:).folder},'UniformOutput',0);
     multidate = cellfun(@(X) X{end},multidate,'UniformOutput',0);
-    if length(unique(multidate))>1 && strcmp(RecordingType{midx},'Chronic')
-        multidate=1;
-    else
+    % if length(unique(multidate))>1 && strcmp(RecordingType{midx},'Chronic')
+    %     multidate=1;
+    % else
         multidate=0;
-    end
+    % end
     if NewHistologyNeededOri || RedoUserInput
         thefirstperprobe = zeros(1,2);
     else
@@ -328,13 +325,6 @@ for midx = 1:length(MiceOpt)
 
           
             %% Get Histology output
-            if numel(myKsDir) == 1
-                myKsDir = myKsDir{1};
-            elseif multidate
-                disp('Multidate')
-            else
-                keyboard
-            end
             GetHistologyOutput      %I created an extra function to have one line of code in the different scripts
           
 

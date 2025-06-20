@@ -20,43 +20,89 @@ if nargin > 5 && ~iscell(trackcoordinates)
 end
 
 % Extract spike and cluster data
-spikeCluster = sp.clu;
 spikeTimes = sp.st;
 spikeDepths = sp.spikeDepths;
-cluster_id = clusinfo.cluster_id;
+spikeRecSes = sp.RecSes;
+amplitudes = sp.spikeAmps;
+if ~all(isnan(clusinfo.UniqueID))
+    spikeCluster = sp.UniqClu;
+    cluster_id = clusinfo.UniqueID;
+else
+    spikeCluster = sp.clu;
+    cluster_id = clusinfo.cluster_id;
+end
+
+% we may have multiple shanks, but the current recording may cover just a
+% selection of shanks:
+ShanksUsed = unique(clusinfo.Shank);
+histinfo = histinfo(ShanksUsed+1); % ID + 1 (0-indexed)
 numShanks = numel(histinfo);
 
-% Optional: Remove noise clusters
-if removenoise
-    spikeID = ismember(spikeCluster, cluster_id(logical(clusinfo.Good_ID)));
-else
-    spikeID = true(size(spikeCluster));
-end
 % identify max spike depth distibution
 activityClusters = cell(numShanks, 1);
 MUACorr = cell(numShanks, 1);
 depthEdges = cell(numShanks, 1);
 for shank = 1:numShanks
+    if removenoise
+        spikeID = ismember(spikeCluster, cluster_id(logical(clusinfo.Good_ID) & clusinfo.Shank'==ShanksUsed(shank)));
+    else
+        spikeID = ismember(spikeCluster, cluster_id(clusinfo.Shank'==ShanksUsed(shank)));
+    end
+
+    if ~any(spikeID)
+        continue
+    end
 
     % Autocorrelation of spikes
-    [autocorr{shank}, depthCenters{shank}] = computeAutocorrByDepth(spikeTimes, spikeDepths, 1, 50, 50);
+    % [autocorr{shank}, depthCenters{shank}] = computeAutocorrByDepth(spikeTimes(spikeID), spikeDepths(spikeID), spikeRecSes(spikeID), 1, 50, height(histinfo));
     % Activity per bin
-    [activityClusters{shank}, MUACorr{shank}, firingRates{shank}, depthEdges{shank}] = computeFunctionalClusters(spikeTimes(spikeID), spikeDepths(spikeID), histinfo{shank});
+    [activityClusters{shank}, MUACorr{shank}, firingRates{shank}, depthEdges{shank}, FreqIntens{shank}] = computeFunctionalClusters(spikeTimes(spikeID), spikeDepths(spikeID), histinfo{shank});
     % Identify valid depths:
     minDepth = min(spikeDepths); %always the tip
     firingRates{shank} = smoothdata(firingRates{shank},'gaussian',floor(500./nanmedian(unique(diff(depthEdges{shank})))));
-    firstactivity = find(firingRates{shank}>0.1,1,'first');
-    maxDepthtmp1 =  depthEdges{shank}(find(firingRates{shank}(firstactivity:end)>1,1,'last')+firstactivity-1);
-    autoCorrVar = smoothdata(nanvar(autocorr{shank},[],2),'gaussian',floor(500./nanmedian(unique(diff(depthCenters{shank})))));
-    autoCorrVar = autoCorrVar./nanmax(autoCorrVar);
-    maxDepthtmp2 = depthCenters{shank}(find(autoCorrVar>0.1,1,'last'));
-    maxDepthtmp = min([maxDepthtmp1,maxDepthtmp2]);
-    if isempty(maxDepthtmp)
-        maxDepthtmp = depthEdges{shank}(end)./2;
-    end
+    % firstactivity = find(firingRates{shank}>0.05,1,'first');
+    % maxDepthtmp1 =  depthEdges{shank}(find(firingRates{shank}(firstactivity:end)>0.05,1,'last')+firstactivity-1);
+    % % CrossCorrVar = CrossCorrVar./nanmax(CrossCorrVar);
+    % maxDepthtmp2 = depthEdges{shank}(find(CrossCorrVar>0.15,1,'last'));
+    % Good unit based
+    nGood = smoothdata(histcounts(clusinfo.depth(logical(clusinfo.Good_ID) & clusinfo.Shank'==shank-1),depthEdges{shank}),'gaussian',floor(500./nanmedian(unique(diff(depthEdges{shank})))));
+
+    % Ampltidues
+    binID = discretize(spikeDepths(spikeID), depthEdges{shank});
+    amps = double(amplitudes(spikeID));
+    spikeAmps{shank} = accumarray(binID(~isnan(binID)), amps(~isnan(binID)),[numel(depthEdges{shank})-1,1], @mean, NaN);                         
+    spikeAmps{shank} = smoothdata(spikeAmps{shank},1,'gaussian',floor(500./nanmedian(unique(diff(depthEdges{shank})))));
+    depthscore = (nGood./max(nGood)+0.1).*(firingRates{shank}'./nanmax(firingRates{shank}) + (spikeAmps{shank}'./nanmax(spikeAmps{shank})) + nanmean(FreqIntens{shank},2)'./nanmax(nanmean(FreqIntens{shank},2)));
+    depthscore = depthscore ./ 4;
+
+    figure;
+    subplot(5,1,1)
+    plot(depthEdges{shank}(1:end-1),firingRates{shank}./nanmax(firingRates{shank}));
+    title('Firing Rate')
+
+    subplot(5,1,2)
+    plot(depthEdges{shank}(1:end-1),nGood./max(nGood));
+    title('nGoodClus')
+
+    subplot(5,1,3)
+    plot(depthEdges{shank}(1:end-1),spikeAmps{shank}./max(spikeAmps{shank}))
+    title(' Average Amplitude')
+
+    subplot(5,1,4)
+    plot(depthEdges{shank}(1:end-1),FreqIntens{shank}./max(FreqIntens{shank},[],1))
+    title('Power at Frequencies')
+
+    subplot(5,1,5)
+    plot(depthEdges{shank}(1:end-1),depthscore);
+    title('Depth Score')
+    hold on
+    line(get(gca,'xlim'),[0.03 0.03],'color',[1 0 0])
+
+    maxDepthtmp = depthEdges{shank}(find(depthscore>0.03,1,'last')+1);
+
     maxDepth{shank} = maxDepthtmp;
 end
-maxDepth = nanmean(cat(1,maxDepth{:}));
+maxDepth = nanmax(cat(1,maxDepth{:}));
 DepthRange = maxDepth - minDepth;
 
 % Compute functional clustering (NMF, firing rates, correlation) for each shank
@@ -77,34 +123,52 @@ for shank = 1:numShanks
         histinfo{shank}(removeId,:) = [];%- 
         trackcoordinates{shank}(removeId,:) = [];
         probeLengths{shank}(removeId) = [];
-    end
+        depthEdges{shank}(removeId) = [];
+        spikeAmps{shank}(removeId) = [];
 
+        % Need to rerun 
+        if removenoise
+            spikeID = ismember(spikeCluster, cluster_id(logical(clusinfo.Good_ID) & clusinfo.Shank'==ShanksUsed(shank)));
+        else
+            spikeID = ismember(spikeCluster, cluster_id(clusinfo.Shank'==ShanksUsed(shank)));
+        end
+        [activityClusters{shank}, MUACorr{shank}, firingRates{shank}, depthEdges{shank}, FreqIntens{shank}] = computeFunctionalClusters(spikeTimes(spikeID), spikeDepths(spikeID), histinfo{shank});
+
+    end
 end
 spikeTimes(spikeDepths<minDepth | spikeDepths>maxDepth) = [];
 spikeCluster(spikeDepths<minDepth | spikeDepths>maxDepth) = [];
 spikeDepths(spikeDepths<minDepth | spikeDepths>maxDepth) = [];
 
 
-% Optional: Remove noise clusters
-if removenoise
-    spikeID = ismember(spikeCluster, cluster_id(logical(clusinfo.Good_ID)));
-else
-    spikeID = true(size(spikeCluster));
-end
-
 % Clean up histinfo a little bit
 for shank = 1:numShanks
-    histinfo{shank} = cleanHistinfo(histinfo{shank});
-    trackcoordinates{shank} = trackcoordinates{shank}(1:size(histinfo{shank},1),:);
+    [histinfo{shank} removeid] = cleanHistinfo(histinfo{shank});
+    if ~isempty(removeid)
+        trackcoordinates{shank}(removeid,:) = [];
+        probeLengths{shank}(removeid) = [];
+        depthEdges{shank}(removeid) = [];
+        spikeAmps{shank}(removeid) = [];
 
-end
+        % Need to rerun
+        if removenoise
+            spikeID = ismember(spikeCluster, cluster_id(logical(clusinfo.Good_ID) & clusinfo.Shank'==ShanksUsed(shank)));
+        else
+            spikeID = ismember(spikeCluster, cluster_id(clusinfo.Shank'==ShanksUsed(shank)));
+        end
+        [activityClusters{shank}, MUACorr{shank}, firingRates{shank}, depthEdges{shank}, FreqIntens{shank}] = computeFunctionalClusters(spikeTimes(spikeID), spikeDepths(spikeID), histinfo{shank});
 
-% Redo
-activityClusters = cell(numShanks, 1);
-MUACorr = cell(numShanks, 1);
-depthEdges = cell(numShanks, 1);
-for shank = 1:numShanks
-    [activityClusters{shank}, MUACorr{shank}, firingRates{shank}, depthEdges{shank}] = computeFunctionalClusters(spikeTimes(spikeID), spikeDepths(spikeID), histinfo{shank});
+    end
+    if any(depthEdges{shank}>maxDepth | depthEdges{shank}<minDepth) % We still need to cut our depthEdges down
+
+        % Need to rerun
+        if removenoise
+            spikeID = ismember(spikeCluster, cluster_id(logical(clusinfo.Good_ID) & clusinfo.Shank'==ShanksUsed(shank)));
+        else
+            spikeID = ismember(spikeCluster, cluster_id(clusinfo.Shank'==ShanksUsed(shank)));
+        end
+        [activityClusters{shank}, MUACorr{shank}, firingRates{shank}, depthEdges{shank}, FreqIntens{shank}] = computeFunctionalClusters(spikeTimes(spikeID), spikeDepths(spikeID), histinfo{shank});
+    end
 end
 
 
@@ -113,7 +177,7 @@ end
 alignedHistology = cell(numShanks, 1);
 for shank = 1:numShanks
     histDepths = depthEdges{shank}(1:end-1) - diff(depthEdges{shank})/2;
-    alignedHistology{shank} = stretchHistology(histinfo{shank}, activityClusters{shank}, MUACorr{shank}, histDepths, firingRates{shank}, trackcoordinates{shank}, structureTree)
+    [alignedHistology{shank}, Features{shank}] = stretchHistology(histinfo{shank}, activityClusters{shank}, MUACorr{shank}, FreqIntens{shank}, spikeAmps{shank}, histDepths, firingRates{shank}, trackcoordinates{shank}, structureTree);
 end
 
 
@@ -125,14 +189,15 @@ end
 
 % Visualize results
 for shank = 1:numShanks
-    visualizeResults(Depth2Area{shank}, MUACorr{shank}, activityClusters{shank});
+    visualizeResults(Depth2Area{shank}, Features{shank});
 end
 Depth2Area=cat(1,Depth2Area{:});
 
 end
 
-function histinfo = cleanHistinfo(histinfo)
-histinfo(ismember(histinfo.RegionAcronym,'Not found in brain'),:) = [];
+function [histinfo, removeidx] = cleanHistinfo(histinfo)
+removeidx = find(ismember(histinfo.RegionAcronym,'Not found in brain'));
+histinfo(removeidx,:) = [];
 [uniqueAreas,id1,id2] = unique(histinfo.RegionAcronym,'stable');
 
 % Check variable names
@@ -161,14 +226,25 @@ id2 = round(fillmissing(id2,'linear'));
 histinfo.RegionAcronym = uniqueAreas(id2);
 end
 
-function [activityClusters, MUACorr, firingRates, depthEdges] = computeFunctionalClusters(spikeTimes, spikeDepths, histinfo)
+function [activityClusters, MUACorr, firingRates, depthEdges, FreqIntens] = computeFunctionalClusters(spikeTimes, spikeDepths, histinfo)
 nDepthBins = height(histinfo);
 depthEdges = linspace(min(spikeDepths), max(spikeDepths), nDepthBins + 1);
 timeEdges = min(spikeTimes):1:max(spikeTimes);
 nSmooth = ceil(40./nanmedian(diff(depthEdges))); % smooth for MUA corr with 50 micron
 spikeHist = histcounts2(spikeDepths, spikeTimes, depthEdges, timeEdges);
+
+% Detect noise - and correct
+noiselevel = quantile(spikeHist(spikeHist>0),0.99);
+spikeHist(:,sum(spikeHist>noiselevel,1)>5) = [];
+noiselevel = quantile(spikeHist(spikeHist>0),0.99);
+spikeHist(spikeHist>noiselevel) = nan;
 spikeHist = smoothdata(spikeHist,1,'gaussian',nSmooth);
-MUACorr = corr(spikeHist');
+MUACorr = nan(numel(depthEdges)-1,numel(depthEdges)-1,5);
+for did1 = 1:numel(depthEdges)-1
+    for did2 = 1:numel(depthEdges)-1
+        MUACorr(did1,did2,:) = xcorr(spikeHist(did1,:)',spikeHist(did2,:)',2);
+    end
+end
 
 nAreas = numel(unique(histinfo.RegionAcronym));
 [W, ~] = nnmf(spikeHist, nAreas);
@@ -177,9 +253,36 @@ activityClusters = activityClusters./nanmax(activityClusters,[],1);
 activityClusters(:,isnan(nanmax(activityClusters,[],1))) = [];
 firingRates = mean(spikeHist, 2);
 activityClusters = cat(2,activityClusters,firingRates/ max(mean(spikeHist, 2)));
+
+% Spectogram
+Fs         = 500;           % desired “sampling rate” (Hz) for your rate trace
+dt         = 1/Fs;
+tMax       = max(spikeTimes);
+edges      = 0:dt:tMax;      % bin‐edges for histogram
+newDepthEdges = min(spikeDepths):50:max(spikeDepths);
+
+%--- 2) Bin spikes into a spike‐train
+spikeTrain = histcounts2(spikeDepths, spikeTimes, newDepthEdges, edges);
+
+%--- 3) (Optional) Smooth the binned counts to get an instantaneous rate
+Bands = [0.1 0.5; 0.5 4; 4 8; 8 12; 13 30; 30 60; 60 100; 100 200];
+FreqIntens = nan(numel(newDepthEdges)-1,size(Bands,1));
+disp('Computing frequency band strength, can take a few minutes...')
+for bid = 1:size(Bands,1)
+    FreqIntens(:,bid) = bandpower(spikeTrain', Fs, Bands(bid,:));
 end
 
-function [autocorrMatrix, depthCenters] = computeAutocorrByDepth(spikeTimes, spikeDepths, binSizeMs, maxLagMs, depthBinSize)
+% 1) compute bin‐centers
+oldZ = (newDepthEdges(1:end-1) + newDepthEdges(2:end))/2;    % 1×M
+newZ = (depthEdges(1:end-1) + depthEdges(2:end))/2; % 1×K
+
+% 2) interpolate
+%    FreqIntens is M×N, so interp1 will return K×N
+FreqIntens = interp1(oldZ, FreqIntens, newZ, 'linear', 'extrap' );
+
+end
+
+function [autocorrMatrix, depthCenters] = computeAutocorrByDepth(spikeTimes, spikeDepths, spikeRecSes, binSizeMs, maxLagMs, depthBinSize)
 % Compute and plot spike autocorrelation across probe depth bins
 %
 % Inputs:
@@ -200,35 +303,38 @@ maxLagBins = round(maxLagMs / binSizeMs);
 lagRange = -maxLagBins:maxLagBins;
 nLags = length(lagRange);
 nBins = length(depthCenters);
+RecSesOpt = unique(spikeRecSes);
 autocorrMatrix = nan(nBins, nLags);
 
 % Loop through depth bins
-for i = 1:nBins
-    depthRange = [depthEdges(i), depthEdges(i+1)];
-    
-    % Filter spike times
-    inRange = spikeDepths >= depthRange(1) & spikeDepths < depthRange(2);
-    times = spikeTimes(inRange);
-    
-    if numel(times) < 50
-        continue; % Skip bins with too few spikes
-    end
+for recid = 1:numel(RecSesOpt)
+    for i = 1:nBins
+        depthRange = [depthEdges(i), depthEdges(i+1)];
 
-    % Bin spikes
-    binSizeSec = binSizeMs / 1000;
-    minTime = min(times);
-    maxTime = max(times);
-    edges = minTime:binSizeSec:maxTime;
-    binnedSpikes = histcounts(times, edges);
-    
-    % Compute autocorrelation
-    [ac, ~] = xcorr(binnedSpikes, maxLagBins, 'coeff');
-    
-    % Remove zero-lag if desired
-    ac(maxLagBins+1) = 0;
-    
-    % Store
-    autocorrMatrix(i, :) = ac;
+        % Filter spike times
+        inRange = spikeDepths >= depthRange(1) & spikeDepths < depthRange(2) & spikeRecSes == RecSesOpt(recid);
+        times = spikeTimes(inRange);
+
+        if numel(times) < 50
+            continue; % Skip bins with too few spikes
+        end
+
+        % Bin spikes
+        binSizeSec = binSizeMs / 1000;
+        minTime = min(times);
+        maxTime = max(times);
+        edges = minTime:binSizeSec:maxTime;
+        binnedSpikes = histcounts(times, edges);
+
+        % Compute autocorrelation
+        [ac, ~] = xcorr(binnedSpikes, maxLagBins, 'coeff');
+
+        % Remove zero-lag if desired
+        ac(maxLagBins+1) = 0;
+
+        % Store
+        autocorrMatrix(i, :) = nanmean(cat(1,autocorrMatrix(i, :),ac),1);
+    end
 end
 
 % Plot
@@ -242,12 +348,33 @@ colorbar;
 set(gca, 'YDir', 'normal'); % depth upwards
 end
 
-function alignedHistology = stretchHistology(histinfo, activityClusters, MUACorr, histDepths, firingRates, trackcoordinates, structureTree)
-% Compute functional area transitions using both NMF and MUA correlations
-gradientActivity = cat(1, zeros(1, size(activityClusters, 2)), abs(diff(activityClusters, 1, 1))); % Gradient across NMF components
-% transitionScoreNMF = var(gradientActivity, 0, 2); % Variance across NMF components
-transitionScoreNMF = [0; sum(diff(gradientActivity,1).^2,2)];
-MUACorr(isnan(MUACorr)) = 0;
+function [alignedHistology, F] = stretchHistology(histinfo, activityClusters, MUACorr, FreqIntens, spikeAmps, histDepths, firingRates, trackcoordinates, structureTree)
+
+% Normalize all scores:
+nDepth = size(MUACorr,1);
+FreqIntens = (FreqIntens-nanmin(FreqIntens,[],1))./(nanmax(FreqIntens,[],1)-nanmin(FreqIntens,[],1));
+spikeAmps = (spikeAmps-nanmin(spikeAmps))./(nanmax(spikeAmps)-nanmin(spikeAmps));
+firingRates =  (firingRates-nanmin(firingRates))./(nanmax(firingRates)-nanmin(firingRates));
+% pull out the PCA scores
+scores = nan(nDepth,5);
+for tl = 1:5
+    C0 = squeeze(MUACorr(:,:,tl));
+    % each row i is the full‐depth correlation profile of depth i
+    [coeff, scorestmp, ~, ~, explained] = pca(C0, 'NumComponents', 1);
+
+    scores(:,tl) = scorestmp;
+ 
+end
+scores = (scores-nanmin(scores,[],1))./(nanmax(scores,[],1)-nanmin(scores,[],1));
+
+% concatenate
+F = [FreqIntens, spikeAmps, firingRates, activityClusters, scores];
+F(:,sum(isnan(F),1)==size(F,1)) = [];
+
+% PCA → first PC
+[~,PC1,~,~,explained] = pca(double(F),'NumComponents',1);
+fprintf('PCA: first PC explain %.1f%% of variance\n', sum(explained(1)));
+PC1 = (PC1-nanmin(PC1))./(nanmax(PC1)-nanmin(PC1));
 
 % Unique areas and gray-like identification
 [uniqueAreas, ~, table2areaidx] = unique(histinfo.RegionAcronym, 'stable');
@@ -273,6 +400,7 @@ parentArea = cell(1,numel(uniqueAreas));
 for areaid = 1:numel(uniqueAreas)
     parentArea{areaid} = getParentArea(uniqueAreas{areaid}, structureTree);
 end
+parentArea(logical(grayLike)) = {'WhiteMatter'}
 
 % Identify expected depth per parent area
 [uniqueParentArea, ~, idToParent] = unique(parentArea,'stable');
@@ -295,7 +423,6 @@ for parid = 1:numel(uniqueParentArea)
     ThisAreaidx = find(ismember(parentArea,uniqueParentArea(parid)) & ~alreadyused,1,'first');%identify first occurance of this area
 
     if ~grayLike(ThisAreaidx)
-
         numPerParent(parid) = numel(histinfo.Position(find(ismember(histinfo.RegionAcronym(startidx:stopidx),uniqueAreas(ismember(parentArea,parentArea(ThisAreaidx)))))+startidx-1));
         EFRPerParent(parid) = nanmean(EFR(ismember(parentArea,parentArea(ThisAreaidx))));
         alreadyused(1:NextAreaidx-1) = true;
@@ -303,30 +430,27 @@ for parid = 1:numel(uniqueParentArea)
         numPerParent(parid) = 0; % Artifically set gray areas to 0 coverage
         EFRPerParent(parid) = nanmean(EFR(ismember(parentArea,parentArea(ThisAreaidx))));
     end
+  
+
     startidx = stopidx;
+end
 
-
+% if a parent area occured more than once, divide numPerParent accordingly
+[~,id1,id2] = unique(uniqueParentArea);
+for id = 1:numel(id1)
+    id3 = id2 == id2(id);
+    numPerParent(id3) = (nansum(numPerParent(id3)))./sum(id3);
 end
 % Convert this into distance
 CoveragePerParent = numPerParent.*(max(histDepths)-min(histDepths))/height(histinfo);
 
-% Identify low firing depths
-% smoothFiringRates = smoothdata(firingRates, 'gaussian', 4);
-lowFiring = firingRates < 1.5;
+% 1) compute absolute first difference
+d = (diff(smoothdata(PC1,'gaussian',50)));       % (N-1)×1
 
-% Adaptive transition clustering
-numClusters = numel(uniqueParentArea);
-transitionScoreMUA = [0; abs(diff(kmeans(MUACorr, numClusters, 'Replicates', 5)))];
-transitionScoreMUA = double(imbinarize(transitionScoreMUA));
-transitionScore = smoothdata(transitionScoreNMF ./ nanmax(transitionScoreNMF) + transitionScoreMUA ./ nanmax(transitionScoreMUA), 'gaussian', 1);
-transitionScore(isnan(transitionScore)) = 0;
-transitionScore(~isfinite(transitionScore)) = max(transitionScore(isfinite(transitionScore)), [], 'omitnan');
+% 2) sort descending, pick top nChanges
+[pks,topIdx] = findpeaks(d,'MinPeakDistance',5,'MinPeakHeight',0,'NPeaks',numel(SwitchIdx));
 
-PeakHeight =  quantile(transitionScore, 1 - numel(uniqueParentArea) ./ numel(transitionScore));
-[~,  parenttransitionpoints] = findpeaks(transitionScore, 'MinPeakHeight',PeakHeight, 'SortStr', 'descend');
-
-Borders = transitionScore>PeakHeight | lowFiring; % Borders are likely to suddenly have low firing or transition the functional dynamics
-
+changePts = sort(topIdx,'ascend') + 1;
 % first, identify all the distances between two 'low firing depths'
 starterid = 1;
 stopid = 1;
@@ -334,22 +458,23 @@ stopid = 1;
 CoverageBetweenLowFRs = [];
 SaveStarterID = starterid;
 SaveStopID = [];
-PeakVal = quantile(Borders,1-sum(isnan(CoveragePerParent))./numel(Borders));
 while stopid<numel(histDepths)
-    stopid = find(Borders(starterid+2:end) >= PeakVal, 1, 'first') + starterid + 1;
+    stopid = changePts(find(changePts > starterid, 1, 'first'));
     if isempty(stopid)
         break
     end
     SaveStopID = [SaveStopID stopid];
     if isempty(stopid), stopid = numel(histDepths); end
     CoverageBetweenLowFRs = [CoverageBetweenLowFRs histDepths(stopid) - histDepths(starterid)];
-    starterid = find(Borders(stopid:end) < PeakVal, 1, 'first') + stopid - 2;
+    starterid = stopid+1;
     if starterid==numel(histDepths)
         break
     end
     SaveStarterID = [SaveStarterID starterid];
 end
 SaveStopID = [SaveStopID numel(histDepths)];
+
+
 
 CoverageBetweenLowFRs = CoverageBetweenLowFRs./(sum(CoverageBetweenLowFRs)./sum(CoveragePerParent));
 % Compute cumulative sums for optimal matching
@@ -369,6 +494,7 @@ for id = 1:numel(nulasignment)
     SaveStopID(nulasignment(id)-counter) = []; % Remove the stop id for this assignment
     counter = counter + 1;
 end
+SaveStarterID = SaveStarterID(1:max(assignment));
 
 SaveStopID = SaveStarterID(2:end)-1;
 SaveStopID = [SaveStopID numel(histDepths)];
@@ -385,13 +511,19 @@ for id = 1:max(assignment)
     TheseAreas = uniqueParentArea(assignment == id & EFRPerParent'~=0);
     nAreas = numel(TheseAreas);
 
-    transitionPoints = parenttransitionpoints(parenttransitionpoints>starterid&parenttransitionpoints<stopid);
-    if ~isempty(transitionPoints) & numel(transitionPoints)>=nAreas-1
-        transitionPoints = [starterid,sort(transitionPoints(1:nAreas-1)','ascend'),stopid];
+    % Where to draw the line between these areas?
+    tmpVec = starterid:stopid;
+    if nAreas>1
+        d = diff(PC1(starterid:stopid));
+        [pks,topIdx] = findpeaks(d,'MinPeakDistance',2,'MinPeakHeight',0,'NPeaks',nAreas-1);
+
+        changePts = sort(topIdx,'ascend') + 1;
+        transitionPoints = [1 changePts' numel(tmpVec)];
+
     else
-        transitionPoints = round(linspace(starterid,stopid,nAreas+1));
+        transitionPoints = [1 numel(tmpVec)];
     end
-    transitionPoints = transitionPoints-starterid+1;
+
 
     % Interpolation
     for aid2 = 1:nAreas
@@ -489,7 +621,7 @@ Depth2Area = table(depths, repmat(shank, numel(depths),1), alignedHistology.Regi
 end
 
 
-function visualizeResults(Depth2Area, MUACorr, activityClusters)
+function visualizeResults(Depth2Area, Features)
 % Order areas by depth
 [sortedDepths, orderIdx] = sort(Depth2Area.Depth,'descend');
 sortedAreas = Depth2Area.Area(orderIdx);
@@ -504,7 +636,7 @@ areaColors = cellfun(@(x) colorMap(x), sortedAreas, 'UniformOutput', false);
 areaColorsRGB = cellfun(@(c) sscanf(c, '%2x%2x%2x')' / 255, areaColors, 'UniformOutput', false);
 areaColorsRGB = vertcat(areaColorsRGB{:});
 
-figure('Position',[896 376 1507 848]);
+figure('Position',[1984 222 965 970]);
 subplot(1,3,1);
 scatter(categorical(sortedAreas,unique(sortedAreas, 'stable')), sortedDepths, 25, areaColorsRGB, 'filled');
 set(gca,'YDir','normal')
@@ -514,27 +646,15 @@ xlabel('Brain Area');
 ylim([min(sortedDepths) max(sortedDepths)])
 makepretty
 
-subplot(1,3,2);
-imagesc([],sortedDepths,activityClusters(orderIdx, :));
+subplot(1,3,[2,3]);
+imagesc([],sortedDepths,Features(orderIdx, :));
 set(gca,'ydir','normal')
 colormap(hot)
 colorbar;
-title('Activity Clusters');
-xlabel('NMF');
+title('Features');
+xlabel('Feature');
 ylabel('Depth');
 ylim([min(sortedDepths) max(sortedDepths)])
 makepretty
 
-
-subplot(1,3,3);
-imagesc(sortedDepths,sortedDepths,MUACorr(orderIdx, orderIdx));
-set(gca,'ydir','normal')
-colormap(hot)
-colorbar;
-title('MUA correlation');
-xlabel('Depth');
-ylabel('Depth');
-ylim([min(sortedDepths) max(sortedDepths)])
-
-makepretty
 end

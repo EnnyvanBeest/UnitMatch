@@ -8,12 +8,12 @@ DateOpt = cellfun(@(X) X([X.isdir]),DateOpt,'UniformOutput',0);
 DateOpt = cellfun(@(X) {X.name},DateOpt,'UniformOutput',0);
 
 RemoveOldCopies = 1;
-Redo = 1; % Redo generally
+Redo = 0; % Redo generally
 LogError = {}; % Keep track of which runs didn't work
 if ~exist('PipelineParamsOri','var')
     PipelineParamsOri = PipelineParams;
 end
-for midx = 1:length(MiceOpt)
+for midx = 18:length(MiceOpt)
     close all % to not overcrowd the graphics card
     PipelineParams = PipelineParamsOri; % Reset
     %% Loading data from kilosort/phy easily

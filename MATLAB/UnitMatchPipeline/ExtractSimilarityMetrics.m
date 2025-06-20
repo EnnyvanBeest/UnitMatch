@@ -896,7 +896,6 @@ while flag<2
     if param.nExpectedMatches==0 || priorMatch == 1
         warning('No expected matches, something is wrong. Please send this:')
         figure; imagesc(TotalScore)
-        keyboard
     end
 
     %% Cumulative density function
