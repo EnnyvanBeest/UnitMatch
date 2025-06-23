@@ -67,11 +67,16 @@ for shank = 1:numShanks
     % Good unit based
     nGood = smoothdata(histcounts(clusinfo.depth(logical(clusinfo.Good_ID) & clusinfo.Shank'==shank-1),depthEdges{shank}),'gaussian',floor(500./nanmedian(unique(diff(depthEdges{shank})))));
 
+    if all(nGood==0)
+        nGood = nGood+1;
+    end
     % Ampltidues
     binID = discretize(spikeDepths(spikeID), depthEdges{shank});
     amps = double(amplitudes(spikeID));
+
     spikeAmps{shank} = accumarray(binID(~isnan(binID)), amps(~isnan(binID)),[numel(depthEdges{shank})-1,1], @mean, NaN);                         
     spikeAmps{shank} = smoothdata(spikeAmps{shank},1,'gaussian',floor(500./nanmedian(unique(diff(depthEdges{shank})))));
+    spikeAmps{shank}(isnan(spikeAmps{shank})) = 0;
     depthscore = (nGood./max(nGood)+0.1).*(firingRates{shank}'./nanmax(firingRates{shank}) + (spikeAmps{shank}'./nanmax(spikeAmps{shank})) + nanmean(FreqIntens{shank},2)'./nanmax(nanmean(FreqIntens{shank},2)));
     depthscore = depthscore ./ 4;
 
@@ -84,12 +89,12 @@ for shank = 1:numShanks
     plot(depthEdges{shank}(1:end-1),nGood./max(nGood));
     title('nGoodClus')
 
-    subplot(5,1,3)
-    plot(depthEdges{shank}(1:end-1),spikeAmps{shank}./max(spikeAmps{shank}))
+    subplot(5,1,3)   
+    plot(depthEdges{shank}(1:end-1),spikeAmps{shank}./nanmax(spikeAmps{shank}))
     title(' Average Amplitude')
 
     subplot(5,1,4)
-    plot(depthEdges{shank}(1:end-1),FreqIntens{shank}./max(FreqIntens{shank},[],1))
+    plot(depthEdges{shank}(1:end-1),FreqIntens{shank}./nanmax(FreqIntens{shank},[],1))
     title('Power at Frequencies')
 
     subplot(5,1,5)
@@ -239,14 +244,17 @@ spikeHist(:,sum(spikeHist>noiselevel,1)>5) = [];
 noiselevel = quantile(spikeHist(spikeHist>0),0.99);
 spikeHist(spikeHist>noiselevel) = nan;
 spikeHist = smoothdata(spikeHist,1,'gaussian',nSmooth);
-MUACorr = nan(numel(depthEdges)-1,numel(depthEdges)-1,5);
-for did1 = 1:numel(depthEdges)-1
-    for did2 = 1:numel(depthEdges)-1
-        MUACorr(did1,did2,:) = xcorr(spikeHist(did1,:)',spikeHist(did2,:)',2);
-    end
-end
+MUACorr = corr(spikeHist');
+
+% MUACorr = nan(numel(depthEdges)-1,numel(depthEdges)-1,5);
+% for did1 = 1:numel(depthEdges)-1
+%     for did2 = 1:numel(depthEdges)-1
+%         MUACorr(did1,did2,:) = xcorr(spikeHist(did1,:)',spikeHist(did2,:)',2);
+%     end
+% end
 
 nAreas = numel(unique(histinfo.RegionAcronym));
+spikeHist(isnan(spikeHist)) = 0;
 [W, ~] = nnmf(spikeHist, nAreas);
 activityClusters = W;
 activityClusters = activityClusters./nanmax(activityClusters,[],1);
@@ -269,7 +277,12 @@ Bands = [0.1 0.5; 0.5 4; 4 8; 8 12; 13 30; 30 60; 60 100; 100 200];
 FreqIntens = nan(numel(newDepthEdges)-1,size(Bands,1));
 disp('Computing frequency band strength, can take a few minutes...')
 for bid = 1:size(Bands,1)
-    FreqIntens(:,bid) = bandpower(spikeTrain', Fs, Bands(bid,:));
+    if size(spikeTrain,2)>Fs*7*60 % Take just 5 mins of data
+        sampleidx = Fs*2*60:Fs*7*60;
+    else
+        sampleidx = 1:size(spikeTrain,2);
+    end
+    FreqIntens(:,bid) = bandpower(spikeTrain(:,sampleidx)', Fs, Bands(bid,:));
 end
 
 % 1) compute bin‐centers
@@ -356,9 +369,12 @@ FreqIntens = (FreqIntens-nanmin(FreqIntens,[],1))./(nanmax(FreqIntens,[],1)-nanm
 spikeAmps = (spikeAmps-nanmin(spikeAmps))./(nanmax(spikeAmps)-nanmin(spikeAmps));
 firingRates =  (firingRates-nanmin(firingRates))./(nanmax(firingRates)-nanmin(firingRates));
 % pull out the PCA scores
-scores = nan(nDepth,5);
-for tl = 1:5
+scores = nan(nDepth,size(MUACorr,3));
+for tl = 1:size(MUACorr,3)
     C0 = squeeze(MUACorr(:,:,tl));
+    C0=fillmissing(C0,'constant',0,1);
+    C0=fillmissing(C0,'constant',0,2);
+
     % each row i is the full‐depth correlation profile of depth i
     [coeff, scorestmp, ~, ~, explained] = pca(C0, 'NumComponents', 1);
 
@@ -372,8 +388,16 @@ F = [FreqIntens, spikeAmps, firingRates, activityClusters, scores];
 F(:,sum(isnan(F),1)==size(F,1)) = [];
 
 % PCA → first PC
-[~,PC1,~,~,explained] = pca(double(F),'NumComponents',1);
-fprintf('PCA: first PC explain %.1f%% of variance\n', sum(explained(1)));
+pcnum = 0;
+explained = 0;
+while sum(explained(1:pcnum))<65
+    pcnum = pcnum + 1;
+
+    [~,PC1,~,~,explained] = pca(double(F),'NumComponents',pcnum);
+    fprintf('PCA: %.0f PC explain %.1f%% of variance\n', pcnum, sum(explained(1:pcnum)));
+end
+PC1 = sum(PC1,2);
+PC1 = detrend(PC1);
 PC1 = (PC1-nanmin(PC1))./(nanmax(PC1)-nanmin(PC1));
 
 % Unique areas and gray-like identification
@@ -448,9 +472,14 @@ CoveragePerParent = numPerParent.*(max(histDepths)-min(histDepths))/height(histi
 d = (diff(smoothdata(PC1,'gaussian',50)));       % (N-1)×1
 
 % 2) sort descending, pick top nChanges
-[pks,topIdx] = findpeaks(d,'MinPeakDistance',5,'MinPeakHeight',0,'NPeaks',numel(SwitchIdx));
-
+topIdx = [];
+qval = 1;
+while numel(topIdx)<numel(CoveragePerParent) & qval>0.75
+    qval = qval-0.05;
+    [pks,topIdx] = findpeaks(d,'MinPeakDistance',5,'MinPeakHeight',quantile(d,qval),'NPeaks',numel(CoveragePerParent));
+end
 changePts = sort(topIdx,'ascend') + 1;
+
 % first, identify all the distances between two 'low firing depths'
 starterid = 1;
 stopid = 1;
@@ -508,17 +537,41 @@ for id = 1:max(assignment)
     trackcoordinatestmp = trackcoordinates(starterid:stopid, :);
 
     % Areas to consider in this assignment round
-    TheseAreas = uniqueParentArea(assignment == id & EFRPerParent'~=0);
+    TheseAreas = unique(uniqueParentArea(assignment == id & EFRPerParent'~=0),'stable');
+    IncludeThis = false(1,numel(TheseAreas));
+    % Are all these areas represented?
+    for areaid = 1:numel(TheseAreas)
+        if ismember(uniqueAreas(ismember(parentArea,TheseAreas{areaid})),histinfo.RegionAcronym(starterid:stopid))
+            IncludeThis(areaid) = true;
+        end
+    end
+    TheseAreas = TheseAreas(IncludeThis);
+
     nAreas = numel(TheseAreas);
 
     % Where to draw the line between these areas?
     tmpVec = starterid:stopid;
     if nAreas>1
         d = diff(PC1(starterid:stopid));
-        [pks,topIdx] = findpeaks(d,'MinPeakDistance',2,'MinPeakHeight',0,'NPeaks',nAreas-1);
-
-        changePts = sort(topIdx,'ascend') + 1;
-        transitionPoints = [1 changePts' numel(tmpVec)];
+        topIdx = [];
+        qval = 1;
+        while numel(topIdx)<nAreas-1
+            qval = qval-0.05;
+            if qval<0.5
+                % Use ratio in histology instead
+                [~,id1] = ismember(histinfo.RegionAcronym(starterid:stopid),uniqueAreas(ismember(parentArea,TheseAreas)));
+                nPerRegion = arrayfun(@(X) sum(id1==X),1:nAreas);
+                nPerRegion = nPerRegion./sum(nPerRegion);
+                ratioPerRegion = cumsum(nPerRegion);
+                transitionPoints = [1 round(ratioPerRegion.*numel(tmpVec))];
+                transitionPoints(transitionPoints==0) = [];
+                break
+            end
+            [pks,topIdx] = findpeaks(d,'MinPeakDistance',2,'MinPeakHeight',quantile(d,qval),'NPeaks',nAreas-1);
+            changePts = sort(topIdx,'ascend') + 1;
+            transitionPoints = [1 changePts' numel(tmpVec)];
+        end
+     
 
     else
         transitionPoints = [1 numel(tmpVec)];
@@ -531,6 +584,9 @@ for id = 1:max(assignment)
         tblidx(tblidx<starterid) = [];
         tblidx(tblidx>stopid) = [];
         newDepths(tblidx) = linspace(histdepthtmp(transitionPoints(aid2)), histdepthtmp(transitionPoints(aid2+1)), numel(tblidx));
+        if any(newDepths(tblidx)' - newDepths(1:starterid-1)<0,'all')
+            keyboard
+        end
         for dimid = 1:3
             newTrackcoordinates(tblidx, dimid) = linspace(trackcoordinatestmp(transitionPoints(aid2), dimid), trackcoordinatestmp(transitionPoints(aid2+1), dimid), numel(tblidx));
         end
@@ -636,8 +692,8 @@ areaColors = cellfun(@(x) colorMap(x), sortedAreas, 'UniformOutput', false);
 areaColorsRGB = cellfun(@(c) sscanf(c, '%2x%2x%2x')' / 255, areaColors, 'UniformOutput', false);
 areaColorsRGB = vertcat(areaColorsRGB{:});
 
-figure('Position',[1984 222 965 970]);
-subplot(1,3,1);
+figure('Position',[1220 69 622 900]);
+h(1) = subplot(1,3,1);
 scatter(categorical(sortedAreas,unique(sortedAreas, 'stable')), sortedDepths, 25, areaColorsRGB, 'filled');
 set(gca,'YDir','normal')
 title('Ordered Depth-to-Area Mapping');
@@ -646,7 +702,7 @@ xlabel('Brain Area');
 ylim([min(sortedDepths) max(sortedDepths)])
 makepretty
 
-subplot(1,3,[2,3]);
+h(2) = subplot(1,3,[2,3]);
 imagesc([],sortedDepths,Features(orderIdx, :));
 set(gca,'ydir','normal')
 colormap(hot)
@@ -657,4 +713,5 @@ ylabel('Depth');
 ylim([min(sortedDepths) max(sortedDepths)])
 makepretty
 
+linkaxes(h,'y')
 end
