@@ -230,23 +230,25 @@ for midx = 1:length(MiceOpt)
                     ProbeName = strsplit(tmpfile(sesid).name,'imec');
                     ProbeName = ['Probe' num2str(ProbeName{2}(1))];
 
-                    Sesinfo = strsplit(tmpephysdir(id).name,'_g0');
-                    Sesinfo = strsplit(Sesinfo{1},MiceOpt{midx});
-                    Sesinfo = Sesinfo{2};
-                    if isempty(Sesinfo)
-                        Sesinfo = strsplit(tmpephysdir(id).name,'_g0');
-                        Sesinfo = strsplit(Sesinfo{2},'_');
-                        if length(Sesinfo)>1
-                            Sesinfo = Sesinfo{2};
-                        else
-                            Sesinfo = Sesinfo{1};
-                        end
-                        if isempty(Sesinfo)
-                            Sesinfo = '';
-                        end
-                    else
-                        Sesinfo = Sesinfo(end);
-                    end
+                    Sesinfo = tmpephysdir(id).name;
+                    % 
+                    % Sesinfo = strsplit(tmpephysdir(id).name,'_g0');
+                    % Sesinfo = strsplit(Sesinfo{1},MiceOpt{midx});
+                    % Sesinfo = Sesinfo{2};
+                    % if isempty(Sesinfo)
+                    %     Sesinfo = strsplit(tmpephysdir(id).name,'_g0');
+                    %     Sesinfo = strsplit(Sesinfo{2},'_');
+                    %     if length(Sesinfo)>1
+                    %         Sesinfo = Sesinfo{2};
+                    %     else
+                    %         Sesinfo = Sesinfo{1};
+                    %     end
+                    %     if isempty(Sesinfo)
+                    %         Sesinfo = '';
+                    %     end
+                    % else
+                    %     Sesinfo = Sesinfo(end);
+                    % end
 
                     %                     myKsDir = fullfile(myKsDir,['Probe' num2str(probeid-1)])
                     subksdirs = dir(fullfile(myKsDir,ProbeName,Sesinfo)); %This changed because now I suddenly had 2 probes per recording
@@ -303,6 +305,7 @@ for midx = 1:length(MiceOpt)
                     catch ME
                         disp(ME)
                         disp([fullfile(tmpdatafolder,tmpfile(sesid).name) ' not successfull... skip'])
+                        
                         continue
                     end
 
