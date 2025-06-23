@@ -13,8 +13,8 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 import pandas as pd
 from pathlib import Path
-# from testing.isi_corr import plot_edf5, get_corrections, vectorized_drift_corrected_dist, remove_conflicts, avg_across_directions
-# from testing.func_match import func_matches, get_matches, AUC
+from sklearn.neighbors import KernelDensity
+import scipy
 
 def load_trained_model(device="cpu"):
 
@@ -82,40 +82,6 @@ def inference(model, data_dir):
 
     return result
 
-# def spatial_filter(mt_path:str, matches:pd.DataFrame, dist_thresh=None, drift_corr=True, plot_drift=False):
-#     """
-#     Input is a dataframe of potential matches (according to some threshold, e.g. DNNSim)
-#     Output is a reduced dataframe after filtering out matches that are spatially distant.
-#     dist_thresh can take a numerical value, or set it to None to just reject the 50% of matches 
-#     with greatest Euclidean distance.
-
-#     Args:
-#         mt_path (str): Path to the matchtable.
-#         matches (pd.DataFrame): DataFrame containing potential matches.
-#         dist_thresh (Optional[float]): Maximum allowed Euclidean distance. If None, filters out the 50% most distant matches.
-#         drift_corr (bool): Whether to apply drift correction. Defaults to True.
-#         plot_drift (bool): Whether to plot drift correction visualization. Defaults to False.
-#     """
-#     if len(matches) < 1:
-#         return matches
-#     exp_ids, metadata = mtpath_to_expids(mt_path, matches)
-#     test_data_root = mt_path[:mt_path.find(metadata["mouse"])]
-#     positions = {}
-#     for recses, exp_id in exp_ids.items():
-#         fp = os.path.join(test_data_root, metadata["mouse"], metadata["probe"], 
-#                           metadata["loc"], exp_id, "processed_waveforms")
-#         pos_dict = read_pos(fp)
-#         positions[recses] = pd.DataFrame(pos_dict)
-#     if drift_corr:
-#         corrections = get_corrections(matches, positions)
-#     # plot_distances(matches, positions, corrections=corrections)
-#     matches_with_dist = vectorized_drift_corrected_dist(corrections, positions, matches)
-#     if not dist_thresh:
-#         matches_with_dist.sort_values(by = "dist", inplace=True)
-#         return matches_with_dist.head(len(matches)//2)
-#     else:
-#         return matches_with_dist.loc[matches_with_dist["dist"]<dist_thresh]
-
 def directional_filter(matches: pd.DataFrame):
     filtered_matches = matches.copy()
     for idx, row in matches.iterrows():
@@ -133,6 +99,64 @@ def directional_filter(matches: pd.DataFrame):
         if reverse_match.empty:
             filtered_matches = filtered_matches.drop(idx)  # Drop if no reverse match is found
     return filtered_matches
+
+def get_threshold(prob_matrix:np.ndarray, session_id, MAP=False):
+
+    n = len(session_id)
+    within_session = (session_id[:, None] == session_id).astype(int)
+    pmat = prob_matrix[within_session==True].reshape(-1, 1)
+    labels = np.eye(n)[within_session==True].reshape(-1, 1)
+
+    # On-diagonal means same neuron. Off-diagonal means different neurons.
+    on_diag = pmat[labels==1]
+    off_diag = pmat[labels==0]
+
+    # Kernel density estimation (distributions are more useful than histograms)
+    kde_on = KernelDensity(kernel='gaussian', bandwidth=0.01).fit(on_diag.reshape(-1, 1))
+    kde_off = KernelDensity(kernel='gaussian', bandwidth=0.01).fit(off_diag.reshape(-1, 1))
+    x = np.linspace(min(off_diag), max(on_diag), 1000).reshape(-1, 1)
+    y_on = np.exp(kde_on.score_samples(x))
+    y_off = np.exp(kde_off.score_samples(x))
+
+    # Find the threshold where the distributions intersect
+    if MAP:
+        thresh = np.argwhere(np.diff(np.sign(y_off*(n-1) - y_on)))
+    else:
+        thresh=np.argwhere(np.diff(np.sign(y_off - y_on)))
+    if len(thresh) == 0:
+        thresh = len(x) - 1
+    elif len(thresh) > 1:
+        thresh = thresh[-1]
+
+    return x[thresh].item()
+
+def directional_filter(matrix: np.ndarray):
+    """
+    Filter a 2D numpy array to keep only bidirectional relationships.
+    If matrix[i][j] is non-zero, matrix[j][i] must also be non-zero, 
+    otherwise both are set to zero.
+    """
+    nonzero_mask = matrix != 0
+    nonzero_transpose_mask = matrix.T != 0
+    
+    # Keep only elements where both directions are non-zero
+    bidirectional_mask = nonzero_mask & nonzero_transpose_mask
+    
+    # Apply mask to original matrix
+    return matrix * bidirectional_mask
+
+def remove_conflicts(matrix, fill_value=0):
+    """Optimal conflict removal using Hungarian algorithm."""
+    
+    m = np.array(matrix)
+    cost_matrix = np.where(m != fill_value, -1*m, 0)  # negative for maximisation
+    rows, cols = scipy.optimize.linear_sum_assignment(cost_matrix)
+    
+    result = np.full_like(m, fill_value)
+    valid = m[rows, cols] != fill_value
+    result[rows[valid], cols[valid]] = m[rows[valid], cols[valid]]
+    
+    return result
 
 
 if __name__ == '__main__':

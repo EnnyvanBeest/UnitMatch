@@ -38,7 +38,7 @@ def extract_parameters(waveform, channel_pos, clus_info, param):
     
     return extracted_wave_properties
 
-def extract_metric_scores(extracted_wave_properties, session_switch, within_session, param, niter  = 2):
+def extract_metric_scores(extracted_wave_properties, session_switch, within_session, param, niter  = 2, to_use = None):
     """
     This function runs all of the metric calculations and drift correction to calculate the probability
     distribution needed for UnitMatch.
@@ -56,6 +56,8 @@ def extract_metric_scores(extracted_wave_properties, session_switch, within_sess
     niter : int, optional
         The number of pass through the function, 1 mean no drift correction
             2 is one pass of drift correction, by default 2
+    to_use : list, optional
+        A list of scores to include in the total score calculation. If None (default), all scores are included.
 
     Returns
     -------
@@ -106,7 +108,11 @@ def extract_metric_scores(extracted_wave_properties, session_switch, within_sess
 
         scores_to_include = {'amp_score' : amp_score, 'spatial_decay_score' : spatial_decay_score, 'centroid_overlord_score' : centroid_overlord_score,
                         'centroid_dist' : centroid_dist, 'waveform_score' : waveform_score, 'trajectory_score': trajectory_score }
-
+        if to_use is not None:
+            to_exclude = [key for key in scores_to_include if key not in to_use]
+            for key in to_exclude:
+                scores_to_include.pop(key, None)
+        
         total_score, predictors = mf.get_total_score(scores_to_include, param)
 
         #Initial thresholding

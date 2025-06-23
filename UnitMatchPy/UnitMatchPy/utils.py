@@ -287,8 +287,8 @@ def evaluate_output(output_prob, param, within_session, session_switch, match_th
     # get the number of diagonal matches
     n_diag = np.sum(output_threshold[np.eye(param['n_units']).astype(bool)])
     self_match = n_diag / param['n_units'] *100
-    print(f'The percentage of units matched to themselves is: {self_match}%')
-    print(f'The percentage of false -ve\'s then is: {100 - self_match}% \n')
+    print(f'The percentage of units matched to themselves is: {self_match:.2f}%')
+    print(f'The percentage of false -ve\'s then is: {100 - self_match:.2f}% \n')
 
     #off-diagonal miss-matches
     n_off_diag = np.zeros_like(output_prob)
@@ -296,7 +296,7 @@ def evaluate_output(output_prob, param, within_session, session_switch, match_th
     n_off_diag[within_session == 1] = 0 
     n_off_diag[np.eye(param['n_units']) == 1] = 0 
     false_positive_est =  n_off_diag.sum() / (param['n_units']) 
-    print(f'The rate of miss-match(es) per expected match {false_positive_est}')
+    print(f'The rate of miss-match(es) per expected match {false_positive_est:.2f}')
 
 
     #compute matlab FP per session per session
@@ -306,7 +306,7 @@ def evaluate_output(output_prob, param, within_session, session_switch, match_th
         n_units = tmp_diag.shape[0]
         tmp_diag[np.eye(n_units) == 1] = 0 
         false_positive_est_per_session[did] = tmp_diag.sum() / (n_units ** 2 - n_units) * 100
-        print(f'The percentage of false +ve\'s is {false_positive_est_per_session[did]}% for session {did +1}')
+        print(f'The percentage of false +ve\'s is {false_positive_est_per_session[did]:.2f}% for session {did +1}')
 
     print('\nThis assumes that the spike sorter has made no mistakes')
 
