@@ -1,6 +1,7 @@
 histodone=0;
 histoflag = 0;
 Depth2Area = [];
+removenoise = 0;
 AllenCCFPath = fullfile(GithubDir,'allenCCF');
 if ~exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
     mkdir(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
@@ -30,6 +31,7 @@ if ~histodone %Just in case it's not done yet
         end
         if isempty(histofile)
             % Maybe chronic?
+            try
             myLFDir = dir(Params.RawDataPaths{1});
             MetaFileDir = dir(fullfile(myLFDir.folder,'*.meta'));
             ImecMeta =ReadMeta2(fullfile(MetaFileDir(1).folder,MetaFileDir(1).name));
@@ -38,6 +40,10 @@ if ~histodone %Just in case it's not done yet
             histofile = dir(fullfile(HistoFolder,MiceOpt{midx},'ProbeTracks',['*' ProbeSN],'*.csv')); % Use Probe Serial Number is safest!
             if isempty(histofile)
                 histofile = dir(fullfile(HistoFolder,MiceOpt{midx},'ProbeTracks',thisprobe,'*.csv'));
+            end
+            catch ME
+                disp(ME)
+
             end
         end
         if length(histofile)>1
@@ -72,9 +78,9 @@ if ~histodone %Just in case it's not done yet
             end
             % Align ephys data with probe
             if exist('lfpD') && ~isempty(lfpD)
-                Depth2Area  = alignatlasdata_automated(histinfo,AllenCCFPath,sp,clusinfo,0,0,fullfile(lfpD.folder,lfpD.name),2,trackcoordinates);
+                Depth2Area  = alignatlasdata_automated(histinfo,AllenCCFPath,sp,clusinfo,removenoise,0,fullfile(lfpD.folder,lfpD.name),2,trackcoordinates);
             else
-                 Depth2Area  = alignatlasdata_automated(histinfo,AllenCCFPath,sp,clusinfo,0,trackcoordinates);
+                 Depth2Area  = alignatlasdata_automated(histinfo,AllenCCFPath,sp,clusinfo,removenoise,trackcoordinates);
                 % alignatlasdata_automated(histinfo, AllenCCFPath, sp, clusinfo, removenoise, trackcoordinates)
             end
         end
@@ -99,7 +105,7 @@ if ~histodone %Just in case it's not done yet
         histinfonew.Properties.VariableNames = {'Position','RegionID','RegionAcronym','RegionName'};
 
         % Align ephys data with probe
-        Depth2Area  = alignatlasdata_automated(histinfonew,AllenCCFPath,sp,clusinfo,0,0,fullfile(lfpD.folder,lfpD.name),2);
+        Depth2Area  = alignatlasdata_automated(histinfonew,AllenCCFPath,sp,clusinfo,removenoise,0,fullfile(lfpD.folder,lfpD.name),2);
     end
 end
 if histoflag && ~histodone
@@ -112,7 +118,7 @@ end
 
 % Add information to clusinfo
 
-if exist('tmp') && isstruct(tmp) && isfield(tmp,'VRDat')
+if exist('tmp') && isstruct(tmp) && isfield(tmp,'VRDat') && ~isfield(tmp,'clusinfo')
     myKsDir = dir(fullfile(SaveDir,tmp.VRDat.Mouse(1,:),tmp.VRDat.Date(1,:),tmp.VRDat.Session(1,:),thisprobe,'SpikeData.mat'));
     tmpload = load(fullfile(myKsDir.folder,myKsDir.name));
     clusinfo = tmpload.clusinfo;

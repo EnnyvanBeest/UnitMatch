@@ -8,12 +8,12 @@ DateOpt = cellfun(@(X) X([X.isdir]),DateOpt,'UniformOutput',0);
 DateOpt = cellfun(@(X) {X.name},DateOpt,'UniformOutput',0);
 
 RemoveOldCopies = 1;
-
+Redo = 0; % Redo generally
 LogError = {}; % Keep track of which runs didn't work
 if ~exist('PipelineParamsOri','var')
     PipelineParamsOri = PipelineParams;
 end
-for midx = 1:length(MiceOpt)
+for midx = 18:length(MiceOpt)
     close all % to not overcrowd the graphics card
     PipelineParams = PipelineParamsOri; % Reset
     %% Loading data from kilosort/phy easily
@@ -89,18 +89,26 @@ for midx = 1:length(MiceOpt)
         continue
     end
 
+    KSDates = cellfun(@(X) strsplit(X,filesep),AllKiloSortPaths,'Uni',0);
+    KSDates = cellfun(@(X) datetime(X{end-2}),KSDates,'uni',0);
+
     %% Remove old copies?
     UnitMatchExist = dir(fullfile(SaveDir,MiceOpt{midx},'**','UnitMatch.mat'));
     if ~isempty(UnitMatchExist)
-        MouseAllDone = 0;
+        MouseAllDone = 1;
     else 
         MouseAllDone = 0;
     end
     for id = 1:numel(UnitMatchExist)
-        if RemoveOldCopies && UnitMatchExist(id).date<FromDate
+        if RemoveOldCopies && (UnitMatchExist(id).date<FromDate || Redo)
             delete(fullfile(UnitMatchExist(id).folder,'**'))
             rmdir(UnitMatchExist(id).folder)
-
+            MouseAllDone = 0;
+        elseif any(cellfun(@(X) UnitMatchExist(id).date<=X,KSDates)) %Any new data since running this?
+            if RemoveOldCopies
+                delete(fullfile(UnitMatchExist(id).folder,'**'))
+                rmdir(UnitMatchExist(id).folder)
+            end
             MouseAllDone = 0;
         end
     end
