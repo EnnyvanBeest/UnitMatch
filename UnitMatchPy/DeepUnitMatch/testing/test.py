@@ -155,6 +155,92 @@ def get_final_matches(output_prob_matrix, session_id, matching_threshold=0.5):
     final_matches = probs > matching_threshold
     return probs, final_matches
 
+def pairwise_histogram_correlation(A, B):
+    # Initialize the output correlation matrix
+    num_histograms = A.shape[0]
+    correlation_matrix = np.zeros((num_histograms, num_histograms))
+
+    # Compute pairwise correlations
+    for i in range(num_histograms):
+        for j in range(num_histograms):
+            # Correlate the i-th histogram in A with the j-th histogram in B
+            correlation_matrix[i, j] = np.corrcoef(A[i], B[j])[0, 1]
+    
+    return correlation_matrix
+
+def get_ISI_histograms(param, good_units, ISIbins):
+
+    fs = 3e4
+    nclus = param['n_units']
+    KSdirs = param['KS_dirs']
+    spktimes1 = np.load(os.path.join(KSdirs[0], "spike_times.npy")) / fs
+    spktimes2 = np.load(os.path.join(KSdirs[1], "spike_times.npy")) / fs
+    spktimes = [spktimes1, spktimes2]
+    spkclus1 = np.load(os.path.join(KSdirs[0], "spike_clusters.npy"))
+    spkclus2 = np.load(os.path.join(KSdirs[1], "spike_clusters.npy"))
+    spkclus = [spkclus1, spkclus2]
+
+    ISIMat = np.zeros((len(ISIbins) - 1, 2, nclus))
+    index = 0
+    for session in range(2):
+        times = spktimes[session]
+        clusters = spkclus[session]
+
+        for clusid in tqdm(good_units[session].squeeze()):
+            idx1 = np.where(clusters == clusid)[0]
+
+            for cv in range(2):    
+                if idx1.size > 0:
+                    if idx1.size < 50 and cv == 0:
+                        print(f"Warning: Fewer than 50 spikes for neuron {clusid}, please check your inclusion criteria")
+                    # Split idx1 into two halves
+                    if cv == 0:
+                        idx1 = idx1[:len(idx1) // 2]
+                    else:
+                        idx1 = idx1[len(idx1) // 2:]
+                    ISIMat[:, cv, index], _ = np.histogram(np.diff(times[idx1].astype(float)), bins=ISIbins)
+
+            index += 1
+    return ISIMat
+
+def ISI_correlations(param, good_units):
+
+    # Define ISI bins
+    ISIbins = np.concatenate(([0], 5 * 10 ** np.arange(-4, 0.1, 0.1)))
+    ISIMat = get_ISI_histograms(param, good_units, ISIbins)
+    A, B = ISIMat[:,0,:].T, ISIMat[:,1,:].T                                                         # pull out each cross-validation fold
+
+    return pairwise_histogram_correlation(A, B)                                                      # compute pairwise correlations
+
+def AUC(matches:np.ndarray, func_metric:np.ndarray, session_id):
+    """
+    The AUC depends on a functional metric which is considered as ground truth. This is passed in via func_metric.
+    """
+
+    P = np.sum(matches)
+    if P < 1:
+        raise ValueError("No matches found - can't compute AUC")
+
+    # Calculate AUCs using final sets of matches
+    within_session = (session_id[:, None] == session_id).astype(bool)
+    func_across = func_metric[~within_session]
+    matches_across = matches[~within_session]
+    sorted_indices = np.argsort(func_across)[::-1]
+
+    tp, fp = 0,0
+    N = len(func_across) - P
+    recall, fpr = [], []
+
+    for idx in sorted_indices:
+        if matches_across[idx]:
+            tp+=1
+        else:
+            fp+=1
+        recall.append(tp/P)
+        fpr.append(fp/N)
+    auc = np.trapz(recall, fpr)
+    return auc
+
 
 if __name__ == '__main__':
 
