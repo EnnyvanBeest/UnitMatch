@@ -82,24 +82,6 @@ def inference(model, data_dir):
 
     return result
 
-def directional_filter(matches: pd.DataFrame):
-    filtered_matches = matches.copy()
-    for idx, row in matches.iterrows():
-        i1 = row["ID1"]
-        i2 = row["ID2"]
-        r1 = row["RecSes1"]
-        r2 = row["RecSes2"]
-
-        # Check for the reverse match
-        reverse_match = matches.loc[
-            (matches["RecSes1"] == r2) & (matches["ID1"] == i2) & 
-            (matches["RecSes2"] == r1) & (matches["ID2"] == i1)
-        ]
-
-        if reverse_match.empty:
-            filtered_matches = filtered_matches.drop(idx)  # Drop if no reverse match is found
-    return filtered_matches
-
 def get_threshold(prob_matrix:np.ndarray, session_id, MAP=False):
 
     n = len(session_id)
@@ -142,8 +124,8 @@ def directional_filter(matrix: np.ndarray):
     # Keep only elements where both directions are non-zero
     bidirectional_mask = nonzero_mask & nonzero_transpose_mask
     
-    # Apply mask to original matrix
-    return matrix * bidirectional_mask
+    # return the bidirectional mask
+    return bidirectional_mask
 
 def remove_conflicts(matrix, fill_value=0):
     """Optimal conflict removal using Hungarian algorithm."""
@@ -157,6 +139,21 @@ def remove_conflicts(matrix, fill_value=0):
     result[rows[valid], cols[valid]] = m[rows[valid], cols[valid]]
     
     return result
+
+def get_final_matches(output_prob_matrix, session_id, matching_threshold=0.5):
+    """
+    Process the output probability matrix to get final set of matches across sessions.
+    Output is the probability matrix of matches after thresholding and filtering and a boolean matrix indicating final matches.
+    """
+    within_session = (session_id[:, None] == session_id).astype(int)
+    probs = output_prob_matrix.copy()
+    probs[within_session == True] = 0                               # don't include within-session pairs
+    matches = probs > matching_threshold
+    bidirectional_mask = directional_filter(matches)
+    probs[~bidirectional_mask] = 0                                  # make the matching critera more stringent
+    probs = remove_conflicts(probs)                    # ensure each neuron is only matched once
+    final_matches = probs > matching_threshold
+    return probs, final_matches
 
 
 if __name__ == '__main__':
