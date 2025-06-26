@@ -323,7 +323,7 @@ def dist_angle(avg_waveform_per_tp_flip, param):
         for dim_id2 in np.arange(1,avg_waveform_per_tp_flip.shape[0]):
             if dim_id2 <= dim_id1:
                 continue
-            ang = np.abs( x1[dim_id1,:,:,:,:] - x2[dim_id1,:,:,:,:]) / np.abs(x1[dim_id2,:,:,:,:] - x2[dim_id2,:,:,:,:])
+            ang = np.abs( x1[dim_id1,:,:,:,:] - x2[dim_id1,:,:,:,:]) / (np.abs(x1[dim_id2,:,:,:,:] - x2[dim_id2,:,:,:,:]) + 1e-10)
             
             loc_angle[:,:,:,:,count_id] = np.arctan(ang) * good_angle # only selects angles for units where there is sufficient distance between time poitns
             count_id +=1

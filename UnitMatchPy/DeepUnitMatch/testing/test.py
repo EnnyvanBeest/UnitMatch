@@ -16,6 +16,7 @@ from pathlib import Path
 from sklearn.neighbors import KernelDensity
 import scipy
 
+
 def load_trained_model(device="cpu"):
 
     model = SpatioTemporalCNN_V2(n_channel=30,n_time=60,n_output=256).to(device)
@@ -127,6 +128,24 @@ def directional_filter(matrix: np.ndarray):
     # return the bidirectional mask
     return bidirectional_mask
 
+def directional_filter_df(matches: pd.DataFrame):
+    filtered_matches = matches.copy()
+    for idx, row in matches.iterrows():
+        i1 = row["ID1"]
+        i2 = row["ID2"]
+        r1 = row["RecSes1"]
+        r2 = row["RecSes2"]
+
+        # Check for the reverse match
+        reverse_match = matches.loc[
+            (matches["RecSes1"] == r2) & (matches["ID1"] == i2) & 
+            (matches["RecSes2"] == r1) & (matches["ID2"] == i1)
+        ]
+
+        if reverse_match.empty:
+            filtered_matches = filtered_matches.drop(idx)  # Drop if no reverse match is found
+    return filtered_matches
+
 def remove_conflicts(matrix, fill_value=0):
     """Optimal conflict removal using Hungarian algorithm."""
     
@@ -168,7 +187,7 @@ def pairwise_histogram_correlation(A, B):
     
     return correlation_matrix
 
-def get_ISI_histograms(param, good_units, ISIbins):
+def get_ISI_histograms(param, ISIbins):
 
     fs = 3e4
     nclus = param['n_units']
@@ -179,6 +198,7 @@ def get_ISI_histograms(param, good_units, ISIbins):
     spkclus1 = np.load(os.path.join(KSdirs[0], "spike_clusters.npy"))
     spkclus2 = np.load(os.path.join(KSdirs[1], "spike_clusters.npy"))
     spkclus = [spkclus1, spkclus2]
+    good_units = param['good_units']
 
     ISIMat = np.zeros((len(ISIbins) - 1, 2, nclus))
     index = 0
@@ -203,11 +223,11 @@ def get_ISI_histograms(param, good_units, ISIbins):
             index += 1
     return ISIMat
 
-def ISI_correlations(param, good_units):
+def ISI_correlations(param):
 
     # Define ISI bins
     ISIbins = np.concatenate(([0], 5 * 10 ** np.arange(-4, 0.1, 0.1)))
-    ISIMat = get_ISI_histograms(param, good_units, ISIbins)
+    ISIMat = get_ISI_histograms(param, ISIbins)
     A, B = ISIMat[:,0,:].T, ISIMat[:,1,:].T                                                         # pull out each cross-validation fold
 
     return pairwise_histogram_correlation(A, B)                                                      # compute pairwise correlations

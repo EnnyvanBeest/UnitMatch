@@ -2,7 +2,25 @@ import numpy as np
 from scipy.signal import detrend
 import h5py, os
 from pathlib import Path
-from utils.myutil import get_default_param
+
+def get_default_param(param = None):
+    """
+    Create param, a dictionary with the default parameters.
+    If a dictionary is given, it will add values to it without overwriting existing values.
+    Do not need to give a dictionary.
+    """
+    tmp = {'nTime' : 82, 'nChannels' : 384, 'ChannelRadius' : 110,
+           'RnChannels' : 30, 'RnTime' : 60, 
+        }
+    # if no dictionary is given just returns the default parameters
+    if param == None:
+        out = tmp
+    else:    
+        # Add default parameters to param dictionary, does not overwrite pre existing param values
+        out = tmp | param
+    if out['RnChannels'] %2 !=0:
+        print('RnChannels is not even, please check')
+    return out
 
 def detrend_waveform(waveform):
     """

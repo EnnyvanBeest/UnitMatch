@@ -25,8 +25,10 @@ class NeuropixelsDataset(Dataset):
         self.mode = mode
         self.experiment_unit_map = {}  # Maps experiment to its units
 
+        print(self.data_dir, "is the data directory")
+
         for id, session in enumerate(os.listdir(self.data_dir)):
-            self.experiment_unit_map[id] = [os.path.join(self.data_dir, session, f) for f in os.listdir(os.path.join(self.data_dir, session))]
+            self.experiment_unit_map[id] = self.select_good_units_files(os.path.join(self.data_dir, session), load_pre_merge=False)
 
         self.all_files = [(exp, file) for exp, files in self.experiment_unit_map.items() for file in files]
                     
@@ -61,6 +63,79 @@ class NeuropixelsDataset(Dataset):
             waveform_sh = waveform[..., 1]
             
         return waveform_fh, waveform_sh, MaxSitepos, experiment_path, neuron_file
+    
+    def select_good_units_files(self, directory, load_pre_merge:bool=True):
+        """
+        Selects the filenames of the good units based on the good_units_value array.
+        Args:
+        - directory (str): The directory containing the unit files.
+        - good_units_value (list or numpy.ndarray): An array where a value of 1 indicates a good unit.
+        - load_pre_merge (bool): Whether to load the pre-merge data.
+        Returns:
+        - list: A list of filenames corresponding to the good units.
+        """
+        files = os.listdir(directory)
+        merges = {}
+        removes = []
+        indices = []
+        for file in files:
+            if load_pre_merge:
+                if '+' in file:
+                    removes.append(file)
+            else:
+                if '+' in file:
+                    f = file.replace("Unit",'')
+                    f = f.replace(".npy", '')
+                    id1 = int(f[:f.find('+')])
+                    id2 = int(f[f.find('+')+1:])
+                    merges[id1] = id2
+                if '#' in file:
+                    f = file.replace("Unit",'')
+                    f = f.replace(".npy", '')
+                    id1 = int(f[:f.find('#')])
+                    removes.append(id1)
+            indices.append(self.get_unit_id(file))
+        indices = list(set(indices))  # Remove duplicates
+        good_units_files = []
+        for index in indices:
+            if index in merges.keys():
+                filename = f"Unit{index}+{merges[index]}.npy"
+            elif index in merges.values() or index in removes:
+                # don't load a unit if we already loaded the unit it merged with
+                # or if it's a unit we wanted to remove
+                continue
+            else:   # load the unit, ignoring the # if it is there (for pre-merge data)
+                filename = f"Unit{index}.npy"
+                withhash = f"Unit{index}#.npy"
+            filepath = os.path.join(directory, filename)
+            if os.path.exists(filepath):  # Check if file exists before adding
+                good_units_files.append(filepath)
+            elif load_pre_merge and os.path.exists(os.path.join(directory, withhash)):
+                good_units_files.append(os.path.join(directory, withhash))
+            else:
+                print(f"Warning: Expected file {filepath} does not exist.")
+        return good_units_files
+    
+    def get_unit_id(self, filepath:str):
+        fp = os.path.basename(filepath)
+        if fp[:4] == "Unit":
+            fp = fp.replace("Unit", "")
+            id = fp.replace(".npy", "")
+            if '+' in id:
+                id = id[:id.find('+')]
+            if '#' in id:
+                id = id.replace("#", "")
+            try:
+                return int(id)
+            except:
+                print(id)
+                raise ValueError(f"Invalid filepath format for this waveform: {filepath}", 
+                            "Filename for waveform XX should be UnitXX.npy")
+        else:
+            raise ValueError(f"Invalid filepath format for this waveform: {filepath}", 
+                            "Filename for waveform XX should be UnitXX.npy")
+    
+
 
 class TrainExperimentBatchSampler(Sampler):
     def __init__(self, data_source, batch_size, shuffle=False):
