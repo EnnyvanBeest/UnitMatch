@@ -495,14 +495,21 @@ def fill_missing_pos(KS_dir, n_channels):
         return channel_pos
 
 
-def paths_from_KS(KS_dirs):
+def paths_from_KS(KS_dirs, custom_raw_waveform_paths=None, custom_bombcell_paths=None):
     """
     This function will find specific paths to required files from a KiloSort directory
+    or use custom paths if provided
 
     Parameters
     ----------
     KS_dirs : list
         The list of paths to the KiloSort directory for each session
+    custom_raw_waveform_paths : list, optional
+        Custom paths to raw waveform directories for each session. If provided,
+        these will be used instead of searching within KS_dirs
+    custom_bombcell_paths : list, optional
+        Custom paths to BombCell/unit label files for each session. If provided,
+        these will be used instead of searching within KS_dirs
 
     Returns
     -------
@@ -514,16 +521,30 @@ def paths_from_KS(KS_dirs):
     #load in the number of channels
     tmp = os.getcwd()
 
-    wave_paths = []
-    for i in range(n_sessions):
-        #check if it is in KS directory
-        if os.path.exists(os.path.join(KS_dirs[i], 'RawWaveforms')):
-            wave_paths.append( os.path.join(KS_dirs[i], 'RawWaveforms'))
-        #Raw waveforms curated via bombcell
-        elif os.path.exists(os.path.join(KS_dirs[i], 'qMetrics', 'RawWaveforms')):
-            wave_paths.append( os.path.join(KS_dirs[i],'qMetrics', 'RawWaveforms'))
-        else:
-            raise Exception('Could not find RawWaveforms folder')
+    # Use custom raw waveform paths if provided, otherwise search in KS directories
+    if custom_raw_waveform_paths is not None:
+        if len(custom_raw_waveform_paths) != n_sessions:
+            raise ValueError(f"Number of custom raw waveform paths ({len(custom_raw_waveform_paths)}) must match number of KS directories ({n_sessions})")
+        wave_paths = custom_raw_waveform_paths
+    elif custom_bombcell_paths is not None:
+        if len(custom_bombcell_paths) != n_sessions:
+            raise ValueError(f"Number of custom raw waveform paths ({len(custom_bombcell_paths)}) must match number of KS directories ({n_sessions})")
+        wave_paths = []
+        for i in range(n_sessions):
+             wave_paths.append( os.path.join(custom_bombcell_paths[i], 'RawWaveforms'))
+    else:
+        wave_paths = []
+        for i in range(n_sessions):
+            #check if it is in KS directory
+            if os.path.exists(os.path.join(KS_dirs[i], 'RawWaveforms')):
+                wave_paths.append( os.path.join(KS_dirs[i], 'RawWaveforms'))
+            #Raw waveforms curated via bombcell
+            elif os.path.exists(os.path.join(KS_dirs[i], 'qMetrics', 'RawWaveforms')):
+                wave_paths.append( os.path.join(KS_dirs[i],'qMetrics', 'RawWaveforms'))
+            elif os.path.exists(os.path.join(KS_dirs[i], 'bombcell', 'RawWaveforms')):
+                wave_paths.append( os.path.join(KS_dirs[i],'bombcell', 'RawWaveforms'))
+            else:
+                raise Exception('Could not find RawWaveforms folder')
     #load in a waveform from each session to get the number of channels!
     n_channels = []
     for i in range(n_sessions):
@@ -547,26 +568,21 @@ def paths_from_KS(KS_dirs):
         pos_tmp = np.insert(pos_tmp, 0, np.ones(pos_tmp.shape[0]), axis = 1)
         channel_pos.append(pos_tmp)
 
-    unit_label_paths = []
-    # load Good unit Paths
-    for i in range(n_sessions):
-        if os.path.exists(os.path.join(KS_dirs[i], 'cluster_bc_unitType.tsv')):
-           unit_label_paths.append( os.path.join(KS_dirs[i], 'cluster_bc_unitType.tsv')) 
-           print('Using BombCell: cluster_bc_unitType')
-        else:
-            unit_label_paths.append( os.path.join(KS_dirs[i], 'cluster_group.tsv'))
-            print('Using cluster_group.tsv')
-
-    wave_paths = []
-    for i in range(n_sessions):
-        #check if it is in KS directory
-        if os.path.exists(os.path.join(KS_dirs[i], 'RawWaveforms')):
-            wave_paths.append( os.path.join(KS_dirs[i], 'RawWaveforms'))
-        #Raw waveforms curated via bombcell
-        elif os.path.exists(os.path.join(KS_dirs[i], 'qMetrics', 'RawWaveforms')):
-            wave_paths.append( os.path.join(KS_dirs[i],'qMetrics', 'RawWaveforms'))
-        else:
-            raise Exception('Could not find RawWaveforms folder')
+    # Use custom BombCell paths if provided, otherwise search in KS directories
+    if custom_bombcell_paths is not None:
+        if len(custom_bombcell_paths) != n_sessions:
+            raise ValueError(f"Number of custom BombCell paths ({len(custom_bombcell_paths)}) must match number of KS directories ({n_sessions})")
+        unit_label_paths = custom_bombcell_paths
+    else:
+        unit_label_paths = []
+        # load Good unit Paths
+        for i in range(n_sessions):
+            if os.path.exists(os.path.join(KS_dirs[i], 'cluster_bc_unitType.tsv')):
+               unit_label_paths.append( os.path.join(KS_dirs[i], 'cluster_bc_unitType.tsv')) 
+               print('Using BombCell: cluster_bc_unitType')
+            else:
+                unit_label_paths.append( os.path.join(KS_dirs[i], 'cluster_group.tsv'))
+                print('Using cluster_group.tsv')
     
     return wave_paths, unit_label_paths, channel_pos
 

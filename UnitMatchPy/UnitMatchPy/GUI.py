@@ -6,6 +6,205 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolb
 import numpy as np
 from matplotlib import rcParams
 import os
+import pickle
+
+
+def precalculate_all_acgs(clus_info, param, save_path=None, bin_size=0.001, max_lag=0.05):
+    """
+    Pre-calculate and save autocorrelograms for all units to speed up GUI loading
+    
+    Parameters
+    ----------
+    clus_info : dict
+        Cluster information dictionary containing unit metadata
+    param : dict
+        Parameters dictionary containing KS_dirs and other settings
+    save_path : str, optional
+        Path to save the ACG data. If None, saves in current directory as 'acg_cache.pkl'
+    bin_size : float
+        Bin size in seconds (default 1ms)
+    max_lag : float
+        Maximum lag in seconds (default 50ms)
+        
+    Returns
+    -------
+    acg_cache : dict
+        Dictionary mapping unit_id to (autocorr, bin_centers) tuples
+    """
+    print("Pre-calculating autocorrelograms for all units...")
+    
+    if save_path is None:
+        save_path = 'acg_cache.pkl'
+    
+    acg_cache = {}
+    n_units = len(clus_info.get('session_id', []))
+    
+    for unit_id in range(n_units):
+        try:
+            # Get spike times for this unit
+            spike_times = get_spike_times_for_unit_precalc(unit_id, clus_info, param)
+            
+            if len(spike_times) > 1:
+                # Compute ACG
+                autocorr, bin_centers = compute_acg_precalc(spike_times, bin_size, max_lag)
+                acg_cache[unit_id] = (autocorr, bin_centers)
+                
+                if (unit_id + 1) % 50 == 0:  # Progress update every 50 units
+                    print(f"Processed {unit_id + 1}/{n_units} units")
+            else:
+                acg_cache[unit_id] = (np.array([]), np.array([]))
+                
+        except Exception as e:
+            print(f"Error computing ACG for unit {unit_id}: {e}")
+            acg_cache[unit_id] = (np.array([]), np.array([]))
+    
+    # Save to file
+    try:
+        with open(save_path, 'wb') as f:
+            pickle.dump(acg_cache, f)
+        print(f"ACG cache saved to {save_path}")
+    except Exception as e:
+        print(f"Error saving ACG cache: {e}")
+    
+    return acg_cache
+
+
+def get_spike_times_for_unit_precalc(unit_id, clus_info, param):
+    """
+    Get spike times for a specific unit (used in pre-calculation)
+    
+    Parameters
+    ----------
+    unit_id : int
+        UnitMatch unit ID
+    clus_info : dict
+        Cluster information dictionary
+    param : dict
+        Parameters dictionary
+        
+    Returns
+    -------
+    spike_times : array
+        Spike times in seconds for the unit
+    """
+    try:
+        # Get session information for this unit
+        session_id = clus_info['session_id'][unit_id]
+        original_id = clus_info['original_ids'][unit_id]
+        
+        # Get the Kilosort directory for this session
+        if 'KS_dirs' in param:
+            ks_dir = param['KS_dirs'][session_id]
+        else:
+            return np.array([])
+        
+        # Load Kilosort spike times and cluster assignments
+        spike_times_path = os.path.join(ks_dir, 'spike_times.npy')
+        spike_clusters_path = os.path.join(ks_dir, 'spike_clusters.npy')
+        
+        if os.path.exists(spike_times_path) and os.path.exists(spike_clusters_path):
+            # Load spike times (in samples) and cluster assignments
+            spike_times_samples = np.load(spike_times_path).flatten()
+            spike_clusters = np.load(spike_clusters_path).flatten()
+            
+            # Get sampling rate - try to load from params.py or use default
+            try:
+                params_path = os.path.join(ks_dir, 'params.py')
+                sample_rate = 30000  # Default sample rate
+                if os.path.exists(params_path):
+                    # Parse params.py for sample_rate
+                    with open(params_path, 'r') as f:
+                        params_content = f.read()
+                    # Extract sample_rate
+                    for line in params_content.split('\n'):
+                        if 'sample_rate' in line and '=' in line:
+                            sample_rate = float(line.split('=')[1].strip())
+                            break
+            except:
+                sample_rate = 30000  # Fallback
+            
+            # Get spike times for this specific unit
+            unit_mask = spike_clusters == original_id
+            unit_spike_times = spike_times_samples[unit_mask] / sample_rate  # Convert to seconds
+            
+            return unit_spike_times
+        else:
+            return np.array([])
+            
+    except Exception as e:
+        return np.array([])
+
+
+def compute_acg_precalc(spike_times, bin_size=0.001, max_lag=0.05):
+    """
+    Compute autocorrelogram for a unit (used in pre-calculation)
+    
+    Parameters
+    ----------
+    spike_times : array
+        Spike times in seconds
+    bin_size : float
+        Bin size in seconds (default 1ms)
+    max_lag : float
+        Maximum lag in seconds (default 50ms)
+        
+    Returns
+    -------
+    autocorr : array
+        Autocorrelogram counts
+    bin_centers : array
+        Bin centers in seconds
+    """
+    if len(spike_times) < 2:
+        return np.array([]), np.array([])
+    
+    # Create bins centered around 0
+    bins = np.arange(-max_lag, max_lag + bin_size, bin_size)
+    bin_centers = bins[:-1] + bin_size/2
+    
+    # Calculate autocorrelogram
+    autocorr = np.zeros(len(bin_centers))
+    
+    # For each spike, find all other spikes within max_lag
+    for i, spike_time in enumerate(spike_times):
+        # Find spikes within the lag window
+        time_diffs = spike_times - spike_time
+        valid_diffs = time_diffs[(np.abs(time_diffs) <= max_lag) & (time_diffs != 0)]
+        
+        # Bin the time differences
+        hist, _ = np.histogram(valid_diffs, bins)
+        autocorr += hist
+    
+    # Convert to firing rate (Hz)
+    total_time = spike_times[-1] - spike_times[0] if len(spike_times) > 1 else 1
+    n_spikes = len(spike_times)
+    autocorr = autocorr / (bin_size * n_spikes * total_time)
+    
+    return autocorr, bin_centers
+
+
+def load_acg_cache(cache_path='acg_cache.pkl'):
+    """
+    Load pre-calculated ACG cache from file
+    
+    Parameters
+    ----------
+    cache_path : str
+        Path to the ACG cache file
+        
+    Returns
+    -------
+    acg_cache : dict or None
+        Dictionary mapping unit_id to (autocorr, bin_centers) tuples, or None if loading failed
+    """
+    try:
+        with open(cache_path, 'rb') as f:
+            acg_cache = pickle.load(f)
+        print(f"ACG cache loaded from {cache_path}")
+        return acg_cache
+    except Exception as e:
+        print(f"Could not load ACG cache from {cache_path}: {e}")
+        return None
 
 
 def run_GUI():
@@ -39,9 +238,18 @@ def run_GUI():
     global entry_frame
     global toggle_raw_val
     global toggle_UM_score_val
+    global unit_legend_plot
+    global hist_legend_plot
+    global acg_plot
+    global toggle_acg_val
+    global acg_cache
+
+    # Try to load pre-calculated ACG cache
+    acg_cache = load_acg_cache()
 
     rcParams.update({'figure.autolayout': True})
-    rcParams.update({'font.size': 10})
+    rcParams.update({'font.size': 14})
+    rcParams.update({'font.family': 'DejaVu Sans'})
     color = 'white'
     rcParams['text.color'] = color
     rcParams['axes.labelcolor'] = color
@@ -61,6 +269,13 @@ def run_GUI():
     window_width = screen_width - 100
     window_height = screen_height - 100
     root.geometry(f"{window_width}x{window_height}+50+50")
+    
+    # Configure column weights to prevent plot squashing
+    for i in range(7):  # Configure columns 0-6
+        root.columnconfigure(i, weight=1)
+    # Configure rows to expand properly
+    for i in range(10):  # Configure rows 0-9
+        root.rowconfigure(i, weight=1)
 
     # downloaded theme from https://sourceforge.net/projects/tcl-awthemes/
     theme_path_rel = os.path.join('TkinterTheme', 'awthemes-10.4.0')
@@ -70,6 +285,17 @@ def run_GUI():
     root.tk.call('package', 'require', 'awdark')
     s = ttk.Style(root)
     s.theme_use('awdark')
+    
+    # Configure fonts for all TTK widgets to use DejaVu Sans
+    s.configure('.', font=('DejaVu Sans', 12))
+    s.configure('TLabel', font=('DejaVu Sans', 12))
+    s.configure('TButton', font=('DejaVu Sans', 12))
+    s.configure('TEntry', font=('DejaVu Sans', 10))
+    s.configure('TCombobox', font=('DejaVu Sans', 10))
+    s.configure('TCheckbutton', font=('DejaVu Sans', 12))
+    s.configure('TRadiobutton', font=('DejaVu Sans', 12))
+    s.configure('TLabelFrame.Label', font=('DejaVu Sans', 12, 'bold'))
+    
     root.title('UMPy - Manual Curation')
     #root.geometry('800x800')
 
@@ -218,10 +444,13 @@ def run_GUI():
     ######################################################################################
     toggle_raw_val = BooleanVar()
     toggle_UM_score_val = BooleanVar()
+    toggle_acg_val = BooleanVar()
     toggle_raw_val.set(False)
     toggle_UM_score_val.set(False)
+    toggle_acg_val.set(True)  # Default to hiding ACGs
     toggle_raw_plot = ttk.Checkbutton(root, text ='Hide Raw Data', variable = toggle_raw_val)
     toggle_UM_score_plot = ttk.Checkbutton(root, text ='Hide UM Score Histograms', variable = toggle_UM_score_val)
+    toggle_acg_plot = ttk.Checkbutton(root, text ='Hide Autocorrelograms (ACGs)', variable = toggle_acg_val)
 
 
 
@@ -238,11 +467,21 @@ def run_GUI():
     root.bind_all('n', set_not_match)
 
     #Grid the units
-    entry_frame.grid(row = 0, column = 0, pady=5, padx = 5)
-    match_button.grid(row = 4, column = 3, sticky = 'E',  padx = 50, pady = 5)
-    non_match_button.grid(row = 4, column = 4, sticky = 'W', padx = 50, pady = 5)
-    toggle_UM_score_plot.grid(row = 4, column = 5, sticky = 'W',  padx = 50, pady = 5)
-    toggle_raw_plot.grid(row = 4, column = 6, sticky = 'E',  padx = 50, pady = 5)
+    entry_frame.grid(row = 2, column = 0, pady=5, padx = 5)
+    match_button.grid(row = 1, column = 0, sticky = 'W',  padx = 10, pady = 5)
+    non_match_button.grid(row = 1, column = 1, sticky = 'W', padx = 10, pady = 5)
+    toggle_UM_score_plot.grid(row = 1, column = 2, sticky = 'W',  padx = 10, pady = 5)
+    toggle_raw_plot.grid(row = 1, column = 3, sticky = 'W',  padx = 10, pady = 5)
+    toggle_acg_plot.grid(row = 1, column = 4, sticky = 'W',  padx = 10, pady = 5)
+    
+    # Create visual legend plots outside plots
+    global unit_legend_plot
+    global hist_legend_plot
+    create_unit_legend()
+    create_hist_legend()
+    
+    unit_legend_plot.grid(row = 0, column = 1, columnspan = 2, sticky = 'W', padx = 10, pady = 5)
+    hist_legend_plot.grid(row = 0, column = 3, columnspan = 4, sticky = 'W', padx = 10, pady = 5)
 
     # Configure grid weights to auto-adjust subpanels
     root.grid_rowconfigure(0, weight=1)
@@ -385,6 +624,289 @@ def process_info_for_GUI(output, match_threshold_in, scores_to_include, total_sc
     avg_waveform_avg = np.mean(avg_waveform, axis = -1)
     avg_waveform_per_tp_avg = np.mean(avg_waveform_per_tp, axis = -1)
 
+def create_unit_legend():
+    """Create visual legend for unit colors"""
+    global unit_legend_plot
+    
+    fig = Figure(figsize=(6, 0.5), dpi=100)
+    fig.patch.set_facecolor('#33393b')
+    
+    ax = fig.add_subplot(111)
+    ax.set_facecolor('#33393b')
+    
+    # Draw legend lines and text
+    ax.plot([0, 0.15], [0.5, 0.5], 'g-', lw=3)
+    ax.text(0.18, 0.5, 'Unit A', color='white', fontsize=12, va='center')
+    
+    ax.plot([0.6, 0.75], [0.5, 0.5], 'b-', lw=3)
+    ax.text(0.78, 0.5, 'Unit B', color='white', fontsize=12, va='center')
+    
+    ax.set_xlim(0, 1.2)
+    ax.set_ylim(0, 1)
+    ax.axis('off')
+    
+    unit_legend_plot = FigureCanvasTkAgg(fig, master=root)
+    unit_legend_plot.draw()
+    unit_legend_plot = unit_legend_plot.get_tk_widget()
+
+def create_hist_legend():
+    """Create visual legend for histogram colors"""
+    global hist_legend_plot
+    
+    fig = Figure(figsize=(8, 0.5), dpi=100)
+    fig.patch.set_facecolor('#33393b')
+    
+    ax = fig.add_subplot(111)
+    ax.set_facecolor('#33393b')
+    
+    # Draw legend elements
+    ax.plot([0, 0.1], [0.5, 0.5], 'orange', lw=3)
+    ax.text(0.12, 0.5, 'All scores', color='white', fontsize=10, va='center')
+    
+    ax.plot([0.35, 0.45], [0.5, 0.5], 'magenta', lw=3)
+    ax.text(0.47, 0.5, 'Expected matches', color='white', fontsize=10, va='center')
+    
+    ax.plot([0.75, 0.85], [0.5, 0.5], 'white', lw=2, linestyle='--')
+    ax.text(0.87, 0.5, 'Current pair', color='white', fontsize=10, va='center')
+    
+    ax.set_xlim(0, 1.2)
+    ax.set_ylim(0, 1)
+    ax.axis('off')
+    
+    hist_legend_plot = FigureCanvasTkAgg(fig, master=root)
+    hist_legend_plot.draw()
+    hist_legend_plot = hist_legend_plot.get_tk_widget()
+
+def compute_acg(spike_times, bin_size=0.001, max_lag=0.05):
+    """
+    Compute autocorrelogram for a unit
+    
+    Parameters
+    ----------
+    spike_times : array
+        Spike times in seconds
+    bin_size : float
+        Bin size in seconds (default 1ms)
+    max_lag : float
+        Maximum lag in seconds (default 50ms)
+        
+    Returns
+    -------
+    autocorr : array
+        Autocorrelogram counts
+    bin_centers : array
+        Bin centers in seconds
+    """
+    if len(spike_times) < 2:
+        return np.array([]), np.array([])
+    
+    # Create bins centered around 0
+    bins = np.arange(-max_lag, max_lag + bin_size, bin_size)
+    bin_centers = bins[:-1] + bin_size/2
+    
+    # Calculate autocorrelogram
+    autocorr = np.zeros(len(bin_centers))
+    
+    # For efficiency, subsample spikes if there are too many
+    if len(spike_times) > 10000:
+        indices = np.random.choice(len(spike_times), 10000, replace=False)
+        spike_subset = spike_times[indices]
+    else:
+        spike_subset = spike_times
+    
+    # Calculate cross-correlation with itself  
+    for i, spike_time in enumerate(spike_subset[::10]):  # Subsample further for speed
+        # Find spikes within max_lag of this spike
+        time_diffs = spike_times - spike_time
+        valid_diffs = time_diffs[(np.abs(time_diffs) <= max_lag) & (time_diffs != 0)]
+        
+        if len(valid_diffs) > 0:
+            hist, _ = np.histogram(valid_diffs, bins=bins)
+            autocorr += hist
+    
+    # Convert to firing rate (spikes/sec)
+    if len(spike_subset) > 0:
+        recording_duration = np.max(spike_times) - np.min(spike_times) if len(spike_times) > 0 else 1
+        autocorr = autocorr / (len(spike_subset) * bin_size) if recording_duration > 0 else autocorr
+    
+    return autocorr, bin_centers
+
+def plot_acgs(unit_a, unit_b):
+    """Plot autocorrelograms for both units overlaid in single plot"""
+    global acg_plot
+    global clus_info
+    global acg_cache
+    
+    # Destroy existing plot
+    if 'acg_plot' in globals() and acg_plot.winfo_exists():
+        acg_plot.destroy()
+    
+    
+    # Create figure for single overlaid ACG plot
+    fig = Figure(figsize=(3, 3), dpi=100)
+    fig.patch.set_facecolor('#33393b')
+    
+    # Create single subplot for overlaid ACGs
+    ax = fig.add_subplot(1, 1, 1)
+    ax.set_facecolor('#2d2d2d')
+    
+    max_rate = 0  # Track max rate for y-axis scaling
+    
+    # Try to get ACGs from cache first, otherwise compute them
+    try:
+        # Get ACG for Unit A
+        if acg_cache is not None and unit_a in acg_cache:
+            # Use cached ACG
+            autocorr_a, bin_centers_a = acg_cache[unit_a]
+        else:
+            # Compute ACG on the fly
+            spike_times_a = get_spike_times_for_unit(unit_a)
+            if len(spike_times_a) > 1:
+                autocorr_a, bin_centers_a = compute_acg(spike_times_a)
+            else:
+                autocorr_a, bin_centers_a = np.array([]), np.array([])
+        
+        # Plot ACG for Unit A
+        if len(autocorr_a) > 0:
+            positive_mask = bin_centers_a >= 0
+            positive_centers = bin_centers_a[positive_mask] * 1000  # Convert to ms
+            positive_autocorr = autocorr_a[positive_mask]
+            
+            ax.plot(positive_centers, positive_autocorr, color='green', 
+                   linewidth=2, alpha=0.8, label=f'Unit A ({unit_a})')
+            max_rate = max(max_rate, np.max(positive_autocorr) if len(positive_autocorr) > 0 else 0)
+        
+        # Get ACG for Unit B
+        if acg_cache is not None and unit_b in acg_cache:
+            # Use cached ACG
+            autocorr_b, bin_centers_b = acg_cache[unit_b]
+        else:
+            # Compute ACG on the fly
+            spike_times_b = get_spike_times_for_unit(unit_b)
+            if len(spike_times_b) > 1:
+                autocorr_b, bin_centers_b = compute_acg(spike_times_b)
+            else:
+                autocorr_b, bin_centers_b = np.array([]), np.array([])
+        
+        # Plot ACG for Unit B
+        if len(autocorr_b) > 0:
+            positive_mask = bin_centers_b >= 0
+            positive_centers = bin_centers_b[positive_mask] * 1000  # Convert to ms
+            positive_autocorr = autocorr_b[positive_mask]
+            
+            ax.plot(positive_centers, positive_autocorr, color='blue', 
+                   linewidth=2, alpha=0.8, label=f'Unit B ({unit_b})')
+            max_rate = max(max_rate, np.max(positive_autocorr) if len(positive_autocorr) > 0 else 0)
+        
+        # Set labels and title
+        ax.set_xlabel('Time lag (ms)', fontsize=10, color='white')
+        ax.set_ylabel('Rate (Hz)', fontsize=10, color='white')
+        ax.set_title('Autocorrelograms', fontsize=12, color='white')
+        ax.set_xlim(0, 50)  # 50ms
+        if max_rate > 0:
+            ax.set_ylim(0, max_rate * 1.1)
+        
+        # Add legend
+        legend = ax.legend(fontsize=8, loc='upper right')
+        legend.get_frame().set_facecolor('#33393b')
+        legend.get_frame().set_alpha(0.8)
+        for text in legend.get_texts():
+            text.set_color('white')
+        
+        # Style the plot
+        ax.tick_params(colors='white', labelsize=8)
+        ax.spines['bottom'].set_color('white')
+        ax.spines['left'].set_color('white')
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        
+    except Exception as e:
+        # If spike times not available, show placeholder
+        ax = fig.add_subplot(1, 1, 1)
+        ax.set_facecolor('#2d2d2d')
+        ax.text(0.5, 0.5, 'ACG data\nnot available', ha='center', va='center', 
+                color='white', fontsize=12)
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        ax.axis('off')
+    
+    # Create canvas and position to the right of waveform plot
+    acg_canvas = FigureCanvasTkAgg(fig, master=root)
+    acg_canvas.draw()
+    acg_plot = acg_canvas.get_tk_widget()
+    acg_plot.grid(row=3, column=3, rowspan=2, padx=5, pady=5, sticky='nsew')
+
+def get_spike_times_for_unit(unit_id):
+    """
+    Get spike times for a specific unit from Kilosort data
+    
+    Parameters
+    ----------
+    unit_id : int
+        UnitMatch unit ID
+        
+    Returns
+    -------
+    spike_times : array
+        Spike times in seconds for the unit
+    """
+    try:
+        # Get session information for this unit
+        global clus_info, param
+        session_id = clus_info['session_id'][unit_id]
+        original_id = clus_info['original_ids'][unit_id]
+        
+        # Get the Kilosort directory for this session
+        if 'KS_dirs' in param:
+            ks_dir = param['KS_dirs'][session_id]
+        else:
+            # Try to infer from existing paths
+            return np.array([])
+        
+        # Load Kilosort spike times and cluster assignments
+        spike_times_path = os.path.join(ks_dir, 'spike_times.npy')
+        spike_clusters_path = os.path.join(ks_dir, 'spike_clusters.npy')
+        
+        if os.path.exists(spike_times_path) and os.path.exists(spike_clusters_path):
+            # Load spike times (in samples) and cluster assignments
+            spike_times_samples = np.load(spike_times_path).flatten()
+            spike_clusters = np.load(spike_clusters_path).flatten()
+            
+            # Get sampling rate - try to load from params.py or use default
+            try:
+                params_path = os.path.join(ks_dir, 'params.py')
+                if os.path.exists(params_path):
+                    # Parse params.py for sample_rate
+                    with open(params_path, 'r') as f:
+                        params_content = f.read()
+                    # Extract sample_rate
+                    for line in params_content.split('\n'):
+                        if 'sample_rate' in line and '=' in line:
+                            sample_rate = float(line.split('=')[1].strip())
+                            break
+                    else:
+                        sample_rate = 30000.0  # Default Neuropixels sample rate
+                else:
+                    sample_rate = 30000.0  # Default
+            except:
+                sample_rate = 30000.0  # Default
+            
+            # Filter spikes for this unit
+            unit_mask = spike_clusters == int(original_id)
+            unit_spike_times = spike_times_samples[unit_mask]
+            
+            # Convert to seconds
+            unit_spike_times_sec = unit_spike_times / sample_rate
+            
+            return unit_spike_times_sec
+        else:
+            print(f"Could not find spike_times.npy or spike_clusters.npy in {ks_dir}")
+            return np.array([])
+            
+    except Exception as e:
+        print(f"Error loading spike times for unit {unit_id}: {e}")
+        return np.array([])
+
 def update(event):
     """
     Updates the GUI.
@@ -425,6 +947,14 @@ def update(event):
     else:
         if hist_plot.winfo_exists() == 1:
             hist_plot.destroy()
+    
+    # Plot ACGs for both units if not hidden
+    if toggle_acg_val.get() is False:
+        plot_acgs(unit_a, unit_b)
+    else:
+        if 'acg_plot' in globals() and acg_plot.winfo_exists() == 1:
+            acg_plot.destroy()
+    
 
 def up_options_b_list(event):
     """  
@@ -950,7 +1480,7 @@ def add_original_ID(UnitA, UnitB):
         print(f"Error: {e}")
         original_id_label = ttk.Label(root, text='Error: Unit ID out of bounds', borderwidth=2, relief='groove')
 
-    original_id_label.grid(row=0, column=2, ipadx=5, ipady=5)
+    original_id_label.grid(row=2, column=2, ipadx=5, ipady=5)
 
 def add_probability_label(UnitA, UnitB, CVoption):
     global bayes_label
@@ -960,10 +1490,10 @@ def add_probability_label(UnitA, UnitB, CVoption):
 
     if CVoption == -1:
         bayes_label = ttk.Label(root, text = f'The UM probabilty for this match is:\n {np.round(output_avg[UnitA, UnitB],5)}', borderwidth = 2 , relief= 'groove' )
-        bayes_label.grid(row = 0, column = 1, ipadx = 5, ipady = 5)
+        bayes_label.grid(row = 2, column = 1, ipadx = 5, ipady = 5)
     else:
         bayes_label = ttk.Label(root, text = f'The UM probabilty for this match is:\n {np.round(output_GUI[CVoption][UnitA, UnitB],5)}', borderwidth = 2 , relief= 'groove')
-        bayes_label.grid(row = 0, column = 1, ipadx = 5, ipady = 5)
+        bayes_label.grid(row = 2, column = 1, ipadx = 5, ipady = 5)
 
 
 def set_match(event = None):
@@ -1003,7 +1533,7 @@ def MakeTable(table):
             e.insert(END, table[i][j])
             e.configure(state='readonly')             
             e.grid(row=i, column=j)
-    frame_table.grid(row = 3, column = 0, padx = 10, pady = 10)
+    frame_table.grid(row = 4, column = 0, padx = 10, pady = 10)
 
 #get table data #ADD STABILTY - prob of unit with itself accros cv
 def get_table_data(UnitA, UnitB, CV):
@@ -1100,7 +1630,7 @@ def make_unit_score_table(table):
             e.configure(state='readonly')             
             e.grid(row=i, column=j)
 
-    score_table.grid(row = 3, column = 1, columnspan=2, padx = 10, pady = 10)
+    score_table.grid(row = 5, column = 0, columnspan=2, padx = 10, pady = 10)
 
 
 def plot_avg_waveforms(UnitA, UnitB, CV):
@@ -1116,29 +1646,29 @@ def plot_avg_waveforms(UnitA, UnitB, CV):
     #plt1.spines[["left", "bottom"]].set_position(("data", 0))
     plt1.spines[["bottom"]].set_position(("data", 0))
     plt1.spines[["top", "right"]].set_visible(False)
-    plt1.patch.set_facecolor('#5f6669')
+    plt1.patch.set_facecolor('#2d2d2d')
     plt1.xaxis.set_label_coords(0.9,0)
 
 
     if CV =='Avg':
-        plt1.plot(avg_waveform_avg[:,UnitA], 'g', label=str(UnitA))
-        plt1.plot(avg_waveform_avg[:,UnitB], 'b', label=str(UnitB))
-        plt1.set_xlabel('Time')
-        plt1.set_ylabel('Amplitude')
+        plt1.plot(avg_waveform_avg[:,UnitA], 'g', label=f'Unit A ({UnitA})')
+        plt1.plot(avg_waveform_avg[:,UnitB], 'b', label=f'Unit B ({UnitB})')
+        plt1.set_xlabel('Time (ms)')
+        plt1.set_ylabel('Amplitude (µV)')
         # plt1.set_xlim(left = 0)
         # plt1.set_xticks([])
 
     else:
-        plt1.plot(avg_waveform[:,UnitA,CV[0]], 'g', label=str(UnitA))
-        plt1.plot(avg_waveform[:,UnitB,CV[1]], 'b', label=str(UnitB))
-        plt1.set_xlabel('Time')
-        plt1.set_ylabel('Amplitude')
+        plt1.plot(avg_waveform[:,UnitA,CV[0]], 'g', label=f'Unit A ({UnitA})')
+        plt1.plot(avg_waveform[:,UnitB,CV[1]], 'b', label=f'Unit B ({UnitB})')
+        plt1.set_xlabel('Time (ms)')
+        plt1.set_ylabel('Amplitude (µV)')
         # plt1.set_xlim(left = 0)
 
     avg_waveform_plot = FigureCanvasTkAgg(fig, master = root)
     avg_waveform_plot.draw()
     avg_waveform_plot = avg_waveform_plot.get_tk_widget()
-    avg_waveform_plot.grid(row = 1, column = 0)
+    avg_waveform_plot.grid(row = 3, column = 0)
 
 def plot_trajectories(UnitA, UnitB, CV):
     global trajectory_plot
@@ -1151,7 +1681,7 @@ def plot_trajectories(UnitA, UnitB, CV):
 
     
     plt2 = fig.add_subplot(111)
-    plt2.patch.set_facecolor('#5f6669')
+    plt2.patch.set_facecolor('#2d2d2d')
     plt2.set_aspect(0.5)
     plt2.spines[['right', 'top']].set_visible(False)
     
@@ -1159,30 +1689,30 @@ def plot_trajectories(UnitA, UnitB, CV):
     if CV =='Avg':
         
         # AM not doing a time averaged WaveIDX (where you fins goodtimepoints), will just uses CV 0 for both
-        plt2.plot(avg_waveform_per_tp_avg[1,UnitA,wave_idx[UnitA,:,0].astype(bool)], avg_waveform_per_tp_avg[2,UnitA,wave_idx[UnitA,:,0].astype(bool)], 'g')
+        plt2.plot(avg_waveform_per_tp_avg[1,UnitA,wave_idx[UnitA,:,0].astype(bool)], avg_waveform_per_tp_avg[2,UnitA,wave_idx[UnitA,:,0].astype(bool)], 'g', label=f'Unit A ({UnitA})')
         plt2.scatter(avg_centroid_avg[1,UnitA], avg_centroid_avg[2,UnitA], c = 'g')
 
-        plt2.plot(avg_waveform_per_tp_avg[1,UnitB,wave_idx[UnitB,:,0].astype(bool)], avg_waveform_per_tp_avg[2,UnitB,wave_idx[UnitB,:,0].astype(bool)],'b')
+        plt2.plot(avg_waveform_per_tp_avg[1,UnitB,wave_idx[UnitB,:,0].astype(bool)], avg_waveform_per_tp_avg[2,UnitB,wave_idx[UnitB,:,0].astype(bool)],'b', label=f'Unit B ({UnitB})')
         plt2.scatter(avg_centroid_avg[1,UnitB], avg_centroid_avg[2,UnitB], c = 'b')
 
-        plt2.set_xlabel(r'Xpos ($\mu$m)')
-        plt2.set_ylabel(r'Ypos ($\mu$m)')
+        plt2.set_xlabel(r'X position ($\mu$m)')
+        plt2.set_ylabel(r'Y position ($\mu$m)')
 
     else:
-        plt2.plot(avg_waveform_per_tp[1,UnitA,wave_idx[UnitA,:,CV[0]].astype(bool), CV[0]], avg_waveform_per_tp[2,UnitA,wave_idx[UnitA,:,CV[0]].astype(bool), CV[0]], 'g')
+        plt2.plot(avg_waveform_per_tp[1,UnitA,wave_idx[UnitA,:,CV[0]].astype(bool), CV[0]], avg_waveform_per_tp[2,UnitA,wave_idx[UnitA,:,CV[0]].astype(bool), CV[0]], 'g', label=f'Unit A ({UnitA})')
         plt2.scatter(avg_centroid[1,UnitA,CV[0]], avg_centroid[2,UnitA,CV[0]], c = 'g')
 
-        plt2.plot(avg_waveform_per_tp[1,UnitB,wave_idx[UnitB,:,CV[1]].astype(bool), CV[1]], avg_waveform_per_tp[2,UnitB,wave_idx[UnitB,:,CV[1]].astype(bool), CV[1]],'b')
+        plt2.plot(avg_waveform_per_tp[1,UnitB,wave_idx[UnitB,:,CV[1]].astype(bool), CV[1]], avg_waveform_per_tp[2,UnitB,wave_idx[UnitB,:,CV[1]].astype(bool), CV[1]],'b', label=f'Unit B ({UnitB})')
         plt2.scatter(avg_centroid[1,UnitB,CV[1]], avg_centroid[2,UnitB,CV[1]], c = 'b')
 
-        plt2.set_xlabel(r'Xpos ($\mu$m)')
-        plt2.set_ylabel(r'Ypos ($\mu$m)')
+        plt2.set_xlabel(r'X position ($\mu$m)')
+        plt2.set_ylabel(r'Y position ($\mu$m)')
 
     trajectory_plot=FigureCanvasTkAgg(fig, master = root)
     trajectory_plot.draw()
     trajectory_plot = trajectory_plot.get_tk_widget()
 #    TrajectoryPlot.configure(bg = '#33393b')
-    trajectory_plot.grid(row = 1, column = 1, columnspan = 2)
+    trajectory_plot.grid(row = 3, column = 1, columnspan = 2)
 
 def order_good_sites(good_sites, channel_pos, n_sessions):
     # make it so it goes from biggest to smallest
@@ -1239,7 +1769,7 @@ def plot_raw_waveforms(unit_a, unit_b, CV):
     fig.patch.set_facecolor('#33393b')
 
     main_ax = fig.add_axes([0.2,0.2,0.8,0.8])
-    main_ax.set_facecolor('#5f6669')
+    main_ax.set_facecolor('#2d2d2d')
     main_ax_offset = 0.2
     main_ax_scale = 0.8
 
@@ -1303,8 +1833,9 @@ def plot_raw_waveforms(unit_a, unit_b, CV):
     main_ax.spines.right.set_visible(False)
     main_ax.spines.top.set_visible(False)
     main_ax.set_xticks([min_x, max_x])
-    main_ax.set_xlabel('Xpos ($\mu$m)', size = 14)
-    main_ax.set_ylabel('Ypos ($\mu$m)', size = 14)
+    main_ax.set_xlabel('X position ($\mu$m)', size = 14)
+    main_ax.set_ylabel('Y position ($\mu$m)', size = 14)
+    
 
 
     raw_waveform_plot = FigureCanvasTkAgg(fig, master = root)
@@ -1312,7 +1843,7 @@ def plot_raw_waveforms(unit_a, unit_b, CV):
     raw_waveform_plot = raw_waveform_plot.get_tk_widget()
     #RawWaveformPlot.configure(bg = '#33393b')
 
-    raw_waveform_plot.grid(row = 0, column = 5, columnspan = 2, rowspan = 4, padx = 15, pady = 25, ipadx = 15)
+    raw_waveform_plot.grid(row = 3, column = 4, columnspan = 2, rowspan = 4, padx = 15, pady = 25, ipadx = 15)
 
 def plot_histograms(hist_names, hist, hist_matched, scores_to_include, unit_a, unit_b):
 
@@ -1326,19 +1857,36 @@ def plot_histograms(hist_names, hist, hist_matched, scores_to_include, unit_a, u
     axs = axs.flat
 
 
+    # Create title mapping
+    title_mapping = {
+        'amp_score': 'Amplitude score',
+        'spatial_decay_score': 'Spatial decay score', 
+        'centroid_overlord_score': "C'oid overlord score",
+        'centroid_dist': "C'oid distance score",
+        'waveform_score': 'Waveform score',
+        'trajectory_score': 'Trajectory score'
+    }
+    
     #loop over indexes.. 
     for i in range(len(hist)):
-        axs[i].step(hist[i][1][:-1], hist[i][0], color = 'orange')
-        axs[i].step(hist_matched[i][1][:-1], hist_matched[i][0], color = 'magenta')
+        axs[i].step(hist[i][1][:-1], hist[i][0], color = 'orange', label='All scores' if i == 0 else "")
+        axs[i].step(hist_matched[i][1][:-1], hist_matched[i][0], color = 'magenta', label='Expected matches' if i == 0 else "")
         axs[i].set_ylim(bottom=0)
-        axs[i].set_title(hist_names[i], fontsize = 12)
-        #axs[i].get_yaxis().set_visible(False)
-        axs[i].axvline(scores_to_include[hist_names[i]][unit_a,unit_b], ls = '--', color = 'grey')
-        axs[i].set_facecolor('#5f6669')
+        
+        # Use improved title from mapping
+        plot_title = title_mapping.get(hist_names[i], hist_names[i])
+        axs[i].set_title(plot_title, fontsize = 12)
+        
+        # Add ylabel
+        axs[i].set_ylabel('% units', fontsize=10)
+        
+        axs[i].axvline(scores_to_include[hist_names[i]][unit_a,unit_b], ls = '--', color = 'white', label='Current match pair' if i == 0 else "")
+        axs[i].set_facecolor('#2d2d2d')
+    
 
     hist_plot = FigureCanvasTkAgg(fig, master = root)
     hist_plot.draw()
     hist_plot = hist_plot.get_tk_widget()
 
-    hist_plot.grid(row = 0, column = 3, columnspan = 2, rowspan = 4, padx = 5, pady = 20)
+    hist_plot.grid(row = 3, column = 6, columnspan = 2, rowspan = 4, padx = 5, pady = 20)
 
