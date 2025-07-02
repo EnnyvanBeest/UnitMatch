@@ -4,7 +4,6 @@
 % Supports multiple shanks with linked transformations
 
 function [Depth2Area, ProbMatrix] = alignatlasdata_automated(histinfo, AllenCCFPath, sp, clusinfo, removenoise, trackcoordinates)
-
 % Load Allen CCF Structure Tree
 structureTree = readtable(fullfile(AllenCCFPath, 'structure_tree_safe_2017.csv'));
 % correct firing rates where necessary
@@ -42,7 +41,20 @@ numShanks = numel(histinfo);
 activityClusters = cell(numShanks, 1);
 MUACorr = cell(numShanks, 1);
 depthEdges = cell(numShanks, 1);
+probeLengths = cell(numShanks,1);
+totalProbeLength = cell(numShanks,1);
 for shank = 1:numShanks
+
+    % Structural
+    % need to flip the probe?
+    if trackcoordinates{shank}(end,2)>trackcoordinates{shank}(1,2)
+        trackcoordinates{shank} = flipud(trackcoordinates{shank});
+        histinfo{shank} = flipud(histinfo{shank});
+    end
+    probeLengths{shank} = sqrt(sum(trackcoordinates{shank}-trackcoordinates{shank}(end,:),2).^2); % Distance per segment
+    totalProbeLength{shank} = max(probeLengths{shank}); % Total depth from the brain surface
+
+    % Functional
     if removenoise
         spikeID = ismember(spikeCluster, cluster_id(logical(clusinfo.Good_ID) & clusinfo.Shank'==ShanksUsed(shank)));
     else
@@ -53,12 +65,13 @@ for shank = 1:numShanks
         continue
     end
 
+
     % Autocorrelation of spikes
     % [autocorr{shank}, depthCenters{shank}] = computeAutocorrByDepth(spikeTimes(spikeID), spikeDepths(spikeID), spikeRecSes(spikeID), 1, 50, height(histinfo));
     % Activity per bin
     [activityClusters{shank}, MUACorr{shank}, firingRates{shank}, depthEdges{shank}, FreqIntens{shank}] = computeFunctionalClusters(spikeTimes(spikeID), spikeDepths(spikeID), histinfo{shank});
     % Identify valid depths:
-    minDepth = min(spikeDepths); %always the tip
+    minDepth = min(spikeDepths)-20; %always the tip
     firingRates{shank} = smoothdata(firingRates{shank},'gaussian',floor(500./nanmedian(unique(diff(depthEdges{shank})))));
     % firstactivity = find(firingRates{shank}>0.05,1,'first');
     % maxDepthtmp1 =  depthEdges{shank}(find(firingRates{shank}(firstactivity:end)>0.05,1,'last')+firstactivity-1);
@@ -77,9 +90,14 @@ for shank = 1:numShanks
     spikeAmps{shank} = accumarray(binID(~isnan(binID)), amps(~isnan(binID)),[numel(depthEdges{shank})-1,1], @mean, NaN);                         
     spikeAmps{shank} = smoothdata(spikeAmps{shank},1,'gaussian',floor(500./nanmedian(unique(diff(depthEdges{shank})))));
     spikeAmps{shank}(isnan(spikeAmps{shank})) = 0;
-    depthscore = (nGood./max(nGood)+0.1).*(firingRates{shank}'./nanmax(firingRates{shank}) + (spikeAmps{shank}'./nanmax(spikeAmps{shank})) + nanmean(FreqIntens{shank},2)'./nanmax(nanmean(FreqIntens{shank},2)));
-    depthscore = depthscore ./ 4;
+    spikeAmps{shank} = abs(spikeAmps{shank}-nanmedian( spikeAmps{shank}));
 
+
+    % Structural
+    StructuralPossibility = probeLengths{shank}>=minDepth & probeLengths{shank}<=max(depthEdges{shank}) & depthEdges{shank}(1:end-1)'<totalProbeLength{shank};
+    depthscore = (StructuralPossibility'.*(nGood./max(nGood))+0.1).*(firingRates{shank}'./nanmax(firingRates{shank}) + (1-(spikeAmps{shank}'./nanmax(spikeAmps{shank}))) + nanmean(FreqIntens{shank},2)'./nanmax(nanmean(FreqIntens{shank},2)));
+    depthscore = depthscore ./ 4;
+    
     figure;
     subplot(5,1,1)
     plot(depthEdges{shank}(1:end-1),firingRates{shank}./nanmax(firingRates{shank}));
@@ -90,7 +108,7 @@ for shank = 1:numShanks
     title('nGoodClus')
 
     subplot(5,1,3)   
-    plot(depthEdges{shank}(1:end-1),spikeAmps{shank}./nanmax(spikeAmps{shank}))
+    plot(depthEdges{shank}(1:end-1),1-(spikeAmps{shank}./nanmax(spikeAmps{shank})))
     title(' Average Amplitude')
 
     subplot(5,1,4)
@@ -101,37 +119,36 @@ for shank = 1:numShanks
     plot(depthEdges{shank}(1:end-1),depthscore);
     title('Depth Score')
     hold on
-    line(get(gca,'xlim'),[0.03 0.03],'color',[1 0 0])
+    line(get(gca,'xlim'),[0.05 0.05],'color',[1 0 0])
 
-    maxDepthtmp = depthEdges{shank}(find(depthscore>0.03,1,'last')+1);
+    maxDepthtmp = depthEdges{shank}(find(depthscore>0.05,1,'last')+1);
 
     maxDepth{shank} = maxDepthtmp;
+       
+end
+if ~exist('maxDepth')
+    Depth2Area = [];
+    return
 end
 maxDepth = nanmax(cat(1,maxDepth{:}));
 DepthRange = maxDepth - minDepth;
 
-% Compute functional clustering (NMF, firing rates, correlation) for each shank
-% Adjust histinfo
-probeLengths = cell(numShanks,1);
-totalProbeLength = cell(numShanks,1);
-for shank = 1:numShanks
-    % need to flip the probe?
-    if trackcoordinates{shank}(end,2)>trackcoordinates{shank}(1,2)
-        trackcoordinates{shank} = flipud(trackcoordinates{shank});
-        histinfo{shank} = flipud(histinfo{shank});
-    end
-    probeLengths{shank} = sqrt(sum(trackcoordinates{shank}-trackcoordinates{shank}(end,:),2).^2); % Distance per segment
-    totalProbeLength{shank} = max(probeLengths{shank}); % Total depth from the brain surface
+spikeTimes(spikeDepths<minDepth | spikeDepths>maxDepth) = [];
+spikeCluster(spikeDepths<minDepth | spikeDepths>maxDepth) = [];
+spikeDepths(spikeDepths<minDepth | spikeDepths>maxDepth) = [];
 
+
+% Clean up histinfo a little bit
+for shank = 1:numShanks
     if totalProbeLength{shank}>DepthRange
-        removeId = probeLengths{shank}>maxDepth | probeLengths{shank}<minDepth;  %  Remove these entries 
-        histinfo{shank}(removeId,:) = [];%- 
+        removeId = probeLengths{shank}>maxDepth | probeLengths{shank}<minDepth;  %  Remove these entries
+        histinfo{shank}(removeId,:) = [];%-
         trackcoordinates{shank}(removeId,:) = [];
         probeLengths{shank}(removeId) = [];
         depthEdges{shank}(removeId) = [];
         spikeAmps{shank}(removeId) = [];
 
-        % Need to rerun 
+        % Need to rerun
         if removenoise
             spikeID = ismember(spikeCluster, cluster_id(logical(clusinfo.Good_ID) & clusinfo.Shank'==ShanksUsed(shank)));
         else
@@ -140,14 +157,7 @@ for shank = 1:numShanks
         [activityClusters{shank}, MUACorr{shank}, firingRates{shank}, depthEdges{shank}, FreqIntens{shank}] = computeFunctionalClusters(spikeTimes(spikeID), spikeDepths(spikeID), histinfo{shank});
 
     end
-end
-spikeTimes(spikeDepths<minDepth | spikeDepths>maxDepth) = [];
-spikeCluster(spikeDepths<minDepth | spikeDepths>maxDepth) = [];
-spikeDepths(spikeDepths<minDepth | spikeDepths>maxDepth) = [];
 
-
-% Clean up histinfo a little bit
-for shank = 1:numShanks
     [histinfo{shank} removeid] = cleanHistinfo(histinfo{shank});
     if ~isempty(removeid)
         trackcoordinates{shank}(removeid,:) = [];
@@ -692,7 +702,7 @@ areaColors = cellfun(@(x) colorMap(x), sortedAreas, 'UniformOutput', false);
 areaColorsRGB = cellfun(@(c) sscanf(c, '%2x%2x%2x')' / 255, areaColors, 'UniformOutput', false);
 areaColorsRGB = vertcat(areaColorsRGB{:});
 
-figure('Position',[1220 69 622 900]);
+figure('Position',[22 14 560 900]);
 h(1) = subplot(1,3,1);
 scatter(categorical(sortedAreas,unique(sortedAreas, 'stable')), sortedDepths, 25, areaColorsRGB, 'filled');
 set(gca,'YDir','normal')

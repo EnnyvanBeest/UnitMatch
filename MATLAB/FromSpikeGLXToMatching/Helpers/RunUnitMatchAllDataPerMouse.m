@@ -13,7 +13,7 @@ LogError = {}; % Keep track of which runs didn't work
 if ~exist('PipelineParamsOri','var')
     PipelineParamsOri = PipelineParams;
 end
-for midx = 18:length(MiceOpt)
+for midx = 1:length(MiceOpt)
     close all % to not overcrowd the graphics card
     PipelineParams = PipelineParamsOri; % Reset
     %% Loading data from kilosort/phy easily
@@ -95,7 +95,7 @@ for midx = 18:length(MiceOpt)
     %% Remove old copies?
     UnitMatchExist = dir(fullfile(SaveDir,MiceOpt{midx},'**','UnitMatch.mat'));
     if ~isempty(UnitMatchExist)
-        MouseAllDone = 1;
+        MouseAllDone = 0;
     else 
         MouseAllDone = 0;
     end
