@@ -15,5 +15,5 @@ dependencies:
     - spikeinterface
     - h5py
     - scikit-learn
-    - pytorch
+    - torch
     - ipykernel
