@@ -766,23 +766,25 @@ def drift_n_sessions(candidate_pairs, session_switch, avg_centroid, avg_waveform
     drifts = np.zeros( (n_sessions - 1, 3))
 
     for did in range(n_sessions - 1):
-            idx = np.argwhere( ( (best_pairs[:,0] >= session_switch[did]) * (best_pairs[:,0] < session_switch[did + 1]) *
-                                (best_pairs[:,1] >= session_switch[did + 1]) * (best_pairs[:,1] < session_switch[did + 2]) ) == True)
+        idx = np.argwhere( ( (best_pairs[:,0] >= session_switch[did]) * (best_pairs[:,0] < session_switch[did + 1]) *
+                            (best_pairs[:,1] >= session_switch[did + 1]) * (best_pairs[:,1] < session_switch[did + 2]) ) == True)
 
-            pairs = best_pairs[idx,:].squeeze()
-            if best_match == True:
-                pairs = get_good_matches(pairs, total_score)
+        pairs = best_pairs[idx,:].squeeze()
+        if pairs.ndim == 1:
+            pairs = np.expand_dims(pairs, axis = 0)
+        if best_match == True:
+            pairs = get_good_matches(pairs, total_score)
 
-            #Test to see if there are enough matches to do drift correction per shank
-            if test_matches_per_shank(pairs, avg_centroid, did, param) == True and best_drift == True:
-                drifts = np.zeros( (n_sessions - 1, param['no_shanks'], 3))
-                drifts[did,:,:], avg_waveform_per_tp, avg_centroid = apply_drift_correction_per_shank(pairs, did, session_switch, avg_centroid, avg_waveform_per_tp, param)
-                print(f'Done drift correction per shank for session pair {did+1} and {did+2}')
-            elif len(pairs)>0: #if there exist pairs across sessions:
-                drifts = np.zeros( (n_sessions - 1, 3))
-                drifts[did,:], avg_waveform_per_tp, avg_centroid = apply_drift_correction_basic(pairs, did, session_switch, avg_centroid, avg_waveform_per_tp)
-            elif len(pairs)==0:
-                print('No pairs across sessions to perform drift correction.')
+        #Test to see if there are enough matches to do drift correction per shank
+        if test_matches_per_shank(pairs, avg_centroid, did, param) == True and best_drift == True:
+            drifts = np.zeros( (n_sessions - 1, param['no_shanks'], 3))
+            drifts[did,:,:], avg_waveform_per_tp, avg_centroid = apply_drift_correction_per_shank(pairs, did, session_switch, avg_centroid, avg_waveform_per_tp, param)
+            print(f'Done drift correction per shank for session pair {did+1} and {did+2}')
+        elif len(pairs)>0: #if there exist pairs across sessions:
+            drifts = np.zeros( (n_sessions - 1, 3))
+            drifts[did,:], avg_waveform_per_tp, avg_centroid = apply_drift_correction_basic(pairs, did, session_switch, avg_centroid, avg_waveform_per_tp)
+        elif len(pairs)==0:
+            print('No pairs across sessions to perform drift correction.')
     return drifts, avg_centroid, avg_waveform_per_tp
 
 
