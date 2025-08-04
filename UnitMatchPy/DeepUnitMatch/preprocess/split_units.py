@@ -126,23 +126,42 @@ def merge_and_remove_splits(param, prob_matrix, session_id, model, data_dir, max
     to_merge = set()                        # match table indices corresponding to rows to merge
     to_remove = set()                       # unique unit identifiers to remove
 
-    n1 = np.sum(session_id == session_id[0])
-    n2 = len(session_id) - n1
-
-    ses1 = prob_matrix[:n1, :n1]
-    ses2 = prob_matrix[n1:, n1:]
+    # Get number of sessions and units per session
+    n_sessions = len(param['good_units'])
+    session_switch = np.cumsum([len(units.squeeze()) for units in param['good_units']])
+    session_switch = np.insert(session_switch, 0, 0)
+    
     good_units = param['good_units']
 
-    good0 = np.arange(len(good_units[0].squeeze()))
-    good1 = np.arange(len(good_units[0].squeeze()), param['n_units'])
-
+    # Create dataframe for all session pairs
     d = {
-        "RecSes1": [1] * (n1**2 + n1*n2) + [2] * (n1*n2 + n2**2),
-        "RecSes2": [1] * (n1**2) + [2] * (n1*n2) + [1] * (n1*n2) + [2] * (n2**2),
-        "ID1": np.repeat(good0, n1).tolist() + np.repeat(good0, n2).tolist() + np.repeat(good1, n1).tolist() + np.repeat(good1, n2).tolist(),
-        "ID2": np.tile(good0, n1).tolist() + np.tile(good1, n1).tolist() + np.tile(good0, n2).tolist() + np.tile(good1, n2).tolist(),
-        "Prob": ses1.ravel().tolist() + prob_matrix[:n1, n1:].ravel().tolist() + prob_matrix[n1:, :n1].ravel().tolist() + ses2.ravel().tolist(),
+        "RecSes1": [],
+        "RecSes2": [],
+        "ID1": [],
+        "ID2": [],
+        "Prob": [],
     }
+    
+    # Generate all pairs of sessions (including within-session pairs)
+    for ses1 in range(n_sessions):
+        for ses2 in range(n_sessions):
+            n_units_ses1 = len(good_units[ses1].squeeze())
+            n_units_ses2 = len(good_units[ses2].squeeze())
+            
+            # Get unit IDs for this session
+            units_ses1 = np.arange(n_units_ses1)
+            units_ses2 = np.arange(n_units_ses2)
+            
+            # Extract probability matrix block for this session pair
+            prob_block = prob_matrix[session_switch[ses1]:session_switch[ses1+1], 
+                                   session_switch[ses2]:session_switch[ses2+1]]
+            
+            # Add all unit pairs from this session pair
+            d["RecSes1"].extend([ses1 + 1] * (n_units_ses1 * n_units_ses2))
+            d["RecSes2"].extend([ses2 + 1] * (n_units_ses1 * n_units_ses2))
+            d["ID1"].extend(np.repeat(units_ses1, n_units_ses2).tolist())
+            d["ID2"].extend(np.tile(units_ses2, n_units_ses1).tolist())
+            d["Prob"].extend(prob_block.ravel().tolist())
 
     df = pd.DataFrame(d)
 
@@ -175,6 +194,10 @@ def merge_and_remove_splits(param, prob_matrix, session_id, model, data_dir, max
 
     print(f'Units to remove: {len(to_remove)}')
     print(f'Unit to merge: {len(to_merge)}')
+
+    if len(to_remove) == 0 and len(to_merge) == 0:
+        print("No units to merge or remove. Exiting.")
+        return prob_matrix, param, session_id, session_switch
     
     df_to_merge = df.loc[list(to_merge),:]
     for __, row in df_to_merge.iterrows():
@@ -189,9 +212,12 @@ def merge_and_remove_splits(param, prob_matrix, session_id, model, data_dir, max
         with h5py.File(new_path, 'w') as f:
             for key, value in data.items():
                 f.create_dataset(key, data=value)
+                
+    # Handle removals for multiple sessions
     sessions = [int(i//1e6) for i in to_remove]
     ids = [int(i%1e6) for i in to_remove]
-    removals = {1: [], 2: []}
+    removals = {i+1: [] for i in range(n_sessions)}  # Initialize removals dict for all sessions
+    
     for s, id in zip(sessions, ids):
         dir = os.path.join(data_dir, str(s-1))
         file = os.path.join(dir, f"Unit{id}.npy")
@@ -199,18 +225,37 @@ def merge_and_remove_splits(param, prob_matrix, session_id, model, data_dir, max
         os.rename(file, newfile)
         removals[s].append(id)
 
+    # Update good_units for all sessions
     if len(to_remove) > 0:
-        param['good_units'][0] = np.delete(param['good_units'][0].squeeze(), removals[1])
-        param['good_units'][1] = np.delete(param['good_units'][1].squeeze(), np.array(removals[2]) - n1)
+        for ses in range(n_sessions):
+            if removals[ses+1]:  # If there are removals in this session
+                # For sessions other than the first, we need to adjust the indices
+                if ses == 0:
+                    param['good_units'][ses] = np.delete(param['good_units'][ses].squeeze(), removals[ses+1])
+                else:
+                    # Calculate offset for this session
+                    offset = session_switch[ses]
+                    adjusted_removals = [r - offset for r in removals[ses+1] if r >= offset]
+                    if adjusted_removals:
+                        param['good_units'][ses] = np.delete(param['good_units'][ses].squeeze(), adjusted_removals)
+                    else:
+                        param['good_units'][ses] = param['good_units'][ses].squeeze()
+            else:
+                param['good_units'][ses] = param['good_units'][ses].squeeze()
     else:
-        param['good_units'][0] = param['good_units'][0].squeeze()
-        param['good_units'][1] = param['good_units'][1].squeeze()
+        for ses in range(n_sessions):
+            param['good_units'][ses] = param['good_units'][ses].squeeze()
 
-    param['n_units'] = len(param['good_units'][0]) + len(param['good_units'][1])
-    session_id = np.concatenate((np.zeros(len(param['good_units'][0]),), np.ones(len(param['good_units'][1]),))).astype(int)
+    # Recalculate session information
+    param['n_units'] = sum(len(param['good_units'][ses]) for ses in range(n_sessions))
+    session_id = np.concatenate([np.full(len(param['good_units'][ses]), ses) for ses in range(n_sessions)]).astype(int)
     new_dnnsim = inference(model, data_dir)
-    session_switch = np.array([0, n1, n1 + n2])
-    return new_dnnsim, param, session_id, session_switch
+    
+    # Update session_switch based on new good_units lengths
+    new_session_switch = np.cumsum([len(param['good_units'][ses]) for ses in range(n_sessions)])
+    new_session_switch = np.insert(new_session_switch, 0, 0)
+    
+    return new_dnnsim, param, session_id, new_session_switch
 
 def undo_merge(data_dir):
     """
