@@ -202,19 +202,14 @@ def get_ISI_histograms(param, ISIbins):
     fs = 3e4
     nclus = param['n_units']
     KSdirs = param['KS_dirs']
-    spktimes1 = np.load(os.path.join(KSdirs[0], "spike_times.npy")) / fs
-    spktimes2 = np.load(os.path.join(KSdirs[1], "spike_times.npy")) / fs
-    spktimes = [spktimes1, spktimes2]
-    spkclus1 = np.load(os.path.join(KSdirs[0], "spike_clusters.npy"))
-    spkclus2 = np.load(os.path.join(KSdirs[1], "spike_clusters.npy"))
-    spkclus = [spkclus1, spkclus2]
     good_units = param['good_units']
 
     ISIMat = np.zeros((len(ISIbins) - 1, 2, nclus))
     index = 0
-    for session in range(2):
-        times = spktimes[session]
-        clusters = spkclus[session]
+    for session in range(len(good_units)):
+
+        times = np.load(os.path.join(KSdirs[session], "spike_times.npy")) / fs
+        clusters = np.load(os.path.join(KSdirs[session], "spike_clusters.npy"))
 
         for clusid in tqdm(good_units[session].squeeze()):
             idx1 = np.where(clusters == clusid)[0]
@@ -268,7 +263,7 @@ def AUC(matches:np.ndarray, func_metric:np.ndarray, session_id):
             fp+=1
         recall.append(tp/P)
         fpr.append(fp/N)
-    auc = np.trapz(recall, fpr)
+    auc = np.trapezoid(recall, fpr)
     return auc
 
 
