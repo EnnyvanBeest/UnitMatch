@@ -7,7 +7,7 @@ DateOpt = arrayfun(@(X) dir(fullfile(DataDir{DataDir2Use(X)},MiceOpt{X},'*-*')),
 DateOpt = cellfun(@(X) X([X.isdir]),DateOpt,'UniformOutput',0);
 DateOpt = cellfun(@(X) {X.name},DateOpt,'UniformOutput',0);
 
-RemoveOldCopies = 1;
+RemoveOldCopies = 0;
 Redo = 0; % Redo generally
 LogError = {}; % Keep track of which runs didn't work
 if ~exist('PipelineParamsOri','var')

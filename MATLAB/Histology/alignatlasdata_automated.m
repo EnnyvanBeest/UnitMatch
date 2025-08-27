@@ -95,7 +95,7 @@ for shank = 1:numShanks
 
     % Structural
     StructuralPossibility = probeLengths{shank}>=minDepth & probeLengths{shank}<=max(depthEdges{shank}) & depthEdges{shank}(1:end-1)'<totalProbeLength{shank};
-    depthscore = (StructuralPossibility'.*(nGood./max(nGood))+0.1).*(firingRates{shank}'./nanmax(firingRates{shank}) + (1-(spikeAmps{shank}'./nanmax(spikeAmps{shank}))) + nanmean(FreqIntens{shank},2)'./nanmax(nanmean(FreqIntens{shank},2)));
+    depthscore =((nGood./max(nGood))+0.1).*(StructuralPossibility'+firingRates{shank}'./nanmax(firingRates{shank}) + (1-(spikeAmps{shank}'./nanmax(spikeAmps{shank}))) + nanmean(FreqIntens{shank},2)'./nanmax(nanmean(FreqIntens{shank},2)));
     depthscore = depthscore ./ 4;
     
     figure;
@@ -305,71 +305,6 @@ FreqIntens = interp1(oldZ, FreqIntens, newZ, 'linear', 'extrap' );
 
 end
 
-function [autocorrMatrix, depthCenters] = computeAutocorrByDepth(spikeTimes, spikeDepths, spikeRecSes, binSizeMs, maxLagMs, depthBinSize)
-% Compute and plot spike autocorrelation across probe depth bins
-%
-% Inputs:
-%   spikeTimes     - vector of spike times (in seconds)
-%   spikeDepths    - vector of spike depths (in microns)
-%   binSizeMs      - temporal bin size for autocorrelation (ms)
-%   maxLagMs       - max lag for autocorrelation (ms)
-%   depthBinSize   - depth bin size (microns)
-
-% Set up depth bins
-minDepth = floor(min(spikeDepths));
-maxDepth = ceil(max(spikeDepths));
-depthEdges = minDepth:depthBinSize:maxDepth;
-depthCenters = depthEdges(1:end-1) + depthBinSize/2;
-
-% Preallocate
-maxLagBins = round(maxLagMs / binSizeMs);
-lagRange = -maxLagBins:maxLagBins;
-nLags = length(lagRange);
-nBins = length(depthCenters);
-RecSesOpt = unique(spikeRecSes);
-autocorrMatrix = nan(nBins, nLags);
-
-% Loop through depth bins
-for recid = 1:numel(RecSesOpt)
-    for i = 1:nBins
-        depthRange = [depthEdges(i), depthEdges(i+1)];
-
-        % Filter spike times
-        inRange = spikeDepths >= depthRange(1) & spikeDepths < depthRange(2) & spikeRecSes == RecSesOpt(recid);
-        times = spikeTimes(inRange);
-
-        if numel(times) < 50
-            continue; % Skip bins with too few spikes
-        end
-
-        % Bin spikes
-        binSizeSec = binSizeMs / 1000;
-        minTime = min(times);
-        maxTime = max(times);
-        edges = minTime:binSizeSec:maxTime;
-        binnedSpikes = histcounts(times, edges);
-
-        % Compute autocorrelation
-        [ac, ~] = xcorr(binnedSpikes, maxLagBins, 'coeff');
-
-        % Remove zero-lag if desired
-        ac(maxLagBins+1) = 0;
-
-        % Store
-        autocorrMatrix(i, :) = nanmean(cat(1,autocorrMatrix(i, :),ac),1);
-    end
-end
-
-% Plot
-figure;
-imagesc(lagRange * binSizeMs, depthCenters, autocorrMatrix);
-xlabel('Lag (ms)');
-ylabel('Depth (µm)');
-title('Spike Autocorrelation Across Depth');
-colormap turbo;
-colorbar;
-set(gca, 'YDir', 'normal'); % depth upwards
-end
 
 function [alignedHistology, F] = stretchHistology(histinfo, activityClusters, MUACorr, FreqIntens, spikeAmps, histDepths, firingRates, trackcoordinates, structureTree)
 
@@ -592,7 +527,7 @@ for id = 1:max(assignment)
     for aid2 = 1:nAreas
         tblidx = find(ismember(histinfo.RegionAcronym, uniqueAreas(ismember(parentArea,TheseAreas{aid2}))));
         tblidx(tblidx<starterid) = [];
-        tblidx(tblidx>stopid) = [];
+        tblidx(tblidx>starterid+transitionPoints(aid2+1)-1) = [];
         newDepths(tblidx) = linspace(histdepthtmp(transitionPoints(aid2)), histdepthtmp(transitionPoints(aid2+1)), numel(tblidx));
         if any(newDepths(tblidx)' - newDepths(1:starterid-1)<0,'all')
             keyboard
@@ -725,3 +660,69 @@ makepretty
 
 linkaxes(h,'y')
 end
+
+% function [autocorrMatrix, depthCenters] = computeAutocorrByDepth(spikeTimes, spikeDepths, spikeRecSes, binSizeMs, maxLagMs, depthBinSize)
+% % Compute and plot spike autocorrelation across probe depth bins
+% %
+% % Inputs:
+% %   spikeTimes     - vector of spike times (in seconds)
+% %   spikeDepths    - vector of spike depths (in microns)
+% %   binSizeMs      - temporal bin size for autocorrelation (ms)
+% %   maxLagMs       - max lag for autocorrelation (ms)
+% %   depthBinSize   - depth bin size (microns)
+% 
+% % Set up depth bins
+% minDepth = floor(min(spikeDepths));
+% maxDepth = ceil(max(spikeDepths));
+% depthEdges = minDepth:depthBinSize:maxDepth;
+% depthCenters = depthEdges(1:end-1) + depthBinSize/2;
+% 
+% % Preallocate
+% maxLagBins = round(maxLagMs / binSizeMs);
+% lagRange = -maxLagBins:maxLagBins;
+% nLags = length(lagRange);
+% nBins = length(depthCenters);
+% RecSesOpt = unique(spikeRecSes);
+% autocorrMatrix = nan(nBins, nLags);
+% 
+% % Loop through depth bins
+% for recid = 1:numel(RecSesOpt)
+%     for i = 1:nBins
+%         depthRange = [depthEdges(i), depthEdges(i+1)];
+% 
+%         % Filter spike times
+%         inRange = spikeDepths >= depthRange(1) & spikeDepths < depthRange(2) & spikeRecSes == RecSesOpt(recid);
+%         times = spikeTimes(inRange);
+% 
+%         if numel(times) < 50
+%             continue; % Skip bins with too few spikes
+%         end
+% 
+%         % Bin spikes
+%         binSizeSec = binSizeMs / 1000;
+%         minTime = min(times);
+%         maxTime = max(times);
+%         edges = minTime:binSizeSec:maxTime;
+%         binnedSpikes = histcounts(times, edges);
+% 
+%         % Compute autocorrelation
+%         [ac, ~] = xcorr(binnedSpikes, maxLagBins, 'coeff');
+% 
+%         % Remove zero-lag if desired
+%         ac(maxLagBins+1) = 0;
+% 
+%         % Store
+%         autocorrMatrix(i, :) = nanmean(cat(1,autocorrMatrix(i, :),ac),1);
+%     end
+% end
+% 
+% % Plot
+% figure;
+% imagesc(lagRange * binSizeMs, depthCenters, autocorrMatrix);
+% xlabel('Lag (ms)');
+% ylabel('Depth (µm)');
+% title('Spike Autocorrelation Across Depth');
+% colormap turbo;
+% colorbar;
+% set(gca, 'YDir', 'normal'); % depth upwards
+% end
