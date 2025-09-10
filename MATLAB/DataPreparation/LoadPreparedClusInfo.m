@@ -112,6 +112,7 @@ if Params.UnitMatch
 
         UMOutput = load(fullfile(UMOutputAll(imroid).folder,UMOutputAll(imroid).name),'UMparam');
         UMparam = UMOutput.UMparam;
+        SN = UMparam.AllProbeSN;
         recsesidx = find(ismember(UMparam.KSDir,KiloSortPaths)); % Find which recses id they should have in UM output
         recsesidx2 = find(ismember(KiloSortPaths,UMparam.KSDir));
         if ~any(recsesidx)
@@ -131,8 +132,11 @@ if Params.UnitMatch
             for rrid = 1:numel(recsesidx)
                 TheseClus = find(ismember(clusinfo.RecSesID,[StoreRecSesID{recsesidx2(rrid)}]));
                 if recsesidx(rrid) > 1
+                    try
                     Adjust4Drift = sqrt(sum(UMparam.drift(recsesidx(rrid)-1,:,end).^2)).*sign(UMparam.drift(recsesidx(rrid)-1,3,end));
                     clusinfo.AdjustedDepth(TheseClus) = clusinfo.depth(TheseClus) + Adjust4Drift;
+                    catch
+                    end
                 end
             end
         end
@@ -155,6 +159,7 @@ if Params.UnitMatch
 end
 Params.RawDataPaths = RawPathsUsed;
 Params.KSDir = KiloSortPaths;
+Params.SN = SN;
 %% add nans for missing UID values to not confuse them with other UIDs
 if any(recsesidxIncluded==0)
     clusinfo.UniqueID(ismember(clusinfo.RecSesID,find(recsesidxIncluded==0))) = nan;

@@ -327,6 +327,9 @@ FiringRates = cell(1,nshanks);
 mua_corr = cell(1,nshanks);
 NMF_Res = cell(1,nshanks);
 for shid = 1:nshanks
+    if ~ActiveShanks(shank)
+        continue
+    end
     binned_spikes_depth = zeros(length(unique_depths),length(corr_edges)-1);
     nSpikeClusters = zeros(length(unique_depths),1);
     for curr_depth = 1:length(unique_depths)

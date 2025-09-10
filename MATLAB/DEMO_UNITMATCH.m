@@ -36,7 +36,7 @@ UMparam.SaveDir = 'H:\UnitMatch\Output';
 % This is a cell array with a path to each recording's Kilosort output directory, where there should be a subfolder called 'RawWaveforms'. 
 % N.B. if you want to use the functional score evaluation of UnitMatch, 'KSDir' should also contain the Kilosort output (e.g. spike times etc.)/
 % Takes the form of "{'\\path\to\firstrecording','\\path\to\secondrecording','\\path\to\nthrecording'};", e.g.:  
- UMparam.KSDir = {'D:\UnitMatch\Data\tmp\Mouse1\AL032\2019-11-21\Probe0\1','D:\UnitMatch\Data\tmp\Mouse1\AL032\2019-11-22\Probe0\1'};  
+ UMparam.KSDir = {'H:\MatchingUnits\KilosortOutput\AL032\2019-11-21\Probe0\1','H:\MatchingUnits\KilosortOutput\AL032\2019-11-22\Probe0\1'};  
 
  
 %% Get recording information

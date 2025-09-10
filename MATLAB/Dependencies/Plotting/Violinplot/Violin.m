@@ -173,7 +173,7 @@ classdef Violin < handle
                 end
                 
                 if pos > length(C)
-                    C = lines;
+                    C = lines(pos);
                 end
                 args.ViolinColor = {repmat(C,ceil(size(data,2)/length(C)),1)};
             end
