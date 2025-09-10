@@ -6,6 +6,7 @@ sys.path.insert(0, os.getcwd())
 sys.path.insert(0, os.path.dirname(os.getcwd()))
 sys.path.insert(0, os.path.join(os.path.dirname(os.getcwd()), "DeepUnitMatch"))
 from testing.test import inference, directional_filter, get_threshold, directional_filter_df
+from utils.helpers import create_dataframe
 
 
 def merge_split_unit(row, spk_df:pd.DataFrame, data_dir):
@@ -57,7 +58,7 @@ def load_spk_data(KSdirs):
         clusters = np.load(os.path.join(ses, "spike_clusters.npy"))
         times = np.load(os.path.join(ses, "spike_times.npy")) / 3e4  # convert to seconds
 
-        data['recses'].append(idx+1)
+        data['recses'].append(idx)
         data['clusters'].append(clusters)
         data['times'].append(times)
         data['paths'].append(ses)
@@ -126,44 +127,11 @@ def merge_and_remove_splits(param, prob_matrix, session_id, model, data_dir, max
     to_merge = set()                        # match table indices corresponding to rows to merge
     to_remove = set()                       # unique unit identifiers to remove
 
-    # Get number of sessions and units per session
     n_sessions = len(param['good_units'])
     session_switch = np.cumsum([len(units.squeeze()) for units in param['good_units']])
-    session_switch = np.insert(session_switch, 0, 0)
-    
-    good_units = param['good_units']
+    session_switch = np.insert(session_switch, 0, 0)    
 
-    # Create dataframe for all session pairs
-    d = {
-        "RecSes1": [],
-        "RecSes2": [],
-        "ID1": [],
-        "ID2": [],
-        "Prob": [],
-    }
-    
-    # Generate all pairs of sessions (including within-session pairs)
-    for ses1 in range(n_sessions):
-        for ses2 in range(n_sessions):
-            n_units_ses1 = len(good_units[ses1].squeeze())
-            n_units_ses2 = len(good_units[ses2].squeeze())
-            
-            # Get unit IDs for this session
-            units_ses1 = np.arange(n_units_ses1)
-            units_ses2 = np.arange(n_units_ses2)
-            
-            # Extract probability matrix block for this session pair
-            prob_block = prob_matrix[session_switch[ses1]:session_switch[ses1+1], 
-                                   session_switch[ses2]:session_switch[ses2+1]]
-            
-            # Add all unit pairs from this session pair
-            d["RecSes1"].extend([ses1 + 1] * (n_units_ses1 * n_units_ses2))
-            d["RecSes2"].extend([ses2 + 1] * (n_units_ses1 * n_units_ses2))
-            d["ID1"].extend(np.repeat(units_ses1, n_units_ses2).tolist())
-            d["ID2"].extend(np.tile(units_ses2, n_units_ses1).tolist())
-            d["Prob"].extend(prob_block.ravel().tolist())
-
-    df = pd.DataFrame(d)
+    df = create_dataframe(param['good_units'], prob_matrix)
 
     df['uid1'] = df['RecSes1'] * 1e6 + df['ID1']
     df['uid2'] = df['RecSes2'] * 1e6 + df['ID2']
@@ -216,7 +184,7 @@ def merge_and_remove_splits(param, prob_matrix, session_id, model, data_dir, max
     # Handle removals for multiple sessions
     sessions = [int(i//1e6) for i in to_remove]
     ids = [int(i%1e6) for i in to_remove]
-    removals = {i+1: [] for i in range(n_sessions)}  # Initialize removals dict for all sessions
+    removals = {i: [] for i in range(n_sessions)}  # Initialize removals dict for all sessions
     
     for s, id in zip(sessions, ids):
         dir = os.path.join(data_dir, str(s-1))
@@ -228,14 +196,14 @@ def merge_and_remove_splits(param, prob_matrix, session_id, model, data_dir, max
     # Update good_units for all sessions
     if len(to_remove) > 0:
         for ses in range(n_sessions):
-            if removals[ses+1]:  # If there are removals in this session
+            if removals[ses]:  # If there are removals in this session
                 # For sessions other than the first, we need to adjust the indices
                 if ses == 0:
-                    param['good_units'][ses] = np.delete(param['good_units'][ses].squeeze(), removals[ses+1])
+                    param['good_units'][ses] = np.delete(param['good_units'][ses].squeeze(), removals[ses])
                 else:
                     # Calculate offset for this session
                     offset = session_switch[ses]
-                    adjusted_removals = [r - offset for r in removals[ses+1] if r >= offset]
+                    adjusted_removals = [r - offset for r in removals[ses] if r >= offset]
                     if adjusted_removals:
                         param['good_units'][ses] = np.delete(param['good_units'][ses].squeeze(), adjusted_removals)
                     else:

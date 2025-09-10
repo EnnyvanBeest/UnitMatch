@@ -5,6 +5,7 @@ sys.path.insert(0, os.path.join(os.getcwd(), os.pardir))
 
 from utils.losses import clip_sim, CustomClipLoss, Projector
 from utils.npdataset import NeuropixelsDataset, ValidationExperimentBatchSampler
+from utils.helpers import create_dataframe, get_unit_ids, read_pos
 import numpy as np
 import matplotlib.pyplot as plt
 from utils.mymodel import SpatioTemporalCNN_V2
@@ -14,7 +15,11 @@ from tqdm import tqdm
 import pandas as pd
 from pathlib import Path
 from sklearn.neighbors import KernelDensity
-import scipy
+import importlib
+from utils import helpers
+importlib.reload(helpers)
+from utils.helpers import *
+
 
 
 def load_trained_model(device="cpu"):
@@ -121,7 +126,10 @@ def get_threshold(prob_matrix:np.ndarray, session_id, MAP=False):
     elif len(thresh) > 1:
         thresh = thresh[-1]
 
-    return x[thresh].item()
+    across = prob_matrix[within_session==False].reshape(-1, 1)
+    diff = np.median(pmat) - np.median(across)
+
+    return x[thresh].item() - diff
 
 def directional_filter(matrix: np.ndarray):
     """
@@ -156,33 +164,139 @@ def directional_filter_df(matches: pd.DataFrame):
             filtered_matches = filtered_matches.drop(idx)  # Drop if no reverse match is found
     return filtered_matches
 
-def remove_conflicts(matrix, fill_value=0):
-    """Optimal conflict removal using Hungarian algorithm."""
-    
-    m = np.array(matrix)
-    cost_matrix = np.where(m != fill_value, -1*m, 0)  # negative for maximisation
-    rows, cols = scipy.optimize.linear_sum_assignment(cost_matrix)
-    
-    result = np.full_like(m, fill_value)
-    valid = m[rows, cols] != fill_value
-    result[rows[valid], cols[valid]] = m[rows[valid], cols[valid]]
-    
-    return result
+def remove_conflicts(matches:pd.DataFrame, metric:str):
+    indices_to_drop = []
+    for idx, match in matches.iterrows():
+        id1 = match["ID1"]
+        id2 = match["ID2"]
+        r1 = match["RecSes1"]
+        r2 = match["RecSes2"]
 
-def get_final_matches(output_prob_matrix, session_id, matching_threshold=0.5):
+        neuron1=matches.loc[(matches["ID1"]==id1) & (matches["RecSes1"]==r1),:]
+        if len(neuron1)>1:
+            neuron1 = neuron1.sort_values(by=[metric], ascending=False)
+            indices_to_drop += neuron1.tail(len(neuron1)-1).index.to_list()
+        
+        neuron2=matches.loc[(matches["ID2"]==id2) & (matches["RecSes2"]==r2),:]
+        if len(neuron2)>1:
+            neuron2 = neuron2.sort_values(by=[metric], ascending=False)
+            indices_to_drop += neuron2.tail(len(neuron2)-1).index.to_list()
+    indices_to_drop = list(set(indices_to_drop))
+    return matches.drop(indices_to_drop), len(indices_to_drop)
+
+def get_matches(df, sim_matrix, session_id, data_dir, pos_array, dist_thresh):
     """
     Process the output probability matrix to get final set of matches across sessions.
     Output is the probability matrix of matches after thresholding and filtering and a boolean matrix indicating final matches.
     """
-    within_session = (session_id[:, None] == session_id).astype(int)
-    probs = output_prob_matrix.copy()
-    probs[within_session == True] = 0                               # don't include within-session pairs
-    matches = probs > matching_threshold
-    bidirectional_mask = directional_filter(matches)
-    probs[~bidirectional_mask] = 0                                  # make the matching critera more stringent
-    probs = remove_conflicts(probs)                    # ensure each neuron is only matched once
-    final_matches = probs > matching_threshold
-    return probs, final_matches
+
+    sim_thresh = get_threshold(sim_matrix, session_id)
+
+    matches = df.loc[df["Prob"] > sim_thresh].copy()
+
+    matches = matches.loc[matches["RecSes1"] != matches["RecSes2"]]   # only keep across-session matches
+    matches = directional_filter_df(matches)
+
+    # spatial filtering
+    sessions = np.unique(session_id)
+    positions = {}
+    for session in sessions:
+        session_path = os.path.join(data_dir, str(session))
+        positions[session] = read_pos(session_path)
+        positions[session]['ID'] = positions[session]['ID'].values - positions[session]['ID'].min()
+    corrections = get_corrections(matches, positions)
+    matches_with_dist = vectorised_drift_corrected_dist(corrections, positions, matches)
+    matches = matches_with_dist.loc[matches_with_dist["dist"]<dist_thresh]
+
+    matches = matches[[c for c in df.columns]]
+    matches, confs = remove_conflicts(matches, "Prob")
+
+    matches.insert(len(matches.columns), "match", True)
+    df.insert(len(df.columns), "match", False)
+    df.loc[matches.index, "match"] = True
+    df.loc[(df['RecSes1'] == df['RecSes2']) & (df['ID1'] == df['ID2']), "match"] = True
+    return df
+
+def vectorised_drift_corrected_dist(corrections, positions, matches:pd.DataFrame, nocorr=False):
+    """
+    Vectorised drift-corrected distance computation.
+    Returns matches dataframe with extra column for drift-corrected distance.
+    """
+
+    sessions = list(positions.keys())
+
+    # Extract the x, y positions
+    idx = matches.index
+    coords1 = pd.concat([positions[session].loc[:, ['ID', 'x', 'y']]
+                        .rename(columns={'ID': 'ID1', 'x': 'x1', 'y': 'y1'})
+                        .assign(RecSes1=session)
+                        for session in [sessions[0], sessions[1]]])
+
+    coords2 = pd.concat([positions[session].loc[:, ['ID', 'x', 'y']]
+                        .rename(columns={'ID': 'ID2', 'x': 'x2', 'y': 'y2'})
+                        .assign(RecSes2=session)
+                        for session in [sessions[1], sessions[0]]])
+
+    # Merge with matches DataFrame
+    newmatches = matches.merge(coords1, on=['RecSes1', 'ID1'])
+    newmatches = newmatches.merge(coords2, on=['RecSes2', 'ID2'])
+    newmatches = newmatches.drop_duplicates(subset=['ID1', 'ID2', 'RecSes1', 'RecSes2'])
+    newmatches.index = idx
+    matches = newmatches
+
+    # Calculate shanks (rounded x coordinates)
+    matches['shank1'] = matches['x1'].round(-2).astype(int)
+    matches['shank2'] = matches['x2'].round(-2).astype(int)
+    # Apply corrections where necessary
+    if not nocorr:
+        matches["idx"] = matches.index
+        matches = matches.merge(
+            corrections[['rec1', 'rec2', 'shank', 'ydiff']], 
+            how='left', 
+            left_on=['RecSes1', 'RecSes2', 'shank1'], 
+            right_on=['rec1', 'rec2', 'shank']
+        )
+        matches.index = matches["idx"]
+        matches.drop(['rec1', 'rec2', 'shank', 'idx'], axis=1, inplace=True)
+        # Apply the drift correction conditionally
+        matches['y2_corr'] = np.where(
+            matches['shank1'] != matches['shank2'], 
+            1000, 
+            matches['y2'] - matches['ydiff'].fillna(0)
+        )
+    else:
+        matches['y2_corr'] = matches['y2']
+    # Calculate the Euclidean distance
+    matches['dist'] = np.sqrt((matches['x1'] - matches['x2'])**2 + (matches['y1'] - matches['y2_corr'])**2)
+    return matches
+
+def get_corrections(matches, positions):
+
+    pos1 = pd.concat([positions[key].assign(RecSes1=key) for key in positions.keys()], ignore_index=True)
+    pos2 = pos1.rename(columns={"RecSes1": "RecSes2", "x": "x2", "y": "y2", "ID": "ID2"})
+
+    # Merge matches with positions data to get all necessary columns in one DataFrame
+    matches = (matches
+               .merge(pos1, left_on=["RecSes1", "ID1"], right_on=["RecSes1", "ID"], how="left")
+               .merge(pos2, left_on=["RecSes2", "ID2"], right_on=["RecSes2", "ID2"], how="left"))
+    
+    # Drop rows with missing positions data
+    matches = matches.dropna(subset=["x", "y", "x2", "y2"])
+
+    # Calculate shank and ydiff in a vectorized way
+    matches['shank1'] = matches['x'].round(-2)
+    matches['shank2'] = matches['x2'].round(-2)
+    matches['ydiff'] = matches['y2'] - matches['y']
+
+    # Filter only rows with matching shanks
+    matches = matches[matches['shank1'] == matches['shank2']]
+
+    # Group by session pairs and shank, then calculate median ydiff
+    output = (matches.groupby(['RecSes1', 'RecSes2', 'shank1'])['ydiff']
+              .median()
+              .reset_index()
+              .rename(columns={'shank1': 'shank','RecSes1':'rec1', 'RecSes2':'rec2'}))
+    return output
 
 def pairwise_histogram_correlation(A, B):
     # Initialize the output correlation matrix
