@@ -228,7 +228,7 @@ for midx = 1:length(MiceOpt)
                 %% Actual UnitMatch & Unique UnitID assignment
                 [UniqueIDConversion, MatchTable, WaveformInfo, UMparam] = UnitMatch(clusinfo, UMparam);
                 if UMparam.AssignUniqueID
-                    [UniqueIDConversion, MatchTable] = AssignUniqueID(UMparam.SaveDir,StartUID);
+                    [UniqueIDConversion, MatchTable, UMparam] = AssignUniqueID(UMparam.SaveDir,StartUID);
                 end
                 UMtime = toc(UMtime)
 
@@ -246,6 +246,9 @@ for midx = 1:length(MiceOpt)
                   % Visualization
                 PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
 
+                if UMparam.AssignUniqueID % Sanity check
+                    summaryMatchingPlots(UMparam.SaveDir,{'UID1Liberal','UID1','UID1Conservative'},1,0)
+                end
                 %% Figures
                 if UMparam.MakePlotsOfPairs
                     DrawBlind = 0; %1 for blind drawing (for manual judging of pairs)

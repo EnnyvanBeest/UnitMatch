@@ -126,6 +126,7 @@ for shank = 1:numShanks
     maxDepth{shank} = maxDepthtmp;
        
 end
+ActiveShanks = ~cellfun(@isempty,depthEdges);
 if ~exist('maxDepth')
     Depth2Area = [];
     return
@@ -140,6 +141,9 @@ spikeDepths(spikeDepths<minDepth | spikeDepths>maxDepth) = [];
 
 % Clean up histinfo a little bit
 for shank = 1:numShanks
+    if ~ActiveShanks(shank)
+        continue
+    end
     if totalProbeLength{shank}>DepthRange
         removeId = probeLengths{shank}>maxDepth | probeLengths{shank}<minDepth;  %  Remove these entries
         histinfo{shank}(removeId,:) = [];%-
@@ -191,6 +195,9 @@ end
 % Align histology data with functional clusters using the same depth bins
 alignedHistology = cell(numShanks, 1);
 for shank = 1:numShanks
+     if ~ActiveShanks(shank)
+        continue
+    end
     histDepths = depthEdges{shank}(1:end-1) - diff(depthEdges{shank})/2;
     [alignedHistology{shank}, Features{shank}] = stretchHistology(histinfo{shank}, activityClusters{shank}, MUACorr{shank}, FreqIntens{shank}, spikeAmps{shank}, histDepths, firingRates{shank}, trackcoordinates{shank}, structureTree);
 end
@@ -199,11 +206,17 @@ end
 % Generate deterministic depth-to-area mapping
 Depth2Area = cell(numShanks, 1);
 for shank = 1:numShanks
+     if ~ActiveShanks(shank)
+        continue
+    end
     Depth2Area{shank} = assignAreas(alignedHistology{shank}, acronyms, shank, color_hex);
 end
 
 % Visualize results
 for shank = 1:numShanks
+     if ~ActiveShanks(shank)
+        continue
+    end
     visualizeResults(Depth2Area{shank}, Features{shank});
 end
 Depth2Area=cat(1,Depth2Area{:});

@@ -83,7 +83,7 @@ if ~isfield(UMparam,'AssignUniqueID')
     UMparam.AssignUniqueID = 1; % Use our method of Assigning Unique ID based on match probability (recommended)
 end
 if ~isfield(UMparam,'UseDatadrivenProbThrs')
-    UMparam.UseDatadrivenProbThrs = 1; % Use data driven probability threshold, if 0 use UMparam.ProbabilityThreshold
+    UMparam.UseDatadrivenProbThrs = 0; % Use data driven probability threshold, if 0 use UMparam.ProbabilityThreshold
 end
 if ~isfield(UMparam,'min_angledist')
     UMparam.min_angledist = 0.1 % the minimum distance a centroid must move to take it angle, avoid getting angle of noise

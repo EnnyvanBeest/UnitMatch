@@ -1,5 +1,5 @@
 %% User Input
-NewHistologyNeeded = 0; %Automatically to 1 after RedoAfterClustering
+NewHistologyNeeded = 1; %Automatically to 1 after RedoAfterClustering
 RedoAfterClustering = 0;
 RedoUserInput = 0;
 UseLFP = 0;
@@ -68,11 +68,11 @@ for midx = 1:length(MiceOpt)
     subksdirs = dir(fullfile(myKsDir,'*','Probe*')); %This changed because now I suddenly had 2 probes per recording
     multidate = cellfun(@(X) strsplit(X,'\'),{subksdirs(:).folder},'UniformOutput',0);
     multidate = cellfun(@(X) X{end},multidate,'UniformOutput',0);
-    % if length(unique(multidate))>1 && strcmp(RecordingType{midx},'Chronic')
-    %     multidate=1;
-    % else
-    multidate=0;
-    % end
+    if length(unique(multidate))>1 && strcmp(RecordingType{midx},'Chronic')
+        multidate=1;
+    else
+        multidate=0;
+    end
     if NewHistologyNeededOri || RedoUserInput
         thefirstperprobe = zeros(1,2);
     else
@@ -227,6 +227,8 @@ for midx = 1:length(MiceOpt)
                     if ~isempty(histfile)
                         if ~exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
                             mkdir(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
+                        else
+                            delete(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,'*'))
                         end
                         copyfile(fullfile(histfile(1).folder,histfile(1).name),fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,histfile(1).name))
                         continue
