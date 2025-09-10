@@ -308,7 +308,10 @@ for pairid=1:length(Pairs)
     ylimcur = get(gca,'ylim');
     ylim([ylimcur(1) ylimcur(2)*1.005])
     xlimcur = get(gca,'xlim');
+    try
     xlim([min(Locs(:,1))*10-param.spikeWidth/2 max(Locs(:,1))*10+param.spikeWidth*1.5])
+    catch ME
+    end
     set(gca,'xtick',get(gca,'xtick'),'xticklabel',arrayfun(@(X) num2str(X./10),cellfun(@(X) str2num(X),get(gca,'xticklabel')),'UniformOutput',0))
 
     legend(hleg,arrayfun(@(X) ['ID' num2str(OriClusID(X)) ', Rec' num2str(recsesGood(X))],Pairs{pairid},'Uni',0),'Location','best')
@@ -538,10 +541,16 @@ for pairid=1:length(Pairs)
     title(['rank=' tmpR])
     makepretty
 
+    % build the parts for this file
+    parts = arrayfun(@(k) sprintf('OriID%dRec%d', ...
+        OriClusID(Pairs{pairid}(k)), recsesGood(Pairs{pairid}(k))), ...
+        1:numel(Pairs{pairid}), 'UniformOutput', false);
 
-    fname = cell2mat(arrayfun(@(X) ['UID' num2str(X)],unique(UniqueID(Pairs{pairid})),'Uni',0));
-    saveas(tmpfig,fullfile(param.SaveDir,'MatchFigures',[fname '_x' num2str(length(Pairs{pairid})) '.fig']))
-    saveas(tmpfig,fullfile(param.SaveDir,'MatchFigures',[fname '_x' num2str(length(Pairs{pairid})) '.bmp']))
+    % join with underscores
+    fname = strjoin(parts, '_');
+  
+    saveas(tmpfig,fullfile(param.SaveDir,'MatchFigures',[fname '.fig']))
+    saveas(tmpfig,fullfile(param.SaveDir,'MatchFigures',[fname '.bmp']))
     if strcmp(param.VisibleSetting,'off')
         delete(tmpfig)
     end

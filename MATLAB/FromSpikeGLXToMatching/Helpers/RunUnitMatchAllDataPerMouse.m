@@ -7,13 +7,13 @@ DateOpt = arrayfun(@(X) dir(fullfile(DataDir{DataDir2Use(X)},MiceOpt{X},'*-*')),
 DateOpt = cellfun(@(X) X([X.isdir]),DateOpt,'UniformOutput',0);
 DateOpt = cellfun(@(X) {X.name},DateOpt,'UniformOutput',0);
 
-RemoveOldCopies = 1;
+RemoveOldCopies = 0;
 Redo = 0; % Redo generally
 LogError = {}; % Keep track of which runs didn't work
 if ~exist('PipelineParamsOri','var')
     PipelineParamsOri = PipelineParams;
 end
-for midx = 18:length(MiceOpt)
+for midx = 1:length(MiceOpt)
     close all % to not overcrowd the graphics card
     PipelineParams = PipelineParamsOri; % Reset
     %% Loading data from kilosort/phy easily
@@ -95,7 +95,7 @@ for midx = 18:length(MiceOpt)
     %% Remove old copies?
     UnitMatchExist = dir(fullfile(SaveDir,MiceOpt{midx},'**','UnitMatch.mat'));
     if ~isempty(UnitMatchExist)
-        MouseAllDone = 1;
+        MouseAllDone = 0;
     else 
         MouseAllDone = 0;
     end
@@ -228,7 +228,7 @@ for midx = 18:length(MiceOpt)
                 %% Actual UnitMatch & Unique UnitID assignment
                 [UniqueIDConversion, MatchTable, WaveformInfo, UMparam] = UnitMatch(clusinfo, UMparam);
                 if UMparam.AssignUniqueID
-                    [UniqueIDConversion, MatchTable] = AssignUniqueID(UMparam.SaveDir,StartUID);
+                    [UniqueIDConversion, MatchTable, UMparam] = AssignUniqueID(UMparam.SaveDir,StartUID);
                 end
                 UMtime = toc(UMtime)
 
@@ -246,6 +246,9 @@ for midx = 18:length(MiceOpt)
                   % Visualization
                 PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
 
+                if UMparam.AssignUniqueID % Sanity check
+                    summaryMatchingPlots(UMparam.SaveDir,{'UID1Liberal','UID1','UID1Conservative'},1,0)
+                end
                 %% Figures
                 if UMparam.MakePlotsOfPairs
                     DrawBlind = 0; %1 for blind drawing (for manual judging of pairs)

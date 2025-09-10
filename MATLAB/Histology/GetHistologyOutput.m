@@ -6,7 +6,7 @@ AllenCCFPath = fullfile(GithubDir,'allenCCF');
 if ~exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
     mkdir(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
 end
-tmphistfile = dir(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,'*HistoEphysAlignment_Auto.mat'));
+tmphistfile = dir(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,['*HistoEphysAlignment_Auto.mat']));
 if ~isempty(tmphistfile) && ~NewHistologyNeeded
     tmpfile = load(fullfile(tmphistfile.folder,tmphistfile.name));
     try
