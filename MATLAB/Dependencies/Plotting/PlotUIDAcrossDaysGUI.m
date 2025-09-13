@@ -30,6 +30,9 @@ end
 
 UIDList = [];
 currentIdx = 1;
+UniqueIDConversion = struct();
+WaveformInfo = struct();
+UMparam = struct();
 
 %% Load data from UnitMatch output
 loadData();
@@ -38,19 +41,19 @@ loadData();
 f = figure('Name','UID across days', 'NumberTitle','off', 'Color','w', ...
     'KeyPressFcn', @keyPress);
 
-uicontrol('Style','text', 'Position',[10 400 60 20], 'String','SaveDir');
-saveDirEdit = uicontrol('Style','edit', 'Position',[70 400 320 25], ...
+uicontrol('Style','text', 'Units','normalized', 'Position',[0.01 0.94 0.06 0.04], 'String','SaveDir');
+saveDirEdit = uicontrol('Style','edit', 'Units','normalized', 'Position',[0.08 0.94 0.58 0.05], ...
     'String',SaveDir);
-uicontrol('Style','pushbutton', 'String','Browse', 'Position',[395 400 60 25], ...
+uicontrol('Style','pushbutton', 'String','Browse', 'Units','normalized', 'Position',[0.67 0.94 0.1 0.05], ...
     'Callback',@browseSaveDir);
 
-uicontrol('Style','text', 'Position',[10 370 40 20], 'String','UID');
-uidEdit = uicontrol('Style','edit', 'Position',[50 370 80 25]);
-plotBtn = uicontrol('Style','pushbutton','String','Plot','Position',[140 370 60 25], ...
+uicontrol('Style','text', 'Units','normalized', 'Position',[0.01 0.88 0.05 0.04], 'String','UID');
+uidEdit = uicontrol('Style','edit', 'Units','normalized', 'Position',[0.07 0.88 0.1 0.05]);
+plotBtn = uicontrol('Style','pushbutton','String','Plot','Units','normalized','Position',[0.18 0.88 0.1 0.05], ...
     'Callback',@plotCallback);
-uicontrol('Style','pushbutton','String','<','Position',[205 370 40 25], ...
+uicontrol('Style','pushbutton','String','<','Units','normalized','Position',[0.29 0.88 0.05 0.05], ...
     'Callback',@prevCallback);
-uicontrol('Style','pushbutton','String','>','Position',[250 370 40 25], ...
+uicontrol('Style','pushbutton','String','>','Units','normalized','Position',[0.35 0.88 0.05 0.05], ...
     'Callback',@nextCallback);
 
 axWave = axes('Parent', f, 'Position', [0.1 0.55 0.85 0.35]);
