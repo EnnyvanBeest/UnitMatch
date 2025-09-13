@@ -52,17 +52,19 @@ xlabel(axISI, 'ISI (ms)');      ylabel(axISI, 'Probability');
             return
         end
 
-        idx = find(UniqueIDConversion.UniqueID == uid);
+        idx = find(UniqueIDConversion.UniqueID(logical(UniqueIDConversion.GoodID)) == uid);
         if isempty(idx)
             title(axWave, sprintf('UID %d not found', uid));
             return
         end
+        RecAllGood = UniqueIDConversion.recsesAll(logical(UniqueIDConversion.GoodID));
+        OriClusGood = UniqueIDConversion.OriginalClusID(logical(UniqueIDConversion.GoodID));
 
-        colors = lines(numel(idx));
+        colors = flipud(copper(numel(idx)));
         hold(axWave, 'on');
         hold(axISI, 'on');
         for k = 1:numel(idx)
-            rec = UniqueIDConversion.recsesAll(idx(k));
+            rec = RecAllGood(idx(k));
             % Waveform: average across cross-validations
             wf = squeeze(nanmean(WaveformInfo.ProjectedWaveform(:, idx(k), :), 3));
             plot(axWave, wf, 'Color', colors(k,:), 'DisplayName', sprintf('Rec %d', rec));
@@ -80,7 +82,7 @@ xlabel(axISI, 'ISI (ms)');      ylabel(axISI, 'Probability');
             else
                 clu = sp.spikeTemplates; % fallback
             end
-            st = double(sp.st(clu == UniqueIDConversion.OriginalClusID(idx(k))));
+            st = double(sp.st(clu == OriClusGood(idx(k))));
             if numel(st) < 2
                 continue
             end
