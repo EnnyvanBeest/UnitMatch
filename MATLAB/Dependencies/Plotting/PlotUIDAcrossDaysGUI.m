@@ -58,7 +58,7 @@ uicontrol('Style','pushbutton','String','>','Units','normalized','Position',[0.3
 
 axWave = axes('Parent', f, 'Position', [0.1 0.55 0.85 0.35]);
 axISI  = axes('Parent', f, 'Position', [0.1 0.1 0.85 0.35]);
-xlabel(axWave, 'Time (samples)'); ylabel(axWave, 'Amplitude');
+xlabel(axWave, 'Time (ms)'); ylabel(axWave, 'Amplitude');
 xlabel(axISI, 'ISI (ms)');      ylabel(axISI, 'Probability');
 set(axISI,'XScale','log');
 
@@ -125,12 +125,20 @@ set(axISI,'XScale','log');
         colors = flipud(copper(numel(idx)));
         hold(axWave, 'on');
         hold(axISI, 'on');
+        % Time vector in milliseconds for waveforms
+        try
+            nTime = size(WaveformInfo.ProjectedWaveform, 1);
+        catch
+            nTime = numel(WaveformInfo.ProjectedWaveform(:,1,1));
+        end
+        fs = getWaveformFs(); % samples per second
+        tms = (0:nTime-1) / fs * 1000; % milliseconds
         for k = 1:numel(idx)
             rec = RecAllGood(idx(k));
             dateStr = getRecDate(rec);
             % Waveform: average across cross-validations
             wf = squeeze(nanmean(WaveformInfo.ProjectedWaveform(:, idx(k), :), 3));
-            plot(axWave, wf, 'Color', colors(k,:), 'DisplayName', dateStr);
+            plot(axWave, tms, wf, 'Color', colors(k,:), 'DisplayName', dateStr);
 
             % Load spikes for ISI calculation
             try
@@ -164,13 +172,35 @@ set(axISI,'XScale','log');
         axes(axISI); makepretty; offsetAxes(axISI);
     end
 
+    function fs = getWaveformFs()
+        % Determine sampling rate (Hz) for waveforms; default to 30 kHz
+        fs = 30000; % default
+        if exist('UMparam','var') && isstruct(UMparam)
+            candidates = {'SampleRate','SamplingRate','APSampleRate','Fs','fs','spikeSampleRate','WaveformFs'};
+            for c = 1:numel(candidates)
+                f = candidates{c};
+                if isfield(UMparam, f)
+                    val = UMparam.(f);
+                    if isnumeric(val) && isscalar(val) && isfinite(val) && val > 0
+                        fs = val; return
+                    end
+                end
+            end
+        end
+    end
+
     function dateStr = getRecDate(rec)
         dateStr = sprintf('Rec %d', rec);
         if isfield(UMparam,'KSDir') && numel(UMparam.KSDir) >= rec
             parts = strsplit(UMparam.KSDir{rec}, filesep);
             mask = cellfun(@(p) ~isempty(regexp(p,'\d{4}-\d{2}-\d{2}','once')), parts);
             if any(mask)
-                dateStr = parts{find(mask,1,'last')};
+                lastIdx = find(mask,1,'last');
+                % Extract only the yyyy-mm-dd substring from the matching part
+                m = regexp(parts{lastIdx}, '(\d{4}-\d{2}-\d{2})', 'match', 'once');
+                if ~isempty(m)
+                    dateStr = m;
+                end
             end
         end
     end
