@@ -42,11 +42,21 @@ end
 if ~isfield(UMparam,'spikeWidth')
     if UMparam.Kilosortversion>=4
         UMparam.spikeWidth = 61; % width of spikes in samples (typically assuming 30KhZ sampling)
-        UMparam.NewPeakLoc =  22; % floor(UMparam.spikeWidth./2);
-        UMparam.waveidx =  UMparam.NewPeakLoc-7:UMparam.NewPeakLoc+10;
     else
         UMparam.spikeWidth = 82; % width of spikes in samples (typically assuming 30KhZ sampling)
+    end
+end
+if ~isfield(UMparam,'NewPeakLoc')
+    if UMparam.Kilosortversion>=4
+        UMparam.NewPeakLoc =  22; % floor(UMparam.spikeWidth./2);
+    else
         UMparam.NewPeakLoc =  floor(UMparam.spikeWidth./2);
+    end
+end
+if ~isfield(UMparam,'waveidx')
+    if UMparam.Kilosortversion>=4
+        UMparam.waveidx =  UMparam.NewPeakLoc-7:UMparam.NewPeakLoc+10;
+    else
         UMparam.waveidx =  UMparam.NewPeakLoc-7:UMparam.NewPeakLoc+15;
     end
 end

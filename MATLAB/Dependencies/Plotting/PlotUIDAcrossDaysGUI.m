@@ -133,12 +133,22 @@ set(axISI,'XScale','log');
         end
         fs = getWaveformFs(); % samples per second
         tms = (0:nTime-1) / fs * 1000; % milliseconds
+        % Track data ranges to autoscale axes
+        wfYMin = inf; wfYMax = -inf; hasWave = false;
+        ISIbins = 5*10.^(-4:0.1:0); % seconds
+        isiXms = ISIbins * 1000; hasISI = false; isiYMax = 0;
         for k = 1:numel(idx)
             rec = RecAllGood(idx(k));
             dateStr = getRecDate(rec);
             % Waveform: average across cross-validations
             wf = squeeze(nanmean(WaveformInfo.ProjectedWaveform(:, idx(k), :), 3));
             plot(axWave, tms, wf, 'Color', colors(k,:), 'DisplayName', dateStr);
+            wfValid = wf(~isnan(wf));
+            if ~isempty(wfValid)
+                wfYMin = min(wfYMin, min(wfValid));
+                wfYMax = max(wfYMax, max(wfValid));
+                hasWave = true;
+            end
 
             % Load spikes for ISI calculation
             try
@@ -158,13 +168,32 @@ set(axISI,'XScale','log');
                 continue
             end
             isi = diff(sort(st));
-            ISIbins = 5*10.^(-4:0.1:0);
             histISI = histcounts(isi, [ISIbins Inf], 'Normalization','probability');
             stairs(axISI, ISIbins*1000, histISI, 'Color', colors(k,:), ...
                 'DisplayName', dateStr);
+            if ~isempty(histISI)
+                isiYMax = max(isiYMax, max(histISI));
+                hasISI = true;
+            end
         end
         hold(axWave, 'off');
         hold(axISI, 'off');
+        % Autoscale axes based on plotted data
+        if hasWave
+            xlim(axWave, [tms(1) tms(end)]);
+            yrng = wfYMax - wfYMin;
+            if ~isfinite(yrng) || yrng == 0
+                pad = max(1e-12, 0.05*max(1, abs(wfYMax)));
+            else
+                pad = 0.05 * yrng;
+            end
+            ylim(axWave, [wfYMin - pad, wfYMax + pad]);
+        end
+        if hasISI
+            xlim(axISI, [isiXms(1) isiXms(end)]);
+            ymax = max(1e-6, isiYMax*1.1);
+            ylim(axISI, [0 ymax]);
+        end
         legend(axWave, 'show');
         legend(axISI, 'show');
 
