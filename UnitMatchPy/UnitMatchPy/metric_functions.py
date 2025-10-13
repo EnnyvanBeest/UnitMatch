@@ -168,24 +168,36 @@ def get_Euclidean_dist(avg_waveform_per_tp_flip,param):
     ndarray
         The euclidean distance between each unit for each time point
     """
-    # NOTE these arrays could get very large, may needed calculate in batches or use dask
-    # if arrays become too large
-
+    # Memory-efficient implementation using loops instead of massive tiling
+    
     waveidx = param['waveidx']
     n_units = param['n_units']
-
-    x1 = np.tile( np.expand_dims(avg_waveform_per_tp_flip[:,:,waveidx,0,:], axis = -1), (1,1,1,1,n_units)).squeeze()
-    x2 = np.swapaxes(np.tile( np.expand_dims(avg_waveform_per_tp_flip[:,:,waveidx,1,:], axis = -1), (1,1,1,1,n_units)).squeeze(), 1, 4)
-
-    w = np.isnan( np.abs(x1[0,:,:,:,:] - x2[0,:,:,:,:])).squeeze()
-
-    tmp_euclid = np.linalg.norm(x1-x2, axis = 0)
-    tmp_euclid[w] = np.nan
-    euclid_dist = tmp_euclid
-    del x1
-    del x2
-    del w
-    del tmp_euclid
+    
+    # Extract the relevant slices once
+    data_cv0 = avg_waveform_per_tp_flip[:,:,waveidx,0,:]  # (3, n_units, len(waveidx), n_flips)
+    data_cv1 = avg_waveform_per_tp_flip[:,:,waveidx,1,:]  # (3, n_units, len(waveidx), n_flips)
+    
+    # Initialize output array to match original
+    euclid_dist = np.full((n_units, len(waveidx), data_cv0.shape[-1], n_units), np.nan)
+    
+    # Process unit by unit
+    for i in range(n_units):
+        for j in range(n_units):
+            # Get data for units i and j
+            unit_i_data = data_cv0[:, i, :, :]  # (3, len(waveidx), n_flips)
+            unit_j_data = data_cv1[:, j, :, :]  # (3, len(waveidx), n_flips)
+            
+            # Check for NaN values
+            w = np.isnan(np.abs(unit_i_data[0,:,:] - unit_j_data[0,:,:]))
+            
+            # Compute Euclidean distance between units i and j
+            diff = unit_i_data - unit_j_data  # (3, len(waveidx), n_flips)
+            tmp_euclid = np.linalg.norm(diff, axis=0)  # (len(waveidx), n_flips)
+            tmp_euclid[w] = np.nan
+            
+            # Store result
+            euclid_dist[i, :, :, j] = tmp_euclid
+    
     return euclid_dist
 
 def centroid_metrics(euclid_dist, param):

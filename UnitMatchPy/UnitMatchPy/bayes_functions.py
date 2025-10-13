@@ -26,7 +26,7 @@ def get_parameter_kernels(scores_to_include, labels, cond, param, add_one = 1):
     ndarray
         The probability distributions for each metric
     """
-    print('Calculating the probability distributions of the metric scores')
+    # print('Calculating the probability distributions of the metric scores')
     score_vector = param['score_vector']
     bins = param['bins']
     smooth_prob = param['smooth_prob']
@@ -73,27 +73,43 @@ def apply_naive_bayes(parameter_kernels, priors, predictors, param, cond):
     ndarray
         The probability the unit is or is not a match
     """
-    print('Calculating the match probabilities')
+    # print('Calculating the match probabilities')
     
     score_vector = param['score_vector']
     n_pairs = predictors.shape[0] ** 2
+    n_metrics = predictors.shape[2]
 
-    unravel = np.reshape(predictors , (predictors.shape[0] * predictors.shape[1], predictors.shape[2],1))
-    x1 = np.tile(unravel, ( 1, 1, len(score_vector)))
-    tmp = np.expand_dims(score_vector, axis = (0,1))
-    x2 = np.tile(tmp, (x1.shape[0], x1.shape[1], 1))
-    min_idx = np.argmin( np.abs(x1 - x2), axis = 2)
+    predictors_flat = predictors.reshape(n_pairs, n_metrics)
+    
+    # Process in chunks
+    chunk_size = min(1000, n_pairs)
+    min_idx = np.zeros((n_pairs, n_metrics), dtype=int)
+    
+    for start_idx in range(0, n_pairs, chunk_size):
+        end_idx = min(start_idx + chunk_size, n_pairs)
+        chunk = predictors_flat[start_idx:end_idx]  # (chunk_size, n_metrics)
+        
+        # For each metric, find closest score indices for this chunk
+        for metric_idx in range(n_metrics):
+            metric_values = chunk[:, metric_idx]  # (chunk_size,)
+            # Broadcast: (chunk_size, 1) - (1, n_scores) = (chunk_size, n_scores)
+            distances = np.abs(metric_values[:, np.newaxis] - score_vector[np.newaxis, :])
+            min_idx[start_idx:end_idx, metric_idx] = np.argmin(distances, axis=1)
 
     likelihood = np.full((n_pairs, len(cond)), np.nan)
     for ck in range(len(cond)):
-        tmp_prob = np.zeros_like(min_idx, np.float64)
-        for yy in range(min_idx.shape[1]):
-            tmp_prob[:,yy] = parameter_kernels[min_idx[:,yy],yy,ck]
-        likelihood[:,ck] = np.prod(tmp_prob, axis=1)
 
+        metric_indices = np.arange(n_metrics)[np.newaxis, :]  # (1, n_metrics)
+        
+        # Extract probabilities for all pairs and metrics at once
+        tmp_prob = parameter_kernels[min_idx, metric_indices, ck]  # (n_pairs, n_metrics)
+        
+        # Compute product across metrics for each pair
+        likelihood[:, ck] = np.prod(tmp_prob, axis=1)
 
-    prob = np.full((n_pairs,2), np.nan )
-    for ck in range(len(cond)):
-        prob[:,ck] = priors[ck] * likelihood[:,ck] / np.nansum((priors * likelihood), axis =1)
+    denominator = np.nansum(priors[np.newaxis, :] * likelihood, axis=1)  # (n_pairs,)
+    
+    # Compute final probabilities for all conditions at once
+    prob = (priors[np.newaxis, :] * likelihood) / denominator[:, np.newaxis]  # (n_pairs, len(cond))
     
     return prob
