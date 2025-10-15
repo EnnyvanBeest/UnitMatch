@@ -15,7 +15,30 @@ if ~isfield(UMparam,'UseDatadrivenProbThrs')
     UMparam.UseDatadrivenProbThrs = 0;
 end
 %% Subfunction in case you want to use this on a subset of the data/table
-[MatchTable, UniqueIDConversion, UMparam] = AssignUniqueIDAlgorithm(MatchTable, UniqueIDConversion, UMparam, StartUID);
+if any(ismember(MatchTable.Properties.VariableNames,'MatchProbUM')) % Indicates we compare UM to DNN
+    % DUM:
+    [MatchTableDUM, UniqueIDConversionDUM, UMparam] = AssignUniqueIDAlgorithm(MatchTable, UniqueIDConversion, UMparam, StartUID, 'MatchProb');
+    % Original UM:
+    [MatchTable, UniqueIDConversion, UMparam] = AssignUniqueIDAlgorithm(MatchTable, UniqueIDConversion, UMparam, StartUID, 'MatchProbUM');
+
+    % Add them together
+    UniqueIDConversion.UniqueIDConservativeDUM = UniqueIDConversionDUM.UniqueIDConservativeDUM;
+    UniqueIDConversion.UniqueIDLiberalDUM = UniqueIDConversionDUM.UniqueIDLiberalDUM;
+    UniqueIDConversion.UniqueIDDUM = UniqueIDConversionDUM.UniqueIDDUM;
+
+    % same for matchtable
+    MatchTable.UID1ConservativeDUM = MatchTableDUM.UID1ConservativeDUM;
+    MatchTable.UID2ConservativeDUM = MatchTableDUM.UID2ConservativeDUM;
+    MatchTable.UID1LiberalDUM = MatchTableDUM.UID1LiberalDUM;
+    MatchTable.UID2LiberalDUM = MatchTableDUM.UID2LiberalDUM;
+    MatchTable.UID1DUM = MatchTableDUM.UID1DUM;
+    MatchTable.UID2DUM = MatchTableDUM.UID2DUM;
+    MatchTable.MatchProbDUM = MatchTableDUM.MatchProb; % Just to be certain, store this as the DUM as well 
+
+
+else
+    [MatchTable, UniqueIDConversion, UMparam] = AssignUniqueIDAlgorithm(MatchTable, UniqueIDConversion, UMparam, StartUID);
+end
 
 %% Overwrite
 disp('Saving table')

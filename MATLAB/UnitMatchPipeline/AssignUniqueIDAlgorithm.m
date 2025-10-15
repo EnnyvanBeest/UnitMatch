@@ -1,6 +1,9 @@
-function [MatchTable, UniqueIDConversion, UMparam] = AssignUniqueIDAlgorithm(MatchTable, UniqueIDConversion, UMparam, StartUID)
+function [MatchTable, UniqueIDConversion, UMparam] = AssignUniqueIDAlgorithm(MatchTable, UniqueIDConversion, UMparam, StartUID, Var2Take)
 if nargin<4
     StartUID = 1;
+end
+if nargin<5
+    Var2Take = 'MatchProb';
 end
 %% Input:
 % UniqueIDConversion (struct) with at east per cluster: OriginalClusID, GoodID & recsesAll
@@ -57,16 +60,16 @@ UniqueIDConservative = UniqueIDConservative(Good_Idx);
 UniqueID = UniqueID(Good_Idx);
 GoodRecSesID = GoodRecSesID(Good_Idx);
 % Extract match prob
-MatchProb = reshape(MatchTable.MatchProb,nClus,nClus);
+MatchProb = reshape(MatchTable.(Var2Take),nClus,nClus);
 
 %% Find probability threshold to use
 if UMparam.UseDatadrivenProbThrs
     stepsz = 0.1;
     binedges = [0:stepsz:1];
     plotvec = stepsz/2:stepsz:1-stepsz/2;
-    hw = histcounts(MatchTable.MatchProb(MatchTable.ID1==MatchTable.ID2 & MatchTable.RecSes1 == MatchTable.RecSes2),binedges)./sum(MatchTable.ID1==MatchTable.ID2 & MatchTable.RecSes1 == MatchTable.RecSes2);
-    %     hn = histcounts(MatchTable.MatchProb(MatchTable.ID1~=MatchTable.ID2 & MatchTable.RecSes1 == MatchTable.RecSes2),binedges)./sum(MatchTable.ID1~=MatchTable.ID2 & MatchTable.RecSes1 == MatchTable.RecSes2);
-    %     ha = histcounts(MatchTable.MatchProb(MatchTable.RecSes1 ~= MatchTable.RecSes2),binedges)./sum(MatchTable.RecSes1 ~= MatchTable.RecSes2);
+    hw = histcounts(MatchTable.(Var2Take)(MatchTable.ID1==MatchTable.ID2 & MatchTable.RecSes1 == MatchTable.RecSes2),binedges)./sum(MatchTable.ID1==MatchTable.ID2 & MatchTable.RecSes1 == MatchTable.RecSes2);
+    %     hn = histcounts(MatchTable.(Var2Take)(MatchTable.ID1~=MatchTable.ID2 & MatchTable.RecSes1 == MatchTable.RecSes2),binedges)./sum(MatchTable.ID1~=MatchTable.ID2 & MatchTable.RecSes1 == MatchTable.RecSes2);
+    %     ha = histcounts(MatchTable.(Var2Take)(MatchTable.RecSes1 ~= MatchTable.RecSes2),binedges)./sum(MatchTable.RecSes1 ~= MatchTable.RecSes2);
 
     %     find sudden increase and take that as probability threshold
     UMparam.UsedProbability = plotvec(diff(hw)>0.1);
