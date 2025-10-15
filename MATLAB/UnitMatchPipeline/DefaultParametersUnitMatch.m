@@ -102,8 +102,12 @@ end
 if ~isfield(UMparam,'removeoverMerges')
     UMparam.removeoverMerges = 1; % based on ISI settings below, do not assign same UID to units who's merging would result in more ISI violations
 end
+
 if ~isfield(UMparam,'ISIViolRatioThrs')
     UMparam.ISIViolRatioThrs = 1.5; % Treshold for the ratio of fraction of spikses violating the ISI rules, when merging two neurons. when larger than threshold neurons won't be merged.
+end
+if ~isfield(UMparam,'ISIMinFractionRefractoryViolations')
+    UMparam.ISIMinFractionRefractoryViolations = 0.01; % Max fraction of violations allowed (proportion), this overwrites the above for merging
 end
 if ~isfield(UMparam,'ISIViolRefracMs')
     UMparam.ISIViolRefracMs = 1.5; % refractory window in milliseconds

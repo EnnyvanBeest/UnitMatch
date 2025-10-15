@@ -26,7 +26,10 @@ if ~isfield(UMparam,'removeoverMerges')
     UMparam.removeoverMerges = 1;
 end
 if ~isfield(UMparam,'ISIViolRatioThrs')
-    UMparam.ISIViolRatioThrs = 1.5; % fraction of merged ISIs violating refractory period
+    UMparam.ISIViolRatioThrs = 1.5; % Ratio of fraction of merged ISIs violating refractory period when merging
+end
+if ~isfield(UMparam,'ISIMinFractionRefractoryViolations')
+    UMparam.ISIMinFractionRefractoryViolations = 0.01; % Max fraction of violations allowed, this overwrites the above for merging
 end
 if ~isfield(UMparam,'ISIViolRefracMs')
     UMparam.ISIViolRefracMs = 1.5; % refractory window in milliseconds
@@ -158,7 +161,9 @@ if UMparam.removeoverMerges && ~isempty(Pairs)
             end
             fracViol = sum(diffs*1000 < UMparam.ISIViolRefracMs) / numel(diffs);
             ViolationRatio = fracViol./(2*max([fracViol1,fracViol2]));
-            ISIExclude(pid) = ViolationRatio;
+            if fracViol>UMparam.ISIMinFractionRefractoryViolations
+                ISIExclude(pid) = ViolationRatio;
+            end
         end
         NonSurvivalIdx = NonSurvivalIdx | ISIExclude > UMparam.ISIViolRatioThrs;
     catch ME
