@@ -45,36 +45,6 @@ def create_dataframe(good_units, prob_matrix, session_list=None):
 
     df = pd.DataFrame(d)
     return df
-    
-
-def get_unit_ids(filepaths: list) -> list:
-    # Convert to pandas Series for vectorized operations
-    fps = pd.Series([os.path.basename(fp) for fp in filepaths])
-    
-    # Check format validity
-    valid_mask = (fps.str[:4] == "Unit") & (fps.str[-4:] == ".npy")
-    
-    if not valid_mask.all():
-        invalid_files = [filepaths[i] for i in valid_mask[~valid_mask].index]
-        raise ValueError(f"Invalid filepath format for files: {invalid_files}")
-    
-    # Vectorized string operations
-    ids = (fps.str.replace("Unit", "", regex=False)
-              .str.replace(".npy", "", regex=False)
-              .str.split('+').str[0]
-              .str.replace("#", "", regex=False))
-    
-    # Convert to integers with error handling
-    try:
-        return ids.astype(int).tolist()
-    except ValueError as e:
-        # Find problematic entries
-        for i, id_str in enumerate(ids):
-            try:
-                int(id_str)
-            except ValueError:
-                print(f"Problematic ID: {id_str}")
-                raise ValueError(f"Invalid filepath format for waveform: {filepaths[i]}")
             
 def get_unit_id(filepath:str):
     fp = os.path.basename(filepath)

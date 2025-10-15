@@ -169,7 +169,6 @@ def get_Euclidean_dist(avg_waveform_per_tp_flip,param):
         The euclidean distance between each unit for each time point
     """
     # Memory-efficient implementation using loops instead of massive tiling
-    
     waveidx = param['waveidx']
     n_units = param['n_units']
     
@@ -177,7 +176,7 @@ def get_Euclidean_dist(avg_waveform_per_tp_flip,param):
     data_cv0 = avg_waveform_per_tp_flip[:,:,waveidx,0,:]  # (3, n_units, len(waveidx), n_flips)
     data_cv1 = avg_waveform_per_tp_flip[:,:,waveidx,1,:]  # (3, n_units, len(waveidx), n_flips)
     
-    # Initialize output array to match original
+    # Initialise output array to match original
     euclid_dist = np.full((n_units, len(waveidx), data_cv0.shape[-1], n_units), np.nan)
     
     # Process unit by unit

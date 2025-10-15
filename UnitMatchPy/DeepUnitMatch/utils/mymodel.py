@@ -1,6 +1,3 @@
-# Wentao Qiu, 2023-10-07
-# qiuwentao1212@gmail.com
-
 import torch
 from torch import nn
 

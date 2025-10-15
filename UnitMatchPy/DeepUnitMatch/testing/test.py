@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.join(os.getcwd(), os.pardir))
 
 from utils.losses import clip_sim, CustomClipLoss, Projector
 from utils.npdataset import NeuropixelsDataset, ValidationExperimentBatchSampler
-from utils.helpers import create_dataframe, get_unit_ids, read_pos
+from utils.helpers import read_pos
 import numpy as np
 import matplotlib.pyplot as plt
 from utils.mymodel import SpatioTemporalCNN_V2
@@ -131,21 +131,6 @@ def get_threshold(prob_matrix:np.ndarray, session_id, MAP=False):
 
     return x[thresh].item() - diff
 
-def directional_filter(matrix: np.ndarray):
-    """
-    Filter a 2D numpy array to keep only bidirectional relationships.
-    If matrix[i][j] is non-zero, matrix[j][i] must also be non-zero, 
-    otherwise both are set to zero.
-    """
-    nonzero_mask = matrix != 0
-    nonzero_transpose_mask = matrix.T != 0
-    
-    # Keep only elements where both directions are non-zero
-    bidirectional_mask = nonzero_mask & nonzero_transpose_mask
-    
-    # return the bidirectional mask
-    return bidirectional_mask
-
 def directional_filter_df(matches: pd.DataFrame):
     filtered_matches = matches.copy()
     for idx, row in matches.iterrows():
@@ -164,25 +149,26 @@ def directional_filter_df(matches: pd.DataFrame):
             filtered_matches = filtered_matches.drop(idx)  # Drop if no reverse match is found
     return filtered_matches
 
-def remove_conflicts(matches:pd.DataFrame, metric:str):
-    indices_to_drop = []
-    for idx, match in matches.iterrows():
-        id1 = match["ID1"]
-        id2 = match["ID2"]
-        r1 = match["RecSes1"]
-        r2 = match["RecSes2"]
+def remove_conflicts(matches: pd.DataFrame, metric: str):
+    
+    # Find the best match for each neuron1 (RecSes1, ID1 combination)
+    # For each group, get the index of the row with maximum metric value
+    best_neuron1_indices = matches.groupby(['RecSes1', 'ID1'])[metric].idxmax()
+    
+    # Find the best match for each neuron2 (RecSes2, ID2 combination)  
+    best_neuron2_indices = matches.groupby(['RecSes2', 'ID2'])[metric].idxmax()
+    
+    # A match is valid only if it's the best match for BOTH neurons involved
+    # Take intersection of the two sets of indices
+    valid_indices = set(best_neuron1_indices) & set(best_neuron2_indices)
+    
+    # Count conflicts (total matches minus valid matches)
+    num_conflicts = len(matches) - len(valid_indices)
+    
+    # Filter to keep only valid matches
+    filtered_matches = matches.loc[list(valid_indices)]
 
-        neuron1=matches.loc[(matches["ID1"]==id1) & (matches["RecSes1"]==r1),:]
-        if len(neuron1)>1:
-            neuron1 = neuron1.sort_values(by=[metric], ascending=False)
-            indices_to_drop += neuron1.tail(len(neuron1)-1).index.to_list()
-        
-        neuron2=matches.loc[(matches["ID2"]==id2) & (matches["RecSes2"]==r2),:]
-        if len(neuron2)>1:
-            neuron2 = neuron2.sort_values(by=[metric], ascending=False)
-            indices_to_drop += neuron2.tail(len(neuron2)-1).index.to_list()
-    indices_to_drop = list(set(indices_to_drop))
-    return matches.drop(indices_to_drop), len(indices_to_drop)
+    return filtered_matches, num_conflicts
 
 def get_matches(df, sim_matrix, session_id, data_dir, pos_array, dist_thresh):
     """

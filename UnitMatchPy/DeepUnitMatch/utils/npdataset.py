@@ -1,13 +1,10 @@
-# Wentao Qiu, 2023-10-07
-# qiuwentao1212@gmail.com
-
-
-import os, sys
+import os
 from pathlib import Path
 import random
 import numpy as np
 import h5py
 from torch.utils.data import Dataset, Sampler
+from utils.helpers import get_unit_id
 
 class NeuropixelsDataset(Dataset):
     def __init__(self, data_dir:str, batch_size=1, mode='val'):
@@ -94,7 +91,7 @@ class NeuropixelsDataset(Dataset):
                     f = f.replace(".npy", '')
                     id1 = int(f[:f.find('#')])
                     removes.append(id1)
-            indices.append(self.get_unit_id(file))
+            indices.append(get_unit_id(file))
         indices = list(set(indices))  # Remove duplicates
         good_units_files = []
         for index in indices:
@@ -115,26 +112,6 @@ class NeuropixelsDataset(Dataset):
             else:
                 print(f"Warning: Expected file {filepath} does not exist.")
         return good_units_files
-    
-    def get_unit_id(self, filepath:str):
-        fp = os.path.basename(filepath)
-        if fp[:4] == "Unit":
-            fp = fp.replace("Unit", "")
-            id = fp.replace(".npy", "")
-            if '+' in id:
-                id = id[:id.find('+')]
-            if '#' in id:
-                id = id.replace("#", "")
-            try:
-                return int(id)
-            except:
-                print(id)
-                raise ValueError(f"Invalid filepath format for this waveform: {filepath}", 
-                            "Filename for waveform XX should be UnitXX.npy")
-        else:
-            raise ValueError(f"Invalid filepath format for this waveform: {filepath}", 
-                            "Filename for waveform XX should be UnitXX.npy")
-    
 
 
 class TrainExperimentBatchSampler(Sampler):

@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import os
 import matplotlib.pyplot as plt
-import mat73, h5py
+import mat73
 import sqlite3
 import time
 import random
@@ -152,7 +152,7 @@ def load_good_waveforms(wave_paths, unit_label_paths, param, good_units_only=Tru
                     p_file_good = os.path.join(wave_paths[ls], f'Unit{i}_RawSpikes.npy')
                     tmp_waveform[i] = np.load(p_file_good)
                 waveforms.append(tmp_waveform)
-                # print(f'UnitMatch is treating all the units as good and including all units from {wave_paths[ls]}, we recommended using curated data!')
+                print(f'UnitMatch is treating all the units as good and including all units from {wave_paths[ls]}, we recommended using curated data!')
             except Exception as e:
                 print(f'Error loading waveform for session {ls}: {e}')
             finally:
@@ -583,10 +583,10 @@ def paths_from_KS(KS_dirs, custom_raw_waveform_paths=None, custom_bombcell_paths
         for i in range(n_sessions):
             if os.path.exists(os.path.join(KS_dirs[i], 'cluster_bc_unitType.tsv')):
                unit_label_paths.append( os.path.join(KS_dirs[i], 'cluster_bc_unitType.tsv')) 
-            #    print('Using BombCell: cluster_bc_unitType')
+               print('Using BombCell: cluster_bc_unitType')
             else:
                 unit_label_paths.append( os.path.join(KS_dirs[i], 'cluster_group.tsv'))
-                # print('Using cluster_group.tsv')
+                print('Using cluster_group.tsv')
     
     return wave_paths, unit_label_paths, channel_pos
 
@@ -636,7 +636,7 @@ def get_probe_geometry(channel_pos, param, verbose = False):
         print(f'We have found {n_shanks} with spacing ~ {shank_spacing}')
     return param
 
-def read_datapaths(mice):
+def read_datapaths(mice, base):
     """
     Input should be a list of mouse names as strings, e.g. ["AL031", ...]
     Output is a dictionary uniquely identifying each (mouse, probe, location) and the relevant recordings.
@@ -657,8 +657,6 @@ def read_datapaths(mice):
     raw_waveforms_dict["probe"] = []
     raw_waveforms_dict["loc"] = []
     raw_waveforms_dict["recordings"] = []
-
-    base = r"\\znas\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\FullAnimal_KSChanMap"
 
     # Find Unitmatch.mat for each recording
     for mouse in mice:
@@ -831,6 +829,7 @@ def filter_good_units(mouse, probe, loc, conn, waveforms, session_switch, param)
     return filtered_waveforms, filtered_ses_switch, filtered_within_session, filtered_session_id, good_units, param
 
 def get_unit_id(filepath:str):
+    "This version of get_unit_id is mostly for internal use. The DeepUnitMatch.ipynb notebook uses the one in DeepUnitMatch/utils/helpers.py"
     fp = os.path.basename(filepath)
     if fp[:4] == "Unit" and fp[-14:] == "_RawSpikes.npy":
         fp = fp.replace("Unit", "")
