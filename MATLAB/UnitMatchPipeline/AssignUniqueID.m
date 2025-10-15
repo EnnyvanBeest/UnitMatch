@@ -16,15 +16,19 @@ if ~isfield(UMparam,'UseDatadrivenProbThrs')
 end
 %% Subfunction in case you want to use this on a subset of the data/table
 if any(ismember(MatchTable.Properties.VariableNames,'MatchProbUM')) % Indicates we compare UM to DNN
+    % Ensure the same amount of GoodID
     % DUM:
     [MatchTableDUM, UniqueIDConversionDUM, UMparam] = AssignUniqueIDAlgorithm(MatchTable, UniqueIDConversion, UMparam, StartUID, 'MatchProb');
     % Original UM:
     [MatchTable, UniqueIDConversion, UMparam] = AssignUniqueIDAlgorithm(MatchTable, UniqueIDConversion, UMparam, StartUID, 'MatchProbUM');
 
     % Add them together
-    UniqueIDConversion.UniqueIDConservativeDUM = UniqueIDConversionDUM.UniqueIDConservativeDUM;
-    UniqueIDConversion.UniqueIDLiberalDUM = UniqueIDConversionDUM.UniqueIDLiberalDUM;
-    UniqueIDConversion.UniqueIDDUM = UniqueIDConversionDUM.UniqueIDDUM;
+    UniqueIDConversion.UniqueIDConservativeDUM = UniqueIDConversionDUM.UniqueIDConservative;
+    UniqueIDConversion.UniqueIDLiberalDUM = UniqueIDConversionDUM.UniqueIDLiberal;
+    UniqueIDConversion.UniqueIDDUM = UniqueIDConversionDUM.UniqueID;
+    if numel(UniqueIDConversion.UniqueID) ~= numel(UniqueIDConversion.UniqueIDDUM) 
+        keyboard
+    end
 
     % same for matchtable
     MatchTable.UID1ConservativeDUM = MatchTableDUM.UID1ConservativeDUM;

@@ -3,7 +3,7 @@ SaveDir = '\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\Full
 % SaveDir = '\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\2ConsecutiveDays_KSChanMap\Stitched\'
 % SaveDir = 'H:\UnitMatch\'
 FromDate = datetime("2024-03-08 09:00:00");
-AssignUnitDate = datetime("2025-10-15 10:00:00");
+AssignUnitDate = datetime("2025-10-15 14:21:00");
 
 UMFiles = cell(1,0); % Define your UMfolders here or use below:
 groupvec = nan(1,0);
