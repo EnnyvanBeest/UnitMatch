@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "UnitMatchPy"
+version = "2.42"  # bump on each release (or switch to tag-based versioning)
+description = "Automatic matching of neurons across sessions"
+readme = "README.md"         # keep a README.md inside UnitMatchPy/
+requires-python = ">=3.9"
+authors = [{ name = "Enny van Beest" }]
+
+# CC BY-NC-SA 4.0 is not OSI-approved; declare clearly
+license = { text = "CC BY-NC-SA 4.0 International" }
+
+classifiers = [
+  "License :: Other/Proprietary License",
+  "Programming Language :: Python :: 3",
+  "Operating System :: OS Independent",
+]
+
+dependencies = []
+
+[tool.setuptools]
+packages = ["UnitMatchPy"]   # explicitly include only the Python package folder
