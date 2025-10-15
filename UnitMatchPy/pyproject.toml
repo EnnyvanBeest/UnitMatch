@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "UnitMatchPy"
-version = "2.42"  # bump on each release (or switch to tag-based versioning)
+version = "3.00"  # bump on each release (or switch to tag-based versioning)
 description = "Automatic matching of neurons across sessions"
 readme = "README.md"         # keep a README.md inside UnitMatchPy/
 requires-python = ">=3.9"

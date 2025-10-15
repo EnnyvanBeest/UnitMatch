@@ -1,7 +1,3 @@
-# [DO NOT USE THIS REPO. IT IS STILL A WORK IN PROGRESS]
-
-
-
 # UnitMatch
 Ephys toolbox to match single units (electrophysiology) either within the same recording (oversplits) or across recordings, by using spatial position and waveform-based parameters - both standard and unstandard metrics to the field. 
 
