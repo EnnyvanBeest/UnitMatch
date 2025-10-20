@@ -102,6 +102,11 @@ for midx = 1:length(UMFiles)
     load(fullfile(tmpfile.folder, tmpfile.name), 'MatchTable', 'UMparam', 'UniqueIDConversion');
     toc
 
+    if ~all(ismember(UIDtoUse,MatchTable.Properties.VariableNames))
+        continue
+    end
+
+
     %% Sort out day situation
     if ~isstruct(UMparam.RawDataPaths{1})
         UMparam.RawDataPaths = cellfun(@(x) dir(x), UMparam.RawDataPaths, 'uni', 0);
