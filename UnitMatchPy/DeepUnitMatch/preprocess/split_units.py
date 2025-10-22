@@ -5,7 +5,7 @@ import h5py
 sys.path.insert(0, os.getcwd())
 sys.path.insert(0, os.path.dirname(os.getcwd()))
 sys.path.insert(0, os.path.join(os.path.dirname(os.getcwd()), "DeepUnitMatch"))
-from testing.test import inference, directional_filter, get_threshold, directional_filter_df
+from testing.test import inference, get_threshold, directional_filter_df
 from utils.helpers import create_dataframe
 
 
@@ -92,7 +92,7 @@ def C_ratios(within, threshold_dnn, spk_df, null=False, t_r=0.002, t_c=0.0001):
     l = len(matches_within)
     if null:
         matches_within = within.loc[within["Prob"]<threshold_dnn].nsmallest(3*l)
-        matches_within = directional_filter(matches_within)
+        matches_within = directional_filter_df(matches_within)
         matches_within = matches_within.nlargest(l, ['dist'])
     else:
         matches_within = directional_filter_df(matches_within)
