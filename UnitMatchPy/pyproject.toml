@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "UnitMatchPy"
-version = "3.01"  # bump on each release (or switch to tag-based versioning)
+version = "3.02"  # bump on each release (or switch to tag-based versioning)
 description = "Automatic matching of neurons across sessions"
 readme = "README.md"         # keep a README.md inside UnitMatchPy/
-requires-python = ">=3.9"
+requires-python = ">=3.9,<3.11"
 authors = [{ name = "Enny van Beest" }]
 
 # CC BY-NC-SA 4.0 is not OSI-approved; declare clearly
@@ -19,7 +19,25 @@ classifiers = [
   "Operating System :: OS Independent",
 ]
 
-dependencies = []
+dependencies = [
+  "numpy",
+  "matplotlib",
+  "scipy",
+  "pandas",
+  "mtscomp",
+  "joblib",
+  "mat73",
+  "tqdm",
+  "spikeinterface",
+  "h5py",
+  "scikit-learn",
+  "torch",
+]
 
 [tool.setuptools]
 packages = ["UnitMatchPy"]   # explicitly include only the Python package folder
+
+[project.optional-dependencies]
+notebooks = [
+  "ipykernel",
+]
