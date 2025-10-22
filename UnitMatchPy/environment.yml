@@ -11,6 +11,7 @@ dependencies:
     - mtscomp
     - jobLib
     - tk
+    - mat73
     - tqdm
     - spikeinterface
     - h5py
