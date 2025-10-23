@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "UnitMatchPy"
-version = "3.2.4"  # bump on each release 
+version = "3.2.3"  # bump on each release 
 description = "Automatic matching of neurons across sessions"
 readme = "README.md"         # keep a README.md inside UnitMatchPy/
 requires-python = ">=3.9"
@@ -24,7 +24,7 @@ classifiers = [
 ]
 
 dependencies = [
-  "numpy>=2.0,<3.0; python_version>='3.12'",
+  "numpy>=2.0,<3.0",
   "scipy>=1.9,<2.0",
   "pandas>=1.5,<3.0",
   "matplotlib>=3.6,<4.0",
@@ -50,7 +50,6 @@ full = [
 notebooks = ["ipykernel>=6,<7"]
 dev = ["pytest", "ruff", "mypy", "build", "twine"]
 
-[tool.setuptools]
-include = ["UnitMatchPy"]   # explicitly include only the Python package folder
-
+[tool.setuptools.packages.find]
+where = ["UnitMatchPy"]
 
