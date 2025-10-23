@@ -20,7 +20,7 @@ For extracting raw data, the library [mtscomp](https://github.com/int-brain-lab/
 After creating an python environment
 
 ```
-conda create --name UnitMatch python 
+conda create --name UnitMatch python==3.9 
 conda activate UnitMatch
 ```
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "UnitMatchPy"
-version = "3.2.3"  # bump on each release 
+version = "3.2.4"  # bump on each release 
 description = "Automatic matching of neurons across sessions"
 readme = "README.md"         # keep a README.md inside UnitMatchPy/
 requires-python = ">=3.9"
@@ -32,11 +32,11 @@ dependencies = [
   "tqdm>=4.64,<5.0",
   "h5py>=3.8,<4.0",
   "scikit-learn>=1.2,<2.0",
+  "mtscomp",
   # If your code imports these unconditionally, keep them here.
   # If not, move them to extras (recommended).
   "mat73>=0.62,<1.0",
   "spikeinterface>=0.100,<0.120",
-  # mtscomp has platform-specific wheels; keep as extra if possible
 ]
 
 [project.optional-dependencies]
