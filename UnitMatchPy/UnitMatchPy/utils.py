@@ -117,7 +117,7 @@ def load_good_waveforms(wave_paths, unit_label_paths, param, good_units_only=Tru
                 tmp_idx = np.argwhere(np.isin(unit_label[:, 1], ['GOOD', 'NON-SOMA GOOD']))
             else:
                 unit_label = load_tsv(unit_label_paths[i])
-                tmp_idx = np.argwhere(unit_label[:, 1] == 'good')
+                tmp_idx = np.argwhere(np.isin(unit_label[:, 1], ['good']))
 
             n_units_per_session_all.append(unit_label.shape[0])
             good_unit_idx = unit_label[tmp_idx, 0]

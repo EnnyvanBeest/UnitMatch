@@ -3,6 +3,9 @@ from scipy.signal import detrend
 import h5py, os
 from pathlib import Path
 
+# Track which processed_waveforms session directories we've already cleaned this run
+_CLEANED_WAVEFORM_DIRS = set()
+
 def get_default_param(param = None):
     """
     Create param, a dictionary with the default parameters.
@@ -164,6 +167,18 @@ def save_waveforms_hdf5(file_name, Rwaveform, MaxSitepos, session):
     current_dir = Path(__file__).parent.parent
     dest_path = os.path.join(current_dir, "processed_waveforms", str(session), file_name)
     dest_directory = os.path.dirname(dest_path)
+
+    # If the destination directory already exists, remove existing waveform files once per session
+    try:
+        if os.path.isdir(dest_directory) and dest_directory not in _CLEANED_WAVEFORM_DIRS:
+            for fname in os.listdir(dest_directory):
+                fpath = os.path.join(dest_directory, fname)
+                if os.path.isfile(fpath):
+                    os.remove(fpath)
+            _CLEANED_WAVEFORM_DIRS.add(dest_directory)
+    except Exception as e:
+        print(f"Warning: could not clean destination directory {dest_directory}: {e}")
+
     os.makedirs(dest_directory, exist_ok=True)
 
     new_data = {
