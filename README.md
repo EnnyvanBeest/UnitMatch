@@ -9,6 +9,8 @@ Original code: Enny H. van Beest, Célian Bimbard.
 
 Python version: Sam Dodgson. 
 
+DeepUnitMatch: Wentao Qiu & Suyash Agarwal
+
 We thank Julie Fabre, who implemented some changes to Bombcell - a toolbox for quality metrics and automated curation.
 We also thank Anna Lebedeva, Flora Takacs, Pip Coen, Kenneth Harris, and Matteo Carandini, as well as the rest of the Carandini-Harris laboratory for their feedback and contributions.
 
