@@ -15,12 +15,15 @@ if ~isfield(UMparam,'UseDatadrivenProbThrs')
     UMparam.UseDatadrivenProbThrs = 0;
 end
 %% Subfunction in case you want to use this on a subset of the data/table
-if any(ismember(MatchTable.Properties.VariableNames,'MatchProbUM')) % Indicates we compare UM to DNN
+if any(ismember(MatchTable.Properties.VariableNames,'NBProb18mice')) % Indicates we compare UM to DNN
     % Ensure the same amount of GoodID
     % DUM:
-    [MatchTableDUM, UniqueIDConversionDUM, UMparam] = AssignUniqueIDAlgorithm(MatchTable, UniqueIDConversion, UMparam, StartUID, 'MatchProb');
+    display('DUM')
+    [MatchTableDUM, UniqueIDConversionDUM, UMparam] = AssignUniqueIDAlgorithm(MatchTable, UniqueIDConversion, UMparam, StartUID, 'NBProb18mice');
     % Original UM:
-    [MatchTable, UniqueIDConversion, UMparam] = AssignUniqueIDAlgorithm(MatchTable, UniqueIDConversion, UMparam, StartUID, 'MatchProbUM');
+    display('UM OG')
+
+    [MatchTable, UniqueIDConversion, UMparam] = AssignUniqueIDAlgorithm(MatchTable, UniqueIDConversion, UMparam, StartUID, 'MatchProbNew');
 
     % Add them together
     UniqueIDConversion.UniqueIDConservativeDUM = UniqueIDConversionDUM.UniqueIDConservative;
@@ -31,12 +34,12 @@ if any(ismember(MatchTable.Properties.VariableNames,'MatchProbUM')) % Indicates 
     end
 
     % same for matchtable
-    MatchTable.UID1ConservativeDUM = MatchTableDUM.UID1ConservativeDUM;
-    MatchTable.UID2ConservativeDUM = MatchTableDUM.UID2ConservativeDUM;
-    MatchTable.UID1LiberalDUM = MatchTableDUM.UID1LiberalDUM;
-    MatchTable.UID2LiberalDUM = MatchTableDUM.UID2LiberalDUM;
-    MatchTable.UID1DUM = MatchTableDUM.UID1DUM;
-    MatchTable.UID2DUM = MatchTableDUM.UID2DUM;
+    MatchTable.UID1ConservativeDUM = MatchTableDUM.UID1Conservative;
+    MatchTable.UID2ConservativeDUM = MatchTableDUM.UID2Conservative;
+    MatchTable.UID1LiberalDUM = MatchTableDUM.UID1Liberal;
+    MatchTable.UID2LiberalDUM = MatchTableDUM.UID2Liberal;
+    MatchTable.UID1DUM = MatchTableDUM.UID1;
+    MatchTable.UID2DUM = MatchTableDUM.UID2;
     MatchTable.MatchProbDUM = MatchTableDUM.MatchProb; % Just to be certain, store this as the DUM as well 
 
 
