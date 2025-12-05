@@ -1,6 +1,7 @@
 %% Automated
 % Load all data
 % Find available datasets (always using dates as folders)
+RedoKS = 1;
 clear DateOpt
 DateOpt = arrayfun(@(X) dir(fullfile(DataDir{DataDir2Use(X)},MiceOpt{X},'*-*')),1:length(MiceOpt),'UniformOutput',0);
 DateOpt = cellfun(@(X) X([X.isdir]),DateOpt,'UniformOutput',0);
@@ -201,7 +202,7 @@ for midx = 1:length(MiceOpt)
             %% Loading data from kilosort/phy easily
             myKsDir = fullfile(KilosortDir,MiceOpt{midx},thisdate);
 
-            % Check if there's an ephys folder, if so run pyks2
+            % Check if there's an ephys folder, if so run pyks4
             tmpephysdir = dir(fullfile(DataDir{DataDir2Use(midx)},MiceOpt{midx},thisdate,'ephys',['*' MiceOpt{midx} '*']));
             if isempty(tmpephysdir)
                 continue
@@ -257,7 +258,7 @@ for midx = 1:length(MiceOpt)
                         continue
                     end
 
-                    if ~isempty(dir(fullfile(myKsDir,ProbeName,Sesinfo,'spike*')))
+                    if ~isempty(dir(fullfile(myKsDir,ProbeName,Sesinfo,'spike*'))) && ~RedoKS
                         disp([fullfile(myKsDir,ProbeName,Sesinfo) ' already done, skip...'])
                         % Also extract KS data + do Bombcell, so that .bin file can be removed again afterwards
                         % PipelineParams = ExtractKilosortData({fullfile(myKsDir,ProbeName,Sesinfo)},PipelineParams);
@@ -296,16 +297,15 @@ for midx = 1:length(MiceOpt)
                             [], [], 0, fullfile(tmpdatafolder, strrep(tmpfile(sesid).name, 'cbin', 'bin')));
                         statusCopy = copyfile(strrep(fullfile(tmpfile(sesid).folder, tmpfile(sesid).name), 'cbin', 'meta'), strrep(fullfile(tmpdatafolder, tmpfile(sesid).name), 'cbin', 'meta')); %QQ doesn't work on linux
                     end
-
                     tmpfile(sesid).name = strrep(tmpfile(sesid).name,'cbin','bin');
-                    % PyKS2
+                   
+                    % PyKS4
                     try
                         success = pyrunfile("RunPyKS4_FromMatlab.py","success",bin_file = strrep(fullfile(tmpdatafolder,tmpfile(sesid).name),'\','/'),probe_file = strrep(fullfile(tmpdatafolder,strrep(tmpfile(sesid).name,'.ap.bin','_kilosortChanMap.mat')),'\','/'));
                         clear success
                     catch ME
                         disp(ME)
                         disp([fullfile(tmpdatafolder,tmpfile(sesid).name) ' not successfull... skip'])
-                        
                         continue
                     end
 
@@ -339,7 +339,7 @@ for midx = 1:length(MiceOpt)
 
                     tmp = regexp(C{1}{idx},'='); %Find =
                     C{1}{idx}(tmp+1:end) = []; %Remove current paths
-                    C{1}{idx} = strcat(C{1}{idx}, ['r"' strrep(fullfile(tmpfile(sesid).folder,strrep(tmpfile(sesid).name,'bin','cbin')),'\','/') '"'])
+                    C{1}{idx} = strcat(C{1}{idx}, ['r"' strrep(catGTbin,'\','/') '"'])
 
                     % Rename old params
                     movefile(fullfile(myKsDir,ProbeName,Sesinfo,'params.py'),fullfile(myKsDir,ProbeName,Sesinfo,'paramsOri.py'))
