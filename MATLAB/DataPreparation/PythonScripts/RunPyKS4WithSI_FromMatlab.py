@@ -1,11 +1,12 @@
 from pathlib import Path
+import re
 import spikeinterface as si
 import spikeinterface.extractors as se
 import spikeinterface.sorters as ss
 import spikeinterface.preprocessing as spre
 
 
-def run_ks4_si(bin_file, probe_file=None):
+def run_ks4_si(bin_file):
     """
     Run SpikeInterface preprocessing + Kilosort4 on a SpikeGLX ap.bin.
 
@@ -26,54 +27,45 @@ def run_ks4_si(bin_file, probe_file=None):
 
     output_dir = bin_file.parent / "kilosort4"
     output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Load SpikeGLX recording from the folder containing the bin/meta pair
-    rec0 = se.read_spikeglx(bin_file.parent, load_sync_channel=False)  # auto-detects the matching .bin
+    # Derive stream name (e.g., imec1.ap) from the bin filename
+    imec_match = re.search(r"imec(\d+)", bin_file.name)
+    stream_base = f"imec{imec_match.group(1)}" if imec_match else "imec0"
+    if imec_match is None:
+        print(f"Warning: could not parse imec index from {bin_file.name}; defaulting to {stream_base}")
+    stream_name = f"{stream_base}.ap"
 
-    # Automatically have the probe from the meta; allow overriding with probe_file if provided
-    rec0.get_probe().to_dataframe()
-    if probe_file:
-        try:
-            rec0 = rec0.set_probe(probe_file)
-            print(f"Loaded probe from {probe_file}")
-        except Exception as exc:  # fallback to existing probe metadata
-            print(f"Warning: failed to load probe file {probe_file}: {exc}")
+    # Load SpikeGLX recording. `read_spikeglx` accepts either the .ap.bin
+    # full path or the folder containing the .bin/.meta pair. Try the
+    # .bin first (most explicit), then fall back to the folder.
+    print(bin_file)
+    recording = se.read_spikeglx(bin_file.parent, stream_name=stream_name, load_sync_channel=False)
+  
+    # Probe handling: prefer an explicit `probe_file` if provided; otherwise
+    # rely on probe metadata found in the .meta file. Be defensive: `get_probe`
+    # may raise if no probe is present.
+    probe = recording.get_probe()
 
     # Preprocessing chain
-    recording = spre.phase_shift(rec0)  # correct for time delay between recording channels
-    recording = spre.highpass_filter(recording)  # highpass
-    bad_channel_ids, _ = spre.detect_bad_channels(recording)
-    if len(bad_channel_ids) > 0:
-        print("bad_channel_ids", bad_channel_ids)
-        recording = recording.remove_channels(bad_channel_ids)
-    else:
-        print("bad_channel_ids []")
-    recording = spre.common_reference(recording, operator="median", reference="global")
+    recording = spre.phase_shift(recording)  # correct for time delay between recording channels
+    bad_channel_ids, channel_labels = spre.detect_bad_channels(recording)
+    recording = recording.remove_channels(bad_channel_ids)
+    recording = spre.highpass_filter(recording)  # correct for time delay between recording channels
+
+    print('bad_channel_ids', bad_channel_ids)
 
     # Run Kilosort 4
     print("Starting KS4 now")
-    sorter_params = si.get_default_sorter_params("kilosort4")
-     
-    sorting = ss.run_sorter(
-        "kilosort4",
-        recording=recording,
-        output_folder=output_dir,
-        remove_existing_folder=True,
-        docker_image=True,
-        verbose=True,
-        **sorter_params,
-    )
-
+    sorting_ks4 = ss.run_sorter("kilosort4", recording, output_dir, remove_existing_folder=True)
+    
     print("Kilosort4 output:", output_dir)
-    success = sorting is not None
+    success = sorting_ks4 is not None
     return success
 
 
 if __name__ == "__main__":
 
     # Example:
-    success = run_ks4_si(r"D:/tmpdata/2025-09-22_EB053_3_g0_g0/2025-09-22_EB053_3_g0_g0_imec1/2025-09-22_EB053_3_g0_g0_t0.imec1.ap.bin",r"D:/tmpdata/2025-09-22_EB053_3_g0_g0_t0.imec1_kilosortChanMap.mat")
+    # success = run_ks4_si(r"D:/tmpdata/2025-09-22_EB053_3_g0_g0/2025-09-22_EB053_3_g0_g0_imec1/2025-09-22_EB053_3_g0_g0_t0.imec1.ap.bin")
     
-    #success = run_ks4_si(bin_file,probe_file)
-
+    success = run_ks4_si(bin_file)

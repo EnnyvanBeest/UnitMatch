@@ -1,7 +1,7 @@
 %% Automated
 % Load all data
 % Find available datasets (always using dates as folders)
-RedoKS = 1;
+RedoKS = 0;
 clear DateOpt
 DateOpt = arrayfun(@(X) dir(fullfile(DataDir{DataDir2Use(X)},MiceOpt{X},'*-*')),1:length(MiceOpt),'UniformOutput',0);
 DateOpt = cellfun(@(X) X([X.isdir]),DateOpt,'UniformOutput',0);
@@ -278,59 +278,68 @@ for midx = 1:length(MiceOpt)
                         Compressed=0;
                     end
 
-                    if ~exist(fullfile(tmpdatafolder,tmpfile(sesid).name))
-                        disp('Copying data to local folder...')
-                        copyfile(fullfile(tmpfile(sesid).folder,tmpfile(sesid).name),fullfile(tmpdatafolder,tmpfile(sesid).name))
+                    tmpdatafolder2 = fullfile(strrep(tmpfile(sesid).folder,DataDir{DataDir2Use(midx)},tmpdatafolder));
+
+                    if ~exist(tmpdatafolder2)
+                        mkdir(tmpdatafolder2)
                     end
-                    if ~exist(fullfile(tmpdatafolder,metafile.name))
-                        copyfile(fullfile(metafile.folder,metafile.name),fullfile(tmpdatafolder,metafile.name))
+                    if ~exist(fullfile(tmpdatafolder2,tmpfile(sesid).name))
+                        disp('Copying data to local folder...')
+                        copyfile(fullfile(tmpfile(sesid).folder,tmpfile(sesid).name),fullfile(tmpdatafolder2,tmpfile(sesid).name))
+                    end
+                    if ~exist(fullfile(tmpdatafolder2,metafile.name))
+                        copyfile(fullfile(metafile.folder,metafile.name),fullfile(tmpdatafolder2,metafile.name))
                         if Compressed
-                            copyfile(fullfile(chfile.folder,chfile.name),fullfile(tmpdatafolder,chfile.name))
+                            copyfile(fullfile(chfile.folder,chfile.name),fullfile(tmpdatafolder2,chfile.name))
                         end
                     end
                     % make channel map
-                    [channelPos, probeSN, recordingduration] = ChannelIMROConversion(fullfile(tmpdatafolder,metafile.name),1,0)
-
-                    if ~exist(fullfile(tmpdatafolder, strrep(tmpfile(sesid).name, 'cbin', 'bin')))
+                    [channelPos, probeSN, recordingduration] = ChannelIMROConversion(fullfile(tmpdatafolder2,metafile.name),1,0)
+                    if ~exist(fullfile(tmpdatafolder2, strrep(tmpfile(sesid).name, 'cbin', 'bin')))
                         disp('This is compressed data and need to uncompress... uncompress temporarily')
                         decompDataFile = bc.dcomp.extractCbinData(fullfile(tmpfile(sesid).folder, tmpfile(sesid).name), ...
-                            [], [], 0, fullfile(tmpdatafolder, strrep(tmpfile(sesid).name, 'cbin', 'bin')));
-                        statusCopy = copyfile(strrep(fullfile(tmpfile(sesid).folder, tmpfile(sesid).name), 'cbin', 'meta'), strrep(fullfile(tmpdatafolder, tmpfile(sesid).name), 'cbin', 'meta')); %QQ doesn't work on linux
+                            [], [], 0, fullfile(tmpdatafolder2, strrep(tmpfile(sesid).name, 'cbin', 'bin')));
+                        statusCopy = copyfile(strrep(fullfile(tmpfile(sesid).folder, tmpfile(sesid).name), 'cbin', 'meta'), strrep(fullfile(tmpdatafolder2, tmpfile(sesid).name), 'cbin', 'meta')); %QQ doesn't work on linux
                     end
                     tmpfile(sesid).name = strrep(tmpfile(sesid).name,'cbin','bin');
                    
                     % PyKS4
                     try
-                        success = pyrunfile("RunPyKS4_FromMatlab.py","success",bin_file = strrep(fullfile(tmpdatafolder,tmpfile(sesid).name),'\','/'),probe_file = strrep(fullfile(tmpdatafolder,strrep(tmpfile(sesid).name,'.ap.bin','_kilosortChanMap.mat')),'\','/'));
+                        success = pyrunfile("RunPyKS4WithSI_FromMatlab.py","success",bin_file = strrep(fullfile(tmpdatafolder2,tmpfile(sesid).name),'\','/'));
                         clear success
                     catch ME
                         disp(ME)
-                        disp([fullfile(tmpdatafolder,tmpfile(sesid).name) ' not successfull... skip'])
+                        disp([fullfile(tmpdatafolder2,tmpfile(sesid).name) ' not successfull... skip'])
                         continue
                     end
 
                     % now copy the output
                     disp('Copying output from temporary directory to KS folder')
-                    copyfile(fullfile(tmpdatafolder,'kilosort4'),fullfile(myKsDir,ProbeName,Sesinfo))
+                    copyfile(fullfile(tmpdatafolder2,'kilosort4','sorter_output'),fullfile(myKsDir,ProbeName,Sesinfo))
+                    copyfile(fullfile(tmpdatafolder2,'kilosort4','spikeinterface_log.json'),fullfile(myKsDir,ProbeName,Sesinfo))
+                    copyfile(fullfile(tmpdatafolder2,'kilosort4','spikeinterface_params.json'),fullfile(myKsDir,ProbeName,Sesinfo))
+                    copyfile(fullfile(tmpdatafolder2,'kilosort4','spikeinterface_recording.json'),fullfile(myKsDir,ProbeName,Sesinfo))
 
                     % Remove temporary files
                     disp('Delete files from temporary folder')
                     try
-                        delete(fullfile(tmpdatafolder,metafile.name))
-                        delete(fullfile(tmpdatafolder,chfile.name))
+                        delete(fullfile(tmpdatafolder2,metafile.name))
+                        delete(fullfile(tmpdatafolder2,chfile.name))
                     catch ME
                         disp(ME)
                     end
                     
                     try
-                        delete(fullfile(tmpdatafolder,'kilosort4','*'))
-                        rmdir(fullfile(tmpdatafolder,'kilosort4'))
+                        delete(fullfile(tmpdatafolder2,'kilosort4','sorter_output','*'))
+                        delete(fullfile(tmpdatafolder2,'kilosort4','*'))
+                        rmdir(fullfile(tmpdatafolder2,'kilosort4','sorter_output'))
+                        rmdir(fullfile(tmpdatafolder2,'kilosort4'))
                     catch ME
                         disp(ME)
                     end
                     
 
-                    % change dat_path in params file
+                    %% change dat_path in params file
                     paramsfile = dir(fullfile(myKsDir,ProbeName,Sesinfo,'params.py'));
                     fid =fopen(fullfile(paramsfile.folder,paramsfile.name));
                     C=textscan(fid,'%s','delimiter','\n');
@@ -339,7 +348,7 @@ for midx = 1:length(MiceOpt)
 
                     tmp = regexp(C{1}{idx},'='); %Find =
                     C{1}{idx}(tmp+1:end) = []; %Remove current paths
-                    C{1}{idx} = strcat(C{1}{idx}, ['r"' strrep(catGTbin,'\','/') '"'])
+                    C{1}{idx} = strcat(C{1}{idx}, ['r"' strrep(fullfile(tmpfile(sesid).folder,tmpfile(sesid).name),'\','/') '"'])
 
                     % Rename old params
                     movefile(fullfile(myKsDir,ProbeName,Sesinfo,'params.py'),fullfile(myKsDir,ProbeName,Sesinfo,'paramsOri.py'))
@@ -353,6 +362,7 @@ for midx = 1:length(MiceOpt)
                     
                     
                     %% Also extract KS data + do Bombcell, so that .bin file can be removed again afterwards
+                    PipelineParams.tmpdatafolder = tmpdatafolder2;
                     PipelineParams.RawDataPaths = {fullfile(tmpfile(sesid).folder,strrep(tmpfile(sesid).name,'bin','cbin'))};
                     PipelineParams = ExtractKilosortData({fullfile(myKsDir,ProbeName,Sesinfo)},PipelineParams);
 
