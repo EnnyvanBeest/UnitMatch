@@ -2,7 +2,7 @@ name: UMPy
 
 dependencies:
   - python>3.7,<3.11
-  - numpy
+  - numpy>=1.21,<=1.26.4
   - matplotlib
   - pip
   - pip:
