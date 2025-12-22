@@ -305,7 +305,8 @@ for midx = 1:length(MiceOpt)
                    
                     % PyKS4
                     try
-                        success = pyrunfile("RunPyKS4WithSI_FromMatlab.py","success",bin_file = strrep(fullfile(tmpdatafolder2,tmpfile(sesid).name),'\','/'));
+                        success = pyrunfile("RunPyKS4_FromMatlab.py","success",bin_file = strrep(fullfile(tmpdatafolder2,tmpfile(sesid).name),'\','/'),...
+                            probe_file = strrep(fullfile(tmpdatafolder2,strrep(tmpfile(sesid).name,'.ap.bin','_kilosortChanMap.mat')),'\','/'));
                         clear success
                     catch ME
                         disp(ME)
@@ -315,11 +316,14 @@ for midx = 1:length(MiceOpt)
 
                     % now copy the output
                     disp('Copying output from temporary directory to KS folder')
-                    copyfile(fullfile(tmpdatafolder2,'kilosort4','sorter_output'),fullfile(myKsDir,ProbeName,Sesinfo))
-                    copyfile(fullfile(tmpdatafolder2,'kilosort4','spikeinterface_log.json'),fullfile(myKsDir,ProbeName,Sesinfo))
-                    copyfile(fullfile(tmpdatafolder2,'kilosort4','spikeinterface_params.json'),fullfile(myKsDir,ProbeName,Sesinfo))
-                    copyfile(fullfile(tmpdatafolder2,'kilosort4','spikeinterface_recording.json'),fullfile(myKsDir,ProbeName,Sesinfo))
-
+                    try
+                        copyfile(fullfile(tmpdatafolder2,'kilosort4','sorter_output'),fullfile(myKsDir,ProbeName,Sesinfo))
+                        copyfile(fullfile(tmpdatafolder2,'kilosort4','spikeinterface_log.json'),fullfile(myKsDir,ProbeName,Sesinfo))
+                        copyfile(fullfile(tmpdatafolder2,'kilosort4','spikeinterface_params.json'),fullfile(myKsDir,ProbeName,Sesinfo))
+                        copyfile(fullfile(tmpdatafolder2,'kilosort4','spikeinterface_recording.json'),fullfile(myKsDir,ProbeName,Sesinfo))
+                    catch
+                        copyfile(fullfile(tmpdatafolder2,'kilosort4'),fullfile(myKsDir,ProbeName,Sesinfo))
+                    end
                     % Remove temporary files
                     disp('Delete files from temporary folder')
                     try

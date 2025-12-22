@@ -50,7 +50,6 @@ def run_ks4_si(bin_file):
     recording = spre.phase_shift(recording)  # correct for time delay between recording channels
     bad_channel_ids, channel_labels = spre.detect_bad_channels(recording)
     recording = recording.remove_channels(bad_channel_ids)
-    recording = spre.highpass_filter(recording)  # correct for time delay between recording channels
 
     print('bad_channel_ids', bad_channel_ids)
 
