@@ -13,3 +13,4 @@ testpy.py
 .coverage
 *.npy
 *.json
+ModelExp

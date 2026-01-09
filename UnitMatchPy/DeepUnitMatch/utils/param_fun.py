@@ -160,12 +160,14 @@ def extract_Rwaveforms(waveform, ChannelPos,ChannelMap, param):
     
     return MaxSiteMean, MaxSitepos, sorted_goodChannelMap, sorted_goodpos, Rwaveform
 
-def save_waveforms_hdf5(file_name, Rwaveform, MaxSitepos, session):
+def save_waveforms_hdf5(file_name, Rwaveform, MaxSitepos, session, save_path=None):
     """
     Saves the preprocessed, reduced waveform and the max site position as a HDF5 file.
     """
-    current_dir = Path(__file__).parent.parent
-    dest_path = os.path.join(current_dir, "processed_waveforms", str(session), file_name)
+    if save_path is None:
+        save_path = Path(__file__).parent.parent                  # points to the DeepUnitMatch directory
+    
+    dest_path = os.path.join(save_path, "processed_waveforms", str(session), file_name)
     dest_directory = os.path.dirname(dest_path)
 
     # If the destination directory already exists, remove existing waveform files once per session
@@ -189,13 +191,15 @@ def save_waveforms_hdf5(file_name, Rwaveform, MaxSitepos, session):
         for key, value in new_data.items():
             f.create_dataset(key, data=value)
 
-def get_snippets(waveforms, ChannelPos, session_id):
+def get_snippets(waveforms, ChannelPos, session_id, save_path=None):
     """
     Convert raw waveforms from a pair of sessions (waveforms) to snippets with shape (60,30,2).
 
     Arguments:
     - waveforms: n_units x n_timepoints x n_channels x n_repeats (CV)
     - ChannelPos: list of channel positions for each session. Each session's channel positions should be a 384 x 3 or 384 x 2 array.
+    - session_id: list of session identifiers, 1 integer per unit.
+    - save_path: Optional path to save the processed waveform files. If None, defaults to 'processed_waveforms' folder in current directory.
     """
     processed_waveforms = []
     positions = []
@@ -227,8 +231,8 @@ def get_snippets(waveforms, ChannelPos, session_id):
         else:
             # Clean data - go ahead as normal
             MaxSiteMean, MaxSitepos, sorted_goodChannelMap, sorted_goodpos, Rwaveform = extract_Rwaveforms(unit, ChannelPos, ChannelMap, params)
-        
-        save_waveforms_hdf5(f'Unit{i}.npy', Rwaveform, MaxSitepos, session_id[i])
+
+        save_waveforms_hdf5(f'Unit{i}_RawSpikes.npy', Rwaveform, MaxSitepos, session_id[i], save_path=save_path)
     
         processed_waveforms.append(Rwaveform)
         positions.append(MaxSitepos)

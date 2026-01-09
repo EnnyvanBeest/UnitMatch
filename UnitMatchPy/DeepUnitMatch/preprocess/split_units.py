@@ -188,8 +188,8 @@ def merge_and_remove_splits(param, prob_matrix, session_id, model, data_dir, max
     
     for s, id in zip(sessions, ids):
         dir = os.path.join(data_dir, str(s-1))
-        file = os.path.join(dir, f"Unit{id}.npy")
-        newfile = os.path.join(dir, f"Unit{id}#.npy")
+        file = os.path.join(dir, f"Unit{id}_RawSpikes.npy")
+        newfile = os.path.join(dir, f"Unit{id}#_RawSpikes.npy")
         os.rename(file, newfile)
         removals[s].append(id)
 

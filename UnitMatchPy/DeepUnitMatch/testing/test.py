@@ -4,7 +4,7 @@ sys.path.insert(0, os.getcwd())
 sys.path.insert(0, os.path.join(os.getcwd(), os.pardir))
 
 from utils.losses import clip_sim, CustomClipLoss, Projector
-from utils.npdataset import NeuropixelsDataset, ValidationExperimentBatchSampler
+from utils.npdataset import NeuropixelsDataset_cortexlab, ValidationExperimentBatchSampler
 from utils.helpers import read_pos
 import numpy as np
 import matplotlib.pyplot as plt
@@ -22,12 +22,13 @@ from utils.helpers import *
 
 
 
-def load_trained_model(device="cpu"):
+def load_trained_model(device="cpu", read_path=None):
 
     model = SpatioTemporalCNN_V2(n_channel=30,n_time=60,n_output=256).to(device)
     model = model.double()
-    current_dir = Path(__file__).parent.parent
-    read_path = current_dir / "utils" / "model"
+    if read_path is None:
+        current_dir = Path(__file__).parent.parent
+        read_path = current_dir / "utils" / "model"
     checkpoint = torch.load(read_path)
     model.load_state_dict(checkpoint['model'])
     clip_loss = CustomClipLoss().to(device)
@@ -67,7 +68,7 @@ def reorder_by_depth(matrix:np.ndarray, pos1:np.ndarray, pos2) -> np.ndarray:
 
 def inference(model, data_dir):
 
-    test_dataset = NeuropixelsDataset(data_dir)
+    test_dataset = NeuropixelsDataset_cortexlab(data_dir)
     test_sampler = ValidationExperimentBatchSampler(test_dataset, shuffle = False)
     test_loader = DataLoader(test_dataset, batch_sampler=test_sampler)
 

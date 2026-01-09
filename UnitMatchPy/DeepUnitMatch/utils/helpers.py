@@ -48,9 +48,9 @@ def create_dataframe(good_units, prob_matrix, session_list=None):
             
 def get_unit_id(filepath:str):
     fp = os.path.basename(filepath)
-    if fp[:4] == "Unit" and fp[-4:] == ".npy":
+    if fp[:4] == "Unit" and fp[-14:] == "_RawSpikes.npy":
         fp = fp.replace("Unit", "")
-        id = fp.replace(".npy", "")
+        id = fp.replace("_RawSpikes.npy", "")
         if '+' in id:
             id = id[:id.find('+')]
         if '#' in id:
