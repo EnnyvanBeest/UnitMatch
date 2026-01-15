@@ -115,7 +115,7 @@ for midx = 1:length(MiceOpt)
     end
 
     if MouseAllDone
-        disp([MiceOpt{midx} ' all done'... continue'])
+        disp([MiceOpt{midx} ' all done... continue'])
         continue
     end
     %% Prepare cluster information
