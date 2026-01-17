@@ -5,10 +5,11 @@ SaveDir = '\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\Full
 FromDate = datetime("2024-03-08 09:00:00");
 AssignUnitDate = datetime("2025-11-27 10:21:00");
 
-UMFiles = cell(1,0); % Define your UMfolders here or use below:
+DUMFiles = cell(1,0); % Define your UMfolders here or use below:
+UMFiles = cell(1,0);
 groupvec = nan(1,0);
 SpGLXV = cell(1,0);
-if ~exist('UMFiles') || isempty(UMFiles) % When using the example pipeline this may be useful:
+if ~exist('UMFiles') || isempty(DUMFiles) % When using the example pipeline this may be useful:
     MiceOpt = dir(SaveDir);
     MiceOpt = arrayfun(@(X) X.name,MiceOpt,'Uni',0);
     MiceOpt(ismember(MiceOpt,{'.','..'})) = [];
@@ -37,10 +38,17 @@ if ~exist('UMFiles') || isempty(UMFiles) % When using the example pipeline this 
                 %    SpGLXV = {SpGLXV{:} meta.appVersion};
                 % end
 
+                % Check some stuff across DUM folder and UM folder
+                
+
 
                 %             FolderParts = strsplit(tmpfile(id).folder,filesep);
                 %             idx = find(ismember(FolderParts,MiceOpt{midx}));
-                UMFiles = cat(2,UMFiles,fullfile(tmpfile(id).folder,tmpfile(id).name));
+                DUMFiles = cat(2,DUMFiles,fullfile(tmpfile(id).folder,tmpfile(id).name));
+
+                % also store the UM files
+                UMFiles = cat(2,UMFiles,strrep(fullfile(tmpfile(id).folder,tmpfile(id).name),'DeepUnitMatch','UnitMatch'));
+
                 groupvec = cat(2,groupvec,midx);
             % else
                 % keyboard
@@ -52,18 +60,27 @@ if ~exist('UMFiles') || isempty(UMFiles) % When using the example pipeline this 
     close all
 end
 
-Info  = DataSetInfo(UMFiles)
+Info  = DataSetInfo(DUMFiles)
 Info.RecSes
 nanmean(cat(1,Info.nGoodUnits{:})./cat(1,Info.nTotalUnits{:}).*100)
 nanstd(cat(1,Info.nGoodUnits{:})./cat(1,Info.nTotalUnits{:}).*100)
 
 
-AUCExtract(UMFiles)
+
+InfoUM  = DataSetInfo(UMFiles)
+InfoUM.RecSes
+nanmean(cat(1,InfoUM.nGoodUnits{:})./cat(1,InfoUM.nTotalUnits{:}).*100)
+nanstd(cat(1,InfoUM.nGoodUnits{:})./cat(1,InfoUM.nTotalUnits{:}).*100)
+
+%%
+AUCScoresDUM = AUCExtract(DUMFiles)
+AUCScoresUM = AUCExtract(UMFiles)
 
 
-summaryMatchingPlots(UMFiles,{'UID1','UID1DUM'},groupvec,1)
+%%
+summaryMatchingPlots(DUMFiles,{'UID1','UID1DUM'},groupvec,1,UMFiles)
 
 %
-summaryFunctionalPlots_Part2(UMFiles, groupvec, 0)
+summaryFunctionalPlots_Part2(DUMFiles, groupvec, 0)
 
 

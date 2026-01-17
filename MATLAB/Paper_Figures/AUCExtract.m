@@ -1,4 +1,4 @@
-function AUCExtract(UMfiles)
+function AUCScores = AUCExtract(UMfiles)
 TrajectoryScores = nan(2,2,length(UMfiles));
 for umid = 1:length(UMfiles)
     load(strrep(UMfiles{umid},'UnitMatch.mat','AUC.mat'),'AUCStruct')

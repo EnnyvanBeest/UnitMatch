@@ -1,4 +1,4 @@
-function [unitPresence, unitProbaMatch, days, EPosAndNeg, DataSetInfo, pSinceAppearance, popCorr_Uni, popAUC_Uni] = summaryMatchingPlots(UMFiles,UIDtoUse,groupVector,computeFuncScores)
+function [unitPresence, unitProbaMatch, days, EPosAndNeg, DataSetInfo, pSinceAppearance, popCorr_Uni, popAUC_Uni] = summaryMatchingPlots(UMFiles,UIDtoUse,groupVector,computeFuncScores,alternateUMFiles)
 
 %% Settings
 PlotIndividualMice = 0;
@@ -37,6 +37,11 @@ end
 if nargin<4
     computeFuncScores = 0;
 end
+
+if exist('alternateUMFiles','var')
+    UIDtoUse = {UIDtoUse{:} 'OriUMUID'};
+end
+
 groups = unique(groupVector);
 groupColor = distinguishable_colors(max(groups)+1);
 
@@ -101,6 +106,40 @@ for midx = 1:length(UMFiles)
     tic
     load(fullfile(tmpfile.folder, tmpfile.name), 'MatchTable', 'UMparam', 'UniqueIDConversion');
     toc
+
+    % Checking alternate
+    if exist('alternateUMFiles','var')
+        tmpfilealt = dir(alternateUMFiles{midx});
+        tmpalt = load(fullfile(tmpfilealt.folder, tmpfilealt.name), 'MatchTable', 'UMparam', 'UniqueIDConversion');
+
+        if exist('compfig')
+            close(compfig)
+        end
+        compfig = figure;
+        subplot(1,3,1)
+        scatter(MatchTable.MatchProb,tmpalt.MatchTable.MatchProb)
+        xlabel('New MatchProb UM')
+        ylabel('Original MatchProb UM')
+        UIDOriUMPaper = tmpalt.MatchTable.UID1;
+        UIDUMNow = MatchTable.UID1;
+        subplot(1,3,2)
+        scatter(UIDUMNow,UIDOriUMPaper)
+        xlabel('New UID UM')
+        ylabel('Original UID (paper)')
+
+        subplot(1,3,3)
+        scatter(MatchTable.ISICorr,tmpalt.MatchTable.ISICorr)
+        xlabel('New ISI corr')
+        ylabel('Original ISI corr')
+
+        drawnow
+
+
+        % Add the original UID to the new matchtable so we can use that
+        MatchTable.OriUMUID = UIDOriUMPaper;
+
+    end
+
 
     if ~all(ismember(UIDtoUse,MatchTable.Properties.VariableNames))
         continue
