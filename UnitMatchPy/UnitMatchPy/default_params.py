@@ -25,7 +25,8 @@ def get_default_param(param = None):
             'min_angle_dist' : 0.1, # smallest distance for and angle to be consider
             'min_new_shank_distance' : 100, #The smallest distance which separates 2 shanks
             'units_per_shank_thrs' : 15, # threshold for doing per shank drift correction
-            'match_threshold' : 0.5 # probability threshold to consider as a match
+            'match_threshold' : 0.5, # probability threshold to consider as a match
+            'curve_fit_maxfev' : 10000, # max evaluations for decay curve fitting
         }
     
     tmp['score_vector'] = np.arange(tmp['stepsz']/2 ,1 ,tmp['stepsz'])

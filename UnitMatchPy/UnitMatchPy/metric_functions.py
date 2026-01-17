@@ -168,24 +168,35 @@ def get_Euclidean_dist(avg_waveform_per_tp_flip,param):
     ndarray
         The euclidean distance between each unit for each time point
     """
-    # NOTE these arrays could get very large, may needed calculate in batches or use dask
-    # if arrays become too large
-
+    # Memory-efficient implementation using loops instead of massive tiling
     waveidx = param['waveidx']
     n_units = param['n_units']
-
-    x1 = np.tile( np.expand_dims(avg_waveform_per_tp_flip[:,:,waveidx,0,:], axis = -1), (1,1,1,1,n_units)).squeeze()
-    x2 = np.swapaxes(np.tile( np.expand_dims(avg_waveform_per_tp_flip[:,:,waveidx,1,:], axis = -1), (1,1,1,1,n_units)).squeeze(), 1, 4)
-
-    w = np.isnan( np.abs(x1[0,:,:,:,:] - x2[0,:,:,:,:])).squeeze()
-
-    tmp_euclid = np.linalg.norm(x1-x2, axis = 0)
-    tmp_euclid[w] = np.nan
-    euclid_dist = tmp_euclid
-    del x1
-    del x2
-    del w
-    del tmp_euclid
+    
+    # Extract the relevant slices once
+    data_cv0 = avg_waveform_per_tp_flip[:,:,waveidx,0,:]  # (3, n_units, len(waveidx), n_flips)
+    data_cv1 = avg_waveform_per_tp_flip[:,:,waveidx,1,:]  # (3, n_units, len(waveidx), n_flips)
+    
+    # Initialise output array to match original
+    euclid_dist = np.full((n_units, len(waveidx), data_cv0.shape[-1], n_units), np.nan)
+    
+    # Process unit by unit
+    for i in range(n_units):
+        for j in range(n_units):
+            # Get data for units i and j
+            unit_i_data = data_cv0[:, i, :, :]  # (3, len(waveidx), n_flips)
+            unit_j_data = data_cv1[:, j, :, :]  # (3, len(waveidx), n_flips)
+            
+            # Check for NaN values
+            w = np.isnan(np.abs(unit_i_data[0,:,:] - unit_j_data[0,:,:]))
+            
+            # Compute Euclidean distance between units i and j
+            diff = unit_i_data - unit_j_data  # (3, len(waveidx), n_flips)
+            tmp_euclid = np.linalg.norm(diff, axis=0)  # (len(waveidx), n_flips)
+            tmp_euclid[w] = np.nan
+            
+            # Store result
+            euclid_dist[i, :, :, j] = tmp_euclid
+    
     return euclid_dist
 
 def centroid_metrics(euclid_dist, param):
@@ -323,7 +334,7 @@ def dist_angle(avg_waveform_per_tp_flip, param):
         for dim_id2 in np.arange(1,avg_waveform_per_tp_flip.shape[0]):
             if dim_id2 <= dim_id1:
                 continue
-            ang = np.abs( x1[dim_id1,:,:,:,:] - x2[dim_id1,:,:,:,:]) / np.abs(x1[dim_id2,:,:,:,:] - x2[dim_id2,:,:,:,:])
+            ang = np.abs( x1[dim_id1,:,:,:,:] - x2[dim_id1,:,:,:,:]) / (np.abs(x1[dim_id2,:,:,:,:] - x2[dim_id2,:,:,:,:]) + 1e-10)
             
             loc_angle[:,:,:,:,count_id] = np.arctan(ang) * good_angle # only selects angles for units where there is sufficient distance between time poitns
             count_id +=1
@@ -766,23 +777,25 @@ def drift_n_sessions(candidate_pairs, session_switch, avg_centroid, avg_waveform
     drifts = np.zeros( (n_sessions - 1, 3))
 
     for did in range(n_sessions - 1):
-            idx = np.argwhere( ( (best_pairs[:,0] >= session_switch[did]) * (best_pairs[:,0] < session_switch[did + 1]) *
-                                (best_pairs[:,1] >= session_switch[did + 1]) * (best_pairs[:,1] < session_switch[did + 2]) ) == True)
+        idx = np.argwhere( ( (best_pairs[:,0] >= session_switch[did]) * (best_pairs[:,0] < session_switch[did + 1]) *
+                            (best_pairs[:,1] >= session_switch[did + 1]) * (best_pairs[:,1] < session_switch[did + 2]) ) == True)
 
-            pairs = best_pairs[idx,:].squeeze()
-            if best_match == True:
-                pairs = get_good_matches(pairs, total_score)
+        pairs = best_pairs[idx,:].squeeze()
+        if pairs.ndim == 1:
+            pairs = np.expand_dims(pairs, axis = 0)
+        if best_match == True:
+            pairs = get_good_matches(pairs, total_score)
 
-            #Test to see if there are enough matches to do drift correction per shank
-            if test_matches_per_shank(pairs, avg_centroid, did, param) == True and best_drift == True:
-                drifts = np.zeros( (n_sessions - 1, param['no_shanks'], 3))
-                drifts[did,:,:], avg_waveform_per_tp, avg_centroid = apply_drift_correction_per_shank(pairs, did, session_switch, avg_centroid, avg_waveform_per_tp, param)
-                print(f'Done drift correction per shank for session pair {did+1} and {did+2}')
-            elif len(pairs)>0: #if there exist pairs across sessions:
-                drifts = np.zeros( (n_sessions - 1, 3))
-                drifts[did,:], avg_waveform_per_tp, avg_centroid = apply_drift_correction_basic(pairs, did, session_switch, avg_centroid, avg_waveform_per_tp)
-            elif len(pairs)==0:
-                print('No pairs across sessions to perform drift correction.')
+        #Test to see if there are enough matches to do drift correction per shank
+        if test_matches_per_shank(pairs, avg_centroid, did, param) == True and best_drift == True:
+            drifts = np.zeros( (n_sessions - 1, param['no_shanks'], 3))
+            drifts[did,:,:], avg_waveform_per_tp, avg_centroid = apply_drift_correction_per_shank(pairs, did, session_switch, avg_centroid, avg_waveform_per_tp, param)
+            print(f'Done drift correction per shank for session pair {did+1} and {did+2}')
+        elif len(pairs)>0: #if there exist pairs across sessions:
+            drifts = np.zeros( (n_sessions - 1, 3))
+            drifts[did,:], avg_waveform_per_tp, avg_centroid = apply_drift_correction_basic(pairs, did, session_switch, avg_centroid, avg_waveform_per_tp)
+        elif len(pairs)==0:
+            print('No pairs across sessions to perform drift correction.')
     return drifts, avg_centroid, avg_waveform_per_tp
 
 

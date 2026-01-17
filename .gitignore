@@ -11,3 +11,5 @@ testpy.py
 *.eggs/
 *.egg-info/
 .coverage
+*.npy
+*.json
