@@ -39,7 +39,7 @@ if nargin<4
 end
 
 if exist('alternateUMFiles','var')
-    UIDtoUse = {UIDtoUse{:} 'OriUMUID'};
+    UIDtoUse = {UIDtoUse{:} 'OriUMUID1'};
 end
 
 groups = unique(groupVector);
@@ -136,7 +136,9 @@ for midx = 1:length(UMFiles)
 
 
         % Add the original UID to the new matchtable so we can use that
-        MatchTable.OriUMUID = UIDOriUMPaper;
+        MatchTable.OriUMUID1 = UIDOriUMPaper;
+        MatchTable.OriUMUID2 = tmpalt.MatchTable.UID2;
+
 
     end
 
@@ -424,6 +426,15 @@ IndivFig = figure('name','IndividualDatasets');
 AvgFig = figure('name','AverageDatasets');
 FunctionalFig = figure('name','Functional');
 clear h
+fnames = fieldnames(popCorr_Uni);
+pKW_pSince = kw_by_bin(pSinceAppearance);
+pKW_popCorr = struct();
+pKW_popAUC = struct();
+for ff = 1:numel(fnames)
+    pKW_popCorr.(fnames{ff}) = kw_by_bin(popCorr_Uni.(fnames{ff}));
+    pKW_popAUC.(fnames{ff}) = kw_by_bin(popAUC_Uni.(fnames{ff}));
+    DataSetInfo.(fnames{ff}) = popAUC_Uni.(fnames{ff});
+end
 for uidtype = 1:numel(UIDtoUse)
     figure(IndivFig)
     subplot(3,3,uidtype)
@@ -438,7 +449,6 @@ for uidtype = 1:numel(UIDtoUse)
     makepretty
     offsetAxes
 
-    fnames = fieldnames(popCorr_Uni);
     for ff = 1:numel(fnames)
         subplot(3,3,3+ff)
         hold on
@@ -471,6 +481,14 @@ for uidtype = 1:numel(UIDtoUse)
     subplot(2,1,1)
     hold on
     h(uidtype) = errorbar(1:size(pSinceAppearance,1),nanmean(pSinceAppearance(:,:,uidtype),2),nanstd(pSinceAppearance(:,:,uidtype),[],2)./sqrt(nonnanNr-1),'linestyle','-','color',UIDCols(uidtype,:));
+    if uidtype == numel(UIDtoUse)
+        yl = ylim;
+        yStar = yl(2) - 0.05 * range(yl);
+        sigIdx = find(pKW_pSince < 0.05);
+        if ~isempty(sigIdx)
+            plot(sigIdx, yStar * ones(size(sigIdx)), 'k*', 'MarkerSize', 4);
+        end
+    end
 
     % shadedErrorBar(1:size(pSinceAppearance,1),nanmean(pSinceAppearance,2),nanstd(pSinceAppearance,[],2)./sqrt(nonnanNr-1),'transparent',1)
     set(gca,'XTick',1:numel(deltaDaysBins)-1,'XTickLabel',yTickLabels)
@@ -498,6 +516,14 @@ for uidtype = 1:numel(UIDtoUse)
         ylabel('corr')
         title(fnames{ff})
         ylim([-0.5 1])
+        if uidtype == numel(UIDtoUse)
+            yl = ylim;
+            yStar = yl(2) - 0.05 * range(yl);
+            sigIdx = find(pKW_popCorr.(fnames{ff}) < 0.05);
+            if ~isempty(sigIdx)
+                plot(sigIdx, yStar * ones(size(sigIdx)), 'k*', 'MarkerSize', 4);
+            end
+        end
         makepretty
         offsetAxes
 
@@ -508,6 +534,14 @@ for uidtype = 1:numel(UIDtoUse)
         xlabel('delta Days (>)')
         ylabel('AUC')
         ylim([0 1])
+        if uidtype == numel(UIDtoUse)
+            yl = ylim;
+            yStar = yl(2) - 0.05 * range(yl);
+            sigIdx = find(pKW_popAUC.(fnames{ff}) < 0.05);
+            if ~isempty(sigIdx)
+                plot(sigIdx, yStar * ones(size(sigIdx)), 'k*', 'MarkerSize', 4);
+            end
+        end
 
         makepretty
         offsetAxes
@@ -555,3 +589,32 @@ end
 %% Info on dataset
 DataSetInfo.RecSes = RecSes;
 DataSetInfo.nUnits = nUnitsPerRec;
+DataSetInfo.KW.pSinceAppearance = pKW_pSince;
+DataSetInfo.KW.popCorr_Uni = pKW_popCorr;
+DataSetInfo.KW.popAUC_Uni = pKW_popAUC;
+DataSetInfo.pSinceAppearance = pSinceAppearance;
+
+
+end
+
+function pVals = kw_by_bin(dataByBin)
+nBins = size(dataByBin, 1);
+nUid = size(dataByBin, 3);
+pVals = nan(nBins, 1);
+for binid = 1:nBins
+    dataVec = [];
+    groupVec = [];
+    for uidtype = 1:nUid
+        vals = squeeze(dataByBin(binid,:,uidtype));
+        vals = vals(~isnan(vals));
+        if isempty(vals)
+            continue
+        end
+        dataVec = [dataVec; vals(:)];
+        groupVec = [groupVec; uidtype * ones(numel(vals), 1)];
+    end
+    if numel(unique(groupVec)) > 1 && numel(dataVec) > 1
+        pVals(binid) = kruskalwallis(dataVec, groupVec, 'off');
+    end
+end
+end

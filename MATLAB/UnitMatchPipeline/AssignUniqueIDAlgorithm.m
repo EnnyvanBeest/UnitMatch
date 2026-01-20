@@ -35,7 +35,7 @@ if ~isfield(UMparam,'ISIMinFractionRefractoryViolations')
     UMparam.ISIMinFractionRefractoryViolations = 0.01; % Max fraction of violations allowed, this overwrites the above for merging
 end
 if ~isfield(UMparam,'ISIViolRefracMs')
-    UMparam.ISIViolRefracMs = 1.5; % refractory window in milliseconds
+    UMparam.ISIViolRefracMs = 1; % refractory window in milliseconds
 end
 if UMparam.GoodUnitsOnly
     Good_Idx = find(UniqueIDConversion.GoodID); %Only care about good units at this point
@@ -130,7 +130,6 @@ if UMparam.removeoverMerges && ~isempty(Pairs)
                     end
                     tmp = matfile(matpath);
                     sp = tmp.sp; %#ok<NASGU>
-                    sp = tmp.sp; % ensure variable is loaded
                     lastRecId = recid;
                 else
                     % No KSDir info; skip ISI check
