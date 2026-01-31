@@ -118,7 +118,7 @@ def get_waveforms_mse(avg_waveform, param):
     waveform_mse = re_scale(raw_wave_mse_norm)
     return waveform_mse
 
-def flip_dim(avg_waveform_per_tp, param):
+def flip_dim(avg_waveform_per_tp, param, n=None):
     """
     Creates a version of the weighted average waveform per time point, where the x axis is flipped, due to the effect
     where the average position tends to wards the center of the x coords when the wave is decaying
@@ -135,7 +135,10 @@ def flip_dim(avg_waveform_per_tp, param):
     ndarray
         The average waveform per time point with the x axis flipped and not flipped 
     """
-    n_units = param['n_units']
+    if n is not None:
+        n_units = n
+    else:
+        n_units = param['n_units']
     spike_width = param['spike_width']
 
     flip_dim = np.array((1,)) # BE CAREFUL HERE, Which dimension is the x-axis  
@@ -152,7 +155,7 @@ def flip_dim(avg_waveform_per_tp, param):
 
     return avg_waveform_per_tp_flip
 
-def get_Euclidean_dist(avg_waveform_per_tp_flip,param):
+def get_Euclidean_dist(avg_waveform_per_tp_flip,param, n=None):
     """
     Calculated the Euclidean distance between the units at each time point and for the flipped axis case
 
@@ -170,7 +173,10 @@ def get_Euclidean_dist(avg_waveform_per_tp_flip,param):
     """
     # Memory-efficient implementation using loops instead of massive tiling
     waveidx = param['waveidx']
-    n_units = param['n_units']
+    if n is not None:
+        n_units = n
+    else:
+        n_units = param['n_units']
     
     # Extract the relevant slices once
     data_cv0 = avg_waveform_per_tp_flip[:,:,waveidx,0,:]  # (3, n_units, len(waveidx), n_flips)
@@ -798,6 +804,55 @@ def drift_n_sessions(candidate_pairs, session_switch, avg_centroid, avg_waveform
             print('No pairs across sessions to perform drift correction.')
     return drifts, avg_centroid, avg_waveform_per_tp
 
+
+def drift_correct_session_pair(candidate_pairs, session_switch, avg_centroid, avg_waveform_per_tp, did, param):
+    """
+    This function applies drift correction between n_sessions, currently this is done by aligning session 2 to session 1,
+    then session 3 to session 2 etc.   
+    This function, calls another function to apply the drift correction, to be able to apply different type of drift correction 
+    easily.
+
+    Parameters
+    ----------
+    candidate_pairs : ndarray
+        An array of likely matches
+    session_switch : ndarray
+        What units does the session switch
+    avg_centroid : ndarray
+        The average centroid for each unit
+    avg_waveform_per_tp : ndarray
+        The average waveform per time point for each unit
+    did : int
+        The session id
+    param : dict
+        The param dictionary
+
+    Returns
+    -------
+    ndarray
+        avg_waveform_per_tp arrays drift corrected
+    """
+    best_pairs = np.argwhere(candidate_pairs == 1)
+
+    #make it like the matlab code, (small unit idx, larger unit idx)
+    best_pairs[:, [0,1]] = best_pairs[:, [1,0]]
+
+    idx = np.argwhere( ( (best_pairs[:,0] >= session_switch[did]) * (best_pairs[:,0] < session_switch[did + 1]) *
+                        (best_pairs[:,1] >= session_switch[did + 1]) * (best_pairs[:,1] < session_switch[did + 2]) ) == True)
+
+    pairs = best_pairs[idx,:].squeeze()
+    if pairs.ndim == 1:
+        pairs = np.expand_dims(pairs, axis = 0)
+
+    #Test to see if there are enough matches to do drift correction per shank
+    if test_matches_per_shank(pairs, avg_centroid, did, param) == True:
+        _, avg_waveform_per_tp,_ = apply_drift_correction_per_shank(pairs, did, session_switch, avg_centroid, avg_waveform_per_tp, param)
+        print(f'Done drift correction per shank for session pair {did+1} and {did+2}')
+    elif len(pairs)>0: #if there exist pairs across sessions:
+        _, avg_waveform_per_tp,_ = apply_drift_correction_basic(pairs, did, session_switch, avg_centroid, avg_waveform_per_tp)
+    elif len(pairs)==0:
+        print('No pairs across sessions to perform drift correction.')
+    return avg_waveform_per_tp
 
 
 def get_total_score(scores_to_include, param):
