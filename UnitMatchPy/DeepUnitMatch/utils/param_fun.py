@@ -177,7 +177,7 @@ def save_waveforms_hdf5(file_name, Rwaveform, MaxSitepos, session, save_path=Non
                 fpath = os.path.join(dest_directory, fname)
                 if os.path.isfile(fpath):
                     os.remove(fpath)
-            _CLEANED_WAVEFORM_DIRS.add(dest_directory)
+        _CLEANED_WAVEFORM_DIRS.add(dest_directory)
     except Exception as e:
         print(f"Warning: could not clean destination directory {dest_directory}: {e}")
 
