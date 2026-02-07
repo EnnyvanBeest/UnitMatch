@@ -15,6 +15,7 @@ from tqdm import tqdm
 import pandas as pd
 from pathlib import Path
 from sklearn.neighbors import KernelDensity
+from scipy.optimize import linear_sum_assignment
 import importlib
 from utils import helpers
 importlib.reload(helpers)
@@ -148,6 +149,17 @@ def directional_filter_df(matches: pd.DataFrame):
             filtered_matches = filtered_matches.drop(idx)  # Drop if no reverse match is found
     return filtered_matches
 
+def directional_filter(sim_matrix, session_id, threshold):
+    """
+    Matrix version of directional_filter_df.
+    Returns a boolean matrix where (i,j) is True only if both (i,j) and (j,i)
+    exceed the threshold and belong to different sessions.
+    """
+    above_thresh = sim_matrix > threshold
+    across_session = session_id[:, None] != session_id[None, :]
+    candidates = above_thresh & across_session
+    return candidates & candidates.T
+
 def remove_conflicts(matches: pd.DataFrame, metric: str):
     
     # Find the best match for each neuron1 (RecSes1, ID1 combination)
@@ -169,7 +181,49 @@ def remove_conflicts(matches: pd.DataFrame, metric: str):
 
     return filtered_matches, num_conflicts
 
-def get_matches(df, sim_matrix, session_id, data_dir, pos_array, dist_thresh):
+def remove_conflicts_matrix(sim_matrix, candidates):
+    """
+    Matrix version of remove_conflicts using the Hungarian algorithm.
+    Finds the globally optimal 1-to-1 assignment that maximises total similarity.
+
+    Parameters
+    ----------
+    sim_matrix : np.ndarray (n, n) — similarity scores
+    candidates : np.ndarray (n, n) bool — mask of eligible matches
+
+    Returns
+    -------
+    matches : np.ndarray (n, n) bool
+    num_conflicts : int
+    """
+    active_rows = np.where(candidates.any(axis=1))[0]
+    active_cols = np.where(candidates.any(axis=0))[0]
+
+    if len(active_rows) == 0 or len(active_cols) == 0:
+        return np.zeros_like(candidates, dtype=bool), int(candidates.sum())
+
+    # Extract submatrix of active neurons only
+    sub_sim = sim_matrix[np.ix_(active_rows, active_cols)]
+    sub_cand = candidates[np.ix_(active_rows, active_cols)]
+
+    # Set non-candidate entries to large negative so they're never assigned
+    sub_cost = np.where(sub_cand, sub_sim, -1e9)
+
+    # Hungarian algorithm — globally optimal 1-to-1 assignment
+    ri, ci = linear_sum_assignment(sub_cost, maximize=True)
+
+    # Keep only assignments that were actual candidates
+    valid = sub_cand[ri, ci]
+    ri, ci = ri[valid], ci[valid]
+
+    # Map back to original indices
+    matches = np.zeros_like(candidates, dtype=bool)
+    matches[active_rows[ri], active_cols[ci]] = True
+
+    num_conflicts = int(candidates.sum() - matches.sum())
+    return matches, num_conflicts
+
+def get_matches(df, sim_matrix, session_id, data_dir, dist_thresh):
     """
     Process the output probability matrix to get final set of matches across sessions.
     Output is the probability matrix of matches after thresholding and filtering and a boolean matrix indicating final matches.
