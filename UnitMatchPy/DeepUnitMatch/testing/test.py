@@ -73,18 +73,16 @@ def inference(model, data_dir):
     test_loader = DataLoader(test_dataset, batch_sampler=test_sampler)
 
     submatrices = []
-    positions = []
     n_batches = len(test_loader)
 
     for estimates_i, _, positions_i, exp_ids_i, filepaths_i in tqdm(test_loader):
         # Forward pass
         enc_estimates_i = model(estimates_i)        # shape [bsz, 256]
-        positions.append(positions_i)
 
         for _, candidates_j, positions_j, exp_ids_j, filepaths_j in tqdm(test_loader):
             enc_candidates_j = model(candidates_j)
             s = clip_sim(enc_estimates_i, enc_candidates_j)
-            submatrices.append(reorder_by_depth(s.detach().cpu().numpy(), positions_i, positions_j))
+            submatrices.append(s.detach().cpu().numpy())
     
     result_rows = []
     for i in range(n_batches):
