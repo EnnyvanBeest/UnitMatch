@@ -42,11 +42,21 @@ end
 if ~isfield(UMparam,'spikeWidth')
     if UMparam.Kilosortversion>=4
         UMparam.spikeWidth = 61; % width of spikes in samples (typically assuming 30KhZ sampling)
-        UMparam.NewPeakLoc =  22; % floor(UMparam.spikeWidth./2);
-        UMparam.waveidx =  UMparam.NewPeakLoc-7:UMparam.NewPeakLoc+10;
     else
         UMparam.spikeWidth = 82; % width of spikes in samples (typically assuming 30KhZ sampling)
+    end
+end
+if ~isfield(UMparam,'NewPeakLoc')
+    if UMparam.Kilosortversion>=4
+        UMparam.NewPeakLoc =  22; % floor(UMparam.spikeWidth./2);
+    else
         UMparam.NewPeakLoc =  floor(UMparam.spikeWidth./2);
+    end
+end
+if ~isfield(UMparam,'waveidx')
+    if UMparam.Kilosortversion>=4
+        UMparam.waveidx =  UMparam.NewPeakLoc-7:UMparam.NewPeakLoc+10;
+    else
         UMparam.waveidx =  UMparam.NewPeakLoc-7:UMparam.NewPeakLoc+15;
     end
 end
@@ -83,11 +93,26 @@ if ~isfield(UMparam,'AssignUniqueID')
     UMparam.AssignUniqueID = 1; % Use our method of Assigning Unique ID based on match probability (recommended)
 end
 if ~isfield(UMparam,'UseDatadrivenProbThrs')
-    UMparam.UseDatadrivenProbThrs = 1; % Use data driven probability threshold, if 0 use UMparam.ProbabilityThreshold
+    UMparam.UseDatadrivenProbThrs = 0; % Use data driven probability threshold, if 0 use UMparam.ProbabilityThreshold
 end
 if ~isfield(UMparam,'min_angledist')
     UMparam.min_angledist = 0.1 % the minimum distance a centroid must move to take it angle, avoid getting angle of noise
 end    
+
+if ~isfield(UMparam,'removeoverMerges')
+    UMparam.removeoverMerges = 1; % based on ISI settings below, do not assign same UID to units who's merging would result in more ISI violations
+end
+
+if ~isfield(UMparam,'ISIViolRatioThrs')
+    UMparam.ISIViolRatioThrs = 1.5; % Treshold for the ratio of fraction of spikses violating the ISI rules, when merging two neurons. when larger than threshold neurons won't be merged.
+end
+if ~isfield(UMparam,'ISIMinFractionRefractoryViolations')
+    UMparam.ISIMinFractionRefractoryViolations = 0.01; % Max fraction of violations allowed (proportion), this overwrites the above for merging
+end
+if ~isfield(UMparam,'ISIViolRefracMs')
+    UMparam.ISIViolRefracMs = 1.5; % refractory window in milliseconds
+end
+
 %% Inspection
 if ~isfield(UMparam,'MakePlotsOfPairs')
     UMparam.MakePlotsOfPairs = 0; % Plots and saves matches for you to inspect

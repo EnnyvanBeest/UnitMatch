@@ -2,7 +2,28 @@ import numpy as np
 from scipy.signal import detrend
 import h5py, os
 from pathlib import Path
-from utils.myutil import get_default_param
+
+# Track which processed_waveforms session directories we've already cleaned this run
+_CLEANED_WAVEFORM_DIRS = set()
+
+def get_default_param(param = None):
+    """
+    Create param, a dictionary with the default parameters.
+    If a dictionary is given, it will add values to it without overwriting existing values.
+    Do not need to give a dictionary.
+    """
+    tmp = {'nTime' : 82, 'nChannels' : 384, 'ChannelRadius' : 110,
+           'RnChannels' : 30, 'RnTime' : 60, 
+        }
+    # if no dictionary is given just returns the default parameters
+    if param == None:
+        out = tmp
+    else:    
+        # Add default parameters to param dictionary, does not overwrite pre existing param values
+        out = tmp | param
+    if out['RnChannels'] %2 !=0:
+        print('RnChannels is not even, please check')
+    return out
 
 def detrend_waveform(waveform):
     """
@@ -139,13 +160,27 @@ def extract_Rwaveforms(waveform, ChannelPos,ChannelMap, param):
     
     return MaxSiteMean, MaxSitepos, sorted_goodChannelMap, sorted_goodpos, Rwaveform
 
-def save_waveforms_hdf5(file_name, Rwaveform, MaxSitepos, session):
+def save_waveforms_hdf5(file_name, Rwaveform, MaxSitepos, session, save_path=None):
     """
     Saves the preprocessed, reduced waveform and the max site position as a HDF5 file.
     """
-    current_dir = Path(__file__).parent.parent
-    dest_path = os.path.join(current_dir, "processed_waveforms", str(session), file_name)
+    if save_path is None:
+        save_path = Path(__file__).parent.parent                  # points to the DeepUnitMatch directory
+    
+    dest_path = os.path.join(save_path, "processed_waveforms", str(session), file_name)
     dest_directory = os.path.dirname(dest_path)
+
+    # If the destination directory already exists, remove existing waveform files once per session
+    try:
+        if os.path.isdir(dest_directory) and dest_directory not in _CLEANED_WAVEFORM_DIRS:
+            for fname in os.listdir(dest_directory):
+                fpath = os.path.join(dest_directory, fname)
+                if os.path.isfile(fpath):
+                    os.remove(fpath)
+        _CLEANED_WAVEFORM_DIRS.add(dest_directory)
+    except Exception as e:
+        print(f"Warning: could not clean destination directory {dest_directory}: {e}")
+
     os.makedirs(dest_directory, exist_ok=True)
 
     new_data = {
@@ -156,13 +191,15 @@ def save_waveforms_hdf5(file_name, Rwaveform, MaxSitepos, session):
         for key, value in new_data.items():
             f.create_dataset(key, data=value)
 
-def get_snippets(waveforms, ChannelPos, session_id):
+def get_snippets(waveforms, ChannelPos, session_id, save_path=None):
     """
     Convert raw waveforms from a pair of sessions (waveforms) to snippets with shape (60,30,2).
 
     Arguments:
     - waveforms: n_units x n_timepoints x n_channels x n_repeats (CV)
     - ChannelPos: list of channel positions for each session. Each session's channel positions should be a 384 x 3 or 384 x 2 array.
+    - session_id: list of session identifiers, 1 integer per unit.
+    - save_path: Optional path to save the processed waveform files. If None, defaults to 'processed_waveforms' folder in current directory.
     """
     processed_waveforms = []
     positions = []
@@ -194,8 +231,8 @@ def get_snippets(waveforms, ChannelPos, session_id):
         else:
             # Clean data - go ahead as normal
             MaxSiteMean, MaxSitepos, sorted_goodChannelMap, sorted_goodpos, Rwaveform = extract_Rwaveforms(unit, ChannelPos, ChannelMap, params)
-        
-        save_waveforms_hdf5(f'Unit{i}.npy', Rwaveform, MaxSitepos, session_id[i])
+
+        save_waveforms_hdf5(f'Unit{i}_RawSpikes.npy', Rwaveform, MaxSitepos, session_id[i], save_path=save_path)
     
         processed_waveforms.append(Rwaveform)
         positions.append(MaxSitepos)

@@ -5,7 +5,13 @@ PlotIndividualMice = 0;
 % Drifts2Exclude = 50; % more than 50 micron, expected to lose neurons. This has nothing to do with software but with quality of recordings
 MinNumsUnit = -inf; % should have at least this amount of neurons, otherwise not a good session
 try
-    savedir = UMFiles{1}(1:find(UMFiles{1}~=UMFiles{end},1,'first')-1);
+    if iscell(UMFiles)
+        savedir = UMFiles{1}(1:find(UMFiles{1}~=UMFiles{end},1,'first')-1);
+    else
+        savedir = dir(fullfile(UMFiles,'UnitMatch.mat'));
+        UMFiles = {[savedir.folder,filesep,savedir.name]};
+        savedir = savedir.folder;
+    end
 catch
     warning('can''t create save dir')
     savedir = [];
@@ -417,7 +423,7 @@ for uidtype = 1:numel(UIDtoUse)
     end
 
     figure(AvgFig)
-    nonnanNr = sum(~isnan(pSinceAppearance(:,:,uidtype)),2);
+    nonnanNr = sum(~isnan(pSinceAppearance(:,:,uidtype)),2)+1; %nr data +1
     subplot(2,1,1)
     hold on
     h(uidtype) = errorbar(1:size(pSinceAppearance,1),nanmean(pSinceAppearance(:,:,uidtype),2),nanstd(pSinceAppearance(:,:,uidtype),[],2)./sqrt(nonnanNr-1),'linestyle','-','color',UIDCols(uidtype,:));

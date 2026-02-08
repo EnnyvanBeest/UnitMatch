@@ -1,10 +1,11 @@
 
 %% Plot probes
-disp(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment.mat']))
-Depth2AreaPer = load(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment.mat']));
+tmpfile = dir(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment*.mat']));
+disp(fullfile(tmpfile.folder,tmpfile.name))
+Depth2AreaPer = load(fullfile(tmpfile.folder,tmpfile.name));
 Depth2AreaPer=Depth2AreaPer.Depth2Area;
 
-probePoints = cell2mat(Depth2AreaPer.Coordinates)./10; %Because we use 10 micron steps
+probePoints = Depth2AreaPer.Coordinates./10; %Because we use 10 micron steps
 probePoints(any(isnan(probePoints),2),:)=[];
 % Orientation is ASR, has to go ASL
 probePoints(:,3) = size(av,3)-probePoints(:,3);

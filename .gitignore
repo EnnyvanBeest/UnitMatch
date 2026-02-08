@@ -12,3 +12,5 @@ testpy.py
 *.egg-info/
 .coverage
 *.npy
+*.json
+ModelExp

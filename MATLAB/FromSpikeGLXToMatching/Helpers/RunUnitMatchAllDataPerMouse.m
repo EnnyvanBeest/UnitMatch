@@ -8,7 +8,7 @@ DateOpt = cellfun(@(X) X([X.isdir]),DateOpt,'UniformOutput',0);
 DateOpt = cellfun(@(X) {X.name},DateOpt,'UniformOutput',0);
 
 RemoveOldCopies = 1;
-
+Redo = 0; % Redo generally
 LogError = {}; % Keep track of which runs didn't work
 if ~exist('PipelineParamsOri','var')
     PipelineParamsOri = PipelineParams;
@@ -38,12 +38,10 @@ for midx = 1:length(MiceOpt)
         AllKiloSortPaths = [];
         for did = 1:length(DateOpt{midx})
             disp(['Finding all KS4 directories in ' myKsDir ', ' DateOpt{midx}{did}])
-            % First try KS4
-            tmpfiles = dir(fullfile(myKsDir,DateOpt{midx}{did},'**','KS4'));
+            tmpfiles = dir(fullfile(myKsDir,DateOpt{midx}{did},'**','KS4','**','channel_positions.npy'));
             tmpfiles(cellfun(@(X) ismember(X,{'.','..'}),{tmpfiles(:).name})) = [];
             % Conver to string
-            tmpfiles = arrayfun(@(X) fullfile(tmpfiles(X).folder,tmpfiles(X).name),1:length(tmpfiles),'uni',0);
-
+            tmpfiles = arrayfun(@(X) fullfile(tmpfiles(X).folder),1:length(tmpfiles),'uni',0);
 
             if isempty(tmpfiles)
                 disp(['Trying pyKS directories in ' myKsDir ', ' DateOpt{midx}{did}])
@@ -89,23 +87,35 @@ for midx = 1:length(MiceOpt)
         continue
     end
 
+    KSDates = cellfun(@(X) strsplit(X,filesep),AllKiloSortPaths,'Uni',0);
+    try
+        KSDates = cellfun(@(X) datetime(X{end-2}),KSDates,'uni',0);
+    catch
+        KSDates = cellfun(@(X) datetime(X{end-4}),KSDates,'uni',0);
+    end
     %% Remove old copies?
     UnitMatchExist = dir(fullfile(SaveDir,MiceOpt{midx},'**','UnitMatch.mat'));
     if ~isempty(UnitMatchExist)
-        MouseAllDone = 0;
+        MouseAllDone = 1;
     else 
         MouseAllDone = 0;
     end
     for id = 1:numel(UnitMatchExist)
-        if RemoveOldCopies && UnitMatchExist(id).date<FromDate
+        if RemoveOldCopies && (UnitMatchExist(id).date<FromDate || Redo)
             delete(fullfile(UnitMatchExist(id).folder,'**'))
             rmdir(UnitMatchExist(id).folder)
-
+            MouseAllDone = 0;
+        elseif any(cellfun(@(X) UnitMatchExist(id).date<=X,KSDates)) %Any new data since running this?
+            if RemoveOldCopies
+                delete(fullfile(UnitMatchExist(id).folder,'**'))
+                rmdir(UnitMatchExist(id).folder)
+            end
             MouseAllDone = 0;
         end
     end
 
     if MouseAllDone
+        disp([MiceOpt{midx} ' all done... continue'])
         continue
     end
     %% Prepare cluster information
@@ -220,7 +230,7 @@ for midx = 1:length(MiceOpt)
                 %% Actual UnitMatch & Unique UnitID assignment
                 [UniqueIDConversion, MatchTable, WaveformInfo, UMparam] = UnitMatch(clusinfo, UMparam);
                 if UMparam.AssignUniqueID
-                    [UniqueIDConversion, MatchTable] = AssignUniqueID(UMparam.SaveDir,StartUID);
+                    [UniqueIDConversion, MatchTable, UMparam] = AssignUniqueID(UMparam.SaveDir,StartUID);
                 end
                 UMtime = toc(UMtime)
 
@@ -238,6 +248,9 @@ for midx = 1:length(MiceOpt)
                   % Visualization
                 PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
 
+                if UMparam.AssignUniqueID % Sanity check
+                    summaryMatchingPlots(UMparam.SaveDir,{'UID1Liberal','UID1','UID1Conservative'},1,0)
+                end
                 %% Figures
                 if UMparam.MakePlotsOfPairs
                     DrawBlind = 0; %1 for blind drawing (for manual judging of pairs)

@@ -458,14 +458,11 @@ for subsesid = 1:length(KiloSortPaths)
     ypostmp = channelpostmp(:, 2);
     xpostmp = channelpostmp(:, 1);
     xdiffs = unique(abs(diff(unique(xpostmp))));
-    xdiffs(xdiffs<50) = []; % Assume differences smaller than 50 micron means they're on the same shank?
-    xposopt = (floor(xpostmp./min(xdiffs)+1)); % Sort of hacky
-    Shanktmp = floor(xpostmp(channeltmp+1)./(min(xdiffs)+1));
-    if isempty(xposopt)
-        xposopt = ones(length(channeltmp),1);
+    xdiffs(xdiffs<50 | isnan(xdiffs)) = []; % Assume differences smaller than 50 micron means they're on the same shank?
+    Shanktmp = floor(xpostmp(channeltmp+1)./(min([xdiffs; 250])+1)); % Hardcoding
+    if isempty(Shanktmp)
         Shanktmp = zeros(length(channeltmp),1);
     end
-    %     [~,minid] = arrayfun(@(X) (abs(floor(xpostmp(X)./250)-xposopt)),channeltmp+1,'UniformOutput',0);
     Shank = cat(1, Shank, Shanktmp);
 
     recses = cat(1, recses, repmat(countid, length(channeltmp), 1));

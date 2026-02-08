@@ -1,4 +1,4 @@
-function [MatchTable, UniqueIDConversion] = AssignUniqueIDAlgorithm(MatchTable, UniqueIDConversion, UMparam, StartUID)
+function [MatchTable, UniqueIDConversion, UMparam] = AssignUniqueIDAlgorithm(MatchTable, UniqueIDConversion, UMparam, StartUID)
 if nargin<4
     StartUID = 1;
 end
@@ -15,6 +15,25 @@ UniqueIDLiberal = StartUID:StartUID+length(AllClusterIDs)-1; % Initial assumptio
 OriUniqueID = UniqueIDLiberal; % original
 UniqueIDConservative = UniqueIDLiberal;% Conservative equivalent
 UniqueID = UniqueIDLiberal; %Intermediate;
+% Optional: paths for spike/npy access (used for ISI violation checks)
+if isfield(UniqueIDConversion,'Path4UnitNPY')
+    Path4UnitNPY = UniqueIDConversion.Path4UnitNPY;
+else
+    Path4UnitNPY = {};
+end
+% Defaults for ISI violation exclusion upon merging (oversplit removal)
+if ~isfield(UMparam,'removeoverMerges')
+    UMparam.removeoverMerges = 1;
+end
+if ~isfield(UMparam,'ISIViolRatioThrs')
+    UMparam.ISIViolRatioThrs = 1.5; % Ratio of fraction of merged ISIs violating refractory period when merging
+end
+if ~isfield(UMparam,'ISIMinFractionRefractoryViolations')
+    UMparam.ISIMinFractionRefractoryViolations = 0.01; % Max fraction of violations allowed, this overwrites the above for merging
+end
+if ~isfield(UMparam,'ISIViolRefracMs')
+    UMparam.ISIViolRefracMs = 1.5; % refractory window in milliseconds
+end
 if UMparam.GoodUnitsOnly
     Good_Idx = find(UniqueIDConversion.GoodID); %Only care about good units at this point
 else
@@ -81,7 +100,76 @@ for batchid = 1:numBatch % In batches to prevent memory issues
     MatchProbabilityOri = cat(1,MatchProbabilityOri,diag(MatchProb(Pairs(idx,1),Pairs(idx,2))));
     MatchProbabilityFlip = cat(1,MatchProbabilityFlip,diag(MatchProb(Pairs(idx,2),Pairs(idx,1))));
 end
+% Exclude pairs that fail cross-validation threshold
 NonSurvivalIdx = MatchProbabilityOri<UMparam.UsedProbability|MatchProbabilityFlip<UMparam.UsedProbability;
+
+% Additionally exclude within-recording pairs whose merged spikes would violate ISI criteria
+if UMparam.removeoverMerges && ~isempty(Pairs)
+    try
+        ISIExclude = zeros(size(Pairs,1),1);
+        % Only evaluate pairs from the same recording
+        SameRec = GoodRecSesID(Pairs(:,1)) == GoodRecSesID(Pairs(:,2));
+        % Cache last loaded recording id to avoid repeated IO
+        lastRecId = NaN;
+        sp = [];
+        for pid = 1:size(Pairs,1)
+            if ~SameRec(pid)
+                continue
+            end
+            recid = GoodRecSesID(Pairs(pid,1));
+            if ~isequal(recid,lastRecId)
+                % Load spikes for this recording
+                if isfield(UMparam,'KSDir') && ~isempty(UMparam.KSDir)
+                    if numel(UMparam.KSDir) > 1
+                        matpath = fullfile(UMparam.KSDir{recid},'PreparedData.mat');
+                    else % stitched
+                        matpath = fullfile(UMparam.KSDir{1},'PreparedData.mat');
+                    end
+                    tmp = matfile(matpath);
+                    sp = tmp.sp; %#ok<NASGU>
+                    sp = tmp.sp; % ensure variable is loaded
+                    lastRecId = recid;
+                else
+                    % No KSDir info; skip ISI check
+                    sp = [];
+                    lastRecId = NaN;
+                end
+            end
+            if isempty(sp)
+                continue
+            end
+            % Determine the two cluster template IDs (map from good-subset index to original index)
+            clus1 = AllClusterIDs(Good_Idx(Pairs(pid,1)));
+            clus2 = AllClusterIDs(Good_Idx(Pairs(pid,2)));
+            idx1 = sp.spikeTemplates == clus1;
+            idx2 = sp.spikeTemplates == clus2;
+            if ~any(idx1) || ~any(idx2)
+                continue
+            end
+
+            % Fraction of violation per unit
+            fracViol1 = diff(sort(sp.st(idx1)));
+            fracViol1 = sum(fracViol1*1000 < UMparam.ISIViolRefracMs) / numel(fracViol1);
+
+            fracViol2 = diff(sort(sp.st(idx2)));
+            fracViol2 = sum(fracViol2*1000 < UMparam.ISIViolRefracMs) / numel(fracViol2);
+
+            % When combined:
+            diffs = diff(sort(sp.st(idx1|idx2)));
+            if isempty(diffs)
+                continue
+            end
+            fracViol = sum(diffs*1000 < UMparam.ISIViolRefracMs) / numel(diffs);
+            ViolationRatio = fracViol./(2*max([fracViol1,fracViol2]));
+            if fracViol>UMparam.ISIMinFractionRefractoryViolations
+                ISIExclude(pid) = ViolationRatio;
+            end
+        end
+        NonSurvivalIdx = NonSurvivalIdx | ISIExclude > UMparam.ISIViolRatioThrs;
+    catch ME
+        warning('ISI violation check failed: %s. Skipping ISI-based exclusion.', ME.message);
+    end
+end
 Pairs(NonSurvivalIdx,:) = []; % don't bother with these
 if ~isempty(Pairs)
 
