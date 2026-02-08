@@ -191,7 +191,7 @@ def save_waveforms_hdf5(file_name, Rwaveform, MaxSitepos, session, save_path=Non
         for key, value in new_data.items():
             f.create_dataset(key, data=value)
 
-def get_snippets(waveforms, ChannelPos, session_id, save_path=None):
+def get_snippets(waveforms, ChannelPos, session_id, save_path=None, unit_ids=None):
     """
     Convert raw waveforms from a pair of sessions (waveforms) to snippets with shape (60,30,2).
 
@@ -199,6 +199,8 @@ def get_snippets(waveforms, ChannelPos, session_id, save_path=None):
     - waveforms: n_units x n_timepoints x n_channels x n_repeats (CV)
     - ChannelPos: list of channel positions for each session. Each session's channel positions should be a 384 x 3 or 384 x 2 array.
     - session_id: list of session identifiers, 1 integer per unit.
+    - unit_ids: Optional original unit IDs (length n_units). If provided, snippet files are saved as
+      Unit{unit_id}*_RawSpikes.npy so downstream inference can match UnitMatch ordering/labels.
     - save_path: Optional path to save the processed waveform files. If None, defaults to 'processed_waveforms' folder in current directory.
     """
     # If this save path already contains outputs from a previous run, remove the per-unit
@@ -227,6 +229,11 @@ def get_snippets(waveforms, ChannelPos, session_id, save_path=None):
         # Just need 1 array as these are assumed to be the same for all repeats (CV)
         ChannelPos = ChannelPos[0]
 
+    if unit_ids is not None:
+        unit_ids = np.asarray(unit_ids).squeeze()
+        if unit_ids.shape[0] != len(waveforms):
+            raise ValueError("unit_ids must have the same length as waveforms.")
+
     for i, unit in enumerate(waveforms):
         n_time, n_channels, n_repeats = unit.shape
         if n_time != 82 or n_channels != 384 or n_repeats != 2:
@@ -246,8 +253,9 @@ def get_snippets(waveforms, ChannelPos, session_id, save_path=None):
             # Clean data - go ahead as normal
             MaxSiteMean, MaxSitepos, sorted_goodChannelMap, sorted_goodpos, Rwaveform = extract_Rwaveforms(unit, ChannelPos, ChannelMap, params)
 
-        save_waveforms_hdf5(f'Unit{i}_RawSpikes.npy', Rwaveform, MaxSitepos, session_id[i], save_path=save_path)
-    
+        unit_id = int(unit_ids[i]) if unit_ids is not None else i
+        save_waveforms_hdf5(f"Unit{unit_id}_RawSpikes.npy", Rwaveform, MaxSitepos, session_id[i], save_path=save_path)
+     
         processed_waveforms.append(Rwaveform)
         positions.append(MaxSitepos)
 

@@ -22,6 +22,44 @@ importlib.reload(helpers)
 from utils.helpers import *
 
 
+def _parse_unitmatch_good_units(unit_label_paths):
+    """
+    Mirror UnitMatchPy.utils.load_good_waveforms() selection and ordering from TSVs.
+    Returns list[list[int]] good unit IDs per session, preserving TSV row order.
+    """
+    if unit_label_paths is None:
+        return None
+
+    good_units = []
+    is_bombcell = os.path.basename(unit_label_paths[0]) == "cluster_bc_unitType.tsv"
+
+    for path in unit_label_paths:
+        session_good = []
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                parts = line.split("\t")
+                if len(parts) < 2:
+                    continue
+                try:
+                    unit_id = int(parts[0])
+                except ValueError:
+                    # header row
+                    continue
+                label = str(parts[1]).strip().lower()
+                if is_bombcell:
+                    if label in {"good", "non-soma good"}:
+                        session_good.append(unit_id)
+                else:
+                    if label == "good":
+                        session_good.append(unit_id)
+        good_units.append(session_good)
+
+    return good_units
+
+
 
 def load_trained_model(device="cpu", read_path=None):
 
@@ -67,9 +105,13 @@ def reorder_by_depth(matrix:np.ndarray, pos1:np.ndarray, pos2) -> np.ndarray:
     
     return sorted_matrix
 
-def inference(model, data_dir):
+def inference(model, data_dir, unit_label_paths=None):
 
-    test_dataset = NeuropixelsDataset_cortexlab(data_dir)
+    # If you pass `unit_label_paths` (the same TSV paths used by UnitMatchPy.utils.load_good_waveforms),
+    # this will build the dataset in the exact same per-session unit order.
+    good_units = _parse_unitmatch_good_units(unit_label_paths)
+    unit_order = good_units if good_units is not None else "unitmatch"
+    test_dataset = NeuropixelsDataset_cortexlab(data_dir, unit_order=unit_order)
     test_sampler = ValidationExperimentBatchSampler(test_dataset, shuffle = False)
     test_loader = DataLoader(test_dataset, batch_sampler=test_sampler)
 
@@ -242,7 +284,6 @@ def get_matches(df, sim_matrix, session_id, data_dir, dist_thresh):
     for session in sessions:
         session_path = os.path.join(data_dir, str(session))
         positions[session] = read_pos(session_path)
-        positions[session]['ID'] = positions[session]['ID'].values - positions[session]['ID'].min()
     corrections = get_corrections(matches, positions)
     matches_with_dist = vectorised_drift_corrected_dist(corrections, positions, matches)
     matches = matches_with_dist.loc[matches_with_dist["dist"]<dist_thresh]
