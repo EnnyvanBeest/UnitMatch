@@ -1,31 +1,90 @@
-# Unit Match - Python
+# UnitMatchPy (UMPy) and DeepUnitMatch (DUM)
 
-## Run UMPy
+This repository contains:
+- **UnitMatchPy (UMPy)**: automatic matching of neurons across sessions (Python package).
+- **DeepUnitMatch (DUM)**: DeepUnitMatch pipeline and demos (see preprint below).
 
-To run UMPy standard spike sorting data is needed; channel positions and 2 extracted raw waveforms for each unit. This can be calculated externally [BombCell](https://github.com/Julie-Fabre/bombcell) or using *extract_raw_demo.ipynb* to extract these waveforms from compressed data (.cbin and .ch) or raw data. There is also a [Spike Interface](https://spikeinterface.readthedocs.io/en/latest/) integrated notebook *UMPy_spike_interface_demo.ipynb* which uses spike interface to get this data.
-Be careful not to mix and match the different ways of extracting raw waveforms, as there are difference between the methods.
+## References
 
-There are to example notebooks for running UMPy *UMPy_example.ipynb* and *UMPy_example_detailed.ipynb*. These notebooks will guide you through running Unit Match all you need to supply is paths to the data. *UMPy_example.ipynb* is recommended to use first as it is simpler, however *UMPy_example_detailed.ipynb* may be useful in unique cases as it is more modular.
+- **UnitMatch (UMPy):** https://www.nature.com/articles/s41592-024-02440-1
+- **DeepUnitMatch (DUM) preprint:** https://www.biorxiv.org/content/10.64898/2026.01.30.702777v1
 
-The GUI is a optional step to curated and investigate the information Unit Match has calculated; for efficient usage of the GUI please look at *GUI_Reference_Guide.md* in the Demo Notebooks folder.
+## Versions
 
-## Dependencies
+- **UnitMatchPy version:** `3.2.9` (from `pyproject.toml`)
+- **DeepUnitMatch:** code lives under `DeepUnitMatch/` (see **DeepUnitMatch (DUM)** section)
 
-This version relies on many core python packages: [numpy](https://numpy.org/), [scipy](https://scipy.org/), [JobLib](https://joblib.readthedocs.io/en/stable/), [pandas](https://pandas.pydata.org/), [tkinter](https://docs.python.org/3/library/tkinter.html) and [matplotlib](https://matplotlib.org/). All of these libaries come with a [Anaconda](https://www.anaconda.com/download/) version of python. 
-For extracting raw data, the library [mtscomp](https://github.com/int-brain-lab/mtscomp) is needed, and can be installed by `pip install mtscomp`.
+## Installation
 
+`pip install` (including `pip install -e .`) installs into whatever Python environment your `pip` points to (system Python, a conda env, or a virtualenv). `pip` does **not** create or name environments.
 
-## Installation 
+We recommend using Anaconda/Miniconda (conda) to create an isolated environment first:
 
-After creating an python environment
-
+```bash
+# Create a new environment (pick any name you like; example: UMPy)
+conda create -n UMPy python=3.11 pip #(press y when prompted)
+conda activate UMPy
 ```
-conda create --name UnitMatch python==3.9 
-conda activate UnitMatch
-```
 
-You can install UnitMatchPy with pip. It will automatically install all the dependencies.
+Then install using pip (options below).
 
-```
+### Option A: Install the released package (PyPI)
+
+```bash
 pip install UnitMatchPy
 ```
+
+Optional extras (heavier dependencies used by some notebooks and integration with SpikeInterface):
+
+```bash
+pip install "UnitMatchPy[full,notebooks]"
+```
+
+### Option B: Install a local, editable copy (for development / modified code)
+
+First, open a terminal and navigate to this folder (the one containing `pyproject.toml`). The `pip install -e` command must be run from here:
+
+```bash
+# Windows (PowerShell)
+cd $HOME\Documents\GitHub\DeepUnitMatch\UnitMatchPy
+
+# macOS / Linux
+cd ~/Documents/GitHub/DeepUnitMatch/UnitMatchPy
+```
+
+```bash
+pip install -e .
+```
+
+Optional extras (e.g. if you'd like to run the notebooks or integrate with SpikeInterface):
+
+```bash
+pip install -e ".[full,notebooks]"
+```
+
+## Demo notebooks
+
+All demo notebooks are in `Demo Notebooks/`.
+
+### Run UnitMatchPy (UMPy)
+
+To run UMPy, standard spike sorting data is needed (channel positions and extracted raw waveforms for each unit). Waveforms can be extracted externally (e.g. [BombCell](https://github.com/Julie-Fabre/bombcell)) or using the demo notebooks:
+- `Demo Notebooks/extract_raw_data_demo.ipynb` (compressed `.cbin`/`.ch` or raw)
+- `Demo Notebooks/extract_raw_data_demo_open_ephys.ipynb` (Open Ephys)
+- `Demo Notebooks/UMPy_spike_interface_demo.ipynb` ([SpikeInterface](https://spikeinterface.readthedocs.io/en/latest/) workflow)
+
+Example notebooks:
+- `Demo Notebooks/UMPy_example.ipynb` (recommended starting point)
+- `Demo Notebooks/UMPy_example_detailed.ipynb` (more modular / advanced)
+
+The GUI is an optional step to curate and explore UnitMatch outputs; see `Demo Notebooks/GUI_Reference_Guide.md` for usage tips and shortcuts.
+
+## DeepUnitMatch (DUM)
+
+To try the DeepUnitMatch version, start with:
+- `Demo Notebooks/DeepUnitMatch.ipynb`
+
+If you want to train / fine-tune a model on your own data, see:
+- `Demo Notebooks/DUM_training.ipynb`
+
+Preprint: https://www.biorxiv.org/content/10.64898/2026.01.30.702777v1

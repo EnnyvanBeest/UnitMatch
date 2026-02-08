@@ -201,6 +201,20 @@ def get_snippets(waveforms, ChannelPos, session_id, save_path=None):
     - session_id: list of session identifiers, 1 integer per unit.
     - save_path: Optional path to save the processed waveform files. If None, defaults to 'processed_waveforms' folder in current directory.
     """
+    # If this save path already contains outputs from a previous run, remove the per-unit
+    # RawSpikes files within the relevant session folders so we don't mix sessions.
+    base_path = Path(__file__).parent.parent if save_path is None else Path(save_path)
+    processed_root = base_path / "processed_waveforms"
+    if processed_root.is_dir():
+        for sess in sorted({str(s) for s in np.asarray(session_id).tolist()}):
+            sess_dir = processed_root / sess
+            if not sess_dir.is_dir():
+                continue
+            for pattern in ("unit*_RawSpikes.npy", "Unit*_RawSpikes.npy"):
+                for old_file in sess_dir.glob(pattern):
+                    if old_file.is_file():
+                        old_file.unlink()
+
     processed_waveforms = []
     positions = []
     params = get_default_param()

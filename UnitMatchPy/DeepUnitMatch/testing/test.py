@@ -416,7 +416,13 @@ def AUC(matches:np.ndarray, func_metric:np.ndarray, session_id):
             fp+=1
         recall.append(tp/P)
         fpr.append(fp/N)
-    auc = np.trapezoid(recall, fpr)
+
+    # NumPy compatibility: `np.trapezoid` exists in newer NumPy versions;
+    # `np.trapz` is the older equivalent.
+    if hasattr(np, "trapezoid"):
+        auc = np.trapezoid(recall, fpr)
+    else:
+        auc = np.trapz(recall, fpr)
     return auc
 
 
