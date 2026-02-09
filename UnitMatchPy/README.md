@@ -87,4 +87,4 @@ To try the DeepUnitMatch version, start with:
 If you want to train / fine-tune a model on your own data, see:
 - `Demo Notebooks/DUM_training.ipynb`
 
-Preprint: https://www.biorxiv.org/content/10.64898/2026.01.30.702777v1
+Important note: DeepUnitMatch current trained model is for Npix 2.0 4-shank only. You will need to train a new model with your own data if you have any other type of probe.
