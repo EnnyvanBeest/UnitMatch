@@ -160,6 +160,9 @@ if exist('clusinfo','var') & ~isempty(Depth2Area)
     grayMask = std(rgbColors, 0, 2) < 0.05;  % threshold can be adjusted
 
     % Calculate all distances
+    if all(isnan(clusinfo.AdjustedDepth))
+        keyboard
+    end
     allDists = abs(clusinfo.AdjustedDepth - Depth2Area.Depth') + abs(clusinfo.Shank - Depth2Area.Shank') * 1000;
 
     % Set distances to gray areas to Inf
@@ -179,7 +182,8 @@ if exist('clusinfo','var') & ~isempty(Depth2Area)
     % Group some areas
     Area= strrep(clusinfo.Area,'/','');
 
-    areaopt = unique(Area,'stable');
+    [areaopt, id1] = unique(Area,'stable');
+    areaoptFN = clusinfo.AreaFN(id1);
     uniquearean = length(areaopt);
     % Use Allen Brain Atlas to find all areas in the recordings
     % Add units to area specific cell
@@ -194,20 +198,23 @@ if exist('clusinfo','var') & ~isempty(Depth2Area)
     newareaabrev = cell(1,length(Area));
     % Make names in table similar to those used here
     atlastable.acronym = lower(atlastable.acronym);
-    atlastable.acronym= strrep(atlastable.acronym,'/','');
+    atlastable.acronym = strrep(atlastable.acronym,'/','');
     for areaid=1:length(areaopt)
         %Find structure_id_path of area
         structure_id_path = atlastable.structure_id_path{find(ismember(lower(atlastable.acronym),areaopt{areaid}))};
         % Cut off last part
         parts = strsplit(structure_id_path,'/');
+        newstructure_id_path = fullfile(parts{2:end-2});
+        newstructure_id_path = ['/' strrep(newstructure_id_path,'\','/') '/'];
+
+
+
         %     parts(cellfun(@isempty,parts))=[];
-        if length(parts)<=4 || any(strfind(areaopt{areaid},'ca'))%if we cannot go further up or hippocampal area
+        if (length(parts)<=4 || sum(contains(atlastable.structure_id_path,newstructure_id_path)) > 17 || any(strfind(areaopt{areaid},'ca'))) && ~contains(areaoptFN{areaid},'layer')%if we cannot go further up or hippocampal area
             tmpareaname = areaopt{areaid}; %if we cannot go further up
             newstructure_id_path = structure_id_path;
         else
-            newstructure_id_path = fullfile(parts{2:end-2});
-            newstructure_id_path = ['/' strrep(newstructure_id_path,'\','/') '/'];
-            % Find area with this new structure id
+                % Find area with this new structure id
             tmpareaname = atlastable.acronym{find(ismember(atlastable.structure_id_path,newstructure_id_path))};
         end
         %Does this one already exist in Automatic AREAS Of Interest?
@@ -234,6 +241,7 @@ if exist('clusinfo','var') & ~isempty(Depth2Area)
     [~,colidx] = ismember(newareaname,AutomaticAREASOfInterestFullName);
     [~,sortareaidx] = sortrows(ColPerFullArea);
 
+    clusinfo.OriArea = Area;
     clusinfo.Area = newareaabrev';
     clusinfo.AreaFN = newareaname';
 

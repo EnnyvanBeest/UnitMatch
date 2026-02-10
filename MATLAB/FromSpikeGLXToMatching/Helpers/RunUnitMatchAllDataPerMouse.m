@@ -95,6 +95,13 @@ for midx = 1:length(MiceOpt)
     end
     %% Remove old copies?
     UnitMatchExist = dir(fullfile(SaveDir,MiceOpt{midx},'**','UnitMatch.mat'));
+    if PipelineParams.separateIMRO
+        UnitMatchExist(cellfun(@(X) contains(X,'AllIMRO'),{UnitMatchExist(:).folder})) = [];
+    else
+        UnitMatchExist(cellfun(@(X) ~contains(X,'AllIMRO'),{UnitMatchExist(:).folder})) = [];
+    end
+
+
     if ~isempty(UnitMatchExist)
         MouseAllDone = 1;
     else 
