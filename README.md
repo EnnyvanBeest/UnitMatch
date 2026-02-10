@@ -20,7 +20,7 @@ Paper to cite: https://www.nature.com/articles/s41592-024-02440-1
 
 Video: https://www.youtube.com/watch?v=4c_dgTZcBaQ&list=PLfhWmWntvjl7kljKozClpjS29DoY8V5pB&index=23&t=21s
 
-Below instructions are for the Matlab version. Please see the python folder for more information on the Python version.
+Below instructions are for the Matlab version. Please see the [python folder](https://github.com/EnnyvanBeest/UnitMatch/tree/main/UnitMatchPy) for more information on the Python and DeepUnitMatch version.
 ### Dependencies on other toolboxes/repositories
 Toolboxes used for matching part:
 - https://github.com/kwikteam/npy-matlab
