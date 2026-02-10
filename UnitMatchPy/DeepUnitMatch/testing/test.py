@@ -4,7 +4,7 @@ sys.path.insert(0, os.getcwd())
 sys.path.insert(0, os.path.join(os.getcwd(), os.pardir))
 
 from utils.losses import clip_sim, CustomClipLoss, Projector
-from utils.npdataset import NeuropixelsDataset, ValidationExperimentBatchSampler
+from utils.npdataset import NeuropixelsDataset_cortexlab, ValidationExperimentBatchSampler
 from utils.helpers import read_pos
 import numpy as np
 import matplotlib.pyplot as plt
@@ -15,19 +15,59 @@ from tqdm import tqdm
 import pandas as pd
 from pathlib import Path
 from sklearn.neighbors import KernelDensity
+from scipy.optimize import linear_sum_assignment
 import importlib
 from utils import helpers
 importlib.reload(helpers)
 from utils.helpers import *
 
 
+def _parse_unitmatch_good_units(unit_label_paths):
+    """
+    Mirror UnitMatchPy.utils.load_good_waveforms() selection and ordering from TSVs.
+    Returns list[list[int]] good unit IDs per session, preserving TSV row order.
+    """
+    if unit_label_paths is None:
+        return None
 
-def load_trained_model(device="cpu"):
+    good_units = []
+    is_bombcell = os.path.basename(unit_label_paths[0]) == "cluster_bc_unitType.tsv"
+
+    for path in unit_label_paths:
+        session_good = []
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                parts = line.split("\t")
+                if len(parts) < 2:
+                    continue
+                try:
+                    unit_id = int(parts[0])
+                except ValueError:
+                    # header row
+                    continue
+                label = str(parts[1]).strip().lower()
+                if is_bombcell:
+                    if label in {"good", "non-soma good"}:
+                        session_good.append(unit_id)
+                else:
+                    if label == "good":
+                        session_good.append(unit_id)
+        good_units.append(session_good)
+
+    return good_units
+
+
+
+def load_trained_model(device="cpu", read_path=None):
 
     model = SpatioTemporalCNN_V2(n_channel=30,n_time=60,n_output=256).to(device)
     model = model.double()
-    current_dir = Path(__file__).parent.parent
-    read_path = current_dir / "utils" / "model"
+    if read_path is None:
+        current_dir = Path(__file__).parent.parent
+        read_path = current_dir / "utils" / "model"
     checkpoint = torch.load(read_path)
     model.load_state_dict(checkpoint['model'])
     clip_loss = CustomClipLoss().to(device)
@@ -65,25 +105,27 @@ def reorder_by_depth(matrix:np.ndarray, pos1:np.ndarray, pos2) -> np.ndarray:
     
     return sorted_matrix
 
-def inference(model, data_dir):
+def inference(model, data_dir, unit_label_paths=None):
 
-    test_dataset = NeuropixelsDataset(data_dir)
+    # If you pass `unit_label_paths` (the same TSV paths used by UnitMatchPy.utils.load_good_waveforms),
+    # this will build the dataset in the exact same per-session unit order.
+    good_units = _parse_unitmatch_good_units(unit_label_paths)
+    unit_order = good_units if good_units is not None else "unitmatch"
+    test_dataset = NeuropixelsDataset_cortexlab(data_dir, unit_order=unit_order)
     test_sampler = ValidationExperimentBatchSampler(test_dataset, shuffle = False)
     test_loader = DataLoader(test_dataset, batch_sampler=test_sampler)
 
     submatrices = []
-    positions = []
     n_batches = len(test_loader)
 
     for estimates_i, _, positions_i, exp_ids_i, filepaths_i in tqdm(test_loader):
         # Forward pass
         enc_estimates_i = model(estimates_i)        # shape [bsz, 256]
-        positions.append(positions_i)
 
         for _, candidates_j, positions_j, exp_ids_j, filepaths_j in tqdm(test_loader):
             enc_candidates_j = model(candidates_j)
             s = clip_sim(enc_estimates_i, enc_candidates_j)
-            submatrices.append(reorder_by_depth(s.detach().cpu().numpy(), positions_i, positions_j))
+            submatrices.append(s.detach().cpu().numpy())
     
     result_rows = []
     for i in range(n_batches):
@@ -149,6 +191,17 @@ def directional_filter_df(matches: pd.DataFrame):
             filtered_matches = filtered_matches.drop(idx)  # Drop if no reverse match is found
     return filtered_matches
 
+def directional_filter(sim_matrix, session_id, threshold):
+    """
+    Matrix version of directional_filter_df.
+    Returns a boolean matrix where (i,j) is True only if both (i,j) and (j,i)
+    exceed the threshold and belong to different sessions.
+    """
+    above_thresh = sim_matrix > threshold
+    across_session = session_id[:, None] != session_id[None, :]
+    candidates = above_thresh & across_session
+    return candidates & candidates.T
+
 def remove_conflicts(matches: pd.DataFrame, metric: str):
     
     # Find the best match for each neuron1 (RecSes1, ID1 combination)
@@ -170,7 +223,49 @@ def remove_conflicts(matches: pd.DataFrame, metric: str):
 
     return filtered_matches, num_conflicts
 
-def get_matches(df, sim_matrix, session_id, data_dir, pos_array, dist_thresh):
+def remove_conflicts_matrix(sim_matrix, candidates):
+    """
+    Matrix version of remove_conflicts using the Hungarian algorithm.
+    Finds the globally optimal 1-to-1 assignment that maximises total similarity.
+
+    Parameters
+    ----------
+    sim_matrix : np.ndarray (n, n) — similarity scores
+    candidates : np.ndarray (n, n) bool — mask of eligible matches
+
+    Returns
+    -------
+    matches : np.ndarray (n, n) bool
+    num_conflicts : int
+    """
+    active_rows = np.where(candidates.any(axis=1))[0]
+    active_cols = np.where(candidates.any(axis=0))[0]
+
+    if len(active_rows) == 0 or len(active_cols) == 0:
+        return np.zeros_like(candidates, dtype=bool), int(candidates.sum())
+
+    # Extract submatrix of active neurons only
+    sub_sim = sim_matrix[np.ix_(active_rows, active_cols)]
+    sub_cand = candidates[np.ix_(active_rows, active_cols)]
+
+    # Set non-candidate entries to large negative so they're never assigned
+    sub_cost = np.where(sub_cand, sub_sim, -1e9)
+
+    # Hungarian algorithm — globally optimal 1-to-1 assignment
+    ri, ci = linear_sum_assignment(sub_cost, maximize=True)
+
+    # Keep only assignments that were actual candidates
+    valid = sub_cand[ri, ci]
+    ri, ci = ri[valid], ci[valid]
+
+    # Map back to original indices
+    matches = np.zeros_like(candidates, dtype=bool)
+    matches[active_rows[ri], active_cols[ci]] = True
+
+    num_conflicts = int(candidates.sum() - matches.sum())
+    return matches, num_conflicts
+
+def get_matches(df, sim_matrix, session_id, data_dir, dist_thresh):
     """
     Process the output probability matrix to get final set of matches across sessions.
     Output is the probability matrix of matches after thresholding and filtering and a boolean matrix indicating final matches.
@@ -189,7 +284,6 @@ def get_matches(df, sim_matrix, session_id, data_dir, pos_array, dist_thresh):
     for session in sessions:
         session_path = os.path.join(data_dir, str(session))
         positions[session] = read_pos(session_path)
-        positions[session]['ID'] = positions[session]['ID'].values - positions[session]['ID'].min()
     corrections = get_corrections(matches, positions)
     matches_with_dist = vectorised_drift_corrected_dist(corrections, positions, matches)
     matches = matches_with_dist.loc[matches_with_dist["dist"]<dist_thresh]
@@ -363,7 +457,13 @@ def AUC(matches:np.ndarray, func_metric:np.ndarray, session_id):
             fp+=1
         recall.append(tp/P)
         fpr.append(fp/N)
-    auc = np.trapezoid(recall, fpr)
+
+    # NumPy compatibility: `np.trapezoid` exists in newer NumPy versions;
+    # `np.trapz` is the older equivalent.
+    if hasattr(np, "trapezoid"):
+        auc = np.trapezoid(recall, fpr)
+    else:
+        auc = np.trapz(recall, fpr)
     return auc
 
 

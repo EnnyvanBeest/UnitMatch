@@ -26,16 +26,16 @@ def merge_split_unit(row, spk_df:pd.DataFrame, data_dir):
     weight2 = len(clus[np.where((clus==row['ID2']))]) / len(merged)
     
     exp_id = spk_df.loc[spk_df['recses']==row['RecSes1'], 'recses'].item()
-    waveforms_dir = os.path.join(data_dir, str(exp_id-1))
-    wave1 = os.path.join(waveforms_dir, f"Unit{str(int(row['ID1']))}.npy")
-    wave2 = os.path.join(waveforms_dir, f"Unit{str(int(row['ID2']))}.npy")
+    waveforms_dir = os.path.join(data_dir, str(exp_id))
+    wave1 = os.path.join(waveforms_dir, f"Unit{str(int(row['ID1']))}_RawSpikes.npy")
+    wave2 = os.path.join(waveforms_dir, f"Unit{str(int(row['ID2']))}_RawSpikes.npy")
     with h5py.File(wave1, 'r') as f1:
         waveform1 = f1['waveform'][()]
         msp1 = f1['MaxSitepos'][()]
     with h5py.File(wave2, 'r') as f2:
         waveform2 = f2['waveform'][()]
     new_waveform = weight1 * waveform1 + weight2 * waveform2
-    save_path = os.path.join(waveforms_dir, f"Unit{str(int(row['ID1']))}+{str(int(row['ID2']))}.npy")
+    save_path = os.path.join(waveforms_dir, f"Unit{str(int(row['ID1']))}+{str(int(row['ID2']))}_RawSpikes.npy")
     new_data = {
         "waveform": new_waveform,          # (60,30,2) 
         "MaxSitepos": msp1
@@ -187,9 +187,9 @@ def merge_and_remove_splits(param, prob_matrix, session_id, model, data_dir, max
     removals = {i: [] for i in range(n_sessions)}  # Initialize removals dict for all sessions
     
     for s, id in zip(sessions, ids):
-        dir = os.path.join(data_dir, str(s-1))
-        file = os.path.join(dir, f"Unit{id}.npy")
-        newfile = os.path.join(dir, f"Unit{id}#.npy")
+        dir = os.path.join(data_dir, str(s))
+        file = os.path.join(dir, f"Unit{id}_RawSpikes.npy")
+        newfile = os.path.join(dir, f"Unit{id}#_RawSpikes.npy")
         os.rename(file, newfile)
         removals[s].append(id)
 

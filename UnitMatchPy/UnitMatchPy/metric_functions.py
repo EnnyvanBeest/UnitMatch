@@ -118,7 +118,7 @@ def get_waveforms_mse(avg_waveform, param):
     waveform_mse = re_scale(raw_wave_mse_norm)
     return waveform_mse
 
-def flip_dim(avg_waveform_per_tp, param):
+def flip_dim(avg_waveform_per_tp, param, n=None):
     """
     Creates a version of the weighted average waveform per time point, where the x axis is flipped, due to the effect
     where the average position tends to wards the center of the x coords when the wave is decaying
@@ -135,7 +135,10 @@ def flip_dim(avg_waveform_per_tp, param):
     ndarray
         The average waveform per time point with the x axis flipped and not flipped 
     """
-    n_units = param['n_units']
+    if n is not None:
+        n_units = n
+    else:
+        n_units = param['n_units']
     spike_width = param['spike_width']
 
     flip_dim = np.array((1,)) # BE CAREFUL HERE, Which dimension is the x-axis  
@@ -152,7 +155,7 @@ def flip_dim(avg_waveform_per_tp, param):
 
     return avg_waveform_per_tp_flip
 
-def get_Euclidean_dist(avg_waveform_per_tp_flip,param):
+def get_Euclidean_dist(avg_waveform_per_tp_flip,param, n=None):
     """
     Calculated the Euclidean distance between the units at each time point and for the flipped axis case
 
@@ -170,7 +173,10 @@ def get_Euclidean_dist(avg_waveform_per_tp_flip,param):
     """
     # Memory-efficient implementation using loops instead of massive tiling
     waveidx = param['waveidx']
-    n_units = param['n_units']
+    if n is not None:
+        n_units = n
+    else:
+        n_units = param['n_units']
     
     # Extract the relevant slices once
     data_cv0 = avg_waveform_per_tp_flip[:,:,waveidx,0,:]  # (3, n_units, len(waveidx), n_flips)
@@ -186,13 +192,13 @@ def get_Euclidean_dist(avg_waveform_per_tp_flip,param):
             unit_i_data = data_cv0[:, i, :, :]  # (3, len(waveidx), n_flips)
             unit_j_data = data_cv1[:, j, :, :]  # (3, len(waveidx), n_flips)
             
-            # Check for NaN values
-            w = np.isnan(np.abs(unit_i_data[0,:,:] - unit_j_data[0,:,:]))
-            
             # Compute Euclidean distance between units i and j
             diff = unit_i_data - unit_j_data  # (3, len(waveidx), n_flips)
             tmp_euclid = np.linalg.norm(diff, axis=0)  # (len(waveidx), n_flips)
-            tmp_euclid[w] = np.nan
+
+            # Be explicit about NaNs across any spatial dimension
+            nan_mask = np.isnan(diff).any(axis=0)
+            tmp_euclid[nan_mask] = np.nan
             
             # Store result
             euclid_dist[i, :, :, j] = tmp_euclid
@@ -216,19 +222,30 @@ def centroid_metrics(euclid_dist, param):
         An array (n_units, n_units) of scores for centroid distance and variance
     """
     max_dist = param['max_dist']
-    waveidx = param['waveidx']
-    new_peak_loc = param['peak_loc']    
+    waveidx = np.asarray(param['waveidx'])
+    peak_loc = int(param['peak_loc'])
 
-    centroid_dist = np.nanmin( euclid_dist[:,new_peak_loc - waveidx ==0,:,:].squeeze(), axis =1 ).squeeze()
+    peak_matches = np.flatnonzero(waveidx == peak_loc)
+    if peak_matches.size == 0:
+        raise ValueError("param['peak_loc'] must be present in param['waveidx'].")
+    peak_idx = int(peak_matches[0])
 
+    # euclid_dist: (n_units, n_waveidx, n_flips, n_units)
+    centroid_dist = np.nanmin(euclid_dist[:, peak_idx, :, :], axis=1)
 
-    centroid_dist = 1 - ((centroid_dist - np.nanmin(centroid_dist)) / (max_dist - np.nanmin(centroid_dist)))
-    centroid_dist[centroid_dist<0] = 0
+    min_centroid_dist = np.nanmin(centroid_dist)
+    denom = max_dist - min_centroid_dist
+    if not np.isfinite(denom) or denom <= 0:
+        centroid_dist = np.zeros_like(centroid_dist)
+    else:
+        centroid_dist = 1 - ((centroid_dist - min_centroid_dist) / denom)
+        centroid_dist = np.clip(centroid_dist, 0, 1)
     centroid_dist[np.isnan(centroid_dist)] = 0
 
     #Centroid Var
     # need ddof = 1 to match with ML
-    centroid_var = np.nanmin( np.nanvar(euclid_dist, axis = 1, ddof = 1 ).squeeze(), axis =1 ).squeeze()
+    ddof = 1 if euclid_dist.shape[1] > 1 else 0
+    centroid_var = np.nanmin(np.nanvar(euclid_dist, axis=1, ddof=ddof), axis=1)
     centroid_var = np.sqrt(centroid_var)
     centroid_var = re_scale(centroid_var)
     centroid_var[np.isnan(centroid_var)] = 0
@@ -696,6 +713,14 @@ def test_matches_per_shank(pairs, avg_centroid, sid, param):
         Will return True if there is enough units per shank to do per shank drift correction
     """
 
+    pairs = np.asarray(pairs)
+    if pairs.size == 0:
+        return False
+    if pairs.ndim == 1:
+        pairs = np.expand_dims(pairs, axis=0)
+    if pairs.ndim != 2 or pairs.shape[1] != 2:
+        raise ValueError("pairs must have shape (n_pairs, 2).")
+
     do_per_shank_correction = True
 
     centroid_a = np.nanmean( avg_centroid[:,pairs[:,0],:], axis = 2)
@@ -718,10 +743,10 @@ def test_matches_per_shank(pairs, avg_centroid, sid, param):
 
             if np.all(correct_shank_a == correct_shank_b) != True:
                 #delete pairs which are on different shanks
-                bad_idx = np.argwhere(correct_shank_a != correct_shank_b)[0]
+                bad_idx = np.flatnonzero(correct_shank_a != correct_shank_b)
                 print(f'These pairs may be bad {bad_idx}, so are excluded from drift correction')
-                correct_shank_a[bad_idx]=False
-                correct_shank_b[bad_idx]=False
+                correct_shank_a[bad_idx] = False
+                correct_shank_b[bad_idx] = False
                 
             shank_id_tmp[correct_shank_a] = i
 
@@ -771,8 +796,10 @@ def drift_n_sessions(candidate_pairs, session_switch, avg_centroid, avg_waveform
     n_sessions = param['n_sessions']
     best_pairs = np.argwhere(candidate_pairs == 1)
 
-    #make it like the matlab code, (small unit idx, larger unit idx)
-    best_pairs[:, [0,1]] = best_pairs[:, [1,0]]
+    # Ensure each pair is ordered (small idx, large idx) regardless of matrix orientation
+    best_pairs = np.sort(best_pairs, axis=1)
+    if best_pairs.size > 0:
+        best_pairs = np.unique(best_pairs, axis=0)
 
     drifts = np.zeros( (n_sessions - 1, 3))
 
@@ -798,6 +825,68 @@ def drift_n_sessions(candidate_pairs, session_switch, avg_centroid, avg_waveform
             print('No pairs across sessions to perform drift correction.')
     return drifts, avg_centroid, avg_waveform_per_tp
 
+
+def drift_correct_session_pair(candidate_pairs, session_switch, avg_centroid, avg_waveform_per_tp, did, param):
+    """
+    This function applies drift correction between n_sessions, currently this is done by aligning session 2 to session 1,
+    then session 3 to session 2 etc.   
+    This function, calls another function to apply the drift correction, to be able to apply different type of drift correction 
+    easily.
+
+    Parameters
+    ----------
+    candidate_pairs : ndarray
+        An array of likely matches
+    session_switch : ndarray
+        What units does the session switch
+    avg_centroid : ndarray
+        The average centroid for each unit
+    avg_waveform_per_tp : ndarray
+        The average waveform per time point for each unit
+    did : int
+        The session id
+    param : dict
+        The param dictionary
+
+    Returns
+    -------
+    ndarray
+        avg_waveform_per_tp arrays drift corrected
+    """
+    session_switch = np.asarray(session_switch).astype(int)
+    n_units = avg_centroid.shape[1]
+    if candidate_pairs.shape != (n_units, n_units):
+        raise ValueError("candidate_pairs must have shape (n_units, n_units) matching avg_centroid/avg_waveform_per_tp.")
+    if session_switch.ndim != 1 or session_switch.size < 3:
+        raise ValueError("session_switch must be a 1D array with at least 3 entries (start, boundary, end).")
+    if session_switch[0] != 0 or session_switch[-1] != n_units:
+        raise ValueError("session_switch must be relative to the provided arrays (session_switch[0]==0 and session_switch[-1]==n_units).")
+    if did < 0 or (did + 2) >= session_switch.size:
+        raise IndexError("did out of range for session_switch.")
+
+    best_pairs = np.argwhere(candidate_pairs == 1)
+
+    # Ensure each pair is ordered (small idx, large idx) regardless of matrix orientation
+    best_pairs = np.sort(best_pairs, axis=1)
+    if best_pairs.size > 0:
+        best_pairs = np.unique(best_pairs, axis=0)
+
+    idx = np.argwhere( ( (best_pairs[:,0] >= session_switch[did]) * (best_pairs[:,0] < session_switch[did + 1]) *
+                        (best_pairs[:,1] >= session_switch[did + 1]) * (best_pairs[:,1] < session_switch[did + 2]) ) == True)
+
+    pairs = best_pairs[idx,:].squeeze()
+    if pairs.ndim == 1:
+        pairs = np.expand_dims(pairs, axis = 0)
+
+    #Test to see if there are enough matches to do drift correction per shank
+    if test_matches_per_shank(pairs, avg_centroid, did, param) == True:
+        _, avg_waveform_per_tp,_ = apply_drift_correction_per_shank(pairs, did, session_switch, avg_centroid, avg_waveform_per_tp, param)
+        print(f'Done drift correction per shank for session pair {did+1} and {did+2}')
+    elif len(pairs)>0: #if there exist pairs across sessions:
+        _, avg_waveform_per_tp,_ = apply_drift_correction_basic(pairs, did, session_switch, avg_centroid, avg_waveform_per_tp)
+    elif len(pairs)==0:
+        print('No pairs across sessions to perform drift correction.')
+    return avg_waveform_per_tp
 
 
 def get_total_score(scores_to_include, param):
