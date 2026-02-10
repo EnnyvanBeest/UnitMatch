@@ -87,4 +87,4 @@ To try the DeepUnitMatch version, start with:
 If you want to train / fine-tune a model on your own data, see:
 - `Demo Notebooks/DUM_training.ipynb`
 
-Important note: DeepUnitMatch current trained model is for Npix 2.0 4-shank only. You will need to train a new model with your own data if you have any other type of probe.
+Important note: DeepUnitMatch current trained model is for Npix 2.0 4-shank only. You will need to train a new model with your own data if you have any other type of probe. (For example, Mouse2 from the figshare data is a Npix 1 dataset, you'll notice the trained model won't give good results on this mouse for that reason.)
