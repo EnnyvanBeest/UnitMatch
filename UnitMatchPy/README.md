@@ -11,7 +11,7 @@ This repository contains:
 
 ## Versions
 
-- **UnitMatchPy version:** `3.2.9` (from `pyproject.toml`)
+- **UnitMatchPy version:** `3.3.0` (from `pyproject.toml`)
 - **DeepUnitMatch:** code lives under `DeepUnitMatch/` (see **DeepUnitMatch (DUM)** section)
 
 ## Installation
