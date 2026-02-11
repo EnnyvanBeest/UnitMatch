@@ -1,13 +1,13 @@
-# UnitMatchPy (UMPy) and DeepUnitMatch (DUM)
+# UnitMatchPy and DeepUnitMatch
 
 This repository contains:
-- **UnitMatchPy (UMPy)**: automatic matching of neurons across sessions (Python package).
-- **DeepUnitMatch (DUM)**: DeepUnitMatch pipeline and demos (see preprint below).
+- **UnitMatchPy**: automatic matching of neurons across sessions (Python package).
+- **DeepUnitMatch**: DeepUnitMatch pipeline and demos (see preprint below).
 
 ## References
 
-- **UnitMatch (UMPy):** https://www.nature.com/articles/s41592-024-02440-1
-- **DeepUnitMatch (DUM) preprint:** https://www.biorxiv.org/content/10.64898/2026.01.30.702777v1
+- **UnitMatch:** https://www.nature.com/articles/s41592-024-02440-1
+- **DeepUnitMatch preprint:** https://www.biorxiv.org/content/10.64898/2026.01.30.702777v1
 
 ## Versions
 
@@ -66,9 +66,9 @@ pip install -e ".[full,notebooks]"
 
 All demo notebooks are in `Demo Notebooks/`.
 
-### Run UnitMatchPy (UMPy)
+### Run UnitMatchPy 
 
-To run UMPy, standard spike sorting data is needed (channel positions and extracted raw waveforms for each unit). Waveforms can be extracted externally (e.g. [BombCell](https://github.com/Julie-Fabre/bombcell)) or using the demo notebooks:
+To run UnitMatchPy, standard spike sorting data is needed (channel positions and extracted raw waveforms for each unit). Waveforms can be extracted externally (e.g. [BombCell](https://github.com/Julie-Fabre/bombcell)) or using the demo notebooks:
 - `Demo Notebooks/extract_raw_data_demo.ipynb` (compressed `.cbin`/`.ch` or raw)
 - `Demo Notebooks/extract_raw_data_demo_open_ephys.ipynb` (Open Ephys)
 - `Demo Notebooks/UMPy_spike_interface_demo.ipynb` ([SpikeInterface](https://spikeinterface.readthedocs.io/en/latest/) workflow)
@@ -79,7 +79,7 @@ Example notebooks:
 
 The GUI is an optional step to curate and explore UnitMatch outputs; see `Demo Notebooks/GUI_Reference_Guide.md` for usage tips and shortcuts.
 
-## DeepUnitMatch (DUM)
+### Run DeepUnitMatch 
 
 To try the DeepUnitMatch version, start with:
 - `Demo Notebooks/DeepUnitMatch.ipynb`
