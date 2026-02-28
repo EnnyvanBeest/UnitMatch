@@ -14,6 +14,11 @@ This repository contains:
 - **UnitMatchPy version:** `3.3.0` (from `pyproject.toml`)
 - **DeepUnitMatch:** code lives under `DeepUnitMatch/` (see **DeepUnitMatch (DUM)** section)
 
+## System requirements
+
+Both UnitMatchPy and DeepUnitMatch can be ran on a standrad computer, with sufficient RAM (>32GB for large datasets). 
+This software is supported for Windows and macOS, and has been tested on Windows 11.
+
 ## Installation
 
 `pip install` (including `pip install -e .`) installs into whatever Python environment your `pip` points to (system Python, a conda env, or a virtualenv). `pip` does **not** create or name environments.
@@ -26,7 +31,7 @@ conda create -n UMPy python=3.11 pip #(press y when prompted)
 conda activate UMPy
 ```
 
-Then install using pip (options below).
+Then install using pip (options below). This step should take less than few minutes.
 
 ### Option A: Install the released package (PyPI)
 
@@ -83,6 +88,8 @@ The GUI is an optional step to curate and explore UnitMatch outputs; see `Demo N
 
 To try the DeepUnitMatch version, start with:
 - `Demo Notebooks/DeepUnitMatch.ipynb`
+
+It should take just a few minutes to run on a standard PC. 
 
 If you want to train / fine-tune a model on your own data, see:
 - `Demo Notebooks/DUM_training.ipynb`
