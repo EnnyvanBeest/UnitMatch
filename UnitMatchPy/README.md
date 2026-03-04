@@ -51,10 +51,10 @@ First, open a terminal and navigate to this folder (the one containing `pyprojec
 
 ```bash
 # Windows (PowerShell)
-cd $HOME\Documents\GitHub\DeepUnitMatch\UnitMatchPy
+cd $HOME\Documents\GitHub\UnitMatch\UnitMatchPy
 
 # macOS / Linux
-cd ~/Documents/GitHub/DeepUnitMatch/UnitMatchPy
+cd ~/Documents/GitHub/UnitMatch/UnitMatchPy
 ```
 
 ```bash
