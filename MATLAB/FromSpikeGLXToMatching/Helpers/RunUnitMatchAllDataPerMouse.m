@@ -250,11 +250,12 @@ for midx = 1:length(MiceOpt)
                 % Evaluate (within unit ID cross-validation)
                 EvaluatingUnitMatch(UMparam.SaveDir);
     
-                %% Function analysis
-                ComputeFunctionalScores(UMparam.SaveDir,1)
-                  % Visualization
+                % Visualization
                 PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo)
 
+                %% Function analysis
+                ComputeFunctionalScores(UMparam.SaveDir,1)
+                
                 if UMparam.AssignUniqueID % Sanity check
                     summaryMatchingPlots(UMparam.SaveDir,{'UID1Liberal','UID1','UID1Conservative'},1,0)
                 end

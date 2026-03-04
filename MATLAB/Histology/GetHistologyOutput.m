@@ -217,11 +217,18 @@ if exist('clusinfo','var') & ~isempty(Depth2Area)
                 % Find area with this new structure id
             tmpareaname = atlastable.acronym{find(ismember(atlastable.structure_id_path,newstructure_id_path))};
         end
+
+        % Group auditory cortex regions together (audp/audd/audv/audpo/etc -> aud).
+        [tmpareaname, forcedFullName] = local_groupAuditoryAcronym(tmpareaname);
         %Does this one already exist in Automatic AREAS Of Interest?
         if ~any(ismember(AutomaticAREASOfInterest,tmpareaname))
             %no, then create
             AutomaticAREASOfInterest = {AutomaticAREASOfInterest{:} tmpareaname};
-            AutomaticAREASOfInterestFullName = {AutomaticAREASOfInterestFullName{:} atlastable.name{find(ismember(atlastable.structure_id_path,newstructure_id_path))}};
+            if ~isempty(forcedFullName)
+                AutomaticAREASOfInterestFullName = {AutomaticAREASOfInterestFullName{:} forcedFullName};
+            else
+                AutomaticAREASOfInterestFullName = {AutomaticAREASOfInterestFullName{:} atlastable.name{find(ismember(atlastable.structure_id_path,newstructure_id_path))}};
+            end
             % Use average color scheme
             ColPerFullArea = cat(1,ColPerFullArea,nanmean(clusinfo.Color(ismember(Area,areaopt{areaid}),:),1));
             ccfIdx = {ccfIdx{:} find(ismember(lower(atlastable.acronym),areaopt{areaid}))};
@@ -232,7 +239,11 @@ if exist('clusinfo','var') & ~isempty(Depth2Area)
         % Index correctly
         automaticareasofinterestid(areaid) = find(ismember(AutomaticAREASOfInterest,tmpareaname));
         newareaabrev(ismember(Area,areaopt{areaid})) = {tmpareaname};
-        newareaname(ismember(Area,areaopt{areaid}))={atlastable.name{find(ismember(atlastable.structure_id_path,newstructure_id_path))}}; %Save out per unit
+        if ~isempty(forcedFullName)
+            newareaname(ismember(Area,areaopt{areaid}))={forcedFullName}; %Save out per unit
+        else
+            newareaname(ismember(Area,areaopt{areaid}))={atlastable.name{find(ismember(atlastable.structure_id_path,newstructure_id_path))}}; %Save out per unit
+        end
     end
     if any(ismember(AutomaticAREASOfInterest,{'root','vs','fiber tracts','cc','fxs'})) % make these void
         AutomaticAREASOfInterestFullName(ismember(AutomaticAREASOfInterest,{'root','vs','fiber tracts','cc','fxs'}))={'root'};
@@ -256,4 +267,22 @@ if exist('tmp') && isstruct(tmp) && isfield(tmp,'VRDat')
         tmp.VRDat.Coordinates(cid,:) = clusinfo.Coordinates(idx,:);
     end
 
+end
+
+function [acrOut, forcedFullName] = local_groupAuditoryAcronym(acrIn)
+% Group auditory cortical regions together.
+% Allen acronyms typically include AUDp/AUDd/AUDv/AUDpo etc.
+acrOut = acrIn;
+forcedFullName = '';
+if isempty(acrIn)
+    return
+end
+if isstring(acrOut)
+    acrOut = char(acrOut);
+end
+acrLow = lower(strtrim(acrOut));
+if startsWith(acrLow, 'aud')
+    acrOut = 'aud';
+    forcedFullName = 'Auditory cortex';
+end
 end
