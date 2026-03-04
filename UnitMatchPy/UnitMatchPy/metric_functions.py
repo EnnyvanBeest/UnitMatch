@@ -418,17 +418,39 @@ def get_threshold(total_score, within_session, euclid_dist, param, is_first_pass
     tmp[within_session == 1] = np.nan
 
     hd, __ = np.histogram(np.diag(tmp), Bins)
-    hd = hd /  param['n_units']
-    hnd, __ = np.histogram( (tmp - tmp *np.eye(param['n_units'])), Bins)
-    hnd = hnd / np.nansum( (tmp - tmp *np.eye(param['n_units'])) )
-    hp, __ = np.histogram(tmp, Bins)
-    hp = hp / np.nansum(tmp)
+    n_units = int(param['n_units'])
+    hd = hd / max(n_units, 1)
 
-    thrs_opt = score_vector[np.argwhere( (pf.smooth(hd,3) > pf.smooth(hnd,3) ) * (score_vector > 0.6) == True)][0]
+    off_diag = tmp - tmp * np.eye(n_units)
+    hnd, __ = np.histogram(off_diag, Bins)
+    hnd_denom = np.nansum(off_diag)
+    if (not np.isfinite(hnd_denom)) or hnd_denom == 0:
+        hnd = np.zeros_like(hnd, dtype=float)
+    else:
+        hnd = hnd / hnd_denom
+    hp, __ = np.histogram(tmp, Bins)
+    hp_denom = np.nansum(tmp)
+    if (not np.isfinite(hp_denom)) or hp_denom == 0:
+        hp = np.zeros_like(hp, dtype=float)
+    else:
+        hp = hp / hp_denom
+
+    hd_s = pf.smooth(hd, 3)
+    hnd_s = pf.smooth(hnd, 3)
+
+    # Guard against edge cases where the histograms (or their normalisations) yield no crossing.
+    min_len = min(score_vector.shape[0], hd_s.shape[0], hnd_s.shape[0])
+    score_vector_use = score_vector[:min_len]
+    mask = (hd_s[:min_len] > hnd_s[:min_len]) & (score_vector_use > 0.6)
+    crossing_idx = np.flatnonzero(mask)
+    if crossing_idx.size == 0:
+        thrs_opt = 0.6
+    else:
+        thrs_opt = float(score_vector_use[crossing_idx[0]])
     # if ThrsOpt.size == 0:
     #     ThrsOpt = 0.6 # give default threshold if above doestn return value
     # fit tmp to a normal ditn
-    fit = tmp[ ~np.isnan(tmp) * (tmp < thrs_opt)]
+    fit = tmp[(~np.isnan(tmp)) & (tmp < thrs_opt)]
     muw = np.mean(fit)
     stdw = np.std(fit)
 
@@ -442,8 +464,12 @@ def get_threshold(total_score, within_session, euclid_dist, param, is_first_pass
             tmp[within_session == 0] = np.nan
 
             ha, __ = np.histogram(tmp, Bins)
-            ha = ha / np.nansum(tmp)
-            fit = tmp[ ~np.isnan(tmp) * (tmp < thrs_opt)]
+            ha_denom = np.nansum(tmp)
+            if (not np.isfinite(ha_denom)) or ha_denom == 0:
+                ha = np.zeros_like(ha, dtype=float)
+            else:
+                ha = ha / ha_denom
+            fit = tmp[(~np.isnan(tmp)) & (tmp < thrs_opt)]
             mua = np.mean(fit)
             stda = np.std(fit)
 
@@ -451,7 +477,7 @@ def get_threshold(total_score, within_session, euclid_dist, param, is_first_pass
             # for first pass only (i.e before drift correction)
             #This is to decrease the threshold for the first pass so that the threshold is lowered
             # as without drift correction even matches should have a lower total score
-            if (~np.isnan(mua) and mua<muw):
+            if np.isfinite(mua) and np.isfinite(muw) and (mua < muw):
                 thrs_opt = thrs_opt - np.abs(muw - mua)
 
     return thrs_opt
