@@ -50,7 +50,9 @@ pip install "UnitMatchPy[full,notebooks]"
 First, open a terminal and navigate to this folder (the one containing `pyproject.toml`). The `pip install -e` command must be run from here:
 
 ```bash
-# Windows (PowerShell)
+# Windows (PowerShell) - note; you may have to give writing access to the specific CONDA environment via Windows Security → Virus & threat protection → Ransomware protection → Manage ransomware protection. For example, if the below steps result in "could not create 'UnitMatchPy.egg-info'"
+
+Look at Controlled folder access:
 cd $HOME\Documents\GitHub\UnitMatch\UnitMatchPy
 
 # macOS / Linux
