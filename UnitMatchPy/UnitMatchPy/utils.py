@@ -25,6 +25,29 @@ def load_tsv(path):
     df  = pd.read_csv(path, sep='\t', skiprows = 0)
     return df.values
 
+def find_unit_label_path(KS_dir):
+    """
+    Find the best available Kilosort/BombCell/Phy cluster label file in a KS output directory.
+
+    Preference order keeps existing behavior (curated labels first when present):
+    - BombCell: cluster_bc_unitType.tsv
+    - Phy: cluster_group.tsv
+    - Raw Kilosort: cluster_KSLabel.tsv
+    """
+    candidates = (
+        'cluster_bc_unitType.tsv',
+        'cluster_group.tsv',
+        'cluster_KSLabel.tsv',
+    )
+    for fname in candidates:
+        path = os.path.join(KS_dir, fname)
+        if os.path.exists(path):
+            return path
+    raise FileNotFoundError(
+        f"Could not find any unit label file in {KS_dir}. "
+        f"Tried: {', '.join(candidates)}"
+    )
+
 def get_session_number(unit_id, session_switch):
     """
     Finds the session number of a unit given its id and the session_switch array
@@ -191,7 +214,7 @@ def get_good_units(unit_label_paths, good = True):
     ----------
     unit_label_paths : list
         A list were each entry is a path to either BombCell good units (cluster_bc_unitType.tsv)
-        or the KiloSort good units (cluster_group.tsv') for each session
+        or a KiloSort/Phy label file (cluster_group.tsv or cluster_KSLabel.tsv) for each session
     good : bool, optional
         If True will only load in units marked good
         If False will load all units labeled in the given .tsv, by default True
@@ -581,12 +604,15 @@ def paths_from_KS(KS_dirs, custom_raw_waveform_paths=None, custom_bombcell_paths
         unit_label_paths = []
         # load Good unit Paths
         for i in range(n_sessions):
-            if os.path.exists(os.path.join(KS_dirs[i], 'cluster_bc_unitType.tsv')):
-               unit_label_paths.append( os.path.join(KS_dirs[i], 'cluster_bc_unitType.tsv')) 
-               print('Using BombCell: cluster_bc_unitType')
-            else:
-                unit_label_paths.append( os.path.join(KS_dirs[i], 'cluster_group.tsv'))
-                print('Using cluster_group.tsv')
+            label_path = find_unit_label_path(KS_dirs[i])
+            unit_label_paths.append(label_path)
+            label_name = os.path.basename(label_path)
+            if label_name == 'cluster_bc_unitType.tsv':
+                print('Using BombCell: cluster_bc_unitType.tsv')
+            elif label_name == 'cluster_group.tsv':
+                print('Using Phy: cluster_group.tsv')
+            elif label_name == 'cluster_KSLabel.tsv':
+                print('Using KiloSort: cluster_KSLabel.tsv')
     
     return wave_paths, unit_label_paths, channel_pos
 

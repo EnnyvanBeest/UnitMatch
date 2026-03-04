@@ -308,7 +308,7 @@ def extract_KS_data(KS_dirs, extract_good_units_only = False):
 
         # load Good unit Paths
         for i in range(n_sessions):
-            unit_labels_paths.append( os.path.join(KS_dirs[i], 'cluster_group.tsv'))
+            unit_labels_paths.append(util.find_unit_label_path(KS_dirs[i]))
 
         good_units = util.get_good_units(unit_labels_paths)
 
