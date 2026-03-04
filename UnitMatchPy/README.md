@@ -16,7 +16,7 @@ This repository contains:
 
 ## System requirements
 
-Both UnitMatchPy and DeepUnitMatch can be ran on a standrad computer, with sufficient RAM (>32GB for large datasets). 
+Both UnitMatchPy and DeepUnitMatch can be ran on a standard computer, with sufficient RAM (>32GB for large datasets). 
 This software is supported for Windows and macOS, and has been tested on Windows 11.
 
 ## Installation
