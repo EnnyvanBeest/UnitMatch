@@ -611,7 +611,18 @@ def get_probe_geometry(channel_pos, param, verbose = False):
         The param dictionary updated with the calculated params
     """
     min_new_shank_distance = param['min_new_shank_distance']
-    x_val = np.unique(channel_pos[:,0])
+
+    # `channel_pos` is either (n_channels, 2) [x, y] or (n_channels, 3) where
+    # the first column is a placeholder (currently filled with 1s in `paths_from_KS`)
+    # and x/y are stored in columns 1/2. Filter NaNs to support excluded channels.
+    channel_pos = np.asarray(channel_pos)
+    x_col = 1 if channel_pos.shape[1] >= 3 else 0
+    x = channel_pos[:, x_col]
+    x = x[np.isfinite(x)]
+    if x.size == 0:
+        x_val = np.array([0.0])
+    else:
+        x_val = np.unique(x)
     x_val = np.sort(x_val) #make sure they are in ascending order 
     x_spacing = np.diff(x_val)
     too_close = np.argwhere(x_spacing < min_new_shank_distance)
