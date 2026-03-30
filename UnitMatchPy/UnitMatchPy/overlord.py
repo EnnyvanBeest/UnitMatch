@@ -83,18 +83,14 @@ def extract_metric_scores(extracted_wave_properties, session_switch, within_sess
     #effected by drift
     for i in range(niter):
         avg_waveform_per_tp_flip = mf.flip_dim(avg_waveform_per_tp, param)
-        euclid_dist = mf.get_Euclidean_dist(avg_waveform_per_tp_flip, param)
 
-        centroid_dist, centroid_var = mf.centroid_metrics(euclid_dist, param)
+        centroid_dist, centroid_var, euclid_dist = mf.get_euclidean_metrics_chunked(
+            avg_waveform_per_tp_flip, param)
 
-        euclid_dist_rc = mf.get_recentered_euclidean_dist(avg_waveform_per_tp_flip, avg_centroid, param)
+        centroid_dist_recentered = mf.get_recentered_metrics_chunked(
+            avg_waveform_per_tp_flip, avg_centroid, param)
 
-        centroid_dist_recentered = mf.recentered_metrics(euclid_dist_rc)
         traj_angle_score, traj_dist_score = mf.dist_angle(avg_waveform_per_tp_flip, param)
-
-
-        # Average Euc Dist
-        euclid_dist = np.nanmin(euclid_dist[:,param['peak_loc'] - param['waveidx'] == 0, :,:].squeeze(), axis = 1 )
 
         # TotalScore
         include_these_pairs = np.argwhere( euclid_dist < param['max_dist']) #array indices of pairs to include

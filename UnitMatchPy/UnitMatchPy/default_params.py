@@ -27,6 +27,7 @@ def get_default_param(param = None):
             'units_per_shank_thrs' : 15, # threshold for doing per shank drift correction
             'match_threshold' : 0.5, # probability threshold to consider as a match
             'curve_fit_maxfev' : 10000, # max evaluations for decay curve fitting
+            'chunk_size' : 500, # row-chunk size for pairwise metric computation
         }
     
     tmp['score_vector'] = np.arange(tmp['stepsz']/2 ,1 ,tmp['stepsz'])
