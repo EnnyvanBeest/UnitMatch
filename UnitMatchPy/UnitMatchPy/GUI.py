@@ -1792,7 +1792,7 @@ def plot_raw_waveforms(unit_a, unit_b, CV):
         good_channels = nearest_channels(max_site, max_site_mean, channel_pos, clus_info, unit_a, CV[0])
 
         min_x, min_y = channel_pos[session_no_a][good_channels[-2],[1,2]].squeeze()
-        max_x, sub_max_y = channel_pos[session_no_a][good_channels[1],[1,2]].squeeze()
+        max_x, maxy = channel_pos[session_no_a][good_channels[1],[1,2]].squeeze()
         delta_x = (max_x - min_x) / 2
         delta_y = (maxy - min_y) / 18
         #may want to change so it find this for both units and selects the most extreme arguments
