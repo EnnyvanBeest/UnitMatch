@@ -252,6 +252,155 @@ def centroid_metrics(euclid_dist, param):
 
     return centroid_dist, centroid_var
 
+def get_euclidean_metrics_chunked(avg_waveform_per_tp_flip, param):
+    """
+    Memory-efficient computation of Euclidean centroid metrics.
+
+    Fuses get_Euclidean_dist + centroid_metrics + peak-slice reduction into a single
+    pass that processes units in row-chunks, avoiding the full (N, waveidx, flips, N)
+    intermediate array. Produces identical results to the original three-step pipeline.
+
+    Parameters
+    ----------
+    avg_waveform_per_tp_flip : ndarray (3, n_units, spike_width, 2, n_flips)
+        The average waveform per time point with the x axis flipped and not flipped
+    param : dict
+        The param dictionary. Uses 'chunk_size' (default 500) to control the
+        number of rows processed per iteration.
+
+    Returns
+    -------
+    centroid_dist : ndarray (n_units, n_units)
+        Rescaled centroid distance score at peak timepoint
+    centroid_var : ndarray (n_units, n_units)
+        Rescaled centroid variance score across timepoints
+    euclid_dist : ndarray (n_units, n_units)
+        Raw (unscaled) Euclidean distance at peak timepoint, minimized over flips.
+        Used downstream for distance-based pair filtering.
+    """
+    waveidx = param['waveidx']
+    n_units = param['n_units']
+    max_dist = param['max_dist']
+    chunk_size = max(1, param.get('chunk_size', 500))
+
+    waveidx_arr = np.asarray(waveidx)
+    peak_loc = int(param['peak_loc'])
+    peak_matches = np.flatnonzero(waveidx_arr == peak_loc)
+    if peak_matches.size == 0:
+        raise ValueError("param['peak_loc'] must be present in param['waveidx'].")
+    peak_idx = int(peak_matches[0])
+
+    n_waveidx = len(waveidx)
+    ddof = 1 if n_waveidx > 1 else 0
+
+    # Extract relevant slices: (3, N, len_waveidx, n_flips)
+    data_cv0 = avg_waveform_per_tp_flip[:, :, waveidx, 0, :]
+    data_cv1 = avg_waveform_per_tp_flip[:, :, waveidx, 1, :]
+
+    # Preallocate (N, N) outputs
+    raw_centroid_dist = np.full((n_units, n_units), np.nan)
+    raw_centroid_var = np.full((n_units, n_units), np.nan)
+
+    for i_start in range(0, n_units, chunk_size):
+        i_end = min(i_start + chunk_size, n_units)
+        # (3, chunk, 1, waveidx, flips) - (3, 1, N, waveidx, flips) = (3, chunk, N, waveidx, flips)
+        diff = (data_cv0[:, i_start:i_end, np.newaxis, :, :]
+                - data_cv1[:, np.newaxis, :, :, :])
+        # Euclidean norm over spatial dims -> (chunk, N, waveidx, flips)
+        ed = np.linalg.norm(diff, axis=0)
+        del diff
+
+        # centroid_dist: distance at peak, min over flips
+        raw_centroid_dist[i_start:i_end, :] = np.nanmin(ed[:, :, peak_idx, :], axis=-1)
+
+        # centroid_var: variance over waveidx, min over flips
+        raw_centroid_var[i_start:i_end, :] = np.nanmin(
+            np.nanvar(ed, axis=2, ddof=ddof), axis=-1)
+        del ed
+
+    # euclid_dist is the raw centroid distance (before rescaling)
+    euclid_dist = raw_centroid_dist.copy()
+
+    # Rescale centroid_dist using max_dist (same as centroid_metrics)
+    min_cd = np.nanmin(raw_centroid_dist)
+    denom = max_dist - min_cd
+    if not np.isfinite(denom) or denom <= 0:
+        centroid_dist = np.zeros_like(raw_centroid_dist)
+    else:
+        centroid_dist = 1 - ((raw_centroid_dist - min_cd) / denom)
+        centroid_dist = np.clip(centroid_dist, 0, 1)
+    centroid_dist[np.isnan(centroid_dist)] = 0
+
+    # Rescale centroid_var (same as centroid_metrics)
+    centroid_var = np.sqrt(raw_centroid_var)
+    centroid_var = re_scale(centroid_var)
+    centroid_var[np.isnan(centroid_var)] = 0
+
+    return centroid_dist, centroid_var, euclid_dist
+
+def get_recentered_metrics_chunked(avg_waveform_per_tp_flip, avg_centroid, param):
+    """
+    Memory-efficient computation of recentered centroid distance metric.
+
+    Fuses get_recentered_euclidean_dist + recentered_metrics into a single pass.
+    First subtracts each unit's average centroid position from its per-timepoint
+    waveform trajectory, then computes pairwise Euclidean distances in row-chunks
+    to avoid the full (N, waveidx, flips, N) intermediate array.
+
+    Parameters
+    ----------
+    avg_waveform_per_tp_flip : ndarray (3, n_units, spike_width, 2, n_flips)
+        The average waveform per time point with the x axis flipped and not flipped
+    avg_centroid : ndarray (3, n_units, 2)
+        The average spatial location for each unit, subtracted before distance
+        computation to isolate trajectory shape from absolute position.
+    param : dict
+        The param dictionary. Uses 'chunk_size' (default 500) to control the
+        number of rows processed per iteration.
+
+    Returns
+    -------
+    centroid_dist_recentered : ndarray (n_units, n_units)
+        Rescaled recentered centroid distance score
+    """
+    waveidx = param['waveidx']
+    n_units = param['n_units']
+    spike_width = param['spike_width']
+    chunk_size = max(1, param.get('chunk_size', 500))
+
+    # Recenter: subtract avg_centroid from each timepoint (per-unit, no N×N)
+    avg_centroid_broadcast = np.tile(
+        np.expand_dims(avg_centroid, axis=(3, 4)), (1, 1, 1, spike_width, 2))
+    recentered = np.swapaxes(
+        np.swapaxes(avg_waveform_per_tp_flip, 2, 3) - avg_centroid_broadcast, 2, 3)
+    del avg_centroid_broadcast
+
+    # Extract CV halves at waveidx: (3, N, len_waveidx, n_flips)
+    rc_cv0 = recentered[:, :, waveidx, 0, :]
+    rc_cv1 = recentered[:, :, waveidx, 1, :]
+    del recentered
+
+    raw_result = np.full((n_units, n_units), np.nan)
+
+    for i_start in range(0, n_units, chunk_size):
+        i_end = min(i_start + chunk_size, n_units)
+        # (3, chunk, 1, waveidx, flips) - (3, 1, N, waveidx, flips) = (3, chunk, N, waveidx, flips)
+        diff = (rc_cv0[:, i_start:i_end, np.newaxis, :, :]
+                - rc_cv1[:, np.newaxis, :, :, :])
+        # Euclidean norm over spatial dims -> (chunk, N, waveidx, flips)
+        ed = np.linalg.norm(diff, axis=0)
+        del diff
+
+        # recentered_metrics: mean over waveidx, then min over flips
+        raw_result[i_start:i_end, :] = np.nanmin(
+            np.nanmean(ed, axis=2), axis=-1)
+        del ed
+
+    centroid_dist_recentered = re_scale(raw_result)
+    centroid_dist_recentered[np.isnan(centroid_dist_recentered)] = 0
+
+    return centroid_dist_recentered
+
 def get_recentered_euclidean_dist(avg_waveform_per_tp_flip, avg_centroid, param):
     """
     Find a Euclidean distance where the location per time has been centered around the average position
