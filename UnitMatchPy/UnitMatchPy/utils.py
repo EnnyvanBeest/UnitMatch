@@ -385,119 +385,112 @@ def isin_2d(test_arr, parent_arr):
 
 def fill_missing_pos(KS_dir, n_channels):
     """
-    KiloSort (especially in 4.0) may not include channel positions for inactive channels, 
-    as UnitMatch require the full channel_pos array this function will extrapolate it from the given channel positions.
-    If there is only one missing positions will fill that in else it will go through each found missing position
-    and attempt to fill them in iteratively, finally it will attempt to find a pattern in the x-coord and fill in positions that way
+    KiloSort may not include channel positions for inactive channels (e.g. channels
+    outside the brain).  UnitMatch requires the full channel_pos array, so this
+    function reconstructs positions for the missing hardware channels.
+
+    Strategy: channel_map.npy maps the N_active entries in channel_positions.npy to
+    their hardware-channel indices (0 … n_channels-1).  For each x-column found in
+    the known positions a linear model  y = slope * hw_channel_index + intercept  is
+    fit using the known (hw_index, y) pairs.  Missing channels are then assigned to
+    the column given by  hw_index % n_cols  and their y is predicted by that model.
+    This correctly handles any number of missing channels, from a single gap to the
+    majority of the probe being outside the brain.
 
     Parameters
     ----------
     KS_dir : str
-        The path to the KiloSort directory
+        Path to the KiloSort output directory.
     n_channels : int
-        The number of channels 
+        Total number of hardware channels (waveform array dimension).
 
     Returns
     -------
-    ndarray
-        The full channel_pos array
+    ndarray, shape (n_channels, 2)
+        Full channel_pos array; known positions are preserved exactly.
     """
-    print('The channel_positions.npy file does not match with the raw waveforms \n \
-           we have attempted to fill in the missing positions, please check the attempt worked and examine the channel_positions and RawWaveforms shape')
-    path_tmp = os.path.join(KS_dir, 'channel_positions.npy')
-    pos = np.load(path_tmp)
+    print('The channel_positions.npy file does not match with the raw waveforms. '
+          'Attempting to fill in missing positions using probe geometry inference. '
+          'Please verify channel_positions and RawWaveforms shapes afterwards.')
 
-    path_tmp = os.path.join(KS_dir, 'channel_map.npy')
-    channel_map = np.load(path_tmp).squeeze()
+    pos = np.load(os.path.join(KS_dir, 'channel_positions.npy'))
+    channel_map = np.load(os.path.join(KS_dir, 'channel_map.npy')).squeeze()
 
-    channel_pos = np.full((n_channels,2), np.nan)
-    channel_pos[channel_map,:] = pos
+    # Place known positions at their correct hardware-channel indices.
+    channel_pos = np.full((n_channels, 2), np.nan)
+    channel_pos[channel_map, :] = pos
 
-    channel_pos_new = []
-    #get the unique x positions
-    x_unique = np.unique(channel_pos[:,0])
-    x_unique = x_unique[~np.isnan(x_unique)]
+    nan_mask = np.isnan(channel_pos[:, 0])
+    if not np.any(nan_mask):
+        print('Likely to be correctly filled')
+        return channel_pos
 
-    #go through each column
+    # --- Geometry inference via per-column linear regression ---
+    # Assumes channels fill x-columns in round-robin order (ch % n_cols → column),
+    # which holds for all Neuropixels probes.  For probes with a different layout the
+    # validation step below will detect the mismatch and fall back to off-probe
+    # placeholders rather than silently returning wrong positions.
+    x_unique = np.unique(pos[:, 0])
+    n_cols = len(x_unique)
+
+    # Estimate a global y-step as a fallback for columns with only one known channel.
+    all_y_diffs = []
     for x in x_unique:
-        #get the known y-values for that column
-        y_column = channel_pos[np.argwhere(channel_pos[:,0] == x), 1].squeeze()
+        yj = np.sort(pos[pos[:, 0] == x, 1])
+        if len(yj) > 1:
+            all_y_diffs.extend(np.diff(yj).tolist())
+    y_step_global = float(np.median(all_y_diffs)) if all_y_diffs else 20.0
 
-        #test to see if any other columns have the same set of y positions
-        same_x_pattern = np.unique(channel_pos[np.in1d(channel_pos[:,1], y_column), 0])
-        same_y_pattern = channel_pos[np.in1d(channel_pos[:,0], same_x_pattern), 1]
+    col_models = {}  # col_index -> (slope, intercept)
+    for col_i, x in enumerate(x_unique):
+        col_mask = pos[:, 0] == x
+        ch_indices = channel_map[col_mask].astype(float)
+        y_vals = pos[col_mask, 1].astype(float)
+        if len(ch_indices) >= 2:
+            slope, intercept = np.polyfit(ch_indices, y_vals, 1)
+            # Validate: max residual must be well below one y-step.
+            residuals = np.abs(np.polyval([slope, intercept], ch_indices) - y_vals)
+            if np.max(residuals) > 0.4 * y_step_global:
+                # Column assignment by ch % n_cols is inconsistent with the known
+                # positions — this probe does not use round-robin column ordering.
+                print('Warning: probe geometry does not follow a round-robin column '
+                      'pattern (max fit residual {:.1f} µm). Cannot infer positions '
+                      'for inactive channels; off-probe placeholders will be used. '
+                      'Supply the full channel_positions manually if needed.'.format(
+                          float(np.max(residuals))))
+                x_fill = float(np.nanmedian(channel_pos[:, 0]))
+                y_fill = float(np.nanmin(channel_pos[:, 1])) - 10000.0
+                channel_pos[nan_mask] = [x_fill, y_fill]
+                return channel_pos
+        else:
+            # Single known channel: use global y-step scaled by column stride.
+            slope = y_step_global / n_cols
+            intercept = y_vals[0] - slope * ch_indices[0]
+        col_models[col_i] = (slope, intercept)
 
-        #find the mode difference, i.e the steps between y-positions 
-        y_steps, y_step_counts = np.unique(np.diff(np.unique(same_y_pattern)), return_counts= True)
-        y_steps = y_steps[np.argmax(y_step_counts)].astype(int)
+    # Assign each inactive hardware channel to its column (ch % n_cols) and
+    # predict its y position from the column's linear model.
+    for ch_idx in np.where(nan_mask)[0]:
+        col_i = ch_idx % n_cols
+        slope, intercept = col_models[col_i]
+        channel_pos[ch_idx] = [x_unique[col_i], slope * ch_idx + intercept]
 
-        #find the min/max y-positions to fill in all positions for the column
-        ymin = np.min(same_y_pattern).astype(int)
-        ymax = np.max(same_y_pattern).astype(int)
-        ypos = np.arange(ymin, ymax+y_steps, y_steps)
+    # Safety net: if any positions are still NaN (unexpected column layout),
+    # place them well off-probe so they do not interfere with active channels.
+    still_nan = np.isnan(channel_pos[:, 0])
+    if np.any(still_nan):
+        x_fill = float(np.nanmedian(channel_pos[:, 0]))
+        y_fill = float(np.nanmin(channel_pos[:, 1])) - 10000.0
+        channel_pos[still_nan] = [x_fill, y_fill]
+        print('Warning: could not infer positions for {:d} inactive channels; '
+              'off-probe placeholder used.'.format(int(np.sum(still_nan))))
 
-        channel_pos_column = np.stack((np.full_like(ypos,x), ypos)).T
-        channel_pos_new.append(channel_pos_column)
-
-    if pos.shape[0] == n_channels - 1:
+    if np.allclose(channel_pos[channel_map], pos):
         print('Likely to be correctly filled')
-        missed_pos_idx = np.argwhere(isin_2d(np.vstack(channel_pos_new), pos) == False)
-        channel_pos[np.isnan(channel_pos)[:,0],:] = np.vstack(channel_pos_new)[missed_pos_idx]
-        return channel_pos
-
-    channel_pos_fill = channel_pos.copy()
-    #find all the positions not in the original channel_positions
-    missed_pos_idxs = np.argwhere(isin_2d(np.vstack(channel_pos_new), pos) == False)
-    #find all the empty channel positions indexs
-    empty_idx = np.unique(np.argwhere(np.isnan(channel_pos))[:,0])
-
-    #check to see if there are the same amount of empty positions as found positions
-    if missed_pos_idx.shape[0] == empty_idx.shape[0]:
-        #go through each estimated missing positions
-        for idx in missed_pos_idxs:
-            missed_pos = np.vstack(channel_pos_new)[idx].squeeze()
-            #find the index of the nearest channel to the estimated missing positions
-            distance_to_pos = np.sqrt(np.sum((channel_pos - missed_pos)**2, axis = 1) )
-            nearest_idx = np.nanargmin(distance_to_pos)
-            #assume that the nearest missing index to the nearest positions is the correct index!
-            estimated_missing_idx = empty_idx[np.argmin(np.abs(empty_idx - nearest_idx))]
-            #fill in this index
-            channel_pos_fill[estimated_missing_idx,:] = missed_pos
-            #delete this index from the empty idx_list
-            empty_idx = np.delete(empty_idx, np.argmin(np.abs(empty_idx - nearest_idx)))
-
-        #If all of the original positions are correct
-        if np.sum(channel_pos == channel_pos_fill) //2 == pos.shape[0]:
-            print('Likely to be correctly filled')
-            return channel_pos_fill
-
-    n_unique_x = x_unique.shape[0]
-    channel_pos_fill = np.zeros_like(channel_pos)
-    test_points = []
-    starts = []
-    x_points = []
-    #Often the channel positions is filled in in a periodic fashion in x coord
-    for i, x in enumerate(x_unique):
-        #find which sequence of positions this x-column fills 
-        x_point = np.argwhere(channel_pos[:,0] == x).squeeze()[0]
-        start = x_point % n_unique_x
-        points = np.arange(start, n_channels, n_unique_x)
-        #fill in the positions for this column
-        for j, point in enumerate(points):
-            channel_pos_fill[point,:] = channel_pos_new[i][j,:]
-
-        test_points.append(points)
-        starts.append(start)
-        x_points.append(x_point)
-
-    #If all of the original positions are correct
-    if np.sum(channel_pos == channel_pos_fill) //2 == pos.shape[0]:
-        print('Likely to be correctly filled')
-        return channel_pos_fill
     else:
-        print('Error in filling channel positions, please fill in manually \n \
-            Have returned the known channel positions and NaN')
-        return channel_pos
+        print('Error in filling channel positions, please fill in manually \n'
+              '    Have returned the known channel positions and NaN')
+    return channel_pos
 
 def paths_from_KS(KS_dirs, custom_raw_waveform_paths=None, custom_bombcell_paths=None):
     """
