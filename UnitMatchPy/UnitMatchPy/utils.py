@@ -125,8 +125,11 @@ def load_good_waveforms(wave_paths, unit_label_paths, param, good_units_only=Tru
             all_units.append(unit_label[:, 0])
 
     waveforms = []
+    successful_sessions = []
     if good_units_only:
         for ls in range(len(wave_paths)):
+            tmp_waveform = None
+            tmp = None
             try:
                 p_file = os.path.join(wave_paths[ls], f'Unit{int(good_units[ls][0].squeeze())}_RawSpikes.npy')
                 tmp = np.load(p_file)
@@ -136,6 +139,7 @@ def load_good_waveforms(wave_paths, unit_label_paths, param, good_units_only=Tru
                     p_file_good = os.path.join(wave_paths[ls], f'Unit{int(good_units[ls][i].squeeze())}_RawSpikes.npy')
                     tmp_waveform[i] = np.load(p_file_good)
                 waveforms.append(tmp_waveform)
+                successful_sessions.append(ls)
             except Exception as e:
                 print(f'Error loading waveform for session {ls}: {e}')
             finally:
@@ -143,6 +147,8 @@ def load_good_waveforms(wave_paths, unit_label_paths, param, good_units_only=Tru
                 del tmp
     else:
         for ls in range(len(wave_paths)):
+            tmp_waveform = None
+            tmp = None
             try:
                 p_file = os.path.join(wave_paths[ls], f'Unit0_RawSpikes.npy')
                 tmp = np.load(p_file)
@@ -152,12 +158,20 @@ def load_good_waveforms(wave_paths, unit_label_paths, param, good_units_only=Tru
                     p_file_good = os.path.join(wave_paths[ls], f'Unit{i}_RawSpikes.npy')
                     tmp_waveform[i] = np.load(p_file_good)
                 waveforms.append(tmp_waveform)
+                successful_sessions.append(ls)
                 print(f'UnitMatch is treating all the units as good and including all units from {wave_paths[ls]}, we recommended using curated data!')
             except Exception as e:
                 print(f'Error loading waveform for session {ls}: {e}')
             finally:
                 del tmp_waveform
                 del tmp
+
+    if len(successful_sessions) < n_sessions:
+        failed = [i for i in range(n_sessions) if i not in successful_sessions]
+        print(f'Warning: failed to load waveforms for {len(failed)} session(s): {failed}. Excluding from analysis.')
+        good_units = [good_units[i] for i in successful_sessions]
+        n_units_per_session_all = [n_units_per_session_all[i] for i in successful_sessions]
+        n_sessions = len(successful_sessions)
 
     n_units_per_session = np.zeros(n_sessions, dtype='int')
     waveform = np.array([])
