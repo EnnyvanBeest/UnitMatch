@@ -183,12 +183,15 @@ if exist('clusinfo','var') & ~isempty(Depth2Area)
     Area= strrep(clusinfo.Area,'/','');
 
     [areaopt, id1] = unique(Area,'stable');
+    atlastable = readtable('structure_tree_safe_2017.csv');
+    if ~isfield(clusinfo,'AreaFN')
+        clusinfo.AreaFN = cellfun(@(X) atlastable.name(find(ismember(lower(atlastable.acronym),X))),clusinfo.Area,'Uni',0)
+    end
     areaoptFN = clusinfo.AreaFN(id1);
     uniquearean = length(areaopt);
     % Use Allen Brain Atlas to find all areas in the recordings
     % Add units to area specific cell
     % Area = Area(~cellfun(@isempty,Area));
-    atlastable = readtable('structure_tree_safe_2017.csv');
     AutomaticAREASOfInterest = {};
     AutomaticAREASOfInterestFullName = {};
     ccfIdx = {};

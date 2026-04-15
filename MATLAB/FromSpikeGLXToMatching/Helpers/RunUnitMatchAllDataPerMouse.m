@@ -242,7 +242,7 @@ for midx = 1:length(MiceOpt)
                 UMtime = toc(UMtime)
 
                 % Update:
-                StartUID = StartUID+max(UniqueIDConversion.UniqueID);
+                StartUID = max(UniqueIDConversion.UniqueID)+1;
 
                 % Save phy similarity info for individual sessions
                 SaveWithinSessionProba_forPhy(UMparam.SaveDir)
@@ -297,8 +297,8 @@ for midx = 1:length(MiceOpt)
             disp(['Preprocessed data for ' MiceOpt{midx} ' run  ' num2str(runid) '/' num2str(nRuns)])
             close all
         catch ME
+            keyboard
             disp([MiceOpt{midx} ' run  ' num2str(runid) '/' num2str(nRuns) ' crashed... continue with others'])
-
             LogError = {LogError{:} [MiceOpt{midx} '_run' num2str(runid)]};
         end
 

@@ -1,5 +1,5 @@
 %% User Input
-NewHistologyNeeded = 1; %Automatically to 1 after RedoAfterClustering
+NewHistologyNeeded = 0; %Automatically to 1 after RedoAfterClustering
 RedoAfterClustering = 0;
 RedoUserInput = 0;
 UseLFP = 0;
