@@ -75,7 +75,7 @@ mouseName = '';
 if numel(parts) >= 3, mouseName = parts{end-2}; end
 
 %% ── Load Allen CCF annotation volume ─────────────────────────────────────────
-av = []; avSz = [0 0 0]; atlasCmap = [];
+av = []; avSz = [0 0 0]; atlasCmap = []; st = [];
 if isempty(allenCCFPath)
     tmp = which('annotation_volume_10um_by_index.npy');
     if ~isempty(tmp), allenCCFPath = fileparts(tmp); end
@@ -119,6 +119,7 @@ lastScale     = 1.0;  % tracks cumulative slider scale
 allShanks     = unique(D2A.Shank);
 selectedShank = allShanks(1);   % shank whose track is shown in the brain slices
 atlasAlpha    = 0.4;            % transparency of atlas colour overlay (0 = off)
+brainZoom     = 1.0;            % 1 = full slice view; <1 = zoomed in around probe
 
 %% ── Build figure ─────────────────────────────────────────────────────────────
 % hasFeatures is true only if at least one shank has a non-empty numeric matrix
@@ -175,10 +176,11 @@ end
 %% ── Control panel ────────────────────────────────────────────────────────────
 % Layout: 2 rows × 11 cols
 %   Cols 1-8  (both rows): Shift | Scale | Shank | Atlas-overlay sliders+labels
-%   Cols 9-11 (row 1):     Reset | Flag | Accept buttons
-%   Cols 9-11 (row 2):     status label
-ctrlG = uigridlayout(outerG, [2, 11], ...
-    'ColumnWidth', {'0.9x','3x','0.9x','3x','0.7x','1.2x','0.7x','2.5x','1.4x','1.6x','1.6x'}, ...
+%   Cols 9-10 (both rows): View zoom slider
+%   Cols 11-13 (row 1):    Reset | Flag | Accept buttons
+%   Cols 11-13 (row 2):    status label
+ctrlG = uigridlayout(outerG, [2, 13], ...
+    'ColumnWidth', {'0.9x','3x','0.9x','3x','0.7x','1.2x','0.7x','2.5x','0.7x','2.5x','1.4x','1.6x','1.6x'}, ...
     'RowHeight',   {'1x','1x'}, ...
     'Padding', [2 2 2 2], 'ColumnSpacing', 5, 'RowSpacing', 2);
 ctrlG.Layout.Row = 2; ctrlG.Layout.Column = [1 nCols];
@@ -214,16 +216,23 @@ slAtlas = uislider(ctrlG, 'Limits',[0 0.8], 'Value', 0.4 * canOverlay, ...
     'Enable', matlab.lang.OnOffSwitchState(canOverlay));
 slAtlas.Layout.Row = [1 2]; slAtlas.Layout.Column = 8;
 
+% Brain view zoom
+lblZoom = uilabel(ctrlG, 'Text','View:', 'HorizontalAlignment','right', 'FontWeight','bold');
+lblZoom.Layout.Row = [1 2]; lblZoom.Layout.Column = 9;
+slZoom = uislider(ctrlG, 'Limits',[0.05 1.0], 'Value',1.0, ...
+    'MajorTicks',[0.05 0.25 0.5 0.75 1.0], 'ValueChangedFcn',@onZoomChanged);
+slZoom.Layout.Row = [1 2]; slZoom.Layout.Column = 10;
+
 % Buttons (row 1)
 btnReset = uibutton(ctrlG, 'Text','Reset', ...
     'BackgroundColor',[0.45 0.45 0.45], 'FontColor','w', 'ButtonPushedFcn',@onReset);
-btnReset.Layout.Row = 1; btnReset.Layout.Column = 9;
+btnReset.Layout.Row = 1; btnReset.Layout.Column = 11;
 btnFlag = uibutton(ctrlG, 'Text','Flag for Review', ...
     'BackgroundColor',[0.80 0.55 0.0], 'FontColor','w', 'ButtonPushedFcn',@onFlag);
-btnFlag.Layout.Row = 1; btnFlag.Layout.Column = 10;
+btnFlag.Layout.Row = 1; btnFlag.Layout.Column = 12;
 btnAccept = uibutton(ctrlG, 'Text','Accept & Save', ...
     'BackgroundColor',[0.10 0.60 0.10], 'FontColor','w', 'ButtonPushedFcn',@onAccept);
-btnAccept.Layout.Row = 1; btnAccept.Layout.Column = 11;
+btnAccept.Layout.Row = 1; btnAccept.Layout.Column = 13;
 
 % Status label (row 2, under buttons)
 if wasCurated
@@ -236,7 +245,7 @@ else
 end
 lblStatus = uilabel(ctrlG, 'Text',initStatus, 'WordWrap','on', ...
     'HorizontalAlignment','left', 'FontSize',8, 'FontColor',[0.35 0.35 0.35]);
-lblStatus.Layout.Row = 2; lblStatus.Layout.Column = [9 11];
+lblStatus.Layout.Row = 2; lblStatus.Layout.Column = [11 13];
 
 %% ── Initial draw ─────────────────────────────────────────────────────────────
 drawAll();
@@ -274,20 +283,43 @@ drawAll();
             x0   = gap + (si-1)*(sw+gap);
             x1   = x0 + sw;
             xMid = (x0+x1)/2;
-            hw   = 5;
-            if numel(depths_s) > 1
-                hw = median(diff(depths_s))/2 + 0.5;
-            end
 
-            % Area-coloured patches
-            for di = 1:numel(depths_s)
-                c = hex2rgbSafe(hex_s{di});
-                patch(axProbe, [x0 x1 x1 x0], depths_s(di)+[-hw -hw hw hw], c, ...
+            % Area-coloured filled regions between boundaries.
+            % Build segment list: each segment spans from one depth boundary
+            % to the next, filled with the colour of the points in that range.
+            bnd_si = boundaries{si};
+            segEdges = [-Inf; bnd_si.depths(:); Inf];   % N+1 edges for N segments
+            for seg = 1:numel(segEdges)-1
+                lo = segEdges(seg);
+                hi = segEdges(seg+1);
+                % Points belonging to this segment
+                inSeg = depths_s >= lo & depths_s < hi;
+                if ~any(inSeg), continue; end
+                % Use the colour of the first (shallowest) point in the segment
+                c = hex2rgbSafe(hex_s{find(inSeg,1)});
+                % Actual depth extent: clamp to the real probe range
+                yLo = max(lo, depths_s(1));
+                yHi = min(hi, depths_s(end));
+                if isinf(yLo), yLo = depths_s(1); end
+                if isinf(yHi), yHi = depths_s(end); end
+                patch(axProbe, [x0 x1 x1 x0], [yLo yLo yHi yHi], c, ...
                     'EdgeColor','none', 'HitTest','off', 'PickableParts','none');
+                % Area acronym label centred within this segment, to the right of the bar.
+                % Pick a text colour that contrasts with the background.
+                if mean(c) < 0.5
+                    txtCol = [1 1 1];   % light text on dark background
+                else
+                    txtCol = [0 0 0];   % dark text on light background
+                end
+                segLabel = getParentAreaLocal(D2A.Area{idx(find(inSeg,1))});
+                text(axProbe, xMid, (yLo + yHi)/2, segLabel, ...
+                    'FontSize', 7, 'FontWeight', 'bold', 'Color', txtCol, ...
+                    'VerticalAlignment', 'middle', 'HorizontalAlignment', 'center', ...
+                    'Clipping', 'on', 'HitTest', 'off');
             end
 
             % Shank label above column
-            text(axProbe, xMid, max(depths_s)+hw*2.5, sprintf('S%d',shk), ...
+            text(axProbe, xMid, max(depths_s)+30, sprintf('S%d',shk), ...
                 'HorizontalAlignment','center', 'FontSize',7, 'FontWeight','bold', ...
                 'HitTest','off');
 
@@ -305,11 +337,6 @@ drawAll();
                     'MarkerSize',11, 'MarkerFaceColor','k', 'HitTest','off', 'PickableParts','none');
                 plot(axProbe, xMid, bnd.depths(bi), 'wo', ...
                     'MarkerSize',7, 'MarkerFaceColor','w', 'HitTest','off', 'PickableParts','none');
-                % Area label on right edge
-                text(axProbe, x1+0.01, bnd.depths(bi), ...
-                    sprintf('%s  |  %s', bnd.areaBelow{bi}, bnd.areaAbove{bi}), ...
-                    'FontSize', 6, 'VerticalAlignment','middle', ...
-                    'Clipping','on', 'HitTest','off');
             end
         end
 
@@ -346,7 +373,12 @@ drawAll();
         medCoord = median(coords(valid,:), 1);   % [AP DV ML] in µm
 
         % Track overlay shows only the selected shank
+        selSi = find(allShanks == selectedShank, 1);
         tc = buildTrackVox(D2A(shankMask,:), useHistology, hVol, avSz);
+
+        % Boundary brain-space positions (interpolated along probe track)
+        bnd_s = boundaries{selSi};
+        bm    = buildBoundaryVox(D2A(shankMask,:), bnd_s.depths, useHistology, hVol, avSz);
 
         % ── Coronal slice (y=DV, x=ML) ───────────────────────────────────────
         cla(axCoronal);
@@ -373,9 +405,24 @@ drawAll();
             scatter(axCoronal, tc.ml, tc.dv, 20, tc.colors, 'filled', ...
                 'MarkerFaceAlpha',0.85, 'HitTest','off');
         end
+        if ~isempty(bm)
+            xl_c = axCoronal.XLim;
+            for bmi_ = 1:numel(bm.dv)
+                plot(axCoronal, xl_c, [bm.dv(bmi_) bm.dv(bmi_)], 'w--', ...
+                    'LineWidth',1.5, 'HitTest','off', 'PickableParts','none');
+            end
+            scatter(axCoronal, bm.ml, bm.dv, 200, 'k', 'd', 'filled', ...
+                'HitTest','off', 'PickableParts','none');
+            scatter(axCoronal, bm.ml, bm.dv, 100, [1 1 0], 'd', 'filled', ...
+                'HitTest','off', 'PickableParts','none');
+        end
         axis(axCoronal,'image');
         set(axCoronal,'YDir','reverse','XTickLabel',{},'YTickLabel',{});
         xlabel(axCoronal,'ML (L→R)'); ylabel(axCoronal,'DV');
+        % Apply zoom around probe centre (ML × DV)
+        if brainZoom < 1 && ~isempty(tc)
+            applySliceZoom(axCoronal, median(double(tc.ml)), median(double(tc.dv)));
+        end
 
         % ── Sagittal slice (y=DV, x=AP) ──────────────────────────────────────
         cla(axSagittal);
@@ -401,9 +448,38 @@ drawAll();
             scatter(axSagittal, tc.ap, tc.dv, 20, tc.colors, 'filled', ...
                 'MarkerFaceAlpha',0.85, 'HitTest','off');
         end
+        if ~isempty(bm)
+            xl_s = axSagittal.XLim;
+            for bmi_ = 1:numel(bm.dv)
+                plot(axSagittal, xl_s, [bm.dv(bmi_) bm.dv(bmi_)], 'w--', ...
+                    'LineWidth',1.5, 'HitTest','off', 'PickableParts','none');
+            end
+            scatter(axSagittal, bm.ap, bm.dv, 200, 'k', 'd', 'filled', ...
+                'HitTest','off', 'PickableParts','none');
+            scatter(axSagittal, bm.ap, bm.dv, 100, [1 1 0], 'd', 'filled', ...
+                'HitTest','off', 'PickableParts','none');
+        end
         axis(axSagittal,'image');
         set(axSagittal,'YDir','reverse','XTickLabel',{},'YTickLabel',{});
         xlabel(axSagittal,'AP'); ylabel(axSagittal,'DV');
+        % Apply zoom around probe centre (AP × DV)
+        if brainZoom < 1 && ~isempty(tc)
+            applySliceZoom(axSagittal, median(double(tc.ap)), median(double(tc.dv)));
+        end
+    end
+
+    % ── Brain slice zoom helper ───────────────────────────────────────────────
+    % Narrows the X-axis view to brainZoom fraction of its full width,
+    % centred on cx (probe position in image x-coordinates).
+    % Y-axis (DV) is always left at the full slice extent.
+    function applySliceZoom(ax, cx, ~)
+        xl = ax.XLim;
+        hw = brainZoom * diff(xl) / 2;
+        newXL = [cx - hw, cx + hw];
+        % Clamp so we never pan outside the image
+        if newXL(1) < xl(1), newXL = newXL - (newXL(1) - xl(1)); end
+        if newXL(2) > xl(2), newXL = newXL - (newXL(2) - xl(2)); end
+        xlim(ax, newXL);
     end
 
     % ── Atlas colour overlay on a histology background ────────────────────────
@@ -485,6 +561,26 @@ drawAll();
         imagesc(axFeat, 1:size(F,2), sortedD, F);
         set(axFeat, 'YDir','normal');
         colormap(axFeat, hot);
+
+        % Match Y-axis exactly to the probe bar and fix X-axis
+        xl_f = [0.5, size(F,2) + 0.5];
+        set(axFeat, 'YLim', axProbe.YLim, 'XLim', xl_f, 'XTick', 1:size(F,2));
+
+        % Overlay parent-area boundary lines with area-pair labels
+        hold(axFeat, 'on');
+        bnd_f = boundaries{selSi};
+        for bi = 1:numel(bnd_f.depths)
+            bd = bnd_f.depths(bi);
+            plot(axFeat, xl_f, [bd bd], '-', 'Color','k', 'LineWidth',5, ...
+                'HitTest','off', 'PickableParts','none');
+            plot(axFeat, xl_f, [bd bd], 'w-', 'LineWidth',2, ...
+                'HitTest','off', 'PickableParts','none');
+            text(axFeat, xl_f(2), bd, ...
+                sprintf('  %s | %s', bnd_f.parentBelow{bi}, bnd_f.parentAbove{bi}), ...
+                'FontSize',6, 'Color','w', 'FontWeight','bold', ...
+                'VerticalAlignment','middle', 'HitTest','off', 'Clipping','off');
+        end
+
         xlabel(axFeat,'Feature index');
         ylabel(axFeat,'Depth (µm)');
         title(axFeat, sprintf('Features  (S%d)', selectedShank));
@@ -497,65 +593,70 @@ drawAll();
     % WindowButton* callbacks, so we transform fig.CurrentPoint manually.
     function [cx, cy, inside] = figPtToAxProbe()
         axPos   = getpixelposition(axProbe, true); % [left bottom w h] in fig pixels
-        figPx   = fig.CurrentPoint;      % [x y] in figure pixels (from bottom-left)
-        % Pixel coordinate relative to axes inner area
-        px = figPx(1) - axPos(1);
-        py = figPx(2) - axPos(2);
+        figPx = fig.CurrentPoint;               % [x y] in figure pixels (from bottom-left)
+        ti    = axProbe.TightInset;              % [left bottom right top] in pixels
+        % Map into the inner data area so the transform is accurate at all depths
+        innerLeft   = axPos(1) + ti(1);
+        innerBottom = axPos(2) + ti(2);
+        innerW      = axPos(3) - ti(1) - ti(3);
+        innerH      = axPos(4) - ti(2) - ti(4);
+        px = figPx(1) - innerLeft;
+        py = figPx(2) - innerBottom;
         xl = axProbe.XLim;
         yl = axProbe.YLim;
-        cx = xl(1) + px / axPos(3) * diff(xl);
-        cy = yl(1) + py / axPos(4) * diff(yl);
-        inside = (px >= 0) && (px <= axPos(3)) && (py >= 0) && (py <= axPos(4));
+        cx = xl(1) + px / innerW * diff(xl);
+        cy = yl(1) + py / innerH * diff(yl);
+        inside = (px >= 0) && (px <= innerW) && (py >= 0) && (py <= innerH);
     end
 
     function onMouseDown(~,~)
         [cx, cy, inside] = figPtToAxProbe();
         if ~inside, return; end
 
-        xl = axProbe.XLim; yl = axProbe.YLim;
-        shanks = unique(D2A.Shank);
-        nS  = numel(shanks);
+        yl = axProbe.YLim;
+        nS  = numel(allShanks);
         gap = 0.05;
         sw  = (1 - gap*(nS+1)) / nS;
         snapTol = diff(yl) * 0.03;   % 3% of depth range
 
-        for si = 1:nS
-            x0 = gap + (si-1)*(sw+gap);
-            x1 = x0 + sw;
-            if cx < x0 || cx > x1, continue; end
-            bnd = boundaries{si};
-            if isempty(bnd.depths), continue; end
-            [minDist, bi] = min(abs(bnd.depths - cy));
-            if minDist < snapTol
-                dragState.active      = true;
-                dragState.shankIdx    = si;
-                dragState.boundaryIdx = bi;
-                fig.Pointer           = 'crosshair';
-                return;
-            end
+        % Only allow dragging boundaries of the currently selected shank
+        si = find(allShanks == selectedShank, 1);
+        if isempty(si), return; end
+        x0 = gap + (si-1)*(sw+gap);
+        x1 = x0 + sw;
+        if cx < x0 || cx > x1, return; end
+        bnd = boundaries{si};
+        if isempty(bnd.depths), return; end
+        [minDist, bi] = min(abs(bnd.depths - cy));
+        if minDist < snapTol
+            dragState.active      = true;
+            dragState.shankIdx    = si;
+            dragState.boundaryIdx = bi;
+            fig.Pointer           = 'crosshair';
         end
     end
 
     function onMouseMove(~,~)
         [cx, cy, inside] = figPtToAxProbe();
 
-        % Update cursor: show crosshair when hovering near any boundary line
+        % Update cursor: show hand when hovering near a boundary of the selected shank
         if ~dragState.active
-            shanks  = unique(D2A.Shank);
-            nS      = numel(shanks);
+            nS      = numel(allShanks);
             gap     = 0.05;
             sw      = (1 - gap*(nS+1)) / nS;
             yl      = axProbe.YLim;
             snapTol = diff(yl) * 0.03;
             nearBnd = false;
             if inside
-                for si = 1:nS
+                si = find(allShanks == selectedShank, 1);
+                if ~isempty(si)
                     x0 = gap + (si-1)*(sw+gap);
                     x1 = x0 + sw;
-                    if cx < x0 || cx > x1, continue; end
-                    bnd = boundaries{si};
-                    if ~isempty(bnd.depths) && min(abs(bnd.depths - cy)) < snapTol
-                        nearBnd = true; break;
+                    if cx >= x0 && cx <= x1
+                        bnd = boundaries{si};
+                        if ~isempty(bnd.depths) && min(abs(bnd.depths - cy)) < snapTol
+                            nearBnd = true;
+                        end
                     end
                 end
             end
@@ -582,14 +683,32 @@ drawAll();
 
     function onMouseUp(~,~)
         if ~dragState.active, return; end
-        si = dragState.shankIdx;
-        bi = dragState.boundaryIdx;
+        si       = dragState.shankIdx;
+        bi       = dragState.boundaryIdx;
+        newDepth = boundaries{si}.depths(bi);
+        pa_below = boundaries{si}.parentBelow{bi};
+        pa_above = boundaries{si}.parentAbove{bi};
         dragState.active = false;
         fig.Pointer = 'arrow';
 
-        % Commit: reassign area labels around the moved boundary
-        D2A        = applyBoundaryMove(D2A, si, bi, boundaries{si}.depths(bi));
+        % Commit: reassign area labels for the selected shank
+        D2A        = applyBoundaryMove(D2A, si, bi, newDepth);
         boundaries = computeBoundaries(D2A);
+
+        % Sync the same parent-area boundary to all other shanks
+        for osi = 1:numel(allShanks)
+            if osi == si, continue; end
+            bndO = boundaries{osi};
+            for obi = 1:numel(bndO.depths)
+                if strcmp(bndO.parentBelow{obi}, pa_below) && ...
+                        strcmp(bndO.parentAbove{obi}, pa_above)
+                    D2A        = applyBoundaryMove(D2A, osi, obi, newDepth);
+                    boundaries = computeBoundaries(D2A);
+                    break;
+                end
+            end
+        end
+
         drawAll();
         lblStatus.Text = sprintf('Boundary moved.  %s', ...
             char(datetime('now','Format','HH:mm:ss')));
@@ -605,6 +724,11 @@ drawAll();
 
     function onAtlasAlphaChanged(~,~)
         atlasAlpha = slAtlas.Value;
+        drawSlices();
+    end
+
+    function onZoomChanged(~,~)
+        brainZoom = slZoom.Value;
         drawSlices();
     end
 
@@ -678,39 +802,59 @@ drawAll();
             idx  = find(mask);
             [~, ord] = sort(D2A_in.Depth(idx));
             idx  = idx(ord);
-            areas = D2A_in.Area(idx);
-            trans = find(~strcmp(areas(1:end-1), areas(2:end)));
-            b.depths    = (D2A_in.Depth(idx(trans)) + D2A_in.Depth(idx(trans+1))) / 2;
-            b.areaBelow = areas(trans);    % lower depth side
-            b.areaAbove = areas(trans+1); % higher depth side
-            b.rowBelow  = idx(trans);
-            b.rowAbove  = idx(trans+1);
+            areas       = D2A_in.Area(idx);
+            parentAreas = cellfun(@getParentAreaLocal, areas, 'UniformOutput', false);
+            % Only parent-area transitions are editable boundaries
+            trans = find(~strcmp(parentAreas(1:end-1), parentAreas(2:end)));
+            b.depths      = (D2A_in.Depth(idx(trans)) + D2A_in.Depth(idx(trans+1))) / 2;
+            b.areaBelow   = areas(trans);
+            b.areaAbove   = areas(trans+1);
+            b.parentBelow = parentAreas(trans);
+            b.parentAbove = parentAreas(trans+1);
+            b.rowBelow    = idx(trans);
+            b.rowAbove    = idx(trans+1);
             bnd{si_} = b;
         end
     end
 
     function D2A_out = applyBoundaryMove(D2A_in, si, bi, newBoundaryDepth)
-        % Reassign area labels for rows between the two areas flanking boundary bi.
+        % Reassign only the rows that cross the parent-area boundary.
+        % Rows that stay within their own parent-area territory keep their sub-area.
         D2A_out = D2A_in;
         shanks  = unique(D2A_in.Shank);
         shk     = shanks(si);
         bnd_    = boundaries{si};
 
-        areaBelow = bnd_.areaBelow{bi};
-        areaAbove = bnd_.areaAbove{bi};
-        colBelow  = getAreaColor(D2A_in, areaBelow);
-        colAbove  = getAreaColor(D2A_in, areaAbove);
+        paBelow      = bnd_.parentBelow{bi};
+        paAbove      = bnd_.parentAbove{bi};
+        areaBelow_rep = bnd_.areaBelow{bi};   % sub-area representative at boundary
+        areaAbove_rep = bnd_.areaAbove{bi};
+        colBelow = getAreaColor(D2A_in, areaBelow_rep);
+        colAbove = getAreaColor(D2A_in, areaAbove_rep);
 
-        % Find all rows on this shank that belong to either neighbouring area
-        mask   = D2A_in.Shank == shk & ismember(D2A_in.Area, {areaBelow, areaAbove});
-        zIdx   = find(mask);
-        zDepths = D2A_in.Depth(zIdx);
+        % Zone: depth range between the adjacent parent-area boundaries
+        depthLow  = -Inf;
+        depthHigh =  Inf;
+        if bi > 1,                  depthLow  = bnd_.depths(bi-1); end
+        if bi < numel(bnd_.depths), depthHigh = bnd_.depths(bi+1); end
 
-        isBelow = zDepths <= newBoundaryDepth;
-        D2A_out.Area(zIdx( isBelow)) = {areaBelow};
-        D2A_out.Color(zIdx( isBelow)) = {colBelow};
-        D2A_out.Area(zIdx(~isBelow)) = {areaAbove};
-        D2A_out.Color(zIdx(~isBelow)) = {colAbove};
+        inZone  = D2A_in.Shank == shk & ...
+                  D2A_in.Depth > depthLow & D2A_in.Depth < depthHigh;
+        zoneIdx = find(inZone);
+        if isempty(zoneIdx), return; end
+
+        zonePAs    = cellfun(@getParentAreaLocal, D2A_in.Area(zoneIdx), 'UniformOutput', false);
+        zoneDepths = D2A_in.Depth(zoneIdx);
+
+        % PA_above rows now at or below the new boundary → adopt paBelow representative
+        crossedDown = strcmp(zonePAs, paAbove) & (zoneDepths <= newBoundaryDepth);
+        D2A_out.Area(zoneIdx(crossedDown))  = {areaBelow_rep};
+        D2A_out.Color(zoneIdx(crossedDown)) = {colBelow};
+
+        % PA_below rows now above the new boundary → adopt paAbove representative
+        crossedUp = strcmp(zonePAs, paBelow) & (zoneDepths > newBoundaryDepth);
+        D2A_out.Area(zoneIdx(crossedUp))  = {areaAbove_rep};
+        D2A_out.Color(zoneIdx(crossedUp)) = {colAbove};
     end
 
     function col = getAreaColor(D2A_in, area)
@@ -720,6 +864,50 @@ drawAll();
         else
             col = 'aaaaaa';
         end
+    end
+
+    %% ── Boundary brain-space coordinate helper ───────────────────────────────
+    % Returns voxel coords (ap, dv, ml) for each boundary depth by linearly
+    % interpolating along the probe track coordinates.
+    function bm = buildBoundaryVox(D2A_shank, bndDepths, useHist, hV, avSz_)
+        bm = [];
+        if isempty(bndDepths), return; end
+        coords = D2A_shank.Coordinates;
+        depths = D2A_shank.Depth;
+        valid  = ~any(isnan(coords), 2);
+        coords = coords(valid, :);
+        depths = depths(valid);
+        if numel(depths) < 2, return; end
+        [depths, sOrd] = sort(depths);
+        coords = coords(sOrd, :);
+        % Average duplicate-depth entries so interp1 gets unique knots
+        [depths, ~, uIdx] = unique(depths, 'stable');
+        nU = numel(depths);
+        coordsU = zeros(nU, 3);
+        for ui = 1:nU
+            coordsU(ui,:) = mean(coords(uIdx == ui,:), 1);
+        end
+        coords = coordsU;
+        if numel(depths) < 2, return; end
+        % Clamp to track range then interpolate
+        bndDepths = max(depths(1), min(depths(end), bndDepths(:)));
+        ap_um = interp1(depths, coords(:,1), bndDepths, 'linear');
+        dv_um = interp1(depths, coords(:,2), bndDepths, 'linear');
+        ml_um = interp1(depths, coords(:,3), bndDepths, 'linear');
+        if useHist && ~isempty(hV)
+            vs   = hV.voxSize_um;
+            sz   = size(hV.vol);      % [DV ML AP]
+            ap   = max(1, min(sz(3), round(ap_um / vs)));
+            dv   = max(1, min(sz(1), round(dv_um / vs)));
+            ml_r = max(1, min(sz(2), round(ml_um / vs)));
+            ml   = sz(2) - ml_r + 1;
+        else
+            ap   = max(1, min(avSz_(1), round(ap_um / 10)));
+            dv   = max(1, min(avSz_(2), round(dv_um / 10)));
+            ml_r = max(1, min(avSz_(3), round(ml_um / 10)));
+            ml   = avSz_(3) - ml_r + 1;
+        end
+        bm.ap = ap;  bm.dv = dv;  bm.ml = ml;
     end
 
     %% ── Track overlay voxel helper ───────────────────────────────────────────
@@ -751,6 +939,33 @@ drawAll();
             colRGB(pi,:) = hex2rgbSafe(hexcols{pi});
         end
         tc.ap = ap; tc.dv = dv; tc.ml = ml; tc.colors = colRGB;
+    end
+
+    %% ── Allen CCF parent-area lookup ─────────────────────────────────────────
+    % Uses `st` from the enclosing workspace (empty → returns area unchanged).
+    % Mirrors getParentArea() in alignatlasdata_automated.m: one level up the
+    % structure_id_path hierarchy, matching what the automated alignment uses
+    % to define editable boundaries.
+    function pa = getParentAreaLocal(area)
+        if isempty(st)
+            pa = area; return;
+        end
+        idx = find(strcmpi(st.acronym, area), 1);
+        if isempty(idx)
+            pa = area; return;
+        end
+        pathParts = strsplit(st.structure_id_path{idx}, '/');
+        if numel(pathParts) > 3
+            parentID  = str2double(pathParts{end-2});
+            parentIdx = find(st.id == parentID, 1);
+            if ~isempty(parentIdx)
+                pa = st.acronym{parentIdx};
+            else
+                pa = area;
+            end
+        else
+            pa = area;
+        end
     end
 
 end  % end of main function

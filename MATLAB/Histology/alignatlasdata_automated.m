@@ -39,6 +39,10 @@ ShanksUsed = unique(clusinfo.Shank);
 histinfo = histinfo(ShanksUsed+1); % ID + 1 (0-indexed)
 numShanks = numel(histinfo);
 
+% Shared depth bounds — all shanks of the same probe are inserted to the
+% same depth, so minDepth is fixed across shanks before the per-shank loop.
+minDepth = min(spikeDepths) - 20;  % always the tip
+
 % identify max spike depth distibution
 activityClusters = cell(numShanks, 1);
 MUACorr = cell(numShanks, 1);
@@ -71,9 +75,9 @@ for shank = 1:numShanks
     % Autocorrelation of spikes
     % [autocorr{shank}, depthCenters{shank}] = computeAutocorrByDepth(spikeTimes(spikeID), spikeDepths(spikeID), spikeRecSes(spikeID), 1, 50, height(histinfo));
     % Activity per bin
-    [activityClusters{shank}, MUACorr{shank}, firingRates{shank}, depthEdges{shank}, FreqIntens{shank}] = computeFunctionalClusters(spikeTimes(spikeID), spikeDepths(spikeID), histinfo{shank});
-    % Identify valid depths:
-    minDepth = min(spikeDepths)-20; %always the tip
+    % First pass: lower bound is shared (minDepth); upper bound is per-shank
+    % so each shank can report its own maxDepth for the global nanmax below.
+    [activityClusters{shank}, MUACorr{shank}, firingRates{shank}, depthEdges{shank}, FreqIntens{shank}] = computeFunctionalClusters(spikeTimes(spikeID), spikeDepths(spikeID), histinfo{shank}, minDepth);
     firingRates{shank} = smoothdata(firingRates{shank},'gaussian',floor(500./nanmedian(unique(diff(depthEdges{shank})))));
     % firstactivity = find(firingRates{shank}>0.05,1,'first');
     % maxDepthtmp1 =  depthEdges{shank}(find(firingRates{shank}(firstactivity:end)>0.05,1,'last')+firstactivity-1);
@@ -160,7 +164,8 @@ for shank = 1:numShanks
         else
             spikeID = ismember(spikeCluster, cluster_id(clusinfo.Shank'==ShanksUsed(shank)));
         end
-        [activityClusters{shank}, MUACorr{shank}, firingRates{shank}, depthEdges{shank}, FreqIntens{shank}] = computeFunctionalClusters(spikeTimes(spikeID), spikeDepths(spikeID), histinfo{shank});
+        % Cleanup re-run: enforce shared depth range across all shanks
+        [activityClusters{shank}, MUACorr{shank}, firingRates{shank}, depthEdges{shank}, FreqIntens{shank}] = computeFunctionalClusters(spikeTimes(spikeID), spikeDepths(spikeID), histinfo{shank}, minDepth, maxDepth);
 
     end
 
@@ -177,10 +182,10 @@ for shank = 1:numShanks
         else
             spikeID = ismember(spikeCluster, cluster_id(clusinfo.Shank'==ShanksUsed(shank)));
         end
-        [activityClusters{shank}, MUACorr{shank}, firingRates{shank}, depthEdges{shank}, FreqIntens{shank}] = computeFunctionalClusters(spikeTimes(spikeID), spikeDepths(spikeID), histinfo{shank});
+        [activityClusters{shank}, MUACorr{shank}, firingRates{shank}, depthEdges{shank}, FreqIntens{shank}] = computeFunctionalClusters(spikeTimes(spikeID), spikeDepths(spikeID), histinfo{shank}, minDepth, maxDepth);
 
     end
-    if any(depthEdges{shank}>maxDepth | depthEdges{shank}<minDepth) % We still need to cut our depthEdges down
+    if min(depthEdges{shank}) ~= minDepth || max(depthEdges{shank}) ~= maxDepth % Enforce shared depth range
 
         % Need to rerun
         if removenoise
@@ -188,7 +193,7 @@ for shank = 1:numShanks
         else
             spikeID = ismember(spikeCluster, cluster_id(clusinfo.Shank'==ShanksUsed(shank)));
         end
-        [activityClusters{shank}, MUACorr{shank}, firingRates{shank}, depthEdges{shank}, FreqIntens{shank}] = computeFunctionalClusters(spikeTimes(spikeID), spikeDepths(spikeID), histinfo{shank});
+        [activityClusters{shank}, MUACorr{shank}, firingRates{shank}, depthEdges{shank}, FreqIntens{shank}] = computeFunctionalClusters(spikeTimes(spikeID), spikeDepths(spikeID), histinfo{shank}, minDepth, maxDepth);
     end
 end
 
@@ -264,9 +269,16 @@ id2 = round(fillmissing(id2,'linear'));
 histinfo.RegionAcronym = uniqueAreas(id2);
 end
 
-function [activityClusters, MUACorr, firingRates, depthEdges, FreqIntens] = computeFunctionalClusters(spikeTimes, spikeDepths, histinfo)
+function [activityClusters, MUACorr, firingRates, depthEdges, FreqIntens] = computeFunctionalClusters(spikeTimes, spikeDepths, histinfo, minDep, maxDep)
 nDepthBins = height(histinfo);
-depthEdges = linspace(min(spikeDepths), max(spikeDepths), nDepthBins + 1);
+% Use caller-supplied bounds when available so all shanks share the same
+% depth range.  Fall back to spike min/max when bounds are not provided
+% (first-pass call where only minDep is known).
+depthLow  = min(spikeDepths);
+depthHigh = max(spikeDepths);
+if nargin >= 4, depthLow  = minDep; end
+if nargin >= 5, depthHigh = maxDep; end
+depthEdges = linspace(depthLow, depthHigh, nDepthBins + 1);
 timeEdges = min(spikeTimes):1:max(spikeTimes);
 nSmooth = ceil(40./nanmedian(diff(depthEdges))); % smooth for MUA corr with 50 micron
 spikeHist = histcounts2(spikeDepths, spikeTimes, depthEdges, timeEdges);
