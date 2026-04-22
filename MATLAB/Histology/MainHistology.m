@@ -1,8 +1,9 @@
 %% User Input
-NewHistologyNeeded = 0; %Automatically to 1 after RedoAfterClustering
+NewHistologyNeeded = 1; %Automatically to 1 after RedoAfterClustering
 RedoAfterClustering = 0;
 RedoUserInput = 0;
 UseLFP = 0;
+
 % directory of reference atlas files
 ann = 10; %Steps in micron that's used
 annotation_volume_location = 'annotation_volume_10um_by_index.npy';
@@ -371,6 +372,126 @@ set(fwireframe,'Units','normalized','Position',[0 0 1 1])
 disp([num2str(nInsertionsIncluded) ' insertions included in ' num2str(sum(nMiceIncluded)) ' mice'])
 
 spinningGIF(fullfile(SaveDir,'ProbeInsertionsAcrossMice.gif'))
+
+%% Manual curation of automated alignments
+% Collect all alignment mat files for the mice processed in this run.
+% For chronic mice (RecordingType == 'Chronic') the alignment from the first
+% session is copied to every subsequent date folder verbatim.  We curate the
+% earliest-date copy once and then propagate the result to all later copies.
+% For acute / non-chronic mice each file is independent even if the probe SN
+% happens to repeat across insertions.
+
+% Build the set of chronic mouse names for the lookup below
+chronicMice = MiceOpt(strcmp(RecordingType, 'Chronic'));
+
+% Collect all mat files and tag each with mouse name + SN + whether chronic
+allMatFiles  = struct('path',{},'mouse',{},'SN',{},'ischronic',{});
+for midx = 1:length(MiceOpt)
+    hits = dir(fullfile(SaveDir, MiceOpt{midx}, '**', '*_HistoEphysAlignment_Auto.mat'));
+    isChr = ismember(MiceOpt{midx}, chronicMice);
+    for fid = 1:numel(hits)
+        snStr = strrep(hits(fid).name, '_HistoEphysAlignment_Auto.mat', '');
+        entry.path      = fullfile(hits(fid).folder, hits(fid).name);
+        entry.mouse     = MiceOpt{midx};
+        entry.SN        = snStr;
+        entry.ischronic = isChr;
+        allMatFiles(end+1) = entry; %#ok<SAGROW>
+    end
+end
+
+if isempty(allMatFiles)
+    disp('No alignment files found — skipping manual curation.')
+else
+    % Build curation groups:
+    %   chronic mice  → one group per (mouse, SN); curate earliest date, propagate to rest
+    %   acute mice    → every file is its own independent group
+    nFiles    = numel(allMatFiles);
+    groupKeys = cell(nFiles, 1);
+    for fid = 1:nFiles
+        if allMatFiles(fid).ischronic
+            groupKeys{fid} = [allMatFiles(fid).mouse '_SN' allMatFiles(fid).SN];
+        else
+            groupKeys{fid} = allMatFiles(fid).path;  % unique per file
+        end
+    end
+    [uniqueGroups, ~, groupIdx] = unique(groupKeys, 'stable');
+
+    % For each group: sort members by folder (YYYY-MM-DD → alphabetical = chronological)
+    % so the canonical file is always the earliest session.
+    nGroups        = numel(uniqueGroups);
+    canonicalPaths = cell(nGroups, 1);
+    linkedPaths    = cell(nGroups, 1);
+    for gid = 1:nGroups
+        memberIdx = find(groupIdx == gid);
+        memberPaths = {allMatFiles(memberIdx).path};
+        [~, sortOrd] = sort(memberPaths);
+        memberPaths  = memberPaths(sortOrd);
+        canonicalPaths{gid} = memberPaths{1};
+        linkedPaths{gid}    = memberPaths(2:end);  % copies to propagate to (chronic only)
+    end
+
+    % Filter groups whose canonical file has not been curated yet
+    needsCuration = false(nGroups, 1);
+    for gid = 1:nGroups
+        try
+            tmp = load(canonicalPaths{gid}, 'ManuallyCurated');
+            needsCuration(gid) = ~isfield(tmp, 'ManuallyCurated') || ~tmp.ManuallyCurated;
+        catch
+            needsCuration(gid) = true;
+        end
+    end
+    toReview = find(needsCuration);
+
+    if isempty(toReview)
+        disp('All alignments already manually curated — nothing to review.')
+    else
+        fprintf('Starting manual curation: %d alignment(s) to review.\n', numel(toReview))
+        for gi = 1:numel(toReview)
+            gid        = toReview(gi);
+            canonPath  = canonicalPaths{gid};
+            linked     = linkedPaths{gid};
+            nLinked    = numel(linked);
+
+            if nLinked > 0
+                fprintf('[%d/%d]  %s  (+%d chronic copy/copies)\n', ...
+                    gi, numel(toReview), canonPath, nLinked)
+            else
+                fprintf('[%d/%d]  %s\n', gi, numel(toReview), canonPath)
+            end
+
+            guiFig = AlignmentCurationGUI(canonPath, fullfile(GithubDir,'allenCCF'), HistoFolder);
+            waitfor(guiFig)  % block until GUI is closed before opening the next
+
+            % Propagate curation result to all chronic date-copies
+            if nLinked > 0
+                try
+                    cur = load(canonPath, 'Depth2Area','AlignmentFeatures', ...
+                        'ManuallyCurated','FlaggedForReview','CurationNotes','CurationDate');
+                    % Extract fields with safe fallbacks for pre-existing files
+                    Depth2Area       = cur.Depth2Area;
+                    AlignmentFeatures = getfield_or(cur, 'AlignmentFeatures', []);
+                    ManuallyCurated  = getfield_or(cur, 'ManuallyCurated',  false);
+                    FlaggedForReview = getfield_or(cur, 'FlaggedForReview', false);
+                    CurationNotes    = getfield_or(cur, 'CurationNotes',    '');
+                    CurationDate     = getfield_or(cur, 'CurationDate',     '');
+                    for lid = 1:nLinked
+                        save(linked{lid}, 'Depth2Area','AlignmentFeatures', ...
+                            'ManuallyCurated','FlaggedForReview', ...
+                            'CurationNotes','CurationDate', '-append');
+                        fprintf('   propagated to %s\n', linked{lid})
+                    end
+                catch ME
+                    warning('AlignmentCuration:propagateFailed', '%s', ME.message)
+                end
+            end
+        end
+        disp('Manual curation complete.')
+    end
+end
+
+function val = getfield_or(s, field, default)
+if isfield(s, field), val = s.(field); else, val = default; end
+end
 
 
 

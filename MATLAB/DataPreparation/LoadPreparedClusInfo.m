@@ -133,7 +133,10 @@ if Params.UnitMatch
                 TheseClus = find(ismember(clusinfo.RecSesID,[StoreRecSesID{recsesidx2(rrid)}]));
                 if recsesidx(rrid) > 1
                     try
-                    Adjust4Drift = sqrt(sum(UMparam.drift(recsesidx(rrid)-1,:,end).^2)).*sign(UMparam.drift(recsesidx(rrid)-1,3,end));
+                    % Use only the Z (depth) component of drift.
+                    % drift dims: (sessionPair, [X Y Z], timepoint); col 3 = depth axis.
+                    % The old 3D-magnitude approach inflated correction when lateral drift was present.
+                    Adjust4Drift = UMparam.drift(recsesidx(rrid)-1, 3, end);
                     clusinfo.AdjustedDepth(TheseClus) = clusinfo.depth(TheseClus) + Adjust4Drift;
                     catch
                     end

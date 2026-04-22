@@ -1,6 +1,7 @@
 histodone=0;
 histoflag = 0;
 Depth2Area = [];
+AlignmentFeatures = [];
 removenoise = 0;
 AllenCCFPath = fullfile(GithubDir,'allenCCF');
 if ~exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
@@ -66,7 +67,7 @@ if ~histodone %Just in case it's not done yet
                 fullfile(fullfile(histofile(1).folder,histofile(1).name))
 
                 % Align ephys data with probe
-                Depth2Area  = alignatlasdata_automated(histinfo,AllenCCFPath,sp,clusinfo,1,1,2);
+                 [Depth2Area, AlignmentFeatures]  = alignatlasdata_automated(histinfo,AllenCCFPath,sp,clusinfo,1,1,2);
 
             end
         else % Automatic alignment with brain globe output
@@ -81,10 +82,9 @@ if ~histodone %Just in case it's not done yet
             end
             % Align ephys data with probe
             if exist('lfpD') && ~isempty(lfpD)
-                Depth2Area  = alignatlasdata_automated(histinfo,AllenCCFPath,sp,clusinfo,removenoise,0,fullfile(lfpD.folder,lfpD.name),2,trackcoordinates);
+                [Depth2Area,AlignmentFeatures] = alignatlasdata_automated(histinfo,AllenCCFPath,sp,clusinfo,removenoise,0,fullfile(lfpD.folder,lfpD.name),2,trackcoordinates);
             else
-                 Depth2Area  = alignatlasdata_automated(histinfo,AllenCCFPath,sp,clusinfo,removenoise,trackcoordinates);
-                % alignatlasdata_automated(histinfo, AllenCCFPath, sp, clusinfo, removenoise, trackcoordinates)
+                [Depth2Area, AlignmentFeatures] = alignatlasdata_automated(histinfo,AllenCCFPath,sp,clusinfo,removenoise,trackcoordinates);
             end
         end
     else
@@ -108,7 +108,7 @@ if ~histodone %Just in case it's not done yet
         histinfonew.Properties.VariableNames = {'Position','RegionID','RegionAcronym','RegionName'};
 
         % Align ephys data with probe
-        Depth2Area  = alignatlasdata_automated(histinfonew,AllenCCFPath,sp,clusinfo,removenoise,0,fullfile(lfpD.folder,lfpD.name),2);
+        [Depth2Area, AlignmentFeatures] = alignatlasdata_automated(histinfonew,AllenCCFPath,sp,clusinfo,removenoise,0,fullfile(lfpD.folder,lfpD.name),2);
     end
 end
 if histoflag && ~histodone
@@ -116,7 +116,9 @@ if histoflag && ~histodone
     saveas(gcf,fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment_Auto.fig']))
     saveas(gcf,fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment_Auto.bmp']))
 
-    save(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment_Auto.mat']),'Depth2Area')
+    ManuallyCurated  = false;
+    FlaggedForReview = false;
+    save(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment_Auto.mat']),'Depth2Area','AlignmentFeatures','ManuallyCurated','FlaggedForReview')
 end
 
 % Add information to clusinfo

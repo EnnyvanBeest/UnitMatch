@@ -3,12 +3,14 @@
 % Incorporates functional clustering, flexible histology alignment, and hierarchical structure
 % Supports multiple shanks with linked transformations
 
-function [Depth2Area, ProbMatrix] = alignatlasdata_automated(histinfo, AllenCCFPath, sp, clusinfo, removenoise, trackcoordinates)
+function [Depth2Area, AlignmentFeatures] = alignatlasdata_automated(histinfo, AllenCCFPath, sp, clusinfo, removenoise, trackcoordinates)
 % Load Allen CCF Structure Tree
 structureTree = readtable(fullfile(AllenCCFPath, 'structure_tree_safe_2017.csv'));
 % correct firing rates where necessary
 acronyms = lower(structureTree.acronym);
 color_hex = structureTree.color_hex_triplet;
+
+AlignmentFeatures = [];  % returned to caller for optional GUI use
 
 % Ensure valid histinfo input
 if ~iscell(histinfo)
@@ -212,14 +214,22 @@ for shank = 1:numShanks
     Depth2Area{shank} = assignAreas(alignedHistology{shank}, acronyms, shank, color_hex);
 end
 
-% Visualize results
+% Visualize results and collect features for GUI
+allFeatures = cell(numShanks, 1);
 for shank = 1:numShanks
-     if ~ActiveShanks(shank)
+    if ~ActiveShanks(shank)
         continue
     end
     visualizeResults(Depth2Area{shank}, Features{shank});
+    allFeatures{shank} = Features{shank};
 end
-Depth2Area=cat(1,Depth2Area{:});
+Depth2Area = cat(1, Depth2Area{:});
+
+% Concatenate features across shanks (rows = depth bins in Depth2Area row order)
+validFeats = allFeatures(~cellfun(@isempty, allFeatures));
+if ~isempty(validFeats)
+    AlignmentFeatures = validFeats;
+end
 
 end
 
