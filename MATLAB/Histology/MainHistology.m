@@ -152,7 +152,15 @@ for midx = 1:length(MiceOpt)
 
                 %Saving directory
                 thisprobe = subksdirs(probeid).name
-                if (~NewHistologyNeeded && exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment_Auto.mat']))) && (~RedoAfterClustering || exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,'CuratedResults.mat')))
+
+                histofile = dir(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment_Auto.mat']));
+                if ~isempty(histofile)
+                    byteshere = histofile.bytes;
+                else
+                    byteshere = 0;
+                end
+             
+                if (~NewHistologyNeeded && exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment_Auto.mat'])) && byteshere > 2000) && (~RedoAfterClustering || exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,'CuratedResults.mat')))
                     if RedoUserInput
                         tmpfig = open(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment_Auto.fig']));
                         answer = questdlg(['Would you like to redo or keep this alignment? '  MiceOpt{midx} ' ' thisdate ' Probe' thisprobe], ...
