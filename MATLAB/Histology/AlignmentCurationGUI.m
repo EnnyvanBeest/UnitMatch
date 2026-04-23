@@ -119,7 +119,7 @@ lastScale     = 1.0;  % tracks cumulative slider scale
 allShanks     = unique(D2A.Shank);
 selectedShank = allShanks(1);   % shank whose track is shown in the brain slices
 atlasAlpha    = 0.4;            % transparency of atlas colour overlay (0 = off)
-brainZoom     = 1.0;            % 1 = full slice view; <1 = zoomed in around probe
+brainZoom     = 0.25;            % 1 = full slice view; <1 = zoomed in around probe
 
 %% ── Build figure ─────────────────────────────────────────────────────────────
 % hasFeatures is true only if at least one shank has a non-empty numeric matrix
@@ -219,7 +219,7 @@ slAtlas.Layout.Row = [1 2]; slAtlas.Layout.Column = 8;
 % Brain view zoom
 lblZoom = uilabel(ctrlG, 'Text','View:', 'HorizontalAlignment','right', 'FontWeight','bold');
 lblZoom.Layout.Row = [1 2]; lblZoom.Layout.Column = 9;
-slZoom = uislider(ctrlG, 'Limits',[0.05 1.0], 'Value',1.0, ...
+slZoom = uislider(ctrlG, 'Limits',[0.05 1.0], 'Value',0.25, ...
     'MajorTicks',[0.05 0.25 0.5 0.75 1.0], 'ValueChangedFcn',@onZoomChanged);
 slZoom.Layout.Row = [1 2]; slZoom.Layout.Column = 10;
 
@@ -379,6 +379,10 @@ drawAll();
         % Boundary brain-space positions (interpolated along probe track)
         bnd_s = boundaries{selSi};
         bm    = buildBoundaryVox(D2A(shankMask,:), bnd_s.depths, useHistology, hVol, avSz);
+        % Probe entry (top) and tip (bottom) as extent markers on the brain plots
+        shankDepths_vm = D2A.Depth(shankMask);
+        bm_extent = buildBoundaryVox(D2A(shankMask,:), ...
+            [min(shankDepths_vm); max(shankDepths_vm)], useHistology, hVol, avSz);
 
         % ── Coronal slice (y=DV, x=ML) ───────────────────────────────────────
         cla(axCoronal);
@@ -415,6 +419,14 @@ drawAll();
                 'HitTest','off', 'PickableParts','none');
             scatter(axCoronal, bm.ml, bm.dv, 100, [1 1 0], 'd', 'filled', ...
                 'HitTest','off', 'PickableParts','none');
+        end
+        % Probe entry and tip: dotted lines spanning the full slice width
+        if ~isempty(bm_extent)
+            xl_ext = axCoronal.XLim;
+            for ei = 1:numel(bm_extent.dv)
+                plot(axCoronal, xl_ext, [bm_extent.dv(ei) bm_extent.dv(ei)], 'w:', ...
+                    'LineWidth', 1.5, 'HitTest','off', 'PickableParts','none');
+            end
         end
         axis(axCoronal,'image');
         set(axCoronal,'YDir','reverse','XTickLabel',{},'YTickLabel',{});
@@ -458,6 +470,14 @@ drawAll();
                 'HitTest','off', 'PickableParts','none');
             scatter(axSagittal, bm.ap, bm.dv, 100, [1 1 0], 'd', 'filled', ...
                 'HitTest','off', 'PickableParts','none');
+        end
+        % Probe entry and tip: dotted lines spanning the full slice width
+        if ~isempty(bm_extent)
+            xl_ext = axSagittal.XLim;
+            for ei = 1:numel(bm_extent.dv)
+                plot(axSagittal, xl_ext, [bm_extent.dv(ei) bm_extent.dv(ei)], 'w:', ...
+                    'LineWidth', 1.5, 'HitTest','off', 'PickableParts','none');
+            end
         end
         axis(axSagittal,'image');
         set(axSagittal,'YDir','reverse','XTickLabel',{},'YTickLabel',{});
@@ -818,21 +838,18 @@ drawAll();
     end
 
     function D2A_out = applyBoundaryMove(D2A_in, si, bi, newBoundaryDepth)
-        % Reassign only the rows that cross the parent-area boundary.
-        % Rows that stay within their own parent-area territory keep their sub-area.
+        % Reassign rows that cross the parent-area boundary, and proportionally
+        % remap child-area labels within each parent's new depth range so that
+        % the sub-area sequence is preserved rather than collapsed to one label.
         D2A_out = D2A_in;
         shanks  = unique(D2A_in.Shank);
         shk     = shanks(si);
         bnd_    = boundaries{si};
 
-        paBelow      = bnd_.parentBelow{bi};
-        paAbove      = bnd_.parentAbove{bi};
-        areaBelow_rep = bnd_.areaBelow{bi};   % sub-area representative at boundary
-        areaAbove_rep = bnd_.areaAbove{bi};
-        colBelow = getAreaColor(D2A_in, areaBelow_rep);
-        colAbove = getAreaColor(D2A_in, areaAbove_rep);
+        paBelow = bnd_.parentBelow{bi};
+        paAbove = bnd_.parentAbove{bi};
 
-        % Zone: depth range between the adjacent parent-area boundaries
+        % Zone: depth range between the two neighbouring parent-area boundaries
         depthLow  = -Inf;
         depthHigh =  Inf;
         if bi > 1,                  depthLow  = bnd_.depths(bi-1); end
@@ -846,15 +863,59 @@ drawAll();
         zonePAs    = cellfun(@getParentAreaLocal, D2A_in.Area(zoneIdx), 'UniformOutput', false);
         zoneDepths = D2A_in.Depth(zoneIdx);
 
-        % PA_above rows now at or below the new boundary → adopt paBelow representative
-        crossedDown = strcmp(zonePAs, paAbove) & (zoneDepths <= newBoundaryDepth);
-        D2A_out.Area(zoneIdx(crossedDown))  = {areaBelow_rep};
-        D2A_out.Color(zoneIdx(crossedDown)) = {colBelow};
+        % ── Helper: remap child areas of one parent proportionally into newRange ──
+        % templateIdx : row indices (into D2A_in) of all current members of this
+        %               parent in the zone, sorted by depth — used as the child-area
+        %               sequence template.
+        % targetIdx   : row indices whose sub-area labels need to be assigned.
+        % newRange    : [lo hi] depth interval the target rows now occupy.
+        function remapChildren(templateIdx, targetIdx, newRange)
+            if isempty(targetIdx), return; end
+            % Sort both sets by depth
+            [tplDepths, tOrd] = sort(D2A_in.Depth(templateIdx));
+            tplAreas  = D2A_in.Area(templateIdx(tOrd));
+            tplColors = D2A_in.Color(templateIdx(tOrd));
+            tgtDepths = D2A_out.Depth(targetIdx);  % already committed depths
 
-        % PA_below rows now above the new boundary → adopt paAbove representative
-        crossedUp = strcmp(zonePAs, paBelow) & (zoneDepths > newBoundaryDepth);
-        D2A_out.Area(zoneIdx(crossedUp))  = {areaAbove_rep};
-        D2A_out.Color(zoneIdx(crossedUp)) = {colAbove};
+            % Map each target depth to a proportional position in the template range
+            tplLo = tplDepths(1);   tplHi = tplDepths(end);
+            if tplHi <= tplLo
+                % Degenerate template: use only its first child label
+                D2A_out.Area(targetIdx)  = tplAreas(1);
+                D2A_out.Color(targetIdx) = tplColors(1);
+                return;
+            end
+            for ti = 1:numel(targetIdx)
+                % Normalised position within the target's new range → template depth
+                frac     = (tgtDepths(ti) - newRange(1)) / max(diff(newRange), 1);
+                frac     = max(0, min(1, frac));
+                tplQuery = tplLo + frac * (tplHi - tplLo);
+                % Find nearest template point
+                [~, nearest] = min(abs(tplDepths - tplQuery));
+                D2A_out.Area{targetIdx(ti)}  = tplAreas{nearest};
+                D2A_out.Color{targetIdx(ti)} = tplColors{nearest};
+            end
+        end
+
+        % ── paAbove rows that moved DOWN into paBelow territory ──────────────
+        crossedDown = find(strcmp(zonePAs, paAbove) & (zoneDepths <= newBoundaryDepth));
+        if ~isempty(crossedDown)
+            % Template: all current paBelow rows in the zone
+            tplMask = strcmp(zonePAs, paBelow);
+            tplIdx  = zoneIdx(tplMask);
+            tgtIdx  = zoneIdx(crossedDown);
+            remapChildren(tplIdx, tgtIdx, [depthLow, newBoundaryDepth]);
+        end
+
+        % ── paBelow rows that moved UP into paAbove territory ────────────────
+        crossedUp = find(strcmp(zonePAs, paBelow) & (zoneDepths > newBoundaryDepth));
+        if ~isempty(crossedUp)
+            % Template: all current paAbove rows in the zone
+            tplMask = strcmp(zonePAs, paAbove);
+            tplIdx  = zoneIdx(tplMask);
+            tgtIdx  = zoneIdx(crossedUp);
+            remapChildren(tplIdx, tgtIdx, [newBoundaryDepth, depthHigh]);
+        end
     end
 
     function col = getAreaColor(D2A_in, area)
@@ -917,7 +978,29 @@ drawAll();
         valid  = ~any(isnan(coords), 2);
         coords = coords(valid, :);
         if isempty(coords), return; end
-        hexcols = D2A_in.Color(valid);
+
+        % Colour each scatter point with the exact same representative colour that
+        % drawProbeBar paints onto the corresponding filled block.
+        % Method: for each boundary segment, find the first (shallowest) data point
+        % in the FULL shank depth sequence (identical to what drawProbeBar uses) and
+        % assign its colour to every valid track point whose depth falls in that segment.
+        allDepths_t  = D2A_in.Depth(valid);
+        shk_         = D2A_in.Shank(1);          % all rows same shank
+        si_          = find(allShanks == shk_, 1);
+        fullIdx_     = find(D2A.Shank == shk_);  % all rows for this shank in D2A
+        [~, fOrd_]   = sort(D2A.Depth(fullIdx_));
+        fullDepths_  = D2A.Depth(fullIdx_(fOrd_));
+        fullColors_  = D2A.Color(fullIdx_(fOrd_));
+        segEdges_    = [-Inf; boundaries{si_}.depths(:); Inf];
+        hexcols      = D2A_in.Color(valid);      % fallback: use stored colour
+        for seg_ = 1:numel(segEdges_)-1
+            lo_ = segEdges_(seg_);
+            hi_ = segEdges_(seg_+1);
+            inFull = fullDepths_ >= lo_ & fullDepths_ < hi_;
+            if ~any(inFull), continue; end
+            segCol = fullColors_{find(inFull, 1)};   % same colour drawProbeBar uses
+            hexcols(allDepths_t >= lo_ & allDepths_t < hi_) = {segCol};
+        end
 
         if useHist && ~isempty(hV)
             vs   = hV.voxSize_um;
