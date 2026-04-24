@@ -90,6 +90,7 @@ sp.SpikeOnProbe = nan(size(sp.clu));
 clusinfo.UniqueID = (1:length(clusinfo.cluster_id))';
 clusinfo.IMROID = repmat(0,length(clusinfo.cluster_id),1);
 clusinfo.AdjustedDepth = clusinfo.depth;
+SN = []; % default; overwritten inside UnitMatch block below
 if Params.UnitMatch
     disp('Assigning correct unique ID')
     PartsPath = strsplit(Params.SaveDir,'\');

@@ -28,7 +28,7 @@ priorMatch = 1-(param.nExpectedMatches./length(IncludeThesePairs)); %
 % priorMatch = 1-((nclus+nclus.*sqrt(ndays-1)*2*param.ExpectMatches)./length(IncludeThesePairs)); %Punish multiple days (unlikely to find as many matches after a few days) *2 for symmetry
 % priorMatch = 1-(nclus*ndays)./(nclus*nclus); %Now use the actual expected prior for bayes'
 ThrsOpt = quantile(TotalScore(IncludeThesePairs),priorMatch);
-CandidatePairs = TotalScore>ThrsOpt;%
+CandidatePairs = TotalScore>=ThrsOpt;%
 
 figure('name','Potential Matches')
 imagesc(CandidatePairs(SortingOrder,SortingOrder))

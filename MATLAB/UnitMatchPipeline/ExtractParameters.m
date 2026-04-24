@@ -138,6 +138,11 @@ for uid = 1:nclus
     % load data
     spikeMap = readNPY(Path4UnitNPY{uid});
 
+    % Some neurons have no second waveform; repeat first
+    if all(isnan(spikeMap(:,:,2)),'all')
+        spikeMap(:,:,2) = spikeMap(:,:,1);
+    end
+
     % Detrending
     spikeMap = detrend(spikeMap,1); 
 
