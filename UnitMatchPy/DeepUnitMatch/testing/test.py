@@ -431,6 +431,160 @@ def ISI_correlations(param):
 
     return pairwise_histogram_correlation(A, B)                                                      # compute pairwise correlations
 
+def get_binned_psth(param, bin_size=0.01):
+    """
+    Bin spike times into a population activity matrix per session.
+    Returns list of (n_units_session x n_time_bins) arrays, one per session.
+    bin_size is in seconds (default 10 ms, matching MATLAB UMparam.binsz).
+    """
+    fs = 3e4
+    KSdirs = param['KS_dirs']
+    good_units = param['good_units']
+
+    session_psthas = []
+    for session in range(len(good_units)):
+        times = np.load(os.path.join(KSdirs[session], "spike_times.npy")) / fs
+        clusters = np.load(os.path.join(KSdirs[session], "spike_clusters.npy"))
+
+        edges = np.arange(times.min() - bin_size / 2, times.max() + bin_size, bin_size)
+
+        session_units = good_units[session]
+        if hasattr(session_units, 'squeeze'):
+            session_units = session_units.squeeze()
+
+        sr = np.zeros((len(session_units), len(edges) - 1))
+        for uid, clusid in enumerate(session_units):
+            idx = np.where(clusters == clusid)[0]
+            if idx.size > 0:
+                sr[uid, :], _ = np.histogram(times[idx], bins=edges)
+
+        session_psthas.append(sr)
+
+    return session_psthas
+
+
+def _normalize_fingerprints(C):
+    """
+    Replace diagonal NaN with row mean, then standardize each row to zero mean / unit std.
+    Units with zero variance (no spikes) get an all-zero fingerprint.
+    """
+    n = C.shape[0]
+    C_f = C.copy()
+    for k in range(n):
+        C_f[k, k] = np.nanmean(C[k])
+    C_f = np.nan_to_num(C_f, nan=0.0)
+    m = C_f.mean(axis=1, keepdims=True)
+    s = C_f.std(axis=1, keepdims=True)
+    s[s == 0] = 1.0
+    return (C_f - m) / s
+
+
+def refpop_correlations(param, bin_size=0.01):
+    """
+    Cross-correlation population fingerprint (refPopCorr), analogous to the
+    MATLAB ComputeFunctionalScores refPopCorr.
+
+    For each unit the fingerprint is its row in the within-session pairwise
+    correlation matrix (one fold per cross-validation half).
+    refPopCorr[i, j] = Pearson r between the fold-1 fingerprint of unit i and
+    the fold-2 fingerprint of unit j.  Higher values indicate more similar
+    population coupling (likely the same unit).
+
+    For cross-session pairs whose sessions have different unit counts, the
+    fingerprints are truncated to the shorter length (reasonable when the
+    same population is recorded across days).
+    """
+    session_psthas = get_binned_psth(param, bin_size)
+    good_units = param['good_units']
+
+    session_C1_norm, session_C2_norm = [], []
+    for sr in session_psthas:
+        n_fold = sr.shape[1] // 2
+        C1 = np.corrcoef(sr[:, :n_fold])
+        C2 = np.corrcoef(sr[:, n_fold:2 * n_fold])
+        # Zero out NaN from units with no spikes before setting diagonal
+        C1 = np.nan_to_num(C1, nan=0.0)
+        C2 = np.nan_to_num(C2, nan=0.0)
+        np.fill_diagonal(C1, np.nan)
+        np.fill_diagonal(C2, np.nan)
+        session_C1_norm.append(_normalize_fingerprints(C1))
+        session_C2_norm.append(_normalize_fingerprints(C2))
+
+    # Map each global unit index to its session and within-session position
+    unit_session = []
+    for session, units in enumerate(good_units):
+        if hasattr(units, 'squeeze'):
+            units = units.squeeze()
+        unit_session.extend([session] * len(units))
+    unit_session = np.array(unit_session)
+
+    nclus = param['n_units']
+    refPopCorr = np.zeros((nclus, nclus))
+
+    for si in range(len(good_units)):
+        for sj in range(len(good_units)):
+            rows_i = np.where(unit_session == si)[0]
+            rows_j = np.where(unit_session == sj)[0]
+            C1n = session_C1_norm[si]   # (n_si, n_si)
+            C2n = session_C2_norm[sj]   # (n_sj, n_sj)
+            min_n = min(C1n.shape[1], C2n.shape[1])
+            # Vectorised pairwise correlation via normalised dot product
+            block = (C1n[:, :min_n] @ C2n[:, :min_n].T) / min_n
+            refPopCorr[np.ix_(rows_i, rows_j)] = np.clip(block, -1, 1)
+
+    return refPopCorr
+
+
+def get_FR(param):
+    """
+    Compute mean firing rate (spikes/s) per unit for two cross-validation halves.
+    Returns array of shape (2, n_units): FR[fold, unit].
+    """
+    fs = 3e4
+    nclus = param['n_units']
+    KSdirs = param['KS_dirs']
+    good_units = param['good_units']
+
+    FR = np.zeros((2, nclus))
+    index = 0
+    for session in range(len(good_units)):
+        times = np.load(os.path.join(KSdirs[session], "spike_times.npy")) / fs
+        clusters = np.load(os.path.join(KSdirs[session], "spike_clusters.npy"))
+
+        session_units = good_units[session]
+        if hasattr(session_units, 'squeeze'):
+            session_units = session_units.squeeze()
+
+        for clusid in session_units:
+            idx = np.where(clusters == clusid)[0]
+            if idx.size > 0:
+                n = len(idx)
+                for cv, cv_idx in enumerate([idx[:n // 2], idx[n // 2:]]):
+                    t_cv = times[cv_idx]
+                    if len(t_cv) > 1:
+                        bins = np.arange(int(t_cv.min()), int(t_cv.max()) + 2)
+                        if len(bins) > 1:
+                            FR[cv, index] = np.nanmean(np.histogram(t_cv, bins=bins)[0])
+            index += 1
+
+    return FR
+
+
+def FR_diff(param):
+    """
+    Pairwise absolute firing rate difference (cross-validated), analogous to
+    the MATLAB ComputeFunctionalScores FRDiff.
+
+    FRDiff[i, j] = |FR_fold2[i] - FR_fold1[j]|.
+    Lower values indicate more similar firing rates (likely same unit).
+
+    Note: the AUC function expects higher = better match, so pass
+    -FR_diff(param) when calling AUC for this metric.
+    """
+    FR = get_FR(param)   # (2, n_units)
+    return np.abs(FR[1, :, np.newaxis] - FR[0, np.newaxis, :])
+
+
 def AUC(matches:np.ndarray, func_metric:np.ndarray, session_id):
     """
     The AUC depends on a functional metric which is considered as ground truth. This is passed in via func_metric.
