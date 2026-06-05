@@ -34,12 +34,15 @@ def get_default_param(param = None):
            'RnChannels' : 30, 'RnTime' : 60, 
         }
     # if no dictionary is given just returns the default parameters
-    if param == None:
+    if param is None:
         out = tmp
-    else:    
+    else:
         # Add default parameters to param dictionary, does not overwrite pre existing param values
         out = tmp | param
-    if out['RnChannels'] %2 !=0:
+        # spike_width is an older alias for nTime; ensure nTime follows it when available
+        if 'spike_width' in out:
+            out['nTime'] = out['spike_width']
+    if out['RnChannels'] % 2 != 0:
         print('RnChannels is not even, please check')
     return out
 
@@ -109,13 +112,21 @@ def sort_good_channels(goodChannelMap, goodpos):
     pos_y_min_sorted = pos_y_min[z_min_sorted_indices]
     pos_y_max_sorted = pos_y_max[z_max_sorted_indices]
 
-    # Step 4: Interleave the channels from the two groups
+    # Step 4: Interleave the channels from the two groups.
+    # When N is odd one group has ceil(N/2) channels; that group must go in the
+    # even slots (which also has ceil(N/2) entries), so we check which is larger.
     sorted_goodChannelMap = np.empty_like(goodChannelMap)
-    sorted_goodChannelMap[::2] = channels_y_min_sorted[:len(sorted_goodChannelMap)//2]  # Even indices
-    sorted_goodChannelMap[1::2] = channels_y_max_sorted[:len(sorted_goodChannelMap)//2]  # Odd indices
     sorted_goodpos = np.empty_like(goodpos)
-    sorted_goodpos[::2, :] = pos_y_min_sorted
-    sorted_goodpos[1::2, :] = pos_y_max_sorted
+    if len(channels_y_min_sorted) >= len(channels_y_max_sorted):
+        sorted_goodChannelMap[::2] = channels_y_min_sorted
+        sorted_goodChannelMap[1::2] = channels_y_max_sorted
+        sorted_goodpos[::2, :] = pos_y_min_sorted
+        sorted_goodpos[1::2, :] = pos_y_max_sorted
+    else:
+        sorted_goodChannelMap[::2] = channels_y_max_sorted
+        sorted_goodChannelMap[1::2] = channels_y_min_sorted
+        sorted_goodpos[::2, :] = pos_y_max_sorted
+        sorted_goodpos[1::2, :] = pos_y_min_sorted
     return sorted_goodChannelMap, sorted_goodpos
 
 def extract_Rwaveforms(waveform, ChannelPos,ChannelMap, param):
@@ -206,7 +217,7 @@ def save_waveforms_hdf5(file_name, Rwaveform, MaxSitepos, session, save_path=Non
         for key, value in new_data.items():
             f.create_dataset(key, data=value)
 
-def get_snippets(waveforms, ChannelPos, session_id, save_path=None, unit_ids=None):
+def get_snippets(waveforms, ChannelPos, session_id, save_path=None, unit_ids=None, param=None):
     """
     Convert raw waveforms from a pair of sessions (waveforms) to snippets with shape (60,30,2).
 
@@ -233,7 +244,8 @@ def get_snippets(waveforms, ChannelPos, session_id, save_path=None, unit_ids=Non
 
     processed_waveforms = []
     positions = []
-    params = get_default_param()
+    kept_indices = []
+    params = get_default_param(param)
     ChannelMap = np.arange(384).astype(np.int32)
 
     if ChannelPos[0].shape[1] == 3:
@@ -248,10 +260,12 @@ def get_snippets(waveforms, ChannelPos, session_id, save_path=None, unit_ids=Non
         if unit_ids.shape[0] != len(waveforms):
             raise ValueError("unit_ids must have the same length as waveforms.")
 
+    expected_n_time = params['nTime']
+    expected_n_channels = params['nChannels']
     for i, unit in enumerate(waveforms):
         n_time, n_channels, n_repeats = unit.shape
-        if n_time != 82 or n_channels != 384 or n_repeats != 2:
-            print(f"Expected waveform shape to be (82,384,2) - instead got {unit.shape}")
+        if n_time != expected_n_time or n_channels != expected_n_channels or n_repeats != 2:
+            print(f"Expected waveform shape to be ({expected_n_time},{expected_n_channels},2) - instead got {unit.shape}")
             continue
         if np.any(np.isnan(unit)) or np.any(np.isinf(unit)):
             if not np.any(np.isnan(unit[:,:,0])) and not np.any(np.isinf(unit[:,:,0])):
@@ -267,13 +281,15 @@ def get_snippets(waveforms, ChannelPos, session_id, save_path=None, unit_ids=Non
             # Clean data - go ahead as normal
             MaxSiteMean, MaxSitepos, sorted_goodChannelMap, sorted_goodpos, Rwaveform = extract_Rwaveforms(unit, ChannelPos, ChannelMap, params)
 
+        if Rwaveform.shape != (params['RnTime'], params['RnChannels'], 2):
+            print(f"Incorrect shape for {i}th unit: {Rwaveform.shape}")
+            continue
+
         unit_id = int(unit_ids[i]) if unit_ids is not None else i
         save_waveforms_hdf5(f"Unit{unit_id}_RawSpikes.npy", Rwaveform, MaxSitepos, session_id[i], save_path=save_path)
-     
+
         processed_waveforms.append(Rwaveform)
         positions.append(MaxSitepos)
+        kept_indices.append(i)
 
-        if Rwaveform.shape!=(60,30,2):
-            print(f"Incorrect shape for {i}th unit: {Rwaveform.shape}")
-
-    return np.array(processed_waveforms), np.array(positions)
+    return np.array(processed_waveforms), np.array(positions), np.array(kept_indices, dtype=int)

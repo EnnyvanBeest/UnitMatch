@@ -99,6 +99,48 @@ def get_within_session(session_id, param):
 
     return within_session
 
+def filter_units_by_index(waveform, session_id, session_switch, good_units, kept_idx, param):
+    """
+    Re-synchronise all per-unit data structures after some units have been dropped
+    (e.g. by get_snippets filtering bad waveforms).
+
+    Parameters
+    ----------
+    waveform : ndarray (n_units, spike_width, n_channels, cv)
+    session_id : ndarray (n_units,)
+    session_switch : ndarray (n_sessions+1,)
+    good_units : list of per-session cluster-ID arrays
+    kept_idx : ndarray of int — indices into the original n_units dimension that were kept
+    param : dict
+
+    Returns
+    -------
+    waveform, session_id, session_switch, within_session, good_units, param  — all filtered
+    """
+    n_dropped = len(session_id) - len(kept_idx)
+    if n_dropped > 0:
+        print(f"Filtering {n_dropped} unit(s) that were rejected by get_snippets.")
+
+    new_waveform = waveform[kept_idx]
+    n_sessions = param['n_sessions']
+
+    new_good_units = []
+    for s in range(n_sessions):
+        start, end = int(session_switch[s]), int(session_switch[s + 1])
+        in_session = kept_idx[(kept_idx >= start) & (kept_idx < end)] - start
+        new_good_units.append(good_units[s][in_session])
+
+    n_units_per_session = np.array([len(g) for g in new_good_units])
+    n_units, new_session_id, new_session_switch, _ = get_session_data(n_units_per_session)
+
+    param['n_units'] = n_units
+    param['good_units'] = new_good_units
+    param['n_channels'] = new_waveform.shape[2]
+    new_within_session = get_within_session(new_session_id, param)
+
+    return new_waveform, new_session_id, new_session_switch, new_within_session, new_good_units, param
+
+
 def load_good_waveforms(wave_paths, unit_label_paths, param, good_units_only=True):
     if len(wave_paths) == len(unit_label_paths):
         n_sessions = len(wave_paths)
@@ -189,10 +231,13 @@ def load_good_waveforms(wave_paths, unit_label_paths, param, good_units_only=Tru
     param['n_channels'] = waveform.shape[2]
     param['n_units_per_session'] = n_units_per_session_all
 
-    if param['spike_width'] != waveform.shape[1]:
-        param['spike_width'] = waveform.shape[1]
-        param['peak_loc'] = np.floor(waveform.shape[1] / 2).astype(int)
-        param['waveidx'] = np.arange(param['peak_loc'] - 8, param['peak_loc'] + 15, dtype=int)
+    actual_width = waveform.shape[1]
+    if param['spike_width'] != actual_width:
+        print(f"Warning: loaded waveform spike_width ({actual_width}) does not match "
+              f"param['spike_width'] ({param['spike_width']}). Updating to match data.")
+    param['spike_width'] = actual_width
+    param['peak_loc'] = int(np.floor(actual_width / 2))
+    param['waveidx'] = np.arange(param['peak_loc'] - 8, param['peak_loc'] + 15, dtype=int)
 
     return waveform, session_id, session_switch, within_session, good_units, param
 
@@ -506,7 +551,7 @@ def fill_missing_pos(KS_dir, n_channels):
               '    Have returned the known channel positions and NaN')
     return channel_pos
 
-def paths_from_KS(KS_dirs, custom_raw_waveform_paths=None, custom_bombcell_paths=None):
+def paths_from_KS(KS_dirs, param=None, custom_raw_waveform_paths=None, custom_bombcell_paths=None):
     """
     This function will find specific paths to required files from a KiloSort directory
     or use custom paths if provided
@@ -515,6 +560,9 @@ def paths_from_KS(KS_dirs, custom_raw_waveform_paths=None, custom_bombcell_paths
     ----------
     KS_dirs : list
         The list of paths to the KiloSort directory for each session
+    param : dict, optional
+        Parameter dictionary. If provided, spike_width and peak_loc are updated
+        from the waveform files found in KS_dirs.
     custom_raw_waveform_paths : list, optional
         Custom paths to raw waveform directories for each session. If provided,
         these will be used instead of searching within KS_dirs
@@ -556,15 +604,29 @@ def paths_from_KS(KS_dirs, custom_raw_waveform_paths=None, custom_bombcell_paths
                 wave_paths.append( os.path.join(KS_dirs[i],'bombcell', 'RawWaveforms'))
             else:
                 raise Exception('Could not find RawWaveforms folder')
-    #load in a waveform from each session to get the number of channels!
+    #load in a waveform from each session to get the number of channels and spike_width
     n_channels = []
+    spike_widths = []
     for i in range(n_sessions):
         path_tmp = wave_paths[i]
         file = os.listdir(path_tmp)
         waveform_tmp = np.load(os.path.join(path_tmp,file[0]))
         n_channels.append(waveform_tmp.shape[1])
+        spike_widths.append(waveform_tmp.shape[0])
 
     os.chdir(tmp)
+
+    if param is not None:
+        unique_widths = set(spike_widths)
+        if len(unique_widths) > 1:
+            print(f"Warning: sessions have inconsistent spike_width values {spike_widths}. "
+                  f"Using the first session's value ({spike_widths[0]}); check your data.")
+        detected_width = spike_widths[0]
+        if 'spike_width' in param and param['spike_width'] != detected_width:
+            print(f"Updating spike_width from {param['spike_width']} to {detected_width} based on waveform files.")
+        param['spike_width'] = detected_width
+        param['peak_loc'] = int(np.floor(detected_width / 2))
+        param['waveidx'] = np.arange(param['peak_loc'] - 8, param['peak_loc'] + 15, dtype=int)
 
     #Load channel_pos
     channel_pos = []
