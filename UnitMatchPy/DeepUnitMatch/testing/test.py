@@ -585,6 +585,54 @@ def FR_diff(param):
     return np.abs(FR[1, :, np.newaxis] - FR[0, np.newaxis, :])
 
 
+def get_ISI_CV(param):
+    """
+    Compute the coefficient of variation (CV = std/mean) of interspike intervals
+    per unit for two cross-validation halves.
+    Returns array of shape (2, n_units): CV[fold, unit].
+    Units with fewer than 2 spikes in a fold get CV = 0.
+    """
+    fs = 3e4
+    nclus = param['n_units']
+    KSdirs = param['KS_dirs']
+    good_units = param['good_units']
+
+    CV = np.zeros((2, nclus))
+    index = 0
+    for session in range(len(good_units)):
+        times = np.load(os.path.join(KSdirs[session], "spike_times.npy")) / fs
+        clusters = np.load(os.path.join(KSdirs[session], "spike_clusters.npy"))
+
+        session_units = good_units[session]
+        if hasattr(session_units, 'squeeze'):
+            session_units = session_units.squeeze()
+
+        for clusid in session_units:
+            idx = np.where(clusters == clusid)[0]
+            if idx.size > 1:
+                n = len(idx)
+                for cv, cv_idx in enumerate([idx[:n // 2], idx[n // 2:]]):
+                    isis = np.diff(times[cv_idx].astype(float))
+                    if len(isis) > 0 and isis.mean() > 0:
+                        CV[cv, index] = isis.std() / isis.mean()
+            index += 1
+
+    return CV
+
+
+def ISI_CV_diff(param):
+    """
+    Pairwise absolute difference in ISI coefficient of variation (cross-validated).
+    CVDiff[i, j] = |CV_fold2[i] - CV_fold1[j]|.
+    Lower values indicate more similar firing regularity (likely same unit).
+
+    Note: the AUC function expects higher = better match, so pass
+    -ISI_CV_diff(param) when calling AUC for this metric.
+    """
+    CV = get_ISI_CV(param)   # (2, n_units)
+    return np.abs(CV[1, :, np.newaxis] - CV[0, np.newaxis, :])
+
+
 def AUC(matches:np.ndarray, func_metric:np.ndarray, session_id):
     """
     The AUC depends on a functional metric which is considered as ground truth. This is passed in via func_metric.
