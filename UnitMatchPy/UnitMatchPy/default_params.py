@@ -17,7 +17,6 @@ def get_default_param(param = None):
     tmp = {'spike_width' : 82, # will automatically update after loading in the waveform
             'waveidx' : np.arange(33,56), # what idxs cover the spike
             'channel_radius' : 150, # the max distance channels which a unit will consider
-            'peak_loc' : 40, # were the spike peak will be aligned to
             'max_dist' : 100, # max distance for possible matches
             'neighbour_dist' : 50,
             'stepsz' : 0.01, # size of of a step in probability distributions
@@ -39,4 +38,9 @@ def get_default_param(param = None):
     else:
         #Add default parameters to param dictionary, does not overwrite pre existing param values
         out = tmp | param
+
+    # peak_loc always follows floor(spike_width / 2) unless the caller set it explicitly
+    if param is None or 'peak_loc' not in param:
+        out['peak_loc'] = int(np.floor(out['spike_width'] / 2))
+
     return out

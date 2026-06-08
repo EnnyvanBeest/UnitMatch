@@ -37,6 +37,10 @@ dependencies = [
   "scikit-learn>=1.2,<2.0",
   "mtscomp",
   "torch>=2.1,<3.0", 
+  "tensorboard",
+  "seaborn",
+  "matplotlib_venn",
+  "statsmodels"
 ]
 
 [project.optional-dependencies]

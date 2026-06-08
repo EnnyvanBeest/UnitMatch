@@ -196,6 +196,14 @@ def decay_and_average_waveform(waveform, channel_pos, good_idx, max_site, max_si
             tmp_amp = tmp_amp[dist_to_max_chan != 0]
             dist_to_max_chan = dist_to_max_chan[dist_to_max_chan != 0]
 
+            if len(tmp_amp) == 0:
+                # Only the max channel itself is within the radius — no spatial decay can be estimated.
+                # Fall back to channel_radius so downstream code has a safe d_10 value.
+                spatial_decay_fit[i, cv] = np.nan
+                spatial_decay[i, cv] = np.nan
+                d_10[i, cv] = channel_radius
+                continue
+
             # there is variation in how different programming languages/options fit to a curve
             popt, pcurve = sp.optimize.curve_fit(
                 exponential_func,
