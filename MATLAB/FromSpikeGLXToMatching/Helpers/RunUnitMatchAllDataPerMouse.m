@@ -87,12 +87,9 @@ for midx = 1:length(MiceOpt)
         continue
     end
 
-    KSDates = cellfun(@(X) strsplit(X,filesep),AllKiloSortPaths,'Uni',0);
-    try
-        KSDates = cellfun(@(X) datetime(X{end-2}),KSDates,'uni',0);
-    catch
-        KSDates = cellfun(@(X) datetime(X{end-4}),KSDates,'uni',0);
-    end
+    KSDates = cellfun(@(X) dir(X),AllKiloSortPaths,'Uni',0);
+    KSDates = cellfun(@(X) (X.date),KSDates,'Uni',0);
+  
     %% Remove old copies?
     UnitMatchExist = dir(fullfile(SaveDir,MiceOpt{midx},'**','UnitMatch.mat'));
     if PipelineParams.separateIMRO
@@ -112,7 +109,7 @@ for midx = 1:length(MiceOpt)
             delete(fullfile(UnitMatchExist(id).folder,'**'))
             rmdir(UnitMatchExist(id).folder)
             MouseAllDone = 0;
-        elseif any(cellfun(@(X) UnitMatchExist(id).date<=X,KSDates)) %Any new data since running this?
+        elseif any(cellfun(@(X) UnitMatchExist(id).date<=datetime(X),KSDates)) %Any new data since running this?
             if RemoveOldCopies
                 delete(fullfile(UnitMatchExist(id).folder,'**'))
                 rmdir(UnitMatchExist(id).folder)
