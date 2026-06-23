@@ -1,0 +1,428 @@
+# Batch wrapper: runs DeepUnitMatch on every UnitMatch.mat found under
+#    \\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\FullAnimal_KSChanMap
+
+# KS directories are read from UMparam.KSDir; good units are taken from
+# UniqueIDConversion (OriginalClusID[GoodID], indexed per session via recsesAll).
+
+# Results are mirrored to:
+#    \\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026
+#with the same subfolder structure.
+
+import os, sys, traceback
+import numpy as np
+import scipy.io
+import h5py
+
+# ── project paths ───────────────────────────────────────────────────────────
+_HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, _HERE)
+sys.path.insert(0, os.path.dirname(_HERE))
+sys.path.insert(0, os.path.join(_HERE, 'DeepUnitMatch'))
+
+import UnitMatchPy.default_params as default_params
+import UnitMatchPy.utils as util
+import UnitMatchPy.overlord as ov
+import UnitMatchPy.bayes_functions as bf
+import UnitMatchPy.assign_unique_id as aid
+import UnitMatchPy.save_utils as su
+import UnitMatchPy.metric_functions as mf
+from DeepUnitMatch.utils import param_fun
+from DeepUnitMatch.testing import test
+from DeepUnitMatch.utils import helpers
+
+# ── user settings ────────────────────────────────────────────────────────────
+BASE_INPUT  = r'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\FullAnimal_KSChanMap'
+BASE_OUTPUT = r'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026'
+
+DEVICE = "cpu"
+THRESH = 0.5
+
+
+# ── MATLAB file loading ───────────────────────────────────────────────────────
+
+def _decode_hdf5_str(f, ref_or_ds):
+    """Decode a MATLAB char array stored as uint16 in an HDF5 file."""
+    if isinstance(ref_or_ds, h5py.Reference):
+        obj = f[ref_or_ds]
+    else:
+        obj = ref_or_ds
+    chars = obj[()].flatten()
+    return ''.join(chr(int(c)) for c in chars)
+
+
+def _hdf5_cellstr(f, dataset):
+    """Read a MATLAB cell array of strings from an h5py dataset."""
+    data = dataset[()]
+    flat = data.flatten()
+    return [_decode_hdf5_str(f, ref) for ref in flat]
+
+
+def _load_mat_scipy(mat_path):
+    """Load via scipy (MATLAB < v7.3). Returns (ks_dirs, orig_clus_id, recsesAll, good_id)."""
+    mat = scipy.io.loadmat(mat_path, simplify_cells=True)
+    ump = mat['UMparam']
+    uid = mat['UniqueIDConversion']
+
+    ks_dirs = ump['KSDir']
+    if isinstance(ks_dirs, str):
+        ks_dirs = [ks_dirs]
+    elif isinstance(ks_dirs, np.ndarray):
+        ks_dirs = [str(s) for s in ks_dirs.flatten()]
+
+    orig_clus_id = np.array(uid['OriginalClusID']).flatten()
+    recsesAll    = np.array(uid['recsesAll']).flatten()
+    good_id      = np.array(uid['GoodID']).flatten().astype(bool)
+
+    return ks_dirs, orig_clus_id, recsesAll, good_id
+
+
+def _load_mat_hdf5(mat_path):
+    """Load via h5py (MATLAB v7.3 HDF5). Returns (ks_dirs, orig_clus_id, recsesAll, good_id)."""
+    with h5py.File(mat_path, 'r') as f:
+        # KSDir is a cell array of strings
+        ks_dirs = _hdf5_cellstr(f, f['UMparam']['KSDir'])
+
+        uid = f['UniqueIDConversion']
+        orig_clus_id = uid['OriginalClusID'][()].flatten()
+        recsesAll    = uid['recsesAll'][()].flatten()
+        good_id      = uid['GoodID'][()].flatten().astype(bool)
+
+    return ks_dirs, orig_clus_id, recsesAll, good_id
+
+
+def load_unitmatchemat(mat_path):
+    """
+    Load UnitMatch.mat and return:
+        ks_dirs       – list of KS directory paths (one per session)
+        orig_clus_id  – cluster IDs for every neuron
+        recsesAll     – session index (1-based, MATLAB convention) for every neuron
+        good_id       – boolean mask of good neurons
+    """
+    try:
+        return _load_mat_scipy(mat_path)
+    except Exception:
+        return _load_mat_hdf5(mat_path)
+
+
+# ── good-unit helpers ─────────────────────────────────────────────────────────
+
+def build_good_units_per_session(ks_dirs, orig_clus_id, recsesAll, good_id):
+    """
+    Returns a list (one entry per session) of (N, 1) float arrays of cluster IDs,
+    matching the shape expected by UnitMatchPy internals.
+    recsesAll is 1-indexed (MATLAB convention).
+    """
+    good_units = []
+    for i in range(len(ks_dirs)):
+        mask = (recsesAll == (i + 1)) & good_id
+        ids  = orig_clus_id[mask].astype(float)
+        good_units.append(ids.reshape(-1, 1))
+    return good_units
+
+
+def load_waveforms_for_good_units(wave_paths, good_units_per_session, param):
+    """
+    Directly loads RawSpikes waveforms for the specified good units, bypassing
+    the TSV-based unit-label files used by util.load_good_waveforms.
+
+    Returns the same tuple as util.load_good_waveforms.
+    """
+    n_sessions = len(wave_paths)
+    waveforms           = []
+    actual_good_units   = []
+    successful_sessions = []
+
+    for sess_idx in range(n_sessions):
+        wave_path = wave_paths[sess_idx]
+        g_units   = good_units_per_session[sess_idx].flatten()
+
+        if len(g_units) == 0:
+            print(f'  Session {sess_idx}: no good units, skipping.')
+            continue
+
+        try:
+            first_id = int(g_units[0])
+            p_first  = os.path.join(wave_path, f'Unit{first_id}_RawSpikes.npy')
+            ref      = np.load(p_first)                      # (T, C, spikes) or similar
+            buf      = np.zeros((len(g_units), *ref.shape), dtype=ref.dtype)
+
+            kept_ids = []
+            kept_idx = []
+            for j, uid in enumerate(g_units):
+                p = os.path.join(wave_path, f'Unit{int(uid)}_RawSpikes.npy')
+                if os.path.exists(p):
+                    buf[j] = np.load(p)
+                    kept_ids.append(uid)
+                    kept_idx.append(j)
+                else:
+                    print(f'  Warning: missing {p}')
+
+            if not kept_ids:
+                print(f'  Session {sess_idx}: no waveform files found, skipping.')
+                continue
+
+            buf = buf[kept_idx]
+            waveforms.append(buf)
+            actual_good_units.append(np.array(kept_ids, dtype=float).reshape(-1, 1))
+            successful_sessions.append(sess_idx)
+
+        except Exception as e:
+            print(f'  Error loading session {sess_idx}: {e}')
+        finally:
+            try: del buf
+            except NameError: pass
+
+    if not waveforms:
+        raise RuntimeError('No sessions loaded successfully.')
+
+    if len(successful_sessions) < n_sessions:
+        failed = [i for i in range(n_sessions) if i not in successful_sessions]
+        print(f'  Warning: skipped {len(failed)} session(s) with no loadable waveforms: {failed}')
+
+    waveform           = np.concatenate(waveforms, axis=0)
+    n_units_per_session = np.array([w.shape[0] for w in waveforms], dtype=int)
+
+    param['n_units'], session_id, session_switch, param['n_sessions'] = \
+        util.get_session_data(n_units_per_session)
+    within_session = util.get_within_session(session_id, param)
+
+    param['n_channels']          = waveform.shape[2]
+    param['n_units_per_session'] = [len(g) for g in actual_good_units]
+
+    actual_width          = waveform.shape[1]
+    param['spike_width']  = actual_width
+    param['peak_loc']     = int(np.floor(actual_width / 2))
+    param['waveidx']      = np.arange(param['peak_loc'] - 8, param['peak_loc'] + 15, dtype=int)
+
+    return waveform, session_id, session_switch, within_session, actual_good_units, param
+
+
+# ── main processing function ──────────────────────────────────────────────────
+
+def run_deep_unit_match(mat_path):
+    """Run the full DeepUnitMatch pipeline for one UnitMatch.mat."""
+    print(f'\n{"="*70}')
+    print(f'Processing: {mat_path}')
+
+    # ── derive save/tmp paths ────────────────────────────────────────────────
+    subfolder = os.path.relpath(os.path.dirname(mat_path), BASE_INPUT)
+    save_dir  = os.path.join(BASE_OUTPUT, subfolder)
+    tmp_path  = os.path.join(save_dir, 'tmp_waveforms')
+
+    print(f'Save dir : {save_dir}')
+    os.makedirs(save_dir, exist_ok=True)
+    os.makedirs(tmp_path,  exist_ok=True)
+
+    # ── load UnitMatch.mat ───────────────────────────────────────────────────
+    print('Loading UnitMatch.mat …')
+    try:
+        ks_dirs, orig_clus_id, recsesAll, good_id = load_unitmatchemat(mat_path)
+    except Exception as e:
+        print(f'  ERROR loading mat: {e}')
+        traceback.print_exc()
+        return
+
+    print(f'  {len(ks_dirs)} session(s):')
+    for i, d in enumerate(ks_dirs):
+        n_good = int(((recsesAll == (i + 1)) & good_id).sum())
+        print(f'    [{i}] {d}  ({n_good} good units)')
+
+    # ── find waveform paths and channel positions ────────────────────────────
+    try:
+        wave_paths, _, channel_pos = util.paths_from_KS(ks_dirs)
+    except Exception as e:
+        print(f'  ERROR in paths_from_KS: {e}')
+        traceback.print_exc()
+        return
+
+    # ── set up parameters ────────────────────────────────────────────────────
+    param = {'KS_dirs': ks_dirs}
+    param = default_params.get_default_param(param=param)
+    param = util.get_probe_geometry(channel_pos[0], param)
+
+    # ── check probe compatibility before any expensive preprocessing ────────────
+    # channel_pos entries are (nChan, 2) or (nChan, 3); when 3-col the first
+    # column is a shank/depth offset so x is column index 1, otherwise 0.
+    cp = channel_pos[0]
+    x_col = cp[:, 1] if cp.shape[1] == 3 else cp[:, 0]
+    actual_n_xchannelpos = int(len(np.unique(x_col)))
+
+    if actual_n_xchannelpos != param['n_xchannelpos']:
+        print(
+            f'  SKIPPING: probe has {actual_n_xchannelpos} x-column position(s) '
+            f'but param expects {param["n_xchannelpos"]}. '
+            f'Set param[\'n_xchannelpos\'] = {actual_n_xchannelpos} to process this probe type.'
+        )
+        return
+
+    # ── load model ───────────────────────────────────────────────────────────
+    print('Loading DeepUnitMatch model …')
+    model = test.load_trained_model(device=DEVICE)
+
+    # ── build per-session good-unit lists from UnitMatch.mat ─────────────────
+    good_units_per_session = build_good_units_per_session(
+        ks_dirs, orig_clus_id, recsesAll, good_id)
+
+    # ── load waveforms ───────────────────────────────────────────────────────
+    print('Loading waveforms …')
+    try:
+        waveform, session_id, session_switch, within_session, good_units, param = \
+            load_waveforms_for_good_units(wave_paths, good_units_per_session, param)
+    except Exception as e:
+        print(f'  ERROR loading waveforms: {e}')
+        traceback.print_exc()
+        return
+
+    param['good_units'] = good_units
+    print(f'  {waveform.shape[0]} units across {param["n_sessions"]} session(s)')
+
+    # ── preprocess with DeepUnitMatch (get_snippets → HDF5) ─────────────────
+    print('Preprocessing waveforms (get_snippets) …')
+    unit_ids = np.concatenate(param['good_units']).squeeze()
+    try:
+        snippets, positions, kept_idx = param_fun.get_snippets(
+            waveform, channel_pos, session_id,
+            save_path=tmp_path, unit_ids=unit_ids, param=param)
+    except Exception as e:
+        print(f'  ERROR in get_snippets: {e}')
+        traceback.print_exc()
+        return
+
+    # re-sync arrays if any units were rejected by get_snippets
+    if len(kept_idx) < len(waveform):
+        waveform, session_id, session_switch, within_session, good_units, param = \
+            util.filter_units_by_index(
+                waveform, session_id, session_switch, good_units, kept_idx, param)
+
+    # ── neural-net inference ─────────────────────────────────────────────────
+    print('Running DeepUnitMatch inference …')
+    data_dir = os.path.join(tmp_path, 'processed_waveforms')
+    try:
+        sim_matrix = test.inference(model, data_dir)
+    except Exception as e:
+        print(f'  ERROR in inference: {e}')
+        traceback.print_exc()
+        return
+
+    # ── Naive Bayes matching (identical to notebook) ─────────────────────────
+    print('Running Naive Bayes matching …')
+    clus_info = {
+        'good_units'   : param['good_units'],
+        'session_switch': session_switch,
+        'session_id'   : session_id,
+        'original_ids' : np.concatenate(param['good_units']),
+    }
+    extracted_wave_properties = ov.extract_parameters(waveform, channel_pos, clus_info, param)
+    within_session = 1 - (session_id[:, None] == session_id).astype(int)
+    sessions = np.unique(session_id)
+
+    probs           = np.zeros(sim_matrix.shape)
+    distance_matrix = np.zeros(sim_matrix.shape)
+
+    for r1 in sessions:
+        for r2 in sessions:
+            if r1 >= r2:
+                continue
+
+            mask        = np.isin(session_id, [r1, r2])
+            sim_mat     = sim_matrix[mask][:, mask]
+            n           = int(np.sum(mask))
+            n_units_r1  = session_switch[r1 + 1] - session_switch[r1]
+            n_units_r2  = session_switch[r2 + 1] - session_switch[r2]
+            ss_pair     = np.array([0, n_units_r1, n_units_r1 + n_units_r2])
+            indices     = np.where(mask)[0]
+
+            df = helpers.create_dataframe(
+                [param['good_units'][r1], param['good_units'][r2]],
+                sim_mat, session_list=[r1, r2])
+            matches = test.get_matches(
+                df, sim_mat, session_id[indices], data_dir, dist_thresh=50)
+
+            labels       = np.eye(sim_mat.shape[0])
+            subsessionid = np.array(
+                [r1] * len(param['good_units'][r1]) +
+                [r2] * len(param['good_units'][r2]))
+            for (recses1, recses2), group in matches.groupby(by=['RecSes1', 'RecSes2']):
+                asmatrix = group['match'].values.reshape(
+                    len(param['good_units'][recses1]),
+                    len(param['good_units'][recses2])).astype(int)
+                labels[np.ix_(subsessionid == recses1, subsessionid == recses2)] = asmatrix
+
+            avg_centroid       = extracted_wave_properties['avg_centroid'][:, mask, :]
+            avg_waveform_per_tp = extracted_wave_properties['avg_waveform_per_tp'][:, mask, :, :]
+            avg_waveform_per_tp = mf.drift_correct_session_pair(
+                labels.astype(bool), ss_pair, avg_centroid, avg_waveform_per_tp, 0, param)
+            avg_waveform_per_tp_flip = mf.flip_dim(avg_waveform_per_tp, param, n)
+            euclid_dist              = mf.get_Euclidean_dist(avg_waveform_per_tp_flip, param, n)
+            centroid_dist, _         = mf.centroid_metrics(euclid_dist, param)
+
+            scores_to_incl   = {'similarity': sim_mat, 'distance': centroid_dist}
+            n_units          = int(np.sqrt(len(df)))
+            priors           = np.array([1 - 2 / n_units, 2 / n_units])
+            parameter_kernels = bf.get_parameter_kernels(
+                scores_to_incl, labels, np.unique(labels), param)
+            predictors = np.stack(list(scores_to_incl.values()), axis=2)
+            probability = bf.apply_naive_bayes(
+                parameter_kernels, priors, predictors, param, np.unique(labels))
+            prob_matrix = probability[:, 1].reshape(n_units, n_units)
+
+            probs[np.ix_(mask, mask)]           = prob_matrix
+            distance_matrix[np.ix_(mask, mask)] = centroid_dist
+
+    # ── final matches ────────────────────────────────────────────────────────
+    final_matches = test.directional_filter(probs, session_id, THRESH)
+    n_matches = int(np.sum(final_matches)) // 2
+    print(f'  {n_matches} matches found (threshold={THRESH})')
+
+    # ── assign unique IDs & save ─────────────────────────────────────────────
+    UIDs = aid.assign_unique_id(probs, param, clus_info)
+
+    su.save_to_output(
+        save_dir,
+        {"distance": distance_matrix},
+        np.argwhere(final_matches),
+        probs,
+        extracted_wave_properties['avg_centroid'],
+        extracted_wave_properties['avg_waveform'],
+        extracted_wave_properties['avg_waveform_per_tp'],
+        extracted_wave_properties['max_site'],
+        distance_matrix,
+        final_matches,
+        clus_info,
+        param,
+        UIDs=UIDs,
+        matches_curated=None,
+        save_match_table=True,
+    )
+    print(f'  Results saved to: {save_dir}')
+
+
+# ── entry point ───────────────────────────────────────────────────────────────
+
+def main():
+    print(f'Scanning for UnitMatch.mat files under:\n  {BASE_INPUT}\n')
+
+    mat_files = []
+    for root, _dirs, files in os.walk(BASE_INPUT):
+        if 'UnitMatch.mat' in files:
+            mat_files.append(os.path.join(root, 'UnitMatch.mat'))
+
+    if not mat_files:
+        print('No UnitMatch.mat files found.')
+        return
+
+    print(f'Found {len(mat_files)} file(s).\n')
+
+    for i, mat_path in enumerate(mat_files):
+        print(f'[{i+1}/{len(mat_files)}]')
+        try:
+            run_deep_unit_match(mat_path)
+        except Exception as e:
+            print(f'  FAILED: {e}')
+            traceback.print_exc()
+
+    print('\nAll done.')
+
+
+if __name__ == '__main__':
+    main()

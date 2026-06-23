@@ -27,6 +27,7 @@ def get_default_param(param = None):
             'match_threshold' : 0.5, # probability threshold to consider as a match
             'curve_fit_maxfev' : 10000, # max evaluations for decay curve fitting
             'chunk_size' : 500, # row-chunk size for pairwise metric computation
+            'n_xchannelpos' : 2, # number of unique x-axis column positions on the probe shank (2 for NP2.0, 4 for NP1.0)
         }
     
     tmp['score_vector'] = np.arange(tmp['stepsz']/2 ,1 ,tmp['stepsz'])

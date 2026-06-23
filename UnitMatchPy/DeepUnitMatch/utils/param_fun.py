@@ -31,7 +31,8 @@ def get_default_param(param = None):
     Do not need to give a dictionary.
     """
     tmp = {'nTime' : 82, 'nChannels' : 384, 'ChannelRadius' : 110,
-           'RnChannels' : 30, 'RnTime' : 60, 
+           'RnChannels' : 30, 'RnTime' : 60,
+           'n_xchannelpos' : 2,  # number of unique x-axis (column) positions on the probe shank (2 for NP2.0, 4 for NP1.0)
         }
     # if no dictionary is given just returns the default parameters
     if param is None:
@@ -72,61 +73,47 @@ def get_max_site(SpatialFP):
     MaxSite = np.argmax(SpatialFP, axis = 0)
     return MaxSite
 
-def sort_good_channels(goodChannelMap, goodpos):
+def sort_good_channels(goodChannelMap, goodpos, n_xchannelpos=2):
     '''
-    Sorts the good channels by their y-axis value and then by their z-axis value.
+    Sorts good channels by depth (z-axis), interleaved across x-axis column positions.
+
+    Works for any number of probe columns (n_xchannelpos). Channels are grouped by
+    their x-axis position, each group is sorted by depth, then all groups are
+    interleaved round-robin (largest group first to fill the leading positions).
     '''
-    # Step 1: Identify the unique y-axis values and sort them
-    unique_y_values = np.unique(goodpos[:, 0])
-    unique_y_values.sort()
+    unique_x_values = np.unique(goodpos[:, 0])
+    unique_x_values.sort()
 
-    # Safety check: ensure there are exactly two unique y-axis values
-    if len(unique_y_values) != 2:
-        print(unique_y_values)
-        print(f"Found {len(unique_y_values)} instead of 2 unique x values.")
-        # TODO: adapt this code to be robust to Neuropixels 1.0 recordings as well as 2.0.
-        # For now we are only using Neuropixels 2.0 data -> if we enter this block it means there was a mistake in spike sorting
-        # Therefore the fix for now is to use return 0s so that we can handle this in extract_Rwaveforms
+    if len(unique_x_values) != n_xchannelpos:
+        print(f"Found {len(unique_x_values)} instead of {n_xchannelpos} unique x-axis column positions.")
+        return [-1], [-1]
 
-        # print(f"Channel Map: {goodChannelMap}")
-        # print(f"Pos: {goodpos}")
-        # raise ValueError(f"There should be exactly two unique y-axis values for Neuropixels 2.0 shank - instead got {len(unique_y_values)}: [{unique_y_values}]")
-        return [-1],[-1]
+    # Group channels by x-column and sort each group by depth (z)
+    groups_ch = []
+    groups_pos = []
+    for x_val in unique_x_values:
+        idx = np.where(goodpos[:, 0] == x_val)[0]
+        z_order = np.argsort(goodpos[idx, 1])
+        groups_ch.append(goodChannelMap[idx][z_order])
+        groups_pos.append(goodpos[idx][z_order])
 
-    channels_y_min_indices = np.where(goodpos[:, 0] == unique_y_values[0])[0]
-    channels_y_max_indices = np.where(goodpos[:, 0] == unique_y_values[1])[0]
+    # Put the largest group first so it occupies the lowest-index slots
+    # (preserves the original NP2.0 behaviour where the bigger column gets even positions)
+    col_order = np.argsort([len(g) for g in groups_ch])[::-1]
+    groups_ch  = [groups_ch[i]  for i in col_order]
+    groups_pos = [groups_pos[i] for i in col_order]
 
-    channels_y_min = goodChannelMap[channels_y_min_indices]
-    channels_y_max = goodChannelMap[channels_y_max_indices]
-
-    pos_y_min = goodpos[channels_y_min_indices]
-    pos_y_max = goodpos[channels_y_max_indices]
-    
-    # Step 3: Sort each group by the z-axis value
-    z_min_sorted_indices = np.argsort(goodpos[goodpos[:, 0] == unique_y_values[0], 1])
-    z_max_sorted_indices = np.argsort(goodpos[goodpos[:, 0] == unique_y_values[1], 1])
-
-    channels_y_min_sorted = channels_y_min[z_min_sorted_indices]
-    channels_y_max_sorted = channels_y_max[z_max_sorted_indices]
-
-    pos_y_min_sorted = pos_y_min[z_min_sorted_indices]
-    pos_y_max_sorted = pos_y_max[z_max_sorted_indices]
-
-    # Step 4: Interleave the channels from the two groups.
-    # When N is odd one group has ceil(N/2) channels; that group must go in the
-    # even slots (which also has ceil(N/2) entries), so we check which is larger.
+    # Round-robin interleave across columns, stepping through depth together
     sorted_goodChannelMap = np.empty_like(goodChannelMap)
     sorted_goodpos = np.empty_like(goodpos)
-    if len(channels_y_min_sorted) >= len(channels_y_max_sorted):
-        sorted_goodChannelMap[::2] = channels_y_min_sorted
-        sorted_goodChannelMap[1::2] = channels_y_max_sorted
-        sorted_goodpos[::2, :] = pos_y_min_sorted
-        sorted_goodpos[1::2, :] = pos_y_max_sorted
-    else:
-        sorted_goodChannelMap[::2] = channels_y_max_sorted
-        sorted_goodChannelMap[1::2] = channels_y_min_sorted
-        sorted_goodpos[::2, :] = pos_y_max_sorted
-        sorted_goodpos[1::2, :] = pos_y_min_sorted
+    pos = 0
+    for depth_idx in range(max(len(g) for g in groups_ch)):
+        for g_ch, g_pos in zip(groups_ch, groups_pos):
+            if depth_idx < len(g_ch):
+                sorted_goodChannelMap[pos] = g_ch[depth_idx]
+                sorted_goodpos[pos] = g_pos[depth_idx]
+                pos += 1
+
     return sorted_goodChannelMap, sorted_goodpos
 
 def extract_Rwaveforms(waveform, ChannelPos,ChannelMap, param):
@@ -162,7 +149,9 @@ def extract_Rwaveforms(waveform, ChannelPos,ChannelMap, param):
     goodChannelMap = ChannelMap[goodidx] #selecting the good channels
     goodpos = ChannelPos * np.tile(goodidx, (2,1)).T
     goodpos = goodpos[goodidx,:]
-    sorted_goodChannelMap,sorted_goodpos = sort_good_channels(goodChannelMap, goodpos)
+    sorted_goodChannelMap, sorted_goodpos = sort_good_channels(
+        goodChannelMap, goodpos, n_xchannelpos=param.get('n_xchannelpos', 2)
+    )
     if sorted_goodChannelMap[0]==-1 and sorted_goodpos[0]==-1:
         # we have a spike sorting error so need to 0 this recording
         return np.array([-1,-1]), np.array([-1,-1]), [0], [0], np.zeros((1,1,1))

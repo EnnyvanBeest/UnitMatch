@@ -1,7 +1,9 @@
 import os, sys
+from pathlib import Path
 
-sys.path.insert(0, os.getcwd())
-sys.path.insert(0, os.path.join(os.getcwd(), os.pardir))
+# Ensure the DeepUnitMatch package root is on the path so `utils` is
+# importable regardless of the caller's working directory.
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from utils.losses import clip_sim, CustomClipLoss, Projector
 from utils.npdataset import NeuropixelsDataset_cortexlab, ValidationExperimentBatchSampler
@@ -13,7 +15,6 @@ import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import pandas as pd
-from pathlib import Path
 from sklearn.neighbors import KernelDensity
 from scipy.optimize import linear_sum_assignment
 import importlib
