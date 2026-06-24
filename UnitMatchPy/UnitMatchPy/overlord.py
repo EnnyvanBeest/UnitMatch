@@ -116,14 +116,14 @@ def extract_metric_scores(extracted_wave_properties, session_switch, within_sess
             #get the thershold for a match
             thrs_opt = mf.get_threshold(total_score, within_session, euclid_dist, param, is_first_pass = True)
 
-            param['n_expected_matches'] = np.sum( (total_score > thrs_opt).astype(int))
+            param['n_expected_matches'] = int(np.sum((total_score > thrs_opt) & include_these_pairs_idx.astype(bool)))
             prior_match = 1 - ( param['n_expected_matches'] / len(include_these_pairs))
             candidate_pairs = total_score > thrs_opt
 
             drifts, avg_centroid, avg_waveform_per_tp = mf.drift_n_sessions(candidate_pairs, session_switch, avg_centroid, avg_waveform_per_tp, total_score, param)
 
     thrs_opt = mf.get_threshold(total_score, within_session, euclid_dist, param, is_first_pass = False)
-    param['n_expected_matches'] = np.sum( (total_score > thrs_opt).astype(int))
+    param['n_expected_matches'] = int(np.sum((total_score > thrs_opt) & include_these_pairs_idx.astype(bool)))
     prior_match = 1 - ( param['n_expected_matches'] / len(include_these_pairs))
     thrs_opt = np.quantile(total_score[include_these_pairs_idx.astype(bool)], prior_match)
     candidate_pairs = total_score > thrs_opt

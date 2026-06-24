@@ -1,14 +1,15 @@
-# Batch wrapper: runs DeepUnitMatch on every UnitMatch.mat found under
+# Batch wrapper: runs DeepUnitMatch and UMPy on every UnitMatch.mat found under
 #    \\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\FullAnimal_KSChanMap
 
 # KS directories are read from UMparam.KSDir; good units are taken from
 # UniqueIDConversion (OriginalClusID[GoodID], indexed per session via recsesAll).
 
 # Results are mirrored to:
-#    \\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026
-#with the same subfolder structure.
+#    \\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026V2
+# with the same subfolder structure, split into DeepUnitMatch/ and UMPy/ subfolders.
+# Waveforms are loaded once per mat file and shared between both pipelines.
 
-import os, sys, traceback
+import os, sys, copy, traceback
 import numpy as np
 import scipy.io
 import h5py
@@ -37,7 +38,8 @@ from DeepUnitMatch.utils import helpers
 BASE_INPUT  = r'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\FullAnimal_KSChanMap'
 BASE_OUTPUT = r'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026V2'
 
-DEVICE = 'cuda' if test.torch.cuda.is_available() else 'cpu'
+DEVICE = 'cpu'  # 'cuda' if test.torch.cuda.is_available() else 'cpu'
+print(f'Device: {DEVICE}')
 THRESH = 0.5
 REDO   = True   # if True, rerun even when output already exists
 
@@ -83,7 +85,6 @@ def _load_mat_scipy(mat_path):
 def _load_mat_hdf5(mat_path):
     """Load via h5py (MATLAB v7.3 HDF5). Returns (ks_dirs, orig_clus_id, recsesAll, good_id)."""
     with h5py.File(mat_path, 'r') as f:
-        # KSDir is a cell array of strings
         ks_dirs = _hdf5_cellstr(f, f['UMparam']['KSDir'])
 
         uid = f['UniqueIDConversion']
@@ -183,7 +184,7 @@ def load_waveforms_for_good_units(wave_paths, good_units_per_session, param):
         failed = [i for i in range(n_sessions) if i not in successful_sessions]
         print(f'  Warning: skipped {len(failed)} session(s) with no loadable waveforms: {failed}')
 
-    waveform           = np.concatenate(waveforms, axis=0)
+    waveform            = np.concatenate(waveforms, axis=0)
     n_units_per_session = np.array([w.shape[0] for w in waveforms], dtype=int)
 
     param['n_units'], session_id, session_switch, param['n_sessions'] = \
@@ -204,67 +205,72 @@ def load_waveforms_for_good_units(wave_paths, good_units_per_session, param):
 # ── path helpers ─────────────────────────────────────────────────────────────
 
 def get_save_dir(mat_path):
-    """Return the output directory for a given UnitMatch.mat path."""
+    """Return the DeepUnitMatch output directory for a given UnitMatch.mat path."""
     subfolder = os.path.relpath(os.path.dirname(mat_path), BASE_INPUT)
     subfolder = os.path.join(os.path.dirname(subfolder), 'DeepUnitMatch')
     return os.path.join(BASE_OUTPUT, subfolder)
 
 
+def get_umpy_save_dir(mat_path):
+    """Return the UMPy output directory for a given UnitMatch.mat path."""
+    subfolder = os.path.relpath(os.path.dirname(mat_path), BASE_INPUT)
+    subfolder = os.path.join(os.path.dirname(subfolder), 'UMPy')
+    return os.path.join(BASE_OUTPUT, subfolder)
+
+
 def results_exist(mat_path):
-    """Return True when the sentinel output file is present for this session."""
+    """Return True when the DeepUnitMatch sentinel output file is present."""
     sentinel = os.path.join(get_save_dir(mat_path), 'MatchingOverview.png')
     return os.path.isfile(sentinel)
 
 
-# ── main processing function ──────────────────────────────────────────────────
+def umpy_results_exist(mat_path):
+    """Return True when the UMPy sentinel output file is present."""
+    sentinel = os.path.join(get_umpy_save_dir(mat_path), 'MatchingOverview.png')
+    return os.path.isfile(sentinel)
 
-def run_deep_unit_match(mat_path):
-    """Run the full DeepUnitMatch pipeline for one UnitMatch.mat."""
-    print(f'\n{"="*70}')
-    print(f'Processing: {mat_path}')
 
-    # ── derive save/tmp paths ────────────────────────────────────────────────
-    save_dir  = get_save_dir(mat_path)
-    tmp_path  = os.path.join(save_dir, 'tmp_waveforms')
+# ── shared session loader ─────────────────────────────────────────────────────
 
-    print(f'Save dir : {save_dir}')
-    os.makedirs(save_dir, exist_ok=True)
-    os.makedirs(tmp_path,  exist_ok=True)
+def _prepare_session(mat_path):
+    """
+    Load and validate everything shared by both pipelines:
+      mat → ks_dirs → params → probe check → waveforms.
 
-    # ── load UnitMatch.mat ───────────────────────────────────────────────────
+    Returns a dict with all session data, or None on failure.
+    Both run functions receive this dict and work on an independent copy of param
+    so that mutations in one pipeline do not affect the other.
+    """
     print('Loading UnitMatch.mat …')
     try:
         ks_dirs, orig_clus_id, recsesAll, good_id = load_unitmatchemat(mat_path)
     except Exception as e:
         print(f'  ERROR loading mat: {e}')
         traceback.print_exc()
-        return
+        return None
 
     print(f'  {len(ks_dirs)} session(s):')
     for i, d in enumerate(ks_dirs):
         n_good = int(((recsesAll == (i + 1)) & good_id).sum())
         print(f'    [{i}] {d}  ({n_good} good units)')
 
-    # ── find waveform paths and channel positions ────────────────────────────
     try:
         wave_paths, _, channel_pos = util.paths_from_KS(ks_dirs)
     except Exception as e:
         print(f'  ERROR in paths_from_KS: {e}')
         traceback.print_exc()
-        return
+        return None
 
-    # ── set up parameters ────────────────────────────────────────────────────
     param = {'KS_dirs': ks_dirs}
     param = default_params.get_default_param(param=param)
     param = util.get_probe_geometry(channel_pos[0], param)
 
-    # ── check probe compatibility before any expensive preprocessing ────────────
+    # ── probe compatibility check ────────────────────────────────────────────
     # channel_pos entries are (nChan, 2) or (nChan, 3); when 3-col the first
     # column is a shank/depth offset so x is column index 1, otherwise 0.
     cp = channel_pos[0]
     x_col = cp[:, 1] if cp.shape[1] == 3 else cp[:, 0]
     actual_n_xchannelpos = int(len(np.unique(x_col)))
-
     unique_x = np.unique(x_col)
     x_gaps = np.diff(np.sort(unique_x))
     n_shanks = int(np.sum(x_gaps > 50)) + 1
@@ -275,17 +281,11 @@ def run_deep_unit_match(mat_path):
             f'({param["n_xchannelpos"] * n_shanks}). '
             f'Set param[\'n_xchannelpos\'] = {actual_n_xchannelpos // n_shanks} to process this probe type.'
         )
-        return
+        return None
 
-    # ── load model ───────────────────────────────────────────────────────────
-    print('Loading DeepUnitMatch model …')
-    model = test.load_trained_model(device=DEVICE)
-
-    # ── build per-session good-unit lists from UnitMatch.mat ─────────────────
     good_units_per_session = build_good_units_per_session(
         ks_dirs, orig_clus_id, recsesAll, good_id)
 
-    # ── load waveforms ───────────────────────────────────────────────────────
     print('Loading waveforms …')
     try:
         waveform, session_id, session_switch, within_session, good_units, param = \
@@ -293,16 +293,53 @@ def run_deep_unit_match(mat_path):
     except Exception as e:
         print(f'  ERROR loading waveforms: {e}')
         traceback.print_exc()
-        return
+        return None
 
     param['good_units'] = good_units
     print(f'  {waveform.shape[0]} units across {param["n_sessions"]} session(s)')
+
+    return {
+        'mat_path':       mat_path,
+        'channel_pos':    channel_pos,
+        'waveform':       waveform,
+        'session_id':     session_id,
+        'session_switch': session_switch,
+        'within_session': within_session,
+        'good_units':     good_units,
+        'param':          param,
+    }
+
+
+# ── DeepUnitMatch pipeline ────────────────────────────────────────────────────
+
+def run_deep_unit_match(sess):
+    """Run the full DeepUnitMatch pipeline for one pre-loaded session."""
+    mat_path = sess['mat_path']
+    print(f'\n--- DeepUnitMatch: {mat_path}')
+
+    save_dir = get_save_dir(mat_path)
+    tmp_path = os.path.join(save_dir, 'tmp_waveforms')
+    print(f'Save dir : {save_dir}')
+    os.makedirs(save_dir, exist_ok=True)
+    os.makedirs(tmp_path, exist_ok=True)
+
+    # work on independent copies so UMPy (running after) sees clean state
+    param          = copy.deepcopy(sess['param'])
+    waveform       = sess['waveform']
+    session_id     = sess['session_id']
+    session_switch = sess['session_switch']
+    good_units     = sess['good_units']
+    channel_pos    = sess['channel_pos']
+
+    # ── load model ───────────────────────────────────────────────────────────
+    print('Loading DeepUnitMatch model …')
+    model = test.load_trained_model(device=DEVICE)
 
     # ── preprocess with DeepUnitMatch (get_snippets → HDF5) ─────────────────
     print('Preprocessing waveforms (get_snippets) …')
     unit_ids = np.concatenate(param['good_units']).squeeze()
     try:
-        snippets, positions, kept_idx = param_fun.get_snippets(
+        _, _, kept_idx = param_fun.get_snippets(
             waveform, channel_pos, session_id,
             save_path=tmp_path, unit_ids=unit_ids, param=param)
     except Exception as e:
@@ -312,7 +349,7 @@ def run_deep_unit_match(mat_path):
 
     # re-sync arrays if any units were rejected by get_snippets
     if len(kept_idx) < len(waveform):
-        waveform, session_id, session_switch, within_session, good_units, param = \
+        waveform, session_id, session_switch, _, good_units, param = \
             util.filter_units_by_index(
                 waveform, session_id, session_switch, good_units, kept_idx, param)
 
@@ -326,16 +363,15 @@ def run_deep_unit_match(mat_path):
         traceback.print_exc()
         return
 
-    # ── Naive Bayes matching (identical to notebook) ─────────────────────────
+    # ── Naive Bayes matching ─────────────────────────────────────────────────
     print('Running Naive Bayes matching …')
     clus_info = {
-        'good_units'   : param['good_units'],
+        'good_units':    param['good_units'],
         'session_switch': session_switch,
-        'session_id'   : session_id,
-        'original_ids' : np.concatenate(param['good_units']),
+        'session_id':    session_id,
+        'original_ids':  np.concatenate(param['good_units']),
     }
     extracted_wave_properties = ov.extract_parameters(waveform, channel_pos, clus_info, param)
-    within_session = 1 - (session_id[:, None] == session_id).astype(int)
     sessions = np.unique(session_id)
 
     probs           = np.zeros(sim_matrix.shape)
@@ -370,7 +406,7 @@ def run_deep_unit_match(mat_path):
                     len(param['good_units'][recses2])).astype(int)
                 labels[np.ix_(subsessionid == recses1, subsessionid == recses2)] = asmatrix
 
-            avg_centroid       = extracted_wave_properties['avg_centroid'][:, mask, :]
+            avg_centroid        = extracted_wave_properties['avg_centroid'][:, mask, :]
             avg_waveform_per_tp = extracted_wave_properties['avg_waveform_per_tp'][:, mask, :, :]
             avg_waveform_per_tp = mf.drift_correct_session_pair(
                 labels.astype(bool), ss_pair, avg_centroid, avg_waveform_per_tp, 0, param)
@@ -378,12 +414,12 @@ def run_deep_unit_match(mat_path):
             euclid_dist              = mf.get_Euclidean_dist(avg_waveform_per_tp_flip, param, n)
             centroid_dist, _         = mf.centroid_metrics(euclid_dist, param)
 
-            scores_to_incl   = {'similarity': sim_mat, 'distance': centroid_dist}
-            n_units          = int(np.sqrt(len(df)))
-            priors           = np.array([1 - 2 / n_units, 2 / n_units])
+            scores_to_incl    = {'similarity': sim_mat, 'distance': centroid_dist}
+            n_units           = int(np.sqrt(len(df)))
+            priors            = np.array([1 - 2 / n_units, 2 / n_units])
             parameter_kernels = bf.get_parameter_kernels(
                 scores_to_incl, labels, np.unique(labels), param)
-            predictors = np.stack(list(scores_to_incl.values()), axis=2)
+            predictors  = np.stack(list(scores_to_incl.values()), axis=2)
             probability = bf.apply_naive_bayes(
                 parameter_kernels, priors, predictors, param, np.unique(labels))
             prob_matrix = probability[:, 1].reshape(n_units, n_units)
@@ -396,11 +432,10 @@ def run_deep_unit_match(mat_path):
     n_matches = int(np.sum(final_matches)) // 2
     print(f'  {n_matches} matches found (threshold={THRESH})')
 
-    # ── assign unique IDs & save ─────────────────────────────────────────────
+    # ── assign unique IDs ────────────────────────────────────────────────────
     UIDs = aid.assign_unique_id(probs, param, clus_info)
 
     # ── performance metrics (AUC against functional scores) ──────────────────
-    # Now we can check performance using the AUC. This tests the agreement between DeepUnitMatch matches and functional scores.
     functional_scores = {}
     try:
         isicorr = test.ISI_correlations(param)
@@ -414,12 +449,12 @@ def run_deep_unit_match(mat_path):
         functional_scores['refpop_correlations'] = refpopcorr
 
         frdiff = test.FR_diff(param)
-        auc_fr = test.AUC(final_matches, -frdiff, session_id)  # negate: lower FRDiff = better match
+        auc_fr = test.AUC(final_matches, -frdiff, session_id)
         print(f"AUC (firing rate difference):      {auc_fr:.3f}")
         functional_scores['FR_diff'] = frdiff
 
         cvdiff = test.ISI_CV_diff(param)
-        auc_cv = test.AUC(final_matches, -cvdiff, session_id)  # negate: lower CVDiff = better match
+        auc_cv = test.AUC(final_matches, -cvdiff, session_id)
         print(f"AUC (ISI CV difference):           {auc_cv:.3f}")
         functional_scores['ISI_CV_diff'] = cvdiff
 
@@ -434,6 +469,7 @@ def run_deep_unit_match(mat_path):
         print(f'  WARNING: functional score computation failed: {e}')
         functional_scores = {}
 
+    # ── save ─────────────────────────────────────────────────────────────────
     su.save_to_output(
         save_dir,
         {"distance": distance_matrix},
@@ -480,11 +516,187 @@ def run_deep_unit_match(mat_path):
 
     if functional_scores:
         score_meta = {
-            'ISI_correlations':   ('ISI correlations',          'viridis', None),
-            'refpop_correlations':('Ref. pop. correlations',    'viridis', None),
-            'FR_diff':            ('Firing rate difference',    'magma',   None),
-            'ISI_CV_diff':        ('ISI CV difference',         'magma',   None),
-            'natim_correlations': ('Nat. image correlations',   'viridis', None),
+            'ISI_correlations':   ('ISI correlations',        'viridis', None),
+            'refpop_correlations':('Ref. pop. correlations',  'viridis', None),
+            'FR_diff':            ('Firing rate difference',  'magma',   None),
+            'ISI_CV_diff':        ('ISI CV difference',       'magma',   None),
+            'natim_correlations': ('Nat. image correlations', 'viridis', None),
+        }
+        keys = [k for k in score_meta if k in functional_scores]
+        fig, axes = plt.subplots(1, len(keys), figsize=(5 * len(keys), 5))
+        if len(keys) == 1:
+            axes = [axes]
+        for ax, key in zip(axes, keys):
+            title, cmap, _ = score_meta[key]
+            im = ax.imshow(functional_scores[key], cmap=cmap, aspect='auto')
+            ax.set_title(title)
+            ax.set_xlabel('Unit')
+            ax.set_ylabel('Unit')
+            fig.colorbar(im, ax=ax)
+        fig.tight_layout()
+        fig.savefig(os.path.join(save_dir, 'FunctionalScores.png'), dpi=150)
+        plt.close(fig)
+
+    print(f'  Results saved to: {save_dir}')
+
+
+# ── UMPy pipeline ─────────────────────────────────────────────────────────────
+
+def run_umpy(sess):
+    """Run the full UMPy pipeline for one pre-loaded session.
+
+    Unlike DeepUnitMatch, the Naive Bayes here uses the extracted waveform
+    metric scores (amplitude, spatial decay, waveform similarity, etc.) rather
+    than a neural-net similarity score.
+    """
+    mat_path = sess['mat_path']
+    print(f'\n--- UMPy: {mat_path}')
+
+    save_dir = get_umpy_save_dir(mat_path)
+    print(f'Save dir : {save_dir}')
+    os.makedirs(save_dir, exist_ok=True)
+
+    # work on independent copies so param mutations don't bleed between pipelines
+    param          = copy.deepcopy(sess['param'])
+    waveform       = sess['waveform']
+    session_id     = sess['session_id']
+    session_switch = sess['session_switch']
+    within_session = sess['within_session']
+    channel_pos    = sess['channel_pos']
+
+    clus_info = {
+        'good_units':     param['good_units'],
+        'session_switch': session_switch,
+        'session_id':     session_id,
+        'original_ids':   np.concatenate(param['good_units']),
+    }
+
+    # ── extract waveform properties ──────────────────────────────────────────
+    print('Extracting waveform properties …')
+    extracted_wave_properties = ov.extract_parameters(waveform, channel_pos, clus_info, param)
+
+    # ── extract metric scores (these go directly into Naive Bayes) ───────────
+    print('Extracting metric scores …')
+    try:
+        total_score, candidate_pairs, scores_to_include, predictors = ov.extract_metric_scores(
+            extracted_wave_properties, session_switch, within_session, param, niter=2)
+    except Exception as e:
+        print(f'  ERROR in extract_metric_scores: {e}')
+        traceback.print_exc()
+        return
+
+    # ── Naive Bayes matching ─────────────────────────────────────────────────
+    print('Running Naive Bayes matching …')
+    prior_match = 1 - (param['n_expected_matches'] / param['n_units'] ** 2)
+    priors = np.array([prior_match, 1 - prior_match])
+    labels = candidate_pairs.astype(int)
+    cond = np.unique(labels)
+    parameter_kernels = bf.get_parameter_kernels(scores_to_include, labels, cond, param, add_one=1)
+    probability = bf.apply_naive_bayes(parameter_kernels, priors, predictors, param, cond)
+    output_prob_matrix = probability[:, 1].reshape(param['n_units'], param['n_units'])
+
+    match_threshold = param.get('match_threshold', THRESH)
+    output_threshold = np.zeros_like(output_prob_matrix)
+    output_threshold[output_prob_matrix > match_threshold] = 1
+    matches = np.argwhere(output_threshold == 1)
+    n_matches = len(matches) // 2
+    print(f'  {n_matches} matches found (threshold={match_threshold})')
+
+    # ── assign unique IDs ────────────────────────────────────────────────────
+    UIDs = aid.assign_unique_id(output_prob_matrix, param, clus_info)
+
+    # ── performance metrics (AUC against functional scores) ──────────────────
+    functional_scores = {}
+    final_matches_bool = output_threshold.astype(bool)
+    try:
+        isicorr = test.ISI_correlations(param)
+        auc_isi = test.AUC(final_matches_bool, isicorr, session_id)
+        print(f"AUC (ISI correlations):            {auc_isi:.3f}")
+        functional_scores['ISI_correlations'] = isicorr
+
+        refpopcorr = test.refpop_correlations(param, matches=final_matches_bool)
+        auc_refpop = test.AUC(final_matches_bool, refpopcorr, session_id)
+        print(f"AUC (ref. pop. correlation):       {auc_refpop:.3f}")
+        functional_scores['refpop_correlations'] = refpopcorr
+
+        frdiff = test.FR_diff(param)
+        auc_fr = test.AUC(final_matches_bool, -frdiff, session_id)
+        print(f"AUC (firing rate difference):      {auc_fr:.3f}")
+        functional_scores['FR_diff'] = frdiff
+
+        cvdiff = test.ISI_CV_diff(param)
+        auc_cv = test.AUC(final_matches_bool, -cvdiff, session_id)
+        print(f"AUC (ISI CV difference):           {auc_cv:.3f}")
+        functional_scores['ISI_CV_diff'] = cvdiff
+
+        try:
+            natimcorr = test.natim_correlations(param)
+            auc_natim = test.AUC(final_matches_bool, natimcorr, session_id)
+            print(f"AUC (nat. image correlations):     {auc_natim:.3f}")
+            functional_scores['natim_correlations'] = natimcorr
+        except Exception:
+            pass
+    except Exception as e:
+        print(f'  WARNING: functional score computation failed: {e}')
+        functional_scores = {}
+
+    # ── save ─────────────────────────────────────────────────────────────────
+    avg_centroid        = extracted_wave_properties['avg_centroid']
+    avg_waveform        = extracted_wave_properties['avg_waveform']
+    avg_waveform_per_tp = extracted_wave_properties['avg_waveform_per_tp']
+    max_site            = extracted_wave_properties['max_site']
+
+    su.save_to_output(
+        save_dir,
+        scores_to_include,
+        matches,
+        output_prob_matrix,
+        avg_centroid,
+        avg_waveform,
+        avg_waveform_per_tp,
+        max_site,
+        total_score,
+        output_threshold,
+        clus_info,
+        param,
+        UIDs=UIDs,
+        matches_curated=None,
+        save_match_table=True,
+        functional_scores=functional_scores if functional_scores else None,
+    )
+
+    # ── save diagnostic figures ───────────────────────────────────────────────
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+
+    im = axes[0].imshow(total_score, cmap='viridis', aspect='auto')
+    axes[0].set_title('Total score')
+    axes[0].set_xlabel('Unit')
+    axes[0].set_ylabel('Unit')
+    fig.colorbar(im, ax=axes[0])
+
+    im = axes[1].imshow(output_prob_matrix, cmap='viridis', aspect='auto')
+    axes[1].set_title('Match probability')
+    axes[1].set_xlabel('Unit')
+    axes[1].set_ylabel('Unit')
+    fig.colorbar(im, ax=axes[1])
+
+    im = axes[2].imshow(output_threshold, cmap='viridis', aspect='auto')
+    axes[2].set_title(f'Final matches (n={n_matches})')
+    axes[2].set_xlabel('Unit')
+    axes[2].set_ylabel('Unit')
+    fig.colorbar(im, ax=axes[2])
+
+    fig.tight_layout()
+    fig.savefig(os.path.join(save_dir, 'MatchingOverview.png'), dpi=150)
+    plt.close(fig)
+
+    if functional_scores:
+        score_meta = {
+            'ISI_correlations':    ('ISI correlations',        'viridis', None),
+            'refpop_correlations': ('Ref. pop. correlations',  'viridis', None),
+            'FR_diff':             ('Firing rate difference',  'magma',   None),
+            'ISI_CV_diff':         ('ISI CV difference',       'magma',   None),
+            'natim_correlations':  ('Nat. image correlations', 'viridis', None),
         }
         keys = [k for k in score_meta if k in functional_scores]
         fig, axes = plt.subplots(1, len(keys), figsize=(5 * len(keys), 5))
@@ -510,7 +722,7 @@ def main():
     print(f'Scanning for UnitMatch.mat files under:\n  {BASE_INPUT}\n')
 
     mat_files = []
-    for root, _dirs, files in os.walk(BASE_INPUT):
+    for root, _, files in os.walk(BASE_INPUT):
         if 'UnitMatch.mat' in files and os.path.basename(root) == 'UnitMatch':
             mat_files.append(os.path.join(root, 'UnitMatch.mat'))
 
@@ -521,15 +733,36 @@ def main():
     print(f'Found {len(mat_files)} file(s).\n')
 
     for i, mat_path in enumerate(mat_files):
-        print(f'[{i+1}/{len(mat_files)}]')
-        if results_exist(mat_path) and not REDO:
-            print(f'  Skipping (results exist, REDO=False): {get_save_dir(mat_path)}')
+        print(f'\n[{i+1}/{len(mat_files)}] {mat_path}')
+
+        run_deep = not results_exist(mat_path) or REDO
+        run_ump  = not umpy_results_exist(mat_path) or REDO
+
+        if not run_deep and not run_ump:
+            print('  Skipping both pipelines (results exist, REDO=False).')
             continue
-        try:
-            run_deep_unit_match(mat_path)
-        except Exception as e:
-            print(f'  FAILED: {e}')
-            traceback.print_exc()
+
+        sess = _prepare_session(mat_path)
+        if sess is None:
+            continue
+
+        if run_deep:
+            try:
+                run_deep_unit_match(sess)
+            except Exception as e:
+                print(f'  DeepUnitMatch FAILED: {e}')
+                traceback.print_exc()
+        else:
+            print(f'  Skipping DeepUnitMatch (results exist, REDO=False): {get_save_dir(mat_path)}')
+
+        if run_ump:
+            try:
+                run_umpy(sess)
+            except Exception as e:
+                print(f'  UMPy FAILED: {e}')
+                traceback.print_exc()
+        else:
+            print(f'  Skipping UMPy (results exist, REDO=False): {get_umpy_save_dir(mat_path)}')
 
     print('\nAll done.')
 
