@@ -361,7 +361,7 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'natImRespCorr')) || recom
         % Find the associated experiments
         if ispc && Flag
             try
-            exp2keep = getNatImExpRef(binFileRef);
+                exp2keep = getNatImExpRef(binFileRef);
             catch
                 exp2keep = [];
             end
@@ -385,8 +385,12 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'natImRespCorr')) || recom
             spikeData = getNatImResp(spikesAll,exp2keep,binFileRef,proc);
             clusterIDs = spikesAll.clusterIDs;
 
+            if size(spikeData,1) > 112
+                spikeData = spikeData(1:112, :, :, :);
+            end
+
             % Split in two halves and subselect units
-            cluIdx = ismember(clusterIDs,unique(MatchTable.ID1(MatchTable.RecSes1 == RecOpt(ss))));
+            cluIdx = ismember(uint32(clusterIDs),uint32(unique(MatchTable.ID1(MatchTable.RecSes1 == RecOpt(ss)))));
             spikeData_cv{1,ss} = spikeData(:,:,cluIdx,1:2:end); % odd
             spikeData_cv{2,ss} = spikeData(:,:,cluIdx,2:2:end); % even
         end
