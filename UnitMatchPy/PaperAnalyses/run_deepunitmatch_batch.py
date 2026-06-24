@@ -38,7 +38,7 @@ from DeepUnitMatch.utils import helpers
 BASE_INPUT  = r'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\FullAnimal_KSChanMap'
 BASE_OUTPUT = r'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026V2'
 
-DEVICE = 'cpu'  # 'cuda' if test.torch.cuda.is_available() else 'cpu'
+DEVICE = 'cuda' if test.torch.cuda.is_available() else 'cpu'
 print(f'Device: {DEVICE}')
 THRESH = 0.5
 REDO   = True   # if True, rerun even when output already exists

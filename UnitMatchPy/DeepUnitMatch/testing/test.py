@@ -69,7 +69,7 @@ def load_trained_model(device="cpu", read_path=None):
     if read_path is None:
         current_dir = Path(__file__).parent.parent
         read_path = current_dir / "utils" / "model"
-    checkpoint = torch.load(read_path)
+    checkpoint = torch.load(read_path, map_location=device)
     model.load_state_dict(checkpoint['model'])
     clip_loss = CustomClipLoss().to(device)
     clip_loss.load_state_dict(checkpoint['clip_loss'])
@@ -118,13 +118,14 @@ def inference(model, data_dir, unit_label_paths=None):
 
     submatrices = []
     n_batches = len(test_loader)
+    device = next(model.parameters()).device
 
     for estimates_i, _, positions_i, exp_ids_i, filepaths_i in tqdm(test_loader):
         # Forward pass
-        enc_estimates_i = model(estimates_i)        # shape [bsz, 256]
+        enc_estimates_i = model(estimates_i.to(device))        # shape [bsz, 256]
 
         for _, candidates_j, positions_j, exp_ids_j, filepaths_j in tqdm(test_loader):
-            enc_candidates_j = model(candidates_j)
+            enc_candidates_j = model(candidates_j.to(device))
             s = clip_sim(enc_estimates_i, enc_candidates_j)
             submatrices.append(s.detach().cpu().numpy())
     
@@ -380,18 +381,23 @@ def get_corrections(matches, positions):
     return output
 
 def pairwise_histogram_correlation(A, B):
-    # Initialize the output correlation matrix
-    num_histograms = A.shape[0]
-    correlation_matrix = np.zeros((num_histograms, num_histograms))
-
-    # Compute pairwise correlations
-    for i in range(num_histograms):
-        for j in range(num_histograms):
-            with np.errstate(invalid='ignore', divide='ignore'):
-                r = np.corrcoef(A[i], B[j])[0, 1]
-            correlation_matrix[i, j] = 0.0 if np.isnan(r) else r
-    
-    return correlation_matrix
+    A = A.astype(float)
+    B = B.astype(float)
+    A -= np.nanmean(A, axis=1, keepdims=True)
+    B -= np.nanmean(B, axis=1, keepdims=True)
+    # Track rows that are undefined (any NaN remaining, or zero variance)
+    undef_A = np.any(np.isnan(A), axis=1) | (np.linalg.norm(np.nan_to_num(A), axis=1) == 0)
+    undef_B = np.any(np.isnan(B), axis=1) | (np.linalg.norm(np.nan_to_num(B), axis=1) == 0)
+    A = np.nan_to_num(A)
+    B = np.nan_to_num(B)
+    norm_A = np.linalg.norm(A, axis=1, keepdims=True)
+    norm_B = np.linalg.norm(B, axis=1, keepdims=True)
+    norm_A[norm_A == 0] = 1
+    norm_B[norm_B == 0] = 1
+    result = (A / norm_A) @ (B / norm_B).T
+    result[undef_A, :] = np.nan
+    result[:, undef_B] = np.nan
+    return result
 
 def get_ISI_histograms(param, ISIbins):
 
@@ -903,15 +909,18 @@ def AUC(matches:np.ndarray, func_metric:np.ndarray, session_id):
     matches = matches[~nan_mask, :][:, ~nan_mask]
     session_id = session_id[~nan_mask]
 
-    P = np.sum(matches)
-    if P < 1:
-        raise ValueError("No matches found - can't compute AUC")
-
-    # Calculate AUCs using final sets of matches
+    # Only across-session pairs are meaningful for cross-session AUC.
+    # P must be computed from across-session matches so that recall and FPR
+    # are correctly normalised (DeepUnitMatch already filters to across-session
+    # before calling this; UMPy's raw threshold matrix includes within-session
+    # self-matches that would otherwise inflate P and deflate recall).
     within_session = (session_id[:, None] == session_id).astype(bool)
     func_across = func_metric[~within_session]
     matches_across = matches[~within_session]
 
+    P = np.sum(matches_across)
+    if P < 1:
+        raise ValueError("No matches found - can't compute AUC")
 
     sorted_indices = np.argsort(func_across)[::-1]
 
