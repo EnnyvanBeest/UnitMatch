@@ -374,6 +374,51 @@ def run_deep_unit_match(sess):
     extracted_wave_properties = ov.extract_parameters(waveform, channel_pos, clus_info, param)
     sessions = np.unique(session_id)
 
+    # ── pre-pass: collect DNN labels for all session pairs → shared drift correction ──
+    # Build a global labels matrix from neural-net matches across every pair, then
+    # call mf.drift_n_sessions — the same function UMPy uses — so both pipelines
+    # share a single, consistent drift-correction mechanism.
+    n_total     = waveform.shape[0]
+    labels_full = np.eye(n_total)
+    pair_matches_cache = {}
+
+    print('  Pre-pass: collecting neural-net labels for drift correction ...')
+    for r1 in sessions:
+        for r2 in sessions:
+            if r1 >= r2:
+                continue
+            mask    = np.isin(session_id, [r1, r2])
+            sim_mat = sim_matrix[mask][:, mask]
+            indices = np.where(mask)[0]
+            n       = int(np.sum(mask))
+
+            df = helpers.create_dataframe(
+                [param['good_units'][r1], param['good_units'][r2]],
+                sim_mat, session_list=[r1, r2])
+            matches = test.get_matches(
+                df, sim_mat, session_id[indices], data_dir, dist_thresh=50)
+            pair_matches_cache[(r1, r2)] = matches
+
+            subsessionid = np.array(
+                [r1] * len(param['good_units'][r1]) +
+                [r2] * len(param['good_units'][r2]))
+            labels_pair = np.eye(n)
+            for (recses1, recses2), group in matches.groupby(by=['RecSes1', 'RecSes2']):
+                asmatrix = group['match'].values.reshape(
+                    len(param['good_units'][recses1]),
+                    len(param['good_units'][recses2])).astype(int)
+                labels_pair[np.ix_(subsessionid == recses1, subsessionid == recses2)] = asmatrix
+            labels_full[np.ix_(indices, indices)] = labels_pair
+
+    # Apply drift correction on full arrays — identical mechanism to UMPy.
+    # sim_matrix serves as total_score so get_good_matches can de-duplicate pairs.
+    avg_centroid        = extracted_wave_properties['avg_centroid'].copy()
+    avg_waveform_per_tp = extracted_wave_properties['avg_waveform_per_tp'].copy()
+    _, avg_centroid, avg_waveform_per_tp = mf.drift_n_sessions(
+        labels_full.astype(bool), session_switch, avg_centroid, avg_waveform_per_tp,
+        sim_matrix, param)
+
+    # ── Bayes loop: use drift-corrected arrays ────────────────────────────────
     probs           = np.zeros(sim_matrix.shape)
     distance_matrix = np.zeros(sim_matrix.shape)
 
@@ -385,16 +430,9 @@ def run_deep_unit_match(sess):
             mask        = np.isin(session_id, [r1, r2])
             sim_mat     = sim_matrix[mask][:, mask]
             n           = int(np.sum(mask))
-            n_units_r1  = session_switch[r1 + 1] - session_switch[r1]
-            n_units_r2  = session_switch[r2 + 1] - session_switch[r2]
-            ss_pair     = np.array([0, n_units_r1, n_units_r1 + n_units_r2])
             indices     = np.where(mask)[0]
 
-            df = helpers.create_dataframe(
-                [param['good_units'][r1], param['good_units'][r2]],
-                sim_mat, session_list=[r1, r2])
-            matches = test.get_matches(
-                df, sim_mat, session_id[indices], data_dir, dist_thresh=50)
+            matches = pair_matches_cache[(r1, r2)]
 
             labels       = np.eye(sim_mat.shape[0])
             subsessionid = np.array(
@@ -406,16 +444,14 @@ def run_deep_unit_match(sess):
                     len(param['good_units'][recses2])).astype(int)
                 labels[np.ix_(subsessionid == recses1, subsessionid == recses2)] = asmatrix
 
-            avg_centroid        = extracted_wave_properties['avg_centroid'][:, mask, :]
-            avg_waveform_per_tp = extracted_wave_properties['avg_waveform_per_tp'][:, mask, :, :]
-            avg_waveform_per_tp = mf.drift_correct_session_pair(
-                labels.astype(bool), ss_pair, avg_centroid, avg_waveform_per_tp, 0, param)
-            avg_waveform_per_tp_flip = mf.flip_dim(avg_waveform_per_tp, param, n)
+            # use drift-corrected waveform (masked to this session pair)
+            avg_waveform_per_tp_pair = avg_waveform_per_tp[:, mask, :, :]
+            avg_waveform_per_tp_flip = mf.flip_dim(avg_waveform_per_tp_pair, param, n)
             euclid_dist              = mf.get_Euclidean_dist(avg_waveform_per_tp_flip, param, n)
             centroid_dist, _         = mf.centroid_metrics(euclid_dist, param)
 
             scores_to_incl    = {'similarity': sim_mat, 'distance': centroid_dist}
-            n_units           = int(np.sqrt(len(df)))
+            n_units           = int(np.sqrt(len(matches)))
             priors            = np.array([1 - 2 / n_units, 2 / n_units])
             parameter_kernels = bf.get_parameter_kernels(
                 scores_to_incl, labels, np.unique(labels), param)
