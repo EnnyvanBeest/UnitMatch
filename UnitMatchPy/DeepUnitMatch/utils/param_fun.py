@@ -84,8 +84,14 @@ def sort_good_channels(goodChannelMap, goodpos, n_xchannelpos=2):
     unique_x_values = np.unique(goodpos[:, 0])
     unique_x_values.sort()
 
-    if len(unique_x_values) != n_xchannelpos:
-        print(f"Found {len(unique_x_values)} instead of {n_xchannelpos} unique x-axis column positions.")
+    n_unique_x = len(unique_x_values)
+    # Multi-shank probes have large x-gaps (>50 µm) between shanks; each shank
+    # contributes n_xchannelpos columns, so the total must be a positive multiple.
+    x_gaps = np.diff(unique_x_values)
+    n_shanks = int(np.sum(x_gaps > 50)) + 1
+    if n_unique_x != n_xchannelpos * n_shanks:
+        print(f"Found {n_unique_x} unique x-axis positions across {n_shanks} shank(s); "
+              f"expected a multiple of {n_xchannelpos} ({n_xchannelpos * n_shanks}).")
         return [-1], [-1]
 
     # Group channels by x-column and sort each group by depth (z)

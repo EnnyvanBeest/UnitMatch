@@ -12,6 +12,9 @@ import os, sys, traceback
 import numpy as np
 import scipy.io
 import h5py
+import matplotlib
+matplotlib.use('Agg')   # non-interactive backend for batch runs
+import matplotlib.pyplot as plt
 
 # ── project paths ───────────────────────────────────────────────────────────
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -32,10 +35,11 @@ from DeepUnitMatch.utils import helpers
 
 # ── user settings ────────────────────────────────────────────────────────────
 BASE_INPUT  = r'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\FullAnimal_KSChanMap'
-BASE_OUTPUT = r'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026'
+BASE_OUTPUT = r'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026V2'
 
-DEVICE = "cpu"
+DEVICE = 'cuda' if test.torch.cuda.is_available() else 'cpu'
 THRESH = 0.5
+REDO   = False   # if True, rerun even when output already exists
 
 
 # ── MATLAB file loading ───────────────────────────────────────────────────────
@@ -197,6 +201,21 @@ def load_waveforms_for_good_units(wave_paths, good_units_per_session, param):
     return waveform, session_id, session_switch, within_session, actual_good_units, param
 
 
+# ── path helpers ─────────────────────────────────────────────────────────────
+
+def get_save_dir(mat_path):
+    """Return the output directory for a given UnitMatch.mat path."""
+    subfolder = os.path.relpath(os.path.dirname(mat_path), BASE_INPUT)
+    subfolder = os.path.join(os.path.dirname(subfolder), 'DeepUnitMatch')
+    return os.path.join(BASE_OUTPUT, subfolder)
+
+
+def results_exist(mat_path):
+    """Return True when the sentinel output file is present for this session."""
+    sentinel = os.path.join(get_save_dir(mat_path), 'MatchingOverview.png')
+    return os.path.isfile(sentinel)
+
+
 # ── main processing function ──────────────────────────────────────────────────
 
 def run_deep_unit_match(mat_path):
@@ -205,8 +224,7 @@ def run_deep_unit_match(mat_path):
     print(f'Processing: {mat_path}')
 
     # ── derive save/tmp paths ────────────────────────────────────────────────
-    subfolder = os.path.relpath(os.path.dirname(mat_path), BASE_INPUT)
-    save_dir  = os.path.join(BASE_OUTPUT, subfolder)
+    save_dir  = get_save_dir(mat_path)
     tmp_path  = os.path.join(save_dir, 'tmp_waveforms')
 
     print(f'Save dir : {save_dir}')
@@ -247,11 +265,15 @@ def run_deep_unit_match(mat_path):
     x_col = cp[:, 1] if cp.shape[1] == 3 else cp[:, 0]
     actual_n_xchannelpos = int(len(np.unique(x_col)))
 
-    if actual_n_xchannelpos != param['n_xchannelpos']:
+    unique_x = np.unique(x_col)
+    x_gaps = np.diff(np.sort(unique_x))
+    n_shanks = int(np.sum(x_gaps > 50)) + 1
+    if actual_n_xchannelpos != param['n_xchannelpos'] * n_shanks:
         print(
-            f'  SKIPPING: probe has {actual_n_xchannelpos} x-column position(s) '
-            f'but param expects {param["n_xchannelpos"]}. '
-            f'Set param[\'n_xchannelpos\'] = {actual_n_xchannelpos} to process this probe type.'
+            f'  SKIPPING: probe has {actual_n_xchannelpos} x-column position(s) across '
+            f'{n_shanks} shank(s), expected a multiple of {param["n_xchannelpos"]} '
+            f'({param["n_xchannelpos"] * n_shanks}). '
+            f'Set param[\'n_xchannelpos\'] = {actual_n_xchannelpos // n_shanks} to process this probe type.'
         )
         return
 
@@ -377,6 +399,33 @@ def run_deep_unit_match(mat_path):
     # ── assign unique IDs & save ─────────────────────────────────────────────
     UIDs = aid.assign_unique_id(probs, param, clus_info)
 
+    # ── performance metrics (AUC against functional scores) ──────────────────
+    # Now we can check performance using the AUC. This tests the agreement between DeepUnitMatch matches and functional scores.
+    functional_scores = {}
+    try:
+        isicorr = test.ISI_correlations(param)
+        auc_isi = test.AUC(final_matches, isicorr, session_id)
+        print(f"AUC (ISI correlations):            {auc_isi:.3f}")
+        functional_scores['ISI_correlations'] = isicorr
+
+        refpopcorr = test.refpop_correlations(param, matches=final_matches)
+        auc_refpop = test.AUC(final_matches, refpopcorr, session_id)
+        print(f"AUC (ref. pop. correlation):       {auc_refpop:.3f}")
+        functional_scores['refpop_correlations'] = refpopcorr
+
+        frdiff = test.FR_diff(param)
+        auc_fr = test.AUC(final_matches, -frdiff, session_id)  # negate: lower FRDiff = better match
+        print(f"AUC (firing rate difference):      {auc_fr:.3f}")
+        functional_scores['FR_diff'] = frdiff
+
+        cvdiff = test.ISI_CV_diff(param)
+        auc_cv = test.AUC(final_matches, -cvdiff, session_id)  # negate: lower CVDiff = better match
+        print(f"AUC (ISI CV difference):           {auc_cv:.3f}")
+        functional_scores['ISI_CV_diff'] = cvdiff
+    except Exception as e:
+        print(f'  WARNING: functional score computation failed: {e}')
+        functional_scores = {}
+
     su.save_to_output(
         save_dir,
         {"distance": distance_matrix},
@@ -393,7 +442,56 @@ def run_deep_unit_match(mat_path):
         UIDs=UIDs,
         matches_curated=None,
         save_match_table=True,
+        functional_scores=functional_scores if functional_scores else None,
     )
+
+    # ── save diagnostic figures ───────────────────────────────────────────────
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+
+    im = axes[0].imshow(sim_matrix, cmap='viridis', aspect='auto')
+    axes[0].set_title('Similarity matrix')
+    axes[0].set_xlabel('Unit')
+    axes[0].set_ylabel('Unit')
+    fig.colorbar(im, ax=axes[0])
+
+    im = axes[1].imshow(probs, cmap='viridis', aspect='auto')
+    axes[1].set_title('Match probability')
+    axes[1].set_xlabel('Unit')
+    axes[1].set_ylabel('Unit')
+    fig.colorbar(im, ax=axes[1])
+
+    im = axes[2].imshow(final_matches, cmap='viridis', aspect='auto')
+    axes[2].set_title(f'Final matches (n={n_matches})')
+    axes[2].set_xlabel('Unit')
+    axes[2].set_ylabel('Unit')
+    fig.colorbar(im, ax=axes[2])
+
+    fig.tight_layout()
+    fig.savefig(os.path.join(save_dir, 'MatchingOverview.png'), dpi=150)
+    plt.close(fig)
+
+    if functional_scores:
+        score_meta = {
+            'ISI_correlations':   ('ISI correlations',          'viridis', None),
+            'refpop_correlations':('Ref. pop. correlations',    'viridis', None),
+            'FR_diff':            ('Firing rate difference',    'magma',   None),
+            'ISI_CV_diff':        ('ISI CV difference',         'magma',   None),
+        }
+        keys = [k for k in score_meta if k in functional_scores]
+        fig, axes = plt.subplots(1, len(keys), figsize=(5 * len(keys), 5))
+        if len(keys) == 1:
+            axes = [axes]
+        for ax, key in zip(axes, keys):
+            title, cmap, _ = score_meta[key]
+            im = ax.imshow(functional_scores[key], cmap=cmap, aspect='auto')
+            ax.set_title(title)
+            ax.set_xlabel('Unit')
+            ax.set_ylabel('Unit')
+            fig.colorbar(im, ax=ax)
+        fig.tight_layout()
+        fig.savefig(os.path.join(save_dir, 'FunctionalScores.png'), dpi=150)
+        plt.close(fig)
+
     print(f'  Results saved to: {save_dir}')
 
 
@@ -404,7 +502,7 @@ def main():
 
     mat_files = []
     for root, _dirs, files in os.walk(BASE_INPUT):
-        if 'UnitMatch.mat' in files:
+        if 'UnitMatch.mat' in files and os.path.basename(root) == 'UnitMatch':
             mat_files.append(os.path.join(root, 'UnitMatch.mat'))
 
     if not mat_files:
@@ -415,6 +513,9 @@ def main():
 
     for i, mat_path in enumerate(mat_files):
         print(f'[{i+1}/{len(mat_files)}]')
+        if results_exist(mat_path) and not REDO:
+            print(f'  Skipping (results exist, REDO=False): {get_save_dir(mat_path)}')
+            continue
         try:
             run_deep_unit_match(mat_path)
         except Exception as e:

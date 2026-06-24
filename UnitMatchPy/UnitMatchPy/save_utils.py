@@ -3,7 +3,7 @@ import pickle
 import pandas as pd
 import numpy as np
 
-def make_match_table(scores_to_include, matches, output_prob, total_score, output_threshold, clus_info, param, UIDs = None, matches_curated = None):
+def make_match_table(scores_to_include, matches, output_prob, total_score, output_threshold, clus_info, param, UIDs = None, matches_curated = None, functional_scores = None):
     """
     Creates the match table showing information for every pair of units.
 
@@ -74,6 +74,11 @@ def make_match_table(scores_to_include, matches, output_prob, total_score, outpu
     for key, value in scores_to_include.items():
         df[key] = np.reshape(value, (n_units *n_units)).T
 
+    # add per-pair functional scores (n_units × n_units matrices) as columns
+    if functional_scores is not None:
+        for key, value in functional_scores.items():
+            df[key] = np.reshape(value, (n_units * n_units))
+
     #if you have supplied UIDs create a data frame using them and merge it to the save table
     if UIDs is not None:
         unique_id_liberal = UIDs[0]
@@ -97,13 +102,13 @@ def make_match_table(scores_to_include, matches, output_prob, total_score, outpu
         unit_a_int_id = xx.reshape(n_units*n_units)
         unit_b_int_id = yy.reshape(n_units*n_units)
 
-        unique_id_df = pd.DataFrame(np.array([unit_a_original_id, unit_b_original_id, unit_a_liberal_id, unit_b_liberal_id, unit_a_int_id, unit_b_int_id, unit_a_conservative_id, unit_b_conservative_id]).T, columns = ['UID1', 'UID2', 'UID Liberal 1', 'UID Liberal 2', 'UID int 1', 'UM UID int 2', 'UID Conservative 1', 'UID Conservative 2'])
+        unique_id_df = pd.DataFrame(np.array([unit_a_original_id, unit_b_original_id, unit_a_liberal_id, unit_b_liberal_id, unit_a_int_id, unit_b_int_id, unit_a_conservative_id, unit_b_conservative_id]).T, columns = ['UID orig 1', 'UID orig 2', 'UID Lib 1', 'UID Lib 2', 'UID 1', 'UID 2', 'UID Cons 1', 'UID Cons 2'])
         df = df.join(unique_id_df)
 
     return df
 
 def save_to_output(save_dir, scores_to_include, matches, output_prob, avg_centroid, avg_waveform, avg_waveform_per_tp, max_site,
-                   total_score, output_threshold, clus_info, param, UIDs = None, matches_curated = None, save_match_table = True):
+                   total_score, output_threshold, clus_info, param, UIDs = None, matches_curated = None, save_match_table = True, functional_scores = None):
     """
     Saves all useful information calculated by UnitMatch to a given save_dir
 
@@ -182,7 +187,7 @@ def save_to_output(save_dir, scores_to_include, matches, output_prob, avg_centro
         np.save(matches_curated_path, matches_curated)
 
     if save_match_table == True:
-        df = make_match_table(scores_to_include, matches, output_prob, total_score, output_threshold, clus_info, param, UIDs = UIDs, matches_curated = None)
+        df = make_match_table(scores_to_include, matches, output_prob, total_score, output_threshold, clus_info, param, UIDs = UIDs, matches_curated = None, functional_scores = functional_scores)
         match_table_path = os.path.join(save_dir, 'MatchTable.csv')
         df.to_csv(match_table_path, index = False)
 

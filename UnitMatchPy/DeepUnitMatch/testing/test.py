@@ -464,74 +464,128 @@ def get_binned_psth(param, bin_size=0.01):
     return session_psthas
 
 
-def _normalize_fingerprints(C):
+def _pairwise_corr_cols(A, B):
     """
-    Replace diagonal NaN with row mean, then standardize each row to zero mean / unit std.
-    Units with zero variance (no spikes) get an all-zero fingerprint.
+    Pairwise Pearson r between all column pairs of A (n×p) and B (n×q),
+    equivalent to MATLAB corr(A, B, 'rows', 'pairwise').
+
+    NaN entries (at most one per column in our use case) are replaced by the
+    column mean before correlating — a negligible approximation when NaNs are
+    sparse.  Columns that are entirely NaN or have zero variance yield 0.
+    Returns (p, q).
     """
-    n = C.shape[0]
-    C_f = C.copy()
-    for k in range(n):
-        C_f[k, k] = np.nanmean(C[k])
-    C_f = np.nan_to_num(C_f, nan=0.0)
-    m = C_f.mean(axis=1, keepdims=True)
-    s = C_f.std(axis=1, keepdims=True)
-    s[s == 0] = 1.0
-    return (C_f - m) / s
+    A = A.copy().astype(float)
+    B = B.copy().astype(float)
+    for M in (A, B):
+        for j in range(M.shape[1]):
+            nan_mask = np.isnan(M[:, j])
+            if nan_mask.all():
+                M[:, j] = 0.0          # all-NaN column → constant zero
+            elif nan_mask.any():
+                M[nan_mask, j] = np.nanmean(M[:, j])
+    p = A.shape[1]
+    combined = np.vstack([A.T, B.T])   # (p+q) × n
+    with np.errstate(invalid='ignore', divide='ignore'):
+        C = np.corrcoef(combined)       # (p+q) × (p+q)
+    return np.nan_to_num(C[:p, p:], nan=0.0)
 
 
-def refpop_correlations(param, bin_size=0.01):
+def refpop_correlations(param, matches=None, bin_size=0.01):
     """
-    Cross-correlation population fingerprint (refPopCorr), analogous to the
-    MATLAB ComputeFunctionalScores refPopCorr.
+    Cross-correlation population fingerprint (refPopCorr), following
+    MATLAB ComputeFunctionalScores / CrossCorrelationFingerPrint.
 
-    For each unit the fingerprint is its row in the within-session pairwise
-    correlation matrix (one fold per cross-validation half).
-    refPopCorr[i, j] = Pearson r between the fold-1 fingerprint of unit i and
-    the fold-2 fingerprint of unit j.  Higher values indicate more similar
-    population coupling (likely the same unit).
+    Within-session: fingerprint is the cross-validated pairwise correlation
+    (fold1 vs fold2), i.e. MATLAB corr(fold1, fold2, 'rows', 'pairwise').
 
-    For cross-session pairs whose sessions have different unit counts, the
-    fingerprints are truncated to the shorter length (reasonable when the
-    same population is recorded across days).
+    Cross-session: the reference population is restricted to matched units
+    (equal-length by definition of a match). Each unit's fingerprint is its
+    correlation profile with those matched reference units in its own session;
+    these equal-length vectors are then compared across sessions.
+
+    Parameters
+    ----------
+    param : dict
+        Must contain 'KS_dirs', 'good_units', 'n_units'.
+    matches : np.ndarray (n_units, n_units) bool, optional
+        Final match matrix. Required for cross-session blocks; cross-session
+        blocks are left as zero when not provided.
+    bin_size : float
+        PSTH bin size in seconds (default 10 ms, matching UMparam.binsz).
     """
     session_psthas = get_binned_psth(param, bin_size)
     good_units = param['good_units']
+    n_sessions = len(good_units)
+    eps = 1e-7
 
-    session_C1_norm, session_C2_norm = [], []
+    session_fold1, session_fold2, session_avg = [], [], []
     for sr in session_psthas:
         n_fold = sr.shape[1] // 2
         C1 = np.corrcoef(sr[:, :n_fold])
         C2 = np.corrcoef(sr[:, n_fold:2 * n_fold])
-        # Zero out NaN from units with no spikes before setting diagonal
         C1 = np.nan_to_num(C1, nan=0.0)
         C2 = np.nan_to_num(C2, nan=0.0)
-        np.fill_diagonal(C1, np.nan)
-        np.fill_diagonal(C2, np.nan)
-        session_C1_norm.append(_normalize_fingerprints(C1))
-        session_C2_norm.append(_normalize_fingerprints(C2))
+        # z-transform average of the two folds (MATLAB: tanh(nanmean(atanh(...))))
+        avg = np.tanh(0.5 * (
+            np.arctanh(np.clip(C1, -1 + eps, 1 - eps)) +
+            np.arctanh(np.clip(C2, -1 + eps, 1 - eps))
+        ))
+        # NaN the diagonal — self-correlation is excluded from fingerprints
+        np.fill_diagonal(C1,  np.nan)
+        np.fill_diagonal(C2,  np.nan)
+        np.fill_diagonal(avg, np.nan)
+        session_fold1.append(C1)
+        session_fold2.append(C2)
+        session_avg.append(avg)
 
-    # Map each global unit index to its session and within-session position
     unit_session = []
-    for session, units in enumerate(good_units):
+    for si, units in enumerate(good_units):
         if hasattr(units, 'squeeze'):
             units = units.squeeze()
-        unit_session.extend([session] * len(units))
+        unit_session.extend([si] * len(units))
     unit_session = np.array(unit_session)
 
     nclus = param['n_units']
     refPopCorr = np.zeros((nclus, nclus))
 
-    for si in range(len(good_units)):
-        for sj in range(len(good_units)):
-            rows_i = np.where(unit_session == si)[0]
+    for si in range(n_sessions):
+        rows_i = np.where(unit_session == si)[0]
+        n_si = len(rows_i)
+
+        for sj in range(n_sessions):
             rows_j = np.where(unit_session == sj)[0]
-            C1n = session_C1_norm[si]   # (n_si, n_si)
-            C2n = session_C2_norm[sj]   # (n_sj, n_sj)
-            min_n = min(C1n.shape[1], C2n.shape[1])
-            # Vectorised pairwise correlation via normalised dot product
-            block = (C1n[:, :min_n] @ C2n[:, :min_n].T) / min_n
-            refPopCorr[np.ix_(rows_i, rows_j)] = np.clip(block, -1, 1)
+            n_sj = len(rows_j)
+
+            if si == sj:
+                # Cross-validated within-session fingerprint:
+                # corr(fold1, fold2, 'rows', 'pairwise') — n_si observations
+                block = _pairwise_corr_cols(session_fold1[si], session_fold2[si])
+
+            else:
+                if matches is None:
+                    block = np.zeros((n_si, n_sj))
+                else:
+                    # Restrict reference population to matched units only.
+                    # Both sessions contribute exactly the same number of matched
+                    # units (one per pair), so fingerprint vectors are equal-length.
+                    match_block = matches[np.ix_(rows_i, rows_j)]  # (n_si × n_sj)
+                    match_pos   = np.argwhere(match_block)          # (n_matched × 2)
+
+                    if len(match_pos) == 0:
+                        block = np.zeros((n_si, n_sj))
+                    else:
+                        local_si = match_pos[:, 0]  # local indices of matched units in si
+                        local_sj = match_pos[:, 1]  # local indices of matched units in sj
+
+                        # Each row is one matched unit's correlation with all session units.
+                        # Diagonal NaN (self-correlation) already set via fill_diagonal above.
+                        SC1 = session_avg[si][local_si, :]  # (n_matched × n_si)
+                        SC2 = session_avg[sj][local_sj, :]  # (n_matched × n_sj)
+
+                        # corr(SC1, SC2, 'rows', 'pairwise') → (n_si × n_sj)
+                        block = _pairwise_corr_cols(SC1, SC2)
+
+            refPopCorr[np.ix_(rows_i, rows_j)] = block
 
     return refPopCorr
 

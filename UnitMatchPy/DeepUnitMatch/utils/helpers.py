@@ -11,8 +11,8 @@ def create_dataframe(good_units, prob_matrix, session_list=None):
     if session_list is None:
         n_sessions = len(good_units)
         session_list = list(range(n_sessions))
-    session_switch = np.cumsum([np.asarray(units).squeeze().shape[0] for units in good_units])
-    session_switch = np.insert(session_switch, 0, 0)    
+    session_switch = np.cumsum([np.asarray(units).ravel().shape[0] for units in good_units])
+    session_switch = np.insert(session_switch, 0, 0)
 
     d = {
         "RecSes1": [],
@@ -21,12 +21,12 @@ def create_dataframe(good_units, prob_matrix, session_list=None):
         "ID2": [],
         "Prob": [],
     }
-    
+
     # Generate all pairs of sessions (including within-session pairs)
     for i, ses1 in enumerate(session_list):
         for j, ses2 in enumerate(session_list):
-            units_ses1 = np.asarray(good_units[i]).squeeze().astype(int)
-            units_ses2 = np.asarray(good_units[j]).squeeze().astype(int)
+            units_ses1 = np.asarray(good_units[i]).ravel().astype(int)
+            units_ses2 = np.asarray(good_units[j]).ravel().astype(int)
             n_units_ses1 = units_ses1.shape[0]
             n_units_ses2 = units_ses2.shape[0]
              
