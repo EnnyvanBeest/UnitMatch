@@ -116,7 +116,7 @@ function exp2keep = getNatImExpRef(binFile)
                             if ~isempty(alignmentFileEphys)
                                 fprintf('tricky situation -- there''s an undefined alignment file for this timeline...\n')
                                 if contains(lower(binFile.name),'natim2')
-                                    printf('File called natim2. Check if there''s another one?\n')
+                                    fprintf('File called natim2. Check if there''s another one?\n')
                                     if numel(unique({dEphys.folder}))==1
                                         cbinFilesForDate = dir(fullfile(dEphys(1).folder,'**','*.ap.cbin'));
                                     else
