@@ -1,3 +1,4 @@
+import os
 import numpy as np
 
 def check_is_in(test_array, parent_array):
@@ -18,6 +19,101 @@ def check_is_in(test_array, parent_array):
     """
     is_in = (test_array[:, None] == parent_array).all(-1).any(-1)
     return is_in
+
+
+def _filter_pairs_by_isi(pairs, clus_info, param):
+    """
+    Returns a boolean mask (len == len(pairs)) where True means the pair should
+    be excluded because merging the two same-session units would produce too many
+    ISI refractory-period violations.
+
+    Only same-session pairs are evaluated; all cross-session pairs keep False.
+    Skips silently when param['KS_dirs'] is absent or IO fails.
+    """
+    isi_exclude = np.zeros(len(pairs), dtype=bool)
+
+    if not param.get('remove_over_merges', True):
+        return isi_exclude
+    if 'KS_dirs' not in param:
+        return isi_exclude
+
+    refrac_ms  = param.get('isi_viol_refrac_ms', 1.5)
+    min_frac   = param.get('isi_min_fraction_refractory_violations', 0.01)
+    ratio_thrs = param.get('isi_viol_ratio_thrs', 1.5)
+
+    session_ids  = clus_info['session_id']
+    original_ids = clus_info['original_ids']
+    ks_dirs      = param['KS_dirs']
+
+    spike_cache = {}  # sess_id -> (spike_times_sec, spike_clusters) or None
+
+    for pid, pair in enumerate(pairs):
+        uid_a, uid_b = int(pair[0]), int(pair[1])
+        sess_a = int(session_ids[uid_a])
+        sess_b = int(session_ids[uid_b])
+
+        if sess_a != sess_b:
+            continue
+
+        if sess_a not in spike_cache:
+            try:
+                ks_dir  = ks_dirs[sess_a]
+                st_path = os.path.join(ks_dir, 'spike_times.npy')
+                sc_path = os.path.join(ks_dir, 'spike_clusters.npy')
+                if os.path.exists(st_path) and os.path.exists(sc_path):
+                    st = np.load(st_path).flatten().astype(np.float64)
+                    sc = np.load(sc_path).flatten()
+                    sample_rate = 30000.0
+                    params_path = os.path.join(ks_dir, 'params.py')
+                    if os.path.exists(params_path):
+                        with open(params_path) as f:
+                            for line in f:
+                                if 'sample_rate' in line and '=' in line:
+                                    sample_rate = float(line.split('=')[1].strip())
+                                    break
+                    spike_cache[sess_a] = (st / sample_rate, sc)
+                else:
+                    spike_cache[sess_a] = None
+            except Exception:
+                spike_cache[sess_a] = None
+
+        if spike_cache[sess_a] is None:
+            continue
+
+        st_sec, sc = spike_cache[sess_a]
+        clus_a = original_ids[uid_a]
+        clus_b = original_ids[uid_b]
+
+        mask_a = sc == clus_a
+        mask_b = sc == clus_b
+        if not np.any(mask_a) or not np.any(mask_b):
+            continue
+
+        st_a = np.sort(st_sec[mask_a])
+        st_b = np.sort(st_sec[mask_b])
+        st_merged = np.sort(np.concatenate([st_a, st_b]))
+
+        diffs_a      = np.diff(st_a)      * 1000
+        diffs_b      = np.diff(st_b)      * 1000
+        diffs_merged = np.diff(st_merged) * 1000
+
+        if len(diffs_a) == 0 or len(diffs_b) == 0 or len(diffs_merged) == 0:
+            continue
+
+        frac_a      = np.sum(diffs_a      < refrac_ms) / len(diffs_a)
+        frac_b      = np.sum(diffs_b      < refrac_ms) / len(diffs_b)
+        frac_merged = np.sum(diffs_merged < refrac_ms) / len(diffs_merged)
+
+        if frac_merged > min_frac:
+            denom = 2 * max(frac_a, frac_b)
+            violation_ratio = frac_merged / denom if denom > 0 else np.inf
+            if violation_ratio > ratio_thrs:
+                isi_exclude[pid] = True
+
+    n_excluded = int(np.sum(isi_exclude))
+    if n_excluded:
+        print(f'ISI check: excluding {n_excluded} same-session pair(s) due to refractory violations.')
+    return isi_exclude
 
 
 def assign_unique_id(output_prob_array, param, clus_info):
@@ -68,6 +164,10 @@ def assign_unique_id(output_prob_array, param, clus_info):
     #Only keep one copy of pairs only if both CV agree its a match
     pairs_unique, count = np.unique(pairs, axis = 0, return_counts=True)
     pairs_unique_filt = np.delete(pairs_unique, count == 1, axis = 0) #if Count = 1 only 1 CV for that pair!
+
+    # Remove same-session pairs whose merge would cause ISI refractory violations
+    isi_exclude = _filter_pairs_by_isi(pairs_unique_filt, clus_info, param)
+    pairs_unique_filt = pairs_unique_filt[~isi_exclude]
 
     #get the mean probability for each match
     prob_mean = np.nanmean(np.vstack((output_prob_array[pairs_unique_filt[:,0], pairs_unique_filt[:,1]], \

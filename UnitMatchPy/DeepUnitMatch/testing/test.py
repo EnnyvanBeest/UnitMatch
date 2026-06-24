@@ -387,8 +387,9 @@ def pairwise_histogram_correlation(A, B):
     # Compute pairwise correlations
     for i in range(num_histograms):
         for j in range(num_histograms):
-            # Correlate the i-th histogram in A with the j-th histogram in B
-            correlation_matrix[i, j] = np.corrcoef(A[i], B[j])[0, 1]
+            with np.errstate(invalid='ignore', divide='ignore'):
+                r = np.corrcoef(A[i], B[j])[0, 1]
+            correlation_matrix[i, j] = 0.0 if np.isnan(r) else r
     
     return correlation_matrix
 

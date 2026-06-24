@@ -28,6 +28,10 @@ def get_default_param(param = None):
             'curve_fit_maxfev' : 10000, # max evaluations for decay curve fitting
             'chunk_size' : 500, # row-chunk size for pairwise metric computation
             'n_xchannelpos' : 2, # number of unique x-axis column positions on each shank (2 for most NP, 4 for staggered NP designs)
+            'remove_over_merges' : True, # use ISI violations to block same-session merges that would worsen refractory-period contamination
+            'isi_viol_refrac_ms' : 1.5, # refractory window in milliseconds
+            'isi_min_fraction_refractory_violations' : 0.01, # combined ISI violation fraction must exceed this before the ratio test is applied
+            'isi_viol_ratio_thrs' : 1.5, # combined / (2 * max individual) violation ratio above which the merge is rejected
         }
     
     tmp['score_vector'] = np.arange(tmp['stepsz']/2 ,1 ,tmp['stepsz'])

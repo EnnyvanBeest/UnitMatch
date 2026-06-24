@@ -39,7 +39,7 @@ BASE_OUTPUT = r'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE
 
 DEVICE = 'cuda' if test.torch.cuda.is_available() else 'cpu'
 THRESH = 0.5
-REDO   = False   # if True, rerun even when output already exists
+REDO   = True   # if True, rerun even when output already exists
 
 
 # ── MATLAB file loading ───────────────────────────────────────────────────────
@@ -422,6 +422,14 @@ def run_deep_unit_match(mat_path):
         auc_cv = test.AUC(final_matches, -cvdiff, session_id)  # negate: lower CVDiff = better match
         print(f"AUC (ISI CV difference):           {auc_cv:.3f}")
         functional_scores['ISI_CV_diff'] = cvdiff
+
+        try:
+            natimcorr = test.natim_correlations(param)
+            auc_natim = test.AUC(final_matches, natimcorr, session_id)
+            print(f"AUC (nat. image correlations):     {auc_natim:.3f}")
+            functional_scores['natim_correlations'] = natimcorr
+        except Exception:
+            pass  # natim data may not be available for every session
     except Exception as e:
         print(f'  WARNING: functional score computation failed: {e}')
         functional_scores = {}
@@ -476,6 +484,7 @@ def run_deep_unit_match(mat_path):
             'refpop_correlations':('Ref. pop. correlations',    'viridis', None),
             'FR_diff':            ('Firing rate difference',    'magma',   None),
             'ISI_CV_diff':        ('ISI CV difference',         'magma',   None),
+            'natim_correlations': ('Nat. image correlations',   'viridis', None),
         }
         keys = [k for k in score_meta if k in functional_scores]
         fig, axes = plt.subplots(1, len(keys), figsize=(5 * len(keys), 5))
