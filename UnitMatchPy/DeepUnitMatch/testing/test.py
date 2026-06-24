@@ -633,11 +633,220 @@ def ISI_CV_diff(param):
     CV = get_ISI_CV(param)   # (2, n_units)
     return np.abs(CV[1, :, np.newaxis] - CV[0, np.newaxis, :])
 
+def get_natim_responses(param):
+    """
+    Bin spike times into stimulus-triggered PSTH per session.
+    Returns list of arrays with shape (n_time_bins, n_stimuli, n_units, max_repeats).
+    Organized as: time × stimulus × neurons × repeats
+    Time dimension: onset bins followed by offset bins (concatenated).
+    """
+    fs = 3e4
+    nclus = param['n_units']
+    KSdirs = param['KS_dirs']
+    good_units = param['good_units']
+
+    session_timecourses = []
+    session_stimulus_responses = []
+    for session in range(len(good_units)):
+        times = np.load(os.path.join(KSdirs[session], "spike_times.npy")) / fs
+        clusters = np.load(os.path.join(KSdirs[session], "spike_clusters.npy"))
+
+        session_units = good_units[session]
+        if hasattr(session_units, 'squeeze'):
+            session_units = session_units.squeeze()
+        n_units = len(session_units)
+
+        # Try to load trial files; if they don't exist, use NaN arrays
+        trial_path = os.path.dirname(os.path.dirname(KSdirs[session]))
+        try:
+            trials_IDs = np.load(os.path.join(trial_path, "trial.imageIDs.npy"))
+            trials_offsetTimes = np.load(os.path.join(trial_path, "trial.offsetTimes.npy"))
+            trials_onsetTimes = np.load(os.path.join(trial_path, "trial.onsetTimes.npy"))
+        except FileNotFoundError:
+            # Trial files don't exist; return NaN arrays
+            bin_size = 0.005
+            onset_window = [-0.3, 0.5]
+            offset_window = [0.0, 0.5]
+            onset_bins = np.arange(onset_window[0], onset_window[1] + bin_size, bin_size)
+            offset_bins = np.arange(offset_window[0], offset_window[1] + bin_size, bin_size)
+            n_time_bins_total = (len(onset_bins) - 1) + (len(offset_bins) - 1)
+            
+            timecourse = np.full((2, n_time_bins_total, n_units), np.nan)
+            stimulus_response = np.full((2, 112, n_units), np.nan)
+            
+            session_timecourses.append(timecourse)
+            session_stimulus_responses.append(stimulus_response)
+            continue
+
+        bin_size = 0.005
+        onset_window = [-0.3, 0.5]
+        offset_window = [0.0, 0.5]
+        psth, _ = get_stimulus_triggered_psth(times, clusters, trials_onsetTimes, trials_offsetTimes, 
+                                 trials_IDs, session_units, 
+                                 onset_window=onset_window, offset_window=offset_window, 
+                                 bin_size=bin_size)
+        
+        # psth shape: (time, stimulus, neurons, repeats)
+        # Average timecourse over stimuli and repeats: (fold, time, neurons)
+        timecourse1 = np.nanmean(psth[:,:,:,1::2], axis=(1, 3))
+        timecourse2 = np.nanmean(psth[:,:,:,::2], axis=(1, 3))
+        timecourse = np.stack([timecourse1, timecourse2], axis=0)  # shape: (fold, time, neurons)
+        
+        # Average response across repeats for each stimulus, using only first 200ms after onset
+        # onset_window = [-0.3, 0.5], we want time 0 to 0.2s
+        ms_after_onset = 0.2
+        bins_in_window = int(ms_after_onset / bin_size)  # 40 bins
+        onset_start_bin = int((0 - onset_window[0]) / bin_size)  # skip to time 0 (60 bins)
+        onset_end_bin = onset_start_bin + bins_in_window  # 100
+        stimulus_response1 = np.nanmean(psth[onset_start_bin:onset_end_bin, :, :, 1::2], axis=(0, 3))
+        stimulus_response2 = np.nanmean(psth[onset_start_bin:onset_end_bin, :, :, ::2], axis=(0, 3))
+        stimulus_response = np.stack([stimulus_response1, stimulus_response2], axis=0)  # shape: (fold, stimulus, neurons)
+
+        session_timecourses.append(timecourse)
+        session_stimulus_responses.append(stimulus_response)
+
+    return session_stimulus_responses, session_timecourses
+
+def get_stimulus_triggered_psth(times, clusters, trials_onsetTimes, trials_offsetTimes, 
+                                 trials_IDs, good_units, 
+                                 onset_window=[-0.3, 0.5], offset_window=[0, 0.5], 
+                                 bin_size=0.005):
+    """
+    Extract PSTH responses around stimulus onset and offset for each neuron.
+    Groups trials by stimulus ID, organizing responses by stimulus identity.
+    Onset and offset responses are concatenated along the time axis.
+    
+    Parameters
+    ----------
+    times : np.ndarray
+        Spike times in seconds
+    clusters : np.ndarray
+        Cluster IDs for each spike
+    trials_onsetTimes : np.ndarray
+        Stimulus onset times for each trial
+    trials_offsetTimes : np.ndarray
+        Stimulus offset times for each trial
+    trials_IDs : np.ndarray
+        Stimulus IDs for each trial (groups stimulus presentations)
+    good_units : array-like
+        Unit IDs to include
+    onset_window : list
+        Time window around stimulus onset [start, end] in seconds
+    offset_window : list
+        Time window around stimulus offset [start, end] in seconds
+    bin_size : float
+        Bin size in seconds
+    
+    Returns
+    -------
+    psth : np.ndarray
+        Shape (n_onset_bins + n_offset_bins, n_stimulus_types, n_units, max_repeats)
+        Dimensions: time × stimulus × neurons × repeats
+        Time dimension: onset bins [0:n_onset_bins] then offset bins [n_onset_bins:]
+    unique_stimulus_ids : np.ndarray
+        Unique stimulus IDs in order
+    """
+    
+    if hasattr(good_units, 'squeeze'):
+        good_units = good_units.squeeze()
+    
+    good_units = np.array(good_units)
+    n_units = len(good_units)
+    
+    # Get unique stimulus IDs and bin edges
+    unique_stimulus_ids = np.unique(trials_IDs)
+    n_stimulus_types = len(unique_stimulus_ids)
+    
+    onset_bins = np.arange(onset_window[0], onset_window[1] + bin_size, bin_size)
+    offset_bins = np.arange(offset_window[0], offset_window[1] + bin_size, bin_size)
+    n_onset_bins = len(onset_bins) - 1
+    n_offset_bins = len(offset_bins) - 1
+    n_time_bins_total = n_onset_bins + n_offset_bins
+    
+    # Count max repeats per stimulus to determine output size
+    max_repeats = 0
+    for stim_id in unique_stimulus_ids:
+        n_repeats = np.sum(trials_IDs == stim_id)
+        max_repeats = max(max_repeats, n_repeats)
+    
+    # Initialize output: time (onset+offset concatenated) × stimulus × neurons × repeats
+    psth = np.zeros((n_time_bins_total, n_stimulus_types, n_units, max_repeats))
+    
+    # Extract PSTH for each stimulus type
+    for stim_idx, stim_id in enumerate(unique_stimulus_ids):
+        # Get all trials with this stimulus ID
+        stim_trials = np.where(trials_IDs == stim_id)[0]
+        
+        for repeat_idx, trial_idx in enumerate(stim_trials):
+            trial_onset = trials_onsetTimes[trial_idx]
+            trial_offset = trials_offsetTimes[trial_idx]
+            
+            # Extract spikes around onset
+            onset_start = trial_onset + onset_window[0]
+            onset_end = trial_onset + onset_window[1]
+            onset_spike_mask = (times >= onset_start) & (times <= onset_end)
+            onset_spike_times = times[onset_spike_mask] - trial_onset
+            onset_spike_clusters = clusters[onset_spike_mask]
+            
+            # Extract spikes around offset
+            offset_start = trial_offset + offset_window[0]
+            offset_end = trial_offset + offset_window[1]
+            offset_spike_mask = (times >= offset_start) & (times <= offset_end)
+            offset_spike_times = times[offset_spike_mask] - trial_offset
+            offset_spike_clusters = clusters[offset_spike_mask]
+            
+            # Bin spikes for each unit
+            for unit_idx, unit in enumerate(good_units):
+                # Onset PSTH (first n_onset_bins of time axis)
+                unit_onset_spikes = onset_spike_times[onset_spike_clusters == unit]
+                if len(unit_onset_spikes) > 0:
+                    hist_onset, _ = np.histogram(unit_onset_spikes, bins=onset_bins)
+                    psth[:n_onset_bins, stim_idx, unit_idx, repeat_idx] = hist_onset
+                
+                # Offset PSTH (remaining n_offset_bins of time axis)
+                unit_offset_spikes = offset_spike_times[offset_spike_clusters == unit]
+                if len(unit_offset_spikes) > 0:
+                    hist_offset, _ = np.histogram(unit_offset_spikes, bins=offset_bins)
+                    psth[n_onset_bins:n_onset_bins + n_offset_bins, stim_idx, unit_idx, repeat_idx] = hist_offset
+    
+    return psth, unique_stimulus_ids
+
+def natim_correlations(param):
+    """
+    Compute pairwise correlations of natural image stimulus fingerprints across neurons.
+    Fingerprints combine average timecourse over stimuli + average response across stimuli.
+    """
+    session_stimulus_responses, session_timecourses = get_natim_responses(param)
+    
+    # Concatenate fingerprints from all sessions
+    all_timecourses = np.concatenate(session_timecourses, axis=2)  # (fold, time, n_all_units)
+    all_stimulus_responses = np.concatenate(session_stimulus_responses, axis=2)  # (fold, stimulus, n_all_units)
+
+    # Compute pairwise correlations for timecourses and stimulus responses
+    timecourse_corr = pairwise_histogram_correlation(all_timecourses[0,:,:].T, all_timecourses[1,:,:].T)
+    stimulus_corr = pairwise_histogram_correlation(all_stimulus_responses[0,:,:].T, all_stimulus_responses[1,:,:].T)
+    
+    # Fisher z-transform
+    z_timecourse = 0.5 * np.arctanh(timecourse_corr)
+    z_stimulus = 0.5 * np.arctanh(stimulus_corr)
+
+    # Average z-scores
+    z_fingerprint = (z_timecourse + z_stimulus) / 2.0
+
+    # Inverse transform with tanh
+    fingerprint_corr = np.tanh(z_fingerprint)
+    return fingerprint_corr
 
 def AUC(matches:np.ndarray, func_metric:np.ndarray, session_id):
     """
     The AUC depends on a functional metric which is considered as ground truth. This is passed in via func_metric.
     """
+    
+    # Filter out NaN values
+    nan_mask = np.all(~np.isfinite(func_metric),axis=1)
+    func_metric = func_metric[~nan_mask, :][:, ~nan_mask]
+    matches = matches[~nan_mask, :][:, ~nan_mask]
+    session_id = session_id[~nan_mask]
 
     P = np.sum(matches)
     if P < 1:
@@ -647,6 +856,8 @@ def AUC(matches:np.ndarray, func_metric:np.ndarray, session_id):
     within_session = (session_id[:, None] == session_id).astype(bool)
     func_across = func_metric[~within_session]
     matches_across = matches[~within_session]
+
+
     sorted_indices = np.argsort(func_across)[::-1]
 
     tp, fp = 0,0
