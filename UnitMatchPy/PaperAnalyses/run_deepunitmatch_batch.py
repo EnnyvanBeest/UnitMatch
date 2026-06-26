@@ -23,6 +23,8 @@ sys.path.insert(0, _HERE)
 sys.path.insert(0, os.path.dirname(_HERE))
 sys.path.insert(0, os.path.join(_HERE, 'DeepUnitMatch'))
 
+import argparse
+
 import UnitMatchPy.default_params as default_params
 import UnitMatchPy.utils as util
 import UnitMatchPy.overlord as ov
@@ -34,6 +36,11 @@ from DeepUnitMatch.utils import param_fun
 from DeepUnitMatch.testing import test
 from DeepUnitMatch.utils import helpers
 
+try:
+    from convert_python_batch_output_to_matlab import convert_python_output_to_matlab
+except Exception:
+    convert_python_output_to_matlab = None
+
 # ── user settings ────────────────────────────────────────────────────────────
 BASE_INPUT  = r'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\FullAnimal_KSChanMap'
 BASE_OUTPUT = r'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026V2'
@@ -42,6 +49,7 @@ DEVICE = 'cuda' if test.torch.cuda.is_available() else 'cpu'
 print(f'Device: {DEVICE}')
 THRESH = 0.5
 REDO   = True   # if True, rerun even when output already exists
+WRITE_MATLAB_COMPAT = False
 
 
 # ── MATLAB file loading ───────────────────────────────────────────────────────
@@ -222,6 +230,36 @@ def results_exist(mat_path):
     """Return True when the DeepUnitMatch sentinel output file is present."""
     sentinel = os.path.join(get_save_dir(mat_path), 'MatchingOverview.png')
     return os.path.isfile(sentinel)
+
+
+def ensure_matlab_compatible_output(save_dir):
+    """Create UnitMatch.mat in save_dir from Python outputs when explicitly requested."""
+    if not WRITE_MATLAB_COMPAT:
+        return None
+
+    out_path = os.path.join(save_dir, 'UnitMatch.mat')
+    if os.path.exists(out_path):
+        return out_path
+
+    if convert_python_output_to_matlab is None:
+        print('  WARNING: MATLAB-compatible conversion requested but the converter is unavailable.')
+        return None
+
+    required = [
+        os.path.join(save_dir, 'UMparam.pickle'),
+        os.path.join(save_dir, 'ClusInfo.pickle'),
+        os.path.join(save_dir, 'MatchProb.npy'),
+        os.path.join(save_dir, 'MatchTable.csv'),
+        os.path.join(save_dir, 'WaveformInfo.npz'),
+    ]
+    if not all(os.path.exists(p) for p in required):
+        return None
+
+    try:
+        return convert_python_output_to_matlab(save_dir, output_mat_path=out_path)
+    except Exception as e:
+        print(f'  WARNING: could not create MATLAB-compatible output: {e}')
+        return None
 
 
 def umpy_results_exist(mat_path):
@@ -524,6 +562,7 @@ def run_deep_unit_match(sess):
         save_match_table=True,
         functional_scores=functional_scores if functional_scores else None,
     )
+    ensure_matlab_compatible_output(save_dir)
 
     # ── save diagnostic figures ───────────────────────────────────────────────
     fig, axes = plt.subplots(1, 3, figsize=(15, 5))
@@ -700,6 +739,7 @@ def run_umpy(sess):
         save_match_table=True,
         functional_scores=functional_scores if functional_scores else None,
     )
+    ensure_matlab_compatible_output(save_dir)
 
     # ── save diagnostic figures ───────────────────────────────────────────────
     fig, axes = plt.subplots(1, 3, figsize=(15, 5))
@@ -754,7 +794,18 @@ def run_umpy(sess):
 
 # ── entry point ───────────────────────────────────────────────────────────────
 
+def parse_args():
+    parser = argparse.ArgumentParser(description='Run DeepUnitMatch and UMPy on UnitMatch.mat inputs.')
+    parser.add_argument('--write-matlab-compat', action='store_true',
+                        help='Also write a MATLAB-compatible UnitMatch.mat from the Python outputs.')
+    return parser.parse_args()
+
+
 def main():
+    args = parse_args()
+    global WRITE_MATLAB_COMPAT
+    WRITE_MATLAB_COMPAT = args.write_matlab_compat
+
     print(f'Scanning for UnitMatch.mat files under:\n  {BASE_INPUT}\n')
 
     mat_files = []

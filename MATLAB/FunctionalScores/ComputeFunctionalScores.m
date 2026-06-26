@@ -9,13 +9,37 @@ if nargin < 3 || isempty(recompute)
 end
 SigThrs = 3; % Threshold for number of standard deviations away from mean
 
+if ~ischar(SaveDir) && ~isstring(SaveDir)
+    error('SaveDir must be a path string.');
+end
+SaveDir = char(SaveDir);
 
-load(fullfile(SaveDir, 'UnitMatch.mat'), 'MatchTable', 'UMparam', 'UniqueIDConversion');
+if ~exist(fullfile(SaveDir, 'UnitMatch.mat'), 'file')
+    [MatchTable, UMparam, UniqueIDConversion, ~] = loadPythonOutputForMatlab(SaveDir);
+else
+    load(fullfile(SaveDir, 'UnitMatch.mat'), 'MatchTable', 'UMparam', 'UniqueIDConversion');
+end
 UMparam.binsz = 0.01; % Binsize in time (s) for the cross-correlation fingerprint. We recommend ~2-10ms time windows
 
-if all(ismember({'refPopCorr','ISICorr','FRDiff','natImRespCorr'},MatchTable.Properties.VariableNames)) && ~recompute
-    disp('Already computed functional scores')
-    return
+matchTableVars = cellstr(MatchTable.Properties.VariableNames);
+matlabScoreNames = {'refPopCorr','ISICorr','FRDiff','natImRespCorr'};
+pythonScoreNames = {'refpop_correlation','refpop_correlations','ISI_correlations','FR_diff','natim_correlation','natim_correlations'};
+figuresOnly = false;
+if (~recompute && (all(ismember(matlabScoreNames, matchTableVars)) || all(ismember(pythonScoreNames, matchTableVars))))
+    if saveFig
+        figFiles = {fullfile(SaveDir, 'FunctionalScoreSeparability.fig'), ...
+            fullfile(SaveDir, 'FunctionalScoreSeparability.png'), ...
+            fullfile(SaveDir, 'VennFunctionalScores.bmp')};
+        if all(cellfun(@(f) exist(f, 'file'), figFiles))
+            disp('Already computed functional scores and all figures present')
+            return
+        end
+        disp('Already computed functional scores; regenerating missing figures...')
+        figuresOnly = true;
+    else
+        disp('Already computed functional scores')
+        return
+    end
 end
 
 % Extract cluster information
@@ -34,38 +58,50 @@ if size(recsesall) ~= size(GoodID)
 end
 
 
-AllKSDir = UMparam.KSDir; %original KS Dir
+if isfield(UMparam, 'KSDir') && ~isempty(UMparam.KSDir)
+    AllKSDir = UMparam.KSDir; %original KS Dir
+else
+    AllKSDir = {};
+end
 nclus = length(UniqueID);
 
 %%% TO REMOVE
 if ~isfield(UMparam,'AllRawPaths') % For now no to disturb Célian
-    UMparam.AllRawPaths = UMparam.RawDataPaths;
+    if isfield(UMparam,'RawDataPaths')
+        UMparam.AllRawPaths = UMparam.RawDataPaths;
+    else
+        UMparam.AllRawPaths = {};
+    end
 end
 
-% 
+%
 % if length(UMparam.AllRawPaths{1}) > 1 %Reshape for Stitched
 %     UMparam.AllRawPaths = arrayfun(@(X) UMparam.AllRawPaths{1}(X),1:length(UMparam.AllRawPaths{1}),'uni',0);
 % end
 
-% Load SP
-disp('Loading spike information...')
-sp = getSpikesFromPrepData(AllKSDir);
+if ~figuresOnly
+    % Load SP
+    disp('Loading spike information...')
+    sp = getSpikesFromPrepData(AllKSDir);
+end
 
 nRec = length(unique(UniqueIDConversion.recsesAll(logical(UniqueIDConversion.GoodID))));
 RecOpt = unique(UniqueIDConversion.recsesAll(logical(UniqueIDConversion.GoodID)));
-EuclDist = reshape(MatchTable.EucledianDistance, nclus, nclus);
 SessionSwitch = arrayfun(@(X) find(recses == X, 1, 'first'), unique(UniqueIDConversion.recsesAll(logical(UniqueIDConversion.GoodID))), 'Uni', 0);
 SessionSwitch(cellfun(@isempty, SessionSwitch)) = [];
 SessionSwitch = [cell2mat(SessionSwitch); nclus + 1];
 
-% Plotting order (sort units based on distance)
-[~, SortingOrder] = arrayfun(@(X) sort(EuclDist(1, SessionSwitch(X):SessionSwitch(X+1)-1)), 1:nRec, 'Uni', 0);
-SortingOrder = arrayfun(@(X) squeeze(SortingOrder{X}+SessionSwitch(X)-1), 1:nRec, 'Uni', 0);
-if size(SortingOrder{1}, 1) == 1
-    SortingOrder = cat(2, SortingOrder{:});
-else
-    SortingOrder = cat(1, SortingOrder{:});
-end
+if ~figuresOnly
+    EuclDist = reshape(MatchTable.EucledianDistance, nclus, nclus);
+    % Plotting order (sort units based on distance)
+    [~, SortingOrder] = arrayfun(@(X) sort(EuclDist(1, SessionSwitch(X):SessionSwitch(X+1)-1)), 1:nRec, 'Uni', 0);
+    SortingOrder = arrayfun(@(X) squeeze(SortingOrder{X}+SessionSwitch(X)-1), 1:nRec, 'Uni', 0);
+    if size(SortingOrder{1}, 1) == 1
+        SortingOrder = cat(2, SortingOrder{:});
+    else
+        SortingOrder = cat(1, SortingOrder{:});
+    end
+
 
 %% Get cross-correlation fingerprints correlations
 
@@ -132,71 +168,72 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'refPopCorr')) || recomput
     [refPopRank, refPopSig] = getRank(atanh(refPopCorr),SessionSwitch);% Over normalized scores
     refPopSig(refPopCorr==0) = nan; % Correlation of 0 means nothing
     refPopRank(refPopCorr==0) = nan; % Correlation of 0 means nothing
-    
+
     % Output needs transposing to be properly stored in table
     refPopCorr = refPopCorr';
-    refPopRank = refPopRank'; 
+    refPopRank = refPopRank';
     refPopSig = refPopSig'; % Saves out number of standard deviations away from mean
     % Save in table
     MatchTable.refPopCorr = refPopCorr(:);
     MatchTable.refPopRank = refPopRank(:); % What goes in the table should give ndays (- nans) for every output when you do sum(refPopRank==1,1) , if it's not, transpose!
     MatchTable.refPopSig = refPopSig(:);
 
-    %% Compare to functional scores
-    if saveFig % Otherwise this takes way tooo long
-        figure;
+end
+%% Compare to functional scores
+if saveFig % Otherwise this takes way tooo long
+    figure;
 
-        subplot(1, 3, 1)
-        imagesc(refPopRank(SortingOrder, SortingOrder) == 1 & refPopSig(SortingOrder, SortingOrder) > SigThrs)
-        hold on
-        arrayfun(@(X) line([SessionSwitch(X), SessionSwitch(X)], get(gca, 'ylim'), 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
-        arrayfun(@(X) line(get(gca, 'xlim'), [SessionSwitch(X), SessionSwitch(X)], 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
-        colormap(flipud(gray))
-        title('rank == 1*')
-        makepretty
+    subplot(1, 3, 1)
+    imagesc(refPopRank(SortingOrder, SortingOrder) == 1 & refPopSig(SortingOrder, SortingOrder) > SigThrs)
+    hold on
+    arrayfun(@(X) line([SessionSwitch(X), SessionSwitch(X)], get(gca, 'ylim'), 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
+    arrayfun(@(X) line(get(gca, 'xlim'), [SessionSwitch(X), SessionSwitch(X)], 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
+    colormap(flipud(gray))
+    title('rank == 1*')
+    makepretty
 
-        subplot(1, 3, 2)
-        imagesc(MatchProbability(SortingOrder, SortingOrder) > UMparam.ProbabilityThreshold)
-        hold on
-        arrayfun(@(X) line([SessionSwitch(X), SessionSwitch(X)], get(gca, 'ylim'), 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
-        arrayfun(@(X) line(get(gca, 'xlim'), [SessionSwitch(X), SessionSwitch(X)], 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
-        colormap(flipud(gray))
-        title(['Match Probability>', num2str(UMparam.ProbabilityThreshold)])
-        makepretty
+    subplot(1, 3, 2)
+    imagesc(MatchProbability(SortingOrder, SortingOrder) > UMparam.ProbabilityThreshold)
+    hold on
+    arrayfun(@(X) line([SessionSwitch(X), SessionSwitch(X)], get(gca, 'ylim'), 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
+    arrayfun(@(X) line(get(gca, 'xlim'), [SessionSwitch(X), SessionSwitch(X)], 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
+    colormap(flipud(gray))
+    title(['Match Probability>', num2str(UMparam.ProbabilityThreshold)])
+    makepretty
 
-        subplot(1, 3, 3)
-        imagesc(MatchProbability(SortingOrder, SortingOrder) >= UMparam.ProbabilityThreshold | (MatchProbability(SortingOrder, SortingOrder) > 0.05 & refPopRank(SortingOrder, SortingOrder) == 1 & refPopSig(SortingOrder, SortingOrder)  > SigThrs));
-        hold on
-        arrayfun(@(X) line([SessionSwitch(X), SessionSwitch(X)], get(gca, 'ylim'), 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
-        arrayfun(@(X) line(get(gca, 'xlim'), [SessionSwitch(X), SessionSwitch(X)], 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
-        colormap(flipud(gray))
-        title('Matching probability + rank')
-        makepretty
-        if saveFig
-            saveas(gcf, fullfile(SaveDir, 'RankVSProbability.fig'))
-            saveas(gcf, fullfile(SaveDir, 'RankVSProbability.bmp'))
-        end
+    subplot(1, 3, 3)
+    imagesc(MatchProbability(SortingOrder, SortingOrder) >= UMparam.ProbabilityThreshold | (MatchProbability(SortingOrder, SortingOrder) > 0.05 & refPopRank(SortingOrder, SortingOrder) == 1 & refPopSig(SortingOrder, SortingOrder)  > SigThrs));
+    hold on
+    arrayfun(@(X) line([SessionSwitch(X), SessionSwitch(X)], get(gca, 'ylim'), 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
+    arrayfun(@(X) line(get(gca, 'xlim'), [SessionSwitch(X), SessionSwitch(X)], 'color', [1, 0, 0]), 2:length(SessionSwitch), 'Uni', 0)
+    colormap(flipud(gray))
+    title('Matching probability + rank')
+    makepretty
+    if saveFig
+        saveas(gcf, fullfile(SaveDir, 'RankVSProbability.fig'))
+        saveas(gcf, fullfile(SaveDir, 'RankVSProbability.bmp'))
+    end
 
-        tmpf = triu(refPopCorr);
-        tmpm = triu(MatchProbability);
-        tmpr = triu(refPopRank);
-        tmpr = tmpr(tmpf ~= 0);
-        tmpm = tmpm(tmpf ~= 0);
-        tmpf = tmpf(tmpf ~= 0);
-        figure;
-        scatter(tmpm, tmpf, 14, tmpr, 'filled')
-        colormap(cat(1, [0, 0, 0], winter))
-        xlabel('Match Probability')
-        ylabel('Cross-correlation fingerprint')
-        makepretty
-        saveas(gcf, fullfile(SaveDir, 'RankVSProbabilityScatter.fig'))
-        saveas(gcf, fullfile(SaveDir, 'RankVSProbabilityScatter.bmp'))
+    tmpf = triu(refPopCorr);
+    tmpm = triu(MatchProbability);
+    tmpr = triu(refPopRank);
+    tmpr = tmpr(tmpf ~= 0);
+    tmpm = tmpm(tmpf ~= 0);
+    tmpf = tmpf(tmpf ~= 0);
+    figure;
+    scatter(tmpm, tmpf, 14, tmpr, 'filled')
+    colormap(cat(1, [0, 0, 0], winter))
+    xlabel('Match Probability')
+    ylabel('Cross-correlation fingerprint')
+    makepretty
+    saveas(gcf, fullfile(SaveDir, 'RankVSProbabilityScatter.fig'))
+    saveas(gcf, fullfile(SaveDir, 'RankVSProbabilityScatter.bmp'))
 
 
-        % Check these: should be z1, z2, z3, z12, z13, z23, z123
-        VenFig = figure('name','Venn, r=Rank, b=sig, g=Match');
-        subplot(2,2,1)
-        try
+    % Check these: should be z1, z2, z3, z12, z13, z23, z123
+    VenFig = figure('name','Venn, r=Rank, b=sig, g=Match');
+    subplot(2,2,1)
+    try
         Idx = (MatchTable.refPopRank(:) == 1 | MatchTable.refPopSig(:) > SigThrs | MatchTable.MatchProb(:) > 0.5) & ~isnan(MatchTable.refPopRank(:));
         h = venn([sum(MatchTable.refPopRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.refPopSig(Idx)< SigThrs) sum(MatchTable.refPopRank(Idx)>1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.refPopSig(Idx) > SigThrs) ...
             sum(MatchTable.refPopRank(Idx)>1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.refPopSig(Idx)< SigThrs) sum(MatchTable.refPopRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.refPopSig(Idx) > SigThrs) ...
@@ -206,10 +243,9 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'refPopCorr')) || recomput
         axis off
         makepretty
         title('RefPopCor')
-        catch
-        end
-
+    catch
     end
+
 end
 
 %% Get ISI fingerprints correlations
@@ -263,6 +299,9 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'ISICorr')) || recompute %
     MatchTable.ISICorr = ISICorr(:);
     MatchTable.ISIRank = ISIRank(:);
     MatchTable.ISISig = ISISig(:);
+
+
+
 end
 
 if saveFig
@@ -270,18 +309,18 @@ if saveFig
     figure(VenFig)
     subplot(2,2,2)
     Idx = (MatchTable.ISIRank(:) == 1 | MatchTable.ISISig(:) > SigThrs | MatchTable.MatchProb(:) > 0.5) & ~isnan(MatchTable.ISIRank(:));
-   try
+    try
 
-       h = venn([sum(MatchTable.ISIRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.ISISig(Idx)< SigThrs) sum(MatchTable.ISIRank(Idx)>1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.ISISig(Idx)> SigThrs) ...
-           sum(MatchTable.ISIRank(Idx)>1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.ISISig(Idx)< SigThrs) sum(MatchTable.ISIRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.ISISig(Idx)> SigThrs) ...
-           sum(MatchTable.ISIRank(Idx)==1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.ISISig(Idx)< SigThrs) sum(MatchTable.ISIRank(Idx)>1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.ISISig(Idx)> SigThrs) ...
-           sum(MatchTable.ISIRank(Idx)==1 & MatchTable.ISISig(Idx) > SigThrs & MatchTable.MatchProb(Idx)>0.5)] );
-       axis square
-       axis off
-       makepretty
-       title('ISICor')
-       catcy
-   end
+        h = venn([sum(MatchTable.ISIRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.ISISig(Idx)< SigThrs) sum(MatchTable.ISIRank(Idx)>1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.ISISig(Idx)> SigThrs) ...
+            sum(MatchTable.ISIRank(Idx)>1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.ISISig(Idx)< SigThrs) sum(MatchTable.ISIRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.ISISig(Idx)> SigThrs) ...
+            sum(MatchTable.ISIRank(Idx)==1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.ISISig(Idx)< SigThrs) sum(MatchTable.ISIRank(Idx)>1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.ISISig(Idx)> SigThrs) ...
+            sum(MatchTable.ISIRank(Idx)==1 & MatchTable.ISISig(Idx) > SigThrs & MatchTable.MatchProb(Idx)>0.5)] );
+        axis square
+        axis off
+        makepretty
+        title('ISICor')
+        catcy
+    end
 end
 
 %% Get FR difference
@@ -302,24 +341,26 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'FRDiff')) || recompute
     MatchTable.FRDiff = FRDiff(:);
     MatchTable.FRRank = FRRank(:);
     MatchTable.FRSig = FRSig(:); % Saves out number of standard deviations away from mean
+
+
 end
 if saveFig
     try
-    % Check these: should be z1, z2, z3, z12, z13, z23, z123
-    figure(VenFig)
-    subplot(2,2,3)
-    Idx = (MatchTable.FRRank(:) == 1 | MatchTable.FRSig(:) > SigThrs | MatchTable.MatchProb(:) > 0.5) & ~isnan(MatchTable.FRRank(:));
-    h = venn([sum(MatchTable.FRRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.FRSig(Idx)< SigThrs) sum(MatchTable.FRRank(Idx)>1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.FRSig(Idx) > SigThrs) ...
-        sum(MatchTable.FRRank(Idx)>1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.FRSig(Idx)< SigThrs) sum(MatchTable.FRRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.FRSig(Idx) > SigThrs) ...
-        sum(MatchTable.FRRank(Idx)==1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.FRSig(Idx)< SigThrs) sum(MatchTable.FRRank(Idx)>1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.FRSig(Idx) > SigThrs) ...
-        sum(MatchTable.FRRank(Idx)==1 & MatchTable.FRSig(Idx) > SigThrs & MatchTable.MatchProb(Idx)>0.5)] );
-    axis square
-    axis off
-    makepretty
-    title('FRDiff')
+        % Check these: should be z1, z2, z3, z12, z13, z23, z123
+        figure(VenFig)
+        subplot(2,2,3)
+        Idx = (MatchTable.FRRank(:) == 1 | MatchTable.FRSig(:) > SigThrs | MatchTable.MatchProb(:) > 0.5) & ~isnan(MatchTable.FRRank(:));
+        h = venn([sum(MatchTable.FRRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.FRSig(Idx)< SigThrs) sum(MatchTable.FRRank(Idx)>1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.FRSig(Idx) > SigThrs) ...
+            sum(MatchTable.FRRank(Idx)>1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.FRSig(Idx)< SigThrs) sum(MatchTable.FRRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.FRSig(Idx) > SigThrs) ...
+            sum(MatchTable.FRRank(Idx)==1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.FRSig(Idx)< SigThrs) sum(MatchTable.FRRank(Idx)>1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.FRSig(Idx) > SigThrs) ...
+            sum(MatchTable.FRRank(Idx)==1 & MatchTable.FRSig(Idx) > SigThrs & MatchTable.MatchProb(Idx)>0.5)] );
+        axis square
+        axis off
+        makepretty
+        title('FRDiff')
     catch ME
     end
-   
+
 end
 
 
@@ -327,7 +368,7 @@ end
 
 if ~any(ismember(MatchTable.Properties.VariableNames, 'natImRespCorr')) || recompute % If it already exists in table, skip this entire thing
     disp('Computing Natural Image Responses...')
- 
+
     % Param for processing
     proc.window = [-0.3 0.5 ... % around onset
         0.0 0.5]; % around offset
@@ -432,11 +473,15 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'natImRespCorr')) || recom
     MatchTable.natImRespRank = natImRespRank(:); % What goes in the table should give ndays for every output when you do sum(refPopRank==1,1), if it's not, transpose!
     MatchTable.natImRespSig = natImRespSig(:);
 
-    if saveFig & ~isempty(exp2keep)
-        % Check these: should be z1, z2, z3, z12, z13, z23, z123
-        figure(VenFig)
-        subplot(2,2,4)
-        try
+
+end
+
+
+if saveFig & ~isempty(exp2keep)
+    % Check these: should be z1, z2, z3, z12, z13, z23, z123
+    figure(VenFig)
+    subplot(2,2,4)
+    try
         Idx = MatchTable.natImRespRank(:) == 1 | MatchTable.natImRespSig(:) > SigThrs | MatchTable.MatchProb(:) > 0.5;
         h = venn([sum(MatchTable.natImRespRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.natImRespSig(Idx) < SigThrs) sum(MatchTable.natImRespRank(Idx)>1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.natImRespSig(Idx)> SigThrs) ...
             sum(MatchTable.natImRespRank(Idx)>1 & MatchTable.MatchProb(Idx)>0.5 & MatchTable.natImRespSig(Idx)< SigThrs) sum(MatchTable.natImRespRank(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.natImRespSig(Idx)> SigThrs) ...
@@ -446,18 +491,18 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'natImRespCorr')) || recom
         axis off
         makepretty
         title('NatImg')
-        catch
-        end
+    catch
     end
+end
 
 
 %     % ---
 %     % Second fingerprint with CCA
-%     
+%
 %     % Perform CCA across recordings
 %     [corrMat, ~] = computeNatImCorr(spikeData_cv(:)); % default 75
 %     % [corrMat, ~] = computeNatImCorr(spikeData_cv(:), 1:ceil(sqrt(size(spikeData_cv{1},1)*size(spikeData_cv{1},2))/2));
-% 
+%
 %     % Reshape the matrix to a single one with correct clusters
 %     corrWCCA_big = nan(sum(nClu),sum(nClu));
 %     corrWCCA_1x2 = corrMat(1:2:end, 2:2:end);
@@ -469,10 +514,10 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'natImRespCorr')) || recom
 %         end
 %     end
 %     corrWCCA_big = tanh(.5*atanh(corrWCCA_big) + .5*atanh(corrWCCA_big')); % not sure that's needed?
-% 
+%
 %     % Get rank
 %     [natImRank, natImSig] = getRank(corrWCCA_big, SessionSwitch);
-%     
+%
 %     % Save in table
 %     MatchTable.natImCorr = corrWCCA_big(:);
 %     MatchTable.natImRank = natImRank(:);
@@ -498,15 +543,14 @@ if ~any(ismember(MatchTable.Properties.VariableNames, 'natImRespCorr')) || recom
 %     end
 %     corrScaledResp_big = tanh(.5*atanh(corrScaledResp_big) + .5*atanh(corrTimecourse_big));
 %     corrScaledResp_big = tanh(.5*atanh(corrScaledResp_big) + .5*atanh(corrScaledResp_big')); % not sure that's needed?
-% 
+%
 %     % Get rank
 %     [natImScaledRespRank, natImScaledRespSig] = getRank(corrScaledResp_big, SessionSwitch);
-% 
+%
 %     % Save in table
 %     MatchTable.natImScaledRespCorr = corrScaledResp_big(:);
 %     MatchTable.natImScaledRespRank = natImScaledRespRank(:);
 %     MatchTable.natImScaledRespSig = natImScaledRespSig(:);
-end
 %% Write to table
 
 save(fullfile(SaveDir, 'UnitMatch.mat'), 'MatchTable', 'UMparam', 'UniqueIDConversion', '-append');
@@ -514,8 +558,38 @@ if exist('AllSessionCorrelations','var')
     save(fullfile(SaveDir, 'UnitMatch.mat'), 'AllSessionCorrelations', '-append');
 end
 
+%% Rebuild VenFig from stored rank columns when skipping computation
+if saveFig
+    VenFig = figure('name','Venn, r=Rank, b=sig, g=Match');
+    rankSets = {{'refPopRank','refPopSig','RefPopCor'}, {'ISIRank','ISISig','ISICor'}, ...
+        {'FRRank','FRSig','FRDiff'}, {'natImRespRank','natImRespSig','NatImg'}};
+    for vi = 1:4
+        rk = rankSets{vi}{1}; sg = rankSets{vi}{2}; ttl = rankSets{vi}{3};
+        subplot(2,2,vi)
+        try
+            if ismember(rk, MatchTable.Properties.VariableNames) && ismember(sg, MatchTable.Properties.VariableNames)
+                Idx = (MatchTable.(rk)(:)==1 | MatchTable.(sg)(:)>SigThrs | MatchTable.MatchProb(:)>0.5) & ~isnan(MatchTable.(rk)(:));
+                venn([sum(MatchTable.(rk)(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.(sg)(Idx)<SigThrs) ...
+                    sum(MatchTable.(rk)(Idx)>1  & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.(sg)(Idx)>SigThrs) ...
+                    sum(MatchTable.(rk)(Idx)>1  & MatchTable.MatchProb(Idx)>0.5  & MatchTable.(sg)(Idx)<SigThrs) ...
+                    sum(MatchTable.(rk)(Idx)==1 & MatchTable.MatchProb(Idx)<=0.5 & MatchTable.(sg)(Idx)>SigThrs) ...
+                    sum(MatchTable.(rk)(Idx)==1 & MatchTable.MatchProb(Idx)>0.5  & MatchTable.(sg)(Idx)<SigThrs) ...
+                    sum(MatchTable.(rk)(Idx)>1  & MatchTable.MatchProb(Idx)>0.5  & MatchTable.(sg)(Idx)>SigThrs) ...
+                    sum(MatchTable.(rk)(Idx)==1 & MatchTable.(sg)(Idx)>SigThrs   & MatchTable.MatchProb(Idx)>0.5)]);
+                axis square; axis off; makepretty; title(ttl)
+            end
+        catch
+        end
+    end
+
+
+    saveas(VenFig, fullfile(SaveDir, ['VennFunctionalScores.fig']))
+    saveas(VenFig, fullfile(SaveDir, ['VennFunctionalScores.bmp']))
+
+end
+end
 %% Extract groups
-if UMparam.RunPyKSChronicStitched
+if isfield(UMparam,'RunPyKSChronicStitched') && UMparam.RunPyKSChronicStitched
     ntimes = 2;
 else
     ntimes = 1;
@@ -542,9 +616,6 @@ for id = 1:ntimes
     refPopCorr = reshape(MatchTable.refPopCorr, nclus, nclus);
 
     if saveFig
-
-        saveas(VenFig, fullfile(SaveDir, ['VennFunctionalScores.fig']))
-        saveas(VenFig, fullfile(SaveDir, ['VennFunctionalScores.bmp']))
 
         figure('name', ['Functional score separatability ', addname])
 
@@ -604,7 +675,7 @@ for id = 1:ntimes
         makepretty
         drawnow %Something to look at while ISI calculations are ongoing
 
-    
+
     end
 
 
@@ -819,11 +890,11 @@ for id = 1:ntimes
     if saveFig
         try
             saveas(gcf, fullfile(SaveDir, [addname, 'FunctionalScoreSeparability.fig']))
-        catch 
+        catch
         end
         try
             saveas(gcf, fullfile(SaveDir, [addname, 'FunctionalScoreSeparability.png']))
-        catch 
+        catch
         end
     end
 end
