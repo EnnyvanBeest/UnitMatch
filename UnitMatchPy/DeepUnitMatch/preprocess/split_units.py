@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
-import os, sys
+import os
+import sys
 import h5py
 
 sys.path.insert(0, os.getcwd())

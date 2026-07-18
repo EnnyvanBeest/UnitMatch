@@ -1,10 +1,7 @@
 # Functions for extracting and averaging raw data
 import os
-from pathlib import Path
 import numpy as np
 from scipy.ndimage import gaussian_filter
-from mtscomp import decompress
-from joblib import Parallel, delayed
 import UnitMatchPy.utils as util
 
 

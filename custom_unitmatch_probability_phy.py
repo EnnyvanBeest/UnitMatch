@@ -5,7 +5,6 @@ from operator import itemgetter
 import numpy as np
 
 from phy import IPlugin
-from phy.apps.template import from_sparse
 
 
 def load_probability_templates(controller):

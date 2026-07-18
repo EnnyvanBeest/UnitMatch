@@ -1,8 +1,6 @@
 from pathlib import Path
 from pykilosort.ibl import run, ibl_pykilosort_params
 import os
-import cupy as cp
-import shutil
 
 
 def RunPyKS(bin_file):

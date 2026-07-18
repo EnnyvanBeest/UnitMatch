@@ -3,7 +3,8 @@
 # The end result of the script is to write MatchProb values to a SQL database with a match table for each mouse/probe/location combination.
 # It also assumes that the waveform snippets are stored in a specific directory structure: root/mouse/probe/location/experiment_id/processed_waveforms
 
-import os, sys
+import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.getcwd()))
 sys.path.insert(0, os.getcwd())

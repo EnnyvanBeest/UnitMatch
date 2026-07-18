@@ -1,6 +1,3 @@
-from pathlib import Path
-import matlab
-import numpy as np
 from mtscomp import decompress
 
 

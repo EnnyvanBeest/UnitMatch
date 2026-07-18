@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.signal import detrend
-import h5py, os
+import h5py
 import shutil
 from pathlib import Path
 

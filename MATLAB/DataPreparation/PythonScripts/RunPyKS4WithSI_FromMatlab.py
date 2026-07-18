@@ -1,6 +1,5 @@
 from pathlib import Path
 import re
-import spikeinterface as si
 import spikeinterface.extractors as se
 import spikeinterface.sorters as ss
 import spikeinterface.preprocessing as spre

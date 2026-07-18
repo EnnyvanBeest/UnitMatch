@@ -249,7 +249,7 @@ def run_training(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
-    print(f"To view the tensorboard, click this link: http://localhost:6006")
+    print("To view the tensorboard, click this link: http://localhost:6006")
 
     train_size = int(0.9 * len(np_dataset))
     val_size = int(0.05 * len(np_dataset))

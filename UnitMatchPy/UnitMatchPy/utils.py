@@ -2,7 +2,6 @@
 import numpy as np
 import pandas as pd
 import os
-import matplotlib.pyplot as plt
 import mat73
 import sqlite3
 import time
@@ -218,7 +217,7 @@ def load_good_waveforms(wave_paths, unit_label_paths, param, good_units_only=Tru
             tmp_waveform = None
             tmp = None
             try:
-                p_file = os.path.join(wave_paths[ls], f"Unit0_RawSpikes.npy")
+                p_file = os.path.join(wave_paths[ls], "Unit0_RawSpikes.npy")
                 tmp = np.load(p_file)
                 tmp_waveform = np.zeros(
                     (

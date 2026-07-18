@@ -1,4 +1,5 @@
-import os, sys
+import os
+import sys
 
 sys.path.insert(0, os.getcwd())
 sys.path.insert(0, os.path.join(os.getcwd(), os.pardir))
@@ -10,7 +11,6 @@ from utils.npdataset import (
 )
 from utils.helpers import read_pos
 import numpy as np
-import matplotlib.pyplot as plt
 from utils.mymodel import SpatioTemporalCNN_V2
 import torch
 from torch.utils.data import DataLoader

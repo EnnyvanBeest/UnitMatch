@@ -1,6 +1,4 @@
 from phylib.io.traces import get_ephys_reader
-from pathlib import Path
-import glob
 import matlab
 
 

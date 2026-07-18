@@ -1,5 +1,5 @@
 import logging
-import os, sys
+import os
 import argparse
 import subprocess
 import numpy as np
@@ -299,7 +299,7 @@ def run_finetune(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
-    print(f"To view the tensorboard, click this link: http://localhost:6006")
+    print("To view the tensorboard, click this link: http://localhost:6006")
 
     model = SpatioTemporalCNN_V2(n_channel=30, n_time=60, n_output=256).to(device)
 

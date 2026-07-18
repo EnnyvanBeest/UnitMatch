@@ -1,6 +1,8 @@
 # tools/bump_version.py
 from pathlib import Path
-import tomllib, re, sys
+import tomllib
+import re
+import sys
 
 pyproj = Path("UnitMatchPy/pyproject.toml")
 data = tomllib.loads(pyproj.read_text(encoding="utf-8"))

@@ -1,8 +1,7 @@
 from tkinter import *
 from tkinter import ttk
-import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import numpy as np
 from matplotlib import rcParams
 import os
@@ -137,7 +136,7 @@ def get_spike_times_for_unit_precalc(unit_id, clus_info, param):
         else:
             return np.array([])
 
-    except Exception as e:
+    except Exception:
         return np.array([])
 
 
@@ -917,7 +916,7 @@ def plot_acgs(unit_a, unit_b):
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
 
-    except Exception as e:
+    except Exception:
         # If spike times not available, show placeholder
         ax = fig.add_subplot(1, 1, 1)
         ax.set_facecolor("#2d2d2d")

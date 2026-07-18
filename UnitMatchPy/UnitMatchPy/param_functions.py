@@ -1,10 +1,8 @@
 # This file will contain all the necessary function for extracting waveform parameters from average waveforms
 import numpy as np
-import matplotlib.pyplot as plt
 from scipy.signal import detrend
 import scipy as sp
 from scipy.ndimage import gaussian_filter
-import pandas as pd
 
 
 def detrend_waveform(waveform):
