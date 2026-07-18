@@ -865,31 +865,6 @@ def read_datapaths(mice, base):
     return raw_waveforms_dict
 
 
-def get_valid_locations(root):
-    """Pre-filter valid locations to avoid repeated file system checks"""
-    valid_locations = []
-
-    for mouse in os.listdir(root):
-        mouse_path = os.path.join(root, mouse)
-        if not os.path.isdir(mouse_path):
-            continue
-
-        for probe in os.listdir(mouse_path):
-            probe_path = os.path.join(mouse_path, probe)
-            if not os.path.isdir(probe_path):
-                continue
-
-            for loc in os.listdir(probe_path):
-                loc_path = os.path.join(probe_path, loc)
-                if not os.path.isdir(loc_path):
-                    continue
-
-                mt_path = os.path.join(loc_path, "merged_mt.csv")
-                if os.path.exists(mt_path):
-                    valid_locations.append((mouse, probe, loc, mt_path))
-
-    return valid_locations
-
 
 def get_exp_id(experiment_path: str, mouse: str):
     """

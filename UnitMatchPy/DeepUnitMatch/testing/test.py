@@ -186,39 +186,23 @@ def get_threshold(prob_matrix: np.ndarray, session_id, MAP=False):
     return x[thresh].item() - diff
 
 
-def directional_filter_df(matches: pd.DataFrame):
-    filtered_matches = matches.copy()
-    for idx, row in matches.iterrows():
-        i1 = row["ID1"]
-        i2 = row["ID2"]
-        r1 = row["RecSes1"]
-        r2 = row["RecSes2"]
+def directional_filter(matches: pd.DataFrame):
+    if len(matches) == 0:
+        return matches
 
-        # Check for the reverse match
-        reverse_match = matches.loc[
-            (matches["RecSes1"] == r2)
-            & (matches["ID1"] == i2)
-            & (matches["RecSes2"] == r1)
-            & (matches["ID2"] == i1)
-        ]
+    # Create a set of all match tuples for O(1) lookup
+    match_tuples = set(
+        zip(matches["RecSes1"], matches["ID1"], matches["RecSes2"], matches["ID2"])
+    )
 
-        if reverse_match.empty:
-            filtered_matches = filtered_matches.drop(
-                idx
-            )  # Drop if no reverse match is found
-    return filtered_matches
+    # For each match, check if its reverse exists in the set
+    # Keep only matches where the reverse direction also exists
+    valid_mask = [
+        (row["RecSes2"], row["ID2"], row["RecSes1"], row["ID1"]) in match_tuples
+        for _, row in matches.iterrows()
+    ]
 
-
-def directional_filter(sim_matrix, session_id, threshold):
-    """
-    Matrix version of directional_filter_df.
-    Returns a boolean matrix where (i,j) is True only if both (i,j) and (j,i)
-    exceed the threshold and belong to different sessions.
-    """
-    above_thresh = sim_matrix > threshold
-    across_session = session_id[:, None] != session_id[None, :]
-    candidates = above_thresh & across_session
-    return candidates & candidates.T
+    return matches[valid_mask]
 
 
 def remove_conflicts(matches: pd.DataFrame, metric: str):
@@ -243,49 +227,6 @@ def remove_conflicts(matches: pd.DataFrame, metric: str):
     return filtered_matches, num_conflicts
 
 
-def remove_conflicts_matrix(sim_matrix, candidates):
-    """
-    Matrix version of remove_conflicts using the Hungarian algorithm.
-    Finds the globally optimal 1-to-1 assignment that maximises total similarity.
-
-    Parameters
-    ----------
-    sim_matrix : np.ndarray (n, n) — similarity scores
-    candidates : np.ndarray (n, n) bool — mask of eligible matches
-
-    Returns
-    -------
-    matches : np.ndarray (n, n) bool
-    num_conflicts : int
-    """
-    active_rows = np.where(candidates.any(axis=1))[0]
-    active_cols = np.where(candidates.any(axis=0))[0]
-
-    if len(active_rows) == 0 or len(active_cols) == 0:
-        return np.zeros_like(candidates, dtype=bool), int(candidates.sum())
-
-    # Extract submatrix of active neurons only
-    sub_sim = sim_matrix[np.ix_(active_rows, active_cols)]
-    sub_cand = candidates[np.ix_(active_rows, active_cols)]
-
-    # Set non-candidate entries to large negative so they're never assigned
-    sub_cost = np.where(sub_cand, sub_sim, -1e9)
-
-    # Hungarian algorithm — globally optimal 1-to-1 assignment
-    ri, ci = linear_sum_assignment(sub_cost, maximize=True)
-
-    # Keep only assignments that were actual candidates
-    valid = sub_cand[ri, ci]
-    ri, ci = ri[valid], ci[valid]
-
-    # Map back to original indices
-    matches = np.zeros_like(candidates, dtype=bool)
-    matches[active_rows[ri], active_cols[ci]] = True
-
-    num_conflicts = int(candidates.sum() - matches.sum())
-    return matches, num_conflicts
-
-
 def get_matches(df, sim_matrix, session_id, data_dir, dist_thresh):
     """
     Process the output probability matrix to get final set of matches across sessions.
@@ -299,7 +240,7 @@ def get_matches(df, sim_matrix, session_id, data_dir, dist_thresh):
     matches = matches.loc[
         matches["RecSes1"] != matches["RecSes2"]
     ]  # only keep across-session matches
-    matches = directional_filter_df(matches)
+    matches = directional_filter(matches)
 
     # spatial filtering
     sessions = np.unique(session_id)
@@ -685,41 +626,6 @@ def ISI_CV_diff(param):
     CV = get_ISI_CV(param)  # (2, n_units)
     return np.abs(CV[1, :, np.newaxis] - CV[0, np.newaxis, :])
 
-
-def AUC(matches: np.ndarray, func_metric: np.ndarray, session_id):
-    """
-    The AUC depends on a functional metric which is considered as ground truth. This is passed in via func_metric.
-    """
-
-    P = np.sum(matches)
-    if P < 1:
-        raise ValueError("No matches found - can't compute AUC")
-
-    # Calculate AUCs using final sets of matches
-    within_session = (session_id[:, None] == session_id).astype(bool)
-    func_across = func_metric[~within_session]
-    matches_across = matches[~within_session]
-    sorted_indices = np.argsort(func_across)[::-1]
-
-    tp, fp = 0, 0
-    N = len(func_across) - P
-    recall, fpr = [], []
-
-    for idx in sorted_indices:
-        if matches_across[idx]:
-            tp += 1
-        else:
-            fp += 1
-        recall.append(tp / P)
-        fpr.append(fp / N)
-
-    # NumPy compatibility: `np.trapezoid` exists in newer NumPy versions;
-    # `np.trapz` is the older equivalent.
-    if hasattr(np, "trapezoid"):
-        auc = np.trapezoid(recall, fpr)
-    else:
-        auc = np.trapz(recall, fpr)
-    return auc
 
 
 if __name__ == "__main__":

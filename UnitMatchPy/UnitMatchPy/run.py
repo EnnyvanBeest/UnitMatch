@@ -16,7 +16,7 @@ import numpy as np
 import default_params as default_params
 from concurrent.futures import ProcessPoolExecutor
 import pandas as pd
-
+from DeepUnitMatch.utils.helpers import get_locations_from_sqlite
 
 def process_single_location(location_data, path_lookup, param):
 
@@ -143,7 +143,7 @@ if __name__ == "__main__":
     root = r"path/to/data/root"  # Root directory containing all data folders - data should be organised under this as mouse/probe/location
 
     paths = pd.DataFrame(util.read_datapaths(os.listdir(root), r"/server/data/base"))
-    valid_locs = util.get_valid_locations(root)
+    valid_locs = get_locations_from_sqlite(db_path=os.path.join(root, "matchtables.db"))
     # paths is a pandas dataframe with columns mouse, probe, loc, recordings, where recordings is a list of KS_dirs for that mouse/probe/location
     # valid_locs is a list of tuples (mouse, probe, loc, mt_path) for each location with a match table
 

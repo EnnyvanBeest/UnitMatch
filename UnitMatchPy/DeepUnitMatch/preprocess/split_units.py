@@ -7,7 +7,7 @@ import h5py
 sys.path.insert(0, os.getcwd())
 sys.path.insert(0, os.path.dirname(os.getcwd()))
 sys.path.insert(0, os.path.join(os.path.dirname(os.getcwd()), "DeepUnitMatch"))
-from testing.test import inference, get_threshold, directional_filter_df
+from testing.test import inference, get_threshold, directional_filter
 from utils.helpers import create_dataframe
 
 
@@ -94,13 +94,12 @@ def C_ratios(within, threshold_dnn, spk_df, null=False, t_r=0.002, t_c=0.0001):
 
     # Get the putative set of split units as off-diagonal matches that pass the thresholds
     matches_within = within.loc[within["Prob"] >= threshold_dnn]
-    l = len(matches_within)
     if null:
-        matches_within = within.loc[within["Prob"] < threshold_dnn].nsmallest(3 * l)
-        matches_within = directional_filter_df(matches_within)
-        matches_within = matches_within.nlargest(l, ["dist"])
+        matches_within = within.loc[within["Prob"] < threshold_dnn].nsmallest(3 * len(matches_within))
+        matches_within = directional_filter(matches_within)
+        matches_within = matches_within.nlargest(len(matches_within), ["dist"])
     else:
-        matches_within = directional_filter_df(matches_within)
+        matches_within = directional_filter(matches_within)
     putative_splits = matches_within.loc[matches_within["ID1"] != matches_within["ID2"]]
     putative_splits_1dir = putative_splits.loc[
         putative_splits["ID1"] < putative_splits["ID2"]
