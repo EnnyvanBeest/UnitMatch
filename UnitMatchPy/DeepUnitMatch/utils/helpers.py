@@ -4,11 +4,16 @@ import os
 import h5py
 import json
 import sqlite3
+import datetime
 
 
+# PROJECT_ROOT is the directory that holds both sibling repos (DeepMatch + DeepUnitMatch)
+# alongside the shared data/results and the committed metadata_index.json.
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PROJECT_ROOT = os.path.normpath(os.path.join(REPO_ROOT, os.pardir))
+PROJECT_ROOT = os.path.normpath(os.path.join(REPO_ROOT, os.pardir, os.pardir, os.pardir))
 METADATA_INDEX_PATH = os.path.join(PROJECT_ROOT, "metadata_index.json")
+
+_metadata_index_cache = None
 
 
 def create_dataframe(good_units, prob_matrix, session_list=None):
@@ -121,6 +126,17 @@ def loc_key_from_mt_path(mt_path: str):
     mouse = os.path.basename(os.path.dirname(os.path.dirname(loc_dir)))
     return f"{mouse}/{probe}/{loc}"
 
+def _index_entry(key: str):
+    """Look up a 'mouse/probe/loc' key in the committed metadata index."""
+    index = _load_metadata_index()
+    if key not in index:
+        raise KeyError(
+            f"'{key}' is not in the metadata index ({METADATA_INDEX_PATH}); "
+            f"re-run build_metadata_index.py if this location is new."
+        )
+    return index[key]
+
+
 def expids_from_index(mt_path: str):
     """Data-drive-free replacement for expids_from_metadata.
 
@@ -133,17 +149,26 @@ def expids_from_index(mt_path: str):
     exp_ids maps each RecSes (int) to its experiment folder name; metadata is the
     loc-level dict with "mouse", "probe" and "loc".
     """
-    index = _load_metadata_index()
-    key = loc_key_from_mt_path(mt_path)
-    if key not in index:
-        raise KeyError(
-            f"'{key}' is not in the metadata index ({METADATA_INDEX_PATH}); "
-            f"re-run build_metadata_index.py if this location is new."
-        )
-    entry = index[key]
+    entry = _index_entry(loc_key_from_mt_path(mt_path))
     exp_ids = {int(recses): name for recses, name in entry["exp_ids"].items()}
     metadata = {k: entry[k] for k in ("mouse", "probe", "loc")}
     return exp_ids, metadata
+
+
+def index_dates_from_loc(mouse, probe, loc):
+    """Return {RecSes (int): datetime.date | None} for a location from the index.
+
+    Reads the per-session recording dates baked into metadata_index.json by
+    build_metadata_index.py, so no per-experiment metadata.json (and no mounted
+    data drive) is needed at test time.
+    """
+    entry = _index_entry(f"{mouse}/{probe}/{loc}")
+    dates = {}
+    for recses, date_str in entry.get("dates", {}).items():
+        dates[int(recses)] = (
+            datetime.date.fromisoformat(date_str) if date_str else None
+        )
+    return dates
 
 def pick(mt, r1, r2, tight: bool = False):
     if tight:

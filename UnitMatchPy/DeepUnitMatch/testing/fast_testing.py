@@ -3,20 +3,23 @@ import pandas as pd
 import numpy as np
 import sqlite3
 from concurrent.futures import ProcessPoolExecutor, as_completed
-import datetime
 import time
-import json
 from sklearn.neighbors import KernelDensity
 from testing.test import remove_conflicts, directional_filter
-from utils.helpers import expids_from_index, pick, create_um_lookup, get_locations_from_sqlite, save_final_results, save_intermediate_results
+from utils.helpers import (
+    PROJECT_ROOT,
+    index_dates_from_loc,
+    pick,
+    create_um_lookup,
+    get_locations_from_sqlite,
+    save_final_results,
+    save_intermediate_results,
+)
 
 
-# Paths relative to the repo root. PROJECT_ROOT is the repo's parent directory,
-# which holds the data/results folders alongside this repo.
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PROJECT_ROOT = os.path.normpath(os.path.join(REPO_ROOT, os.pardir))
+# PROJECT_ROOT (defined in utils.helpers) is the directory holding the shared
+# data/results and metadata_index.json alongside the sibling repos.
 RESULTS_DIR = os.path.join(PROJECT_ROOT, "results")
-ALL_DATA_DIR = os.path.join(PROJECT_ROOT, "ALL_DATA")
 
 
 def test_models_optimized(col_names, fixed_n=True, save_names=None):
@@ -121,19 +124,14 @@ def get_threshold_df(mt: pd.DataFrame, metric: str = "DNNSim"):
     return x[thresh].item()
 
 
-def get_matches_1model(
-    mt,
-    metric,
-    mt_path,
-    spatial: bool = True,
-    fixed_n: int = None,
-    return_both_dirs: bool = False,
-    dist_thresh: float = 20.0
-):
+def get_matches_1model(mt, metric, fixed_n: int = None):
     """
     Get the matches for one model, given a merged match table (for one session pair).
-    If fixed number of matches is set, we don't do similarity thresholding.
-    Always do conflict resolution. Do spatial filtering if spatial is set to True.
+    If a fixed number of matches is set, we don't do similarity thresholding.
+    Always do conflict resolution.
+
+    Spatial filtering is not applied here: the model column already encodes spatial
+    information (e.g. the _40Spat / _80Spat / _NoSpat variants).
     """
     # Filter data once before processing to avoid repeated filtering
     across = mt.loc[
@@ -145,7 +143,7 @@ def get_matches_1model(
             thresh = 0.5
         else:
 
-            thresh = get_threshold_df(mt, metric=metric, vis=False, MAP=False)
+            thresh = get_threshold_df(mt, metric=metric)
 
             within = mt.loc[
                 (mt["RecSes1"] == mt["RecSes2"]),
@@ -172,12 +170,11 @@ def get_matches_1model(
     if len(matches) != 0:
 
         # Resolve conflict matches by only keeping the match with highest similarity
-        matches, conf = remove_conflicts(matches, metric)
+        matches, _ = remove_conflicts(matches, metric)
 
-    # Ensure consistent ordering
-    if not return_both_dirs:
-        matches = matches.loc[matches["RecSes1"] < matches["RecSes2"]]
-        matches = matches.sort_values(by=metric, ascending=False)
+    # Ensure consistent ordering (keep a single direction per session pair)
+    matches = matches.loc[matches["RecSes1"] < matches["RecSes2"]]
+    matches = matches.sort_values(by=metric, ascending=False)
 
     if fixed_n is not None:
         matches = matches.head(fixed_n)
@@ -185,36 +182,19 @@ def get_matches_1model(
     return matches.index.to_list()
 
 
-def all_results_1model(mt, mt_path, model_name, fixed_n=None):
+def all_results_1model(mt: pd.DataFrame, mouse: str, probe: str, loc: str, model_name: str, fixed_n=None):
     """
     Get all the results for a single model.
     """
     # Early exit for invalid data
-    if mt is None:
-        mt = pd.read_csv(mt_path)
     if len(mt) < 20**2:
         return None
 
     sessions = sorted(mt["RecSes1"].unique())  # Sort once and reuse
-    path_dict, metadata = expids_from_index(mt_path)
-    mouse, probe, loc = metadata["mouse"], metadata["probe"], metadata["loc"]
 
-    # Metadata caching
-    metadata_cache = {}
-    for session_id, exp_id in path_dict.items():
-        metadata_path = os.path.join(os.path.dirname(mt_path), exp_id, "metadata.json")
-        try:
-            with open(metadata_path) as f:
-                md = json.load(f)
-                metadata_cache[session_id] = datetime.datetime.strptime(
-                    md["date"], "%Y-%m-%d"
-                ).date()
-        except:
-            print(
-                f"Missing or invalid metadata for session {session_id} at {metadata_path}"
-            )
-            metadata_cache[session_id] = None
-
+    # Per-session recording dates come straight from the committed metadata index
+    # (built by build_metadata_index.py) -- no data drive / metadata.json needed.
+    metadata_cache = index_dates_from_loc(mouse, probe, loc)
 
     results_data = []
 
@@ -233,13 +213,9 @@ def all_results_1model(mt, mt_path, model_name, fixed_n=None):
             n_value = fixed_n.loc[
                 (fixed_n["r1"] == r1) & (fixed_n["r2"] == r2), "N"
             ].values[0]
-            match_indices = get_matches_1model(
-                df, metric=model_name, mt_path=mt_path, fixed_n=n_value
-            )
+            match_indices = get_matches_1model(df, metric=model_name, fixed_n=n_value)
         else:
-            match_indices = get_matches_1model(
-                df, metric=model_name, mt_path=mt_path, fixed_n=None
-            )
+            match_indices = get_matches_1model(df, metric=model_name, fixed_n=None)
 
         # Skip if no matches found
         if not match_indices:
@@ -294,11 +270,9 @@ def all_results_1model(mt, mt_path, model_name, fixed_n=None):
     return results
 
 
-def process_single_location(
-    location_data, col_names, um_lookup, filter50, fixed_n=True
-):
+def process_single_location(location_data, col_names, um_lookup, fixed_n=True):
     """Process a single location - designed to be called in parallel"""
-    mouse, probe, loc, mt_path = location_data
+    mouse, probe, loc = location_data
 
     try:
         # Connect to database (each process needs its own connection)
@@ -320,9 +294,9 @@ def process_single_location(
 
         # Build SQL query based on available columns
         if "newRPC" in columns:
-            base_cols = "ID1,ID2,RecSes1,RecSes2,newRPC,newISI,EucledianDistance"
+            base_cols = "ID1,ID2,RecSes1,RecSes2,newRPC,newISI"
         else:
-            base_cols = "ID1,ID2,RecSes1,RecSes2,refPopCorr,ISICorr,EucledianDistance"
+            base_cols = "ID1,ID2,RecSes1,RecSes2,refPopCorr,ISICorr"
 
         # Check which model columns exist
         existing_cols = [col for col in col_names if col in columns]
@@ -349,7 +323,7 @@ def process_single_location(
         for col_name in existing_cols:
             model_name = col_name
             result = all_results_1model(
-                mt, mt_path, model_name=model_name, fixed_n=UM_N, filter50=filter50
+                mt, mouse, probe, loc, model_name=model_name, fixed_n=UM_N
             )
             if result is not None:
                 results[col_name] = result
@@ -367,11 +341,7 @@ def AUC(mt, indices, func_metric):
     """
     Optimized version of AUC calculation function.
     """
-    try:
-        matches_indices = set(indices)
-    except:
-        matches_indices = set(mt.iloc[indices].index)
-
+    matches_indices = set(indices)
     P = len(matches_indices)
     if P < 1:
         return np.nan
