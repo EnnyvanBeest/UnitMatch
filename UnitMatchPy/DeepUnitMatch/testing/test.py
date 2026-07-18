@@ -4,7 +4,10 @@ sys.path.insert(0, os.getcwd())
 sys.path.insert(0, os.path.join(os.getcwd(), os.pardir))
 
 from utils.losses import clip_sim, CustomClipLoss, Projector
-from utils.npdataset import NeuropixelsDataset_cortexlab, ValidationExperimentBatchSampler
+from utils.npdataset import (
+    NeuropixelsDataset_cortexlab,
+    ValidationExperimentBatchSampler,
+)
 from utils.helpers import read_pos
 import numpy as np
 import matplotlib.pyplot as plt
@@ -18,6 +21,7 @@ from sklearn.neighbors import KernelDensity
 from scipy.optimize import linear_sum_assignment
 import importlib
 from utils import helpers
+
 importlib.reload(helpers)
 from utils.helpers import *
 
@@ -60,35 +64,37 @@ def _parse_unitmatch_good_units(unit_label_paths):
     return good_units
 
 
-
 def load_trained_model(device="cpu", read_path=None):
 
-    model = SpatioTemporalCNN_V2(n_channel=30,n_time=60,n_output=256).to(device)
+    model = SpatioTemporalCNN_V2(n_channel=30, n_time=60, n_output=256).to(device)
     model = model.double()
     if read_path is None:
         current_dir = Path(__file__).parent.parent
         read_path = current_dir / "utils" / "model"
     checkpoint = torch.load(read_path)
-    model.load_state_dict(checkpoint['model'])
+    model.load_state_dict(checkpoint["model"])
     clip_loss = CustomClipLoss().to(device)
-    clip_loss.load_state_dict(checkpoint['clip_loss'])
+    clip_loss.load_state_dict(checkpoint["clip_loss"])
     model.eval()
     clip_loss.eval()
 
     # Load projector
-    projector = Projector(input_dim=256, output_dim=128, hidden_dim=128, n_hidden_layers=1, dropout=0.1).to(device)
+    projector = Projector(
+        input_dim=256, output_dim=128, hidden_dim=128, n_hidden_layers=1, dropout=0.1
+    ).to(device)
     projector = projector.double()
 
     # Can also return projector if needed
     return model
 
-def reorder_by_depth(matrix:np.ndarray, pos1:np.ndarray, pos2) -> np.ndarray:
+
+def reorder_by_depth(matrix: np.ndarray, pos1: np.ndarray, pos2) -> np.ndarray:
     """
     Matrix should compare just one recording session against another.
     """
 
-    depths1 = pos1[:,1]
-    depths2 = pos2[:,1]
+    depths1 = pos1[:, 1]
+    depths2 = pos2[:, 1]
 
     if matrix.shape[0] == depths1.shape[0]:
         sort_indices = np.argsort(depths1)
@@ -102,8 +108,9 @@ def reorder_by_depth(matrix:np.ndarray, pos1:np.ndarray, pos2) -> np.ndarray:
     else:
         sort_indices = np.argsort(depths2)
         sorted_matrix = sorted_matrix[:, sort_indices]
-    
+
     return sorted_matrix
+
 
 def inference(model, data_dir, unit_label_paths=None):
 
@@ -112,7 +119,7 @@ def inference(model, data_dir, unit_label_paths=None):
     good_units = _parse_unitmatch_good_units(unit_label_paths)
     unit_order = good_units if good_units is not None else "unitmatch"
     test_dataset = NeuropixelsDataset_cortexlab(data_dir, unit_order=unit_order)
-    test_sampler = ValidationExperimentBatchSampler(test_dataset, shuffle = False)
+    test_sampler = ValidationExperimentBatchSampler(test_dataset, shuffle=False)
     test_loader = DataLoader(test_dataset, batch_sampler=test_sampler)
 
     submatrices = []
@@ -120,13 +127,13 @@ def inference(model, data_dir, unit_label_paths=None):
 
     for estimates_i, _, positions_i, exp_ids_i, filepaths_i in tqdm(test_loader):
         # Forward pass
-        enc_estimates_i = model(estimates_i)        # shape [bsz, 256]
+        enc_estimates_i = model(estimates_i)  # shape [bsz, 256]
 
         for _, candidates_j, positions_j, exp_ids_j, filepaths_j in tqdm(test_loader):
             enc_candidates_j = model(candidates_j)
             s = clip_sim(enc_estimates_i, enc_candidates_j)
             submatrices.append(s.detach().cpu().numpy())
-    
+
     result_rows = []
     for i in range(n_batches):
         row_matrices = []
@@ -135,43 +142,49 @@ def inference(model, data_dir, unit_label_paths=None):
             row_matrices.append(submatrices[matrix_idx])
         row = np.hstack(row_matrices)
         result_rows.append(row)
-    
+
     result = np.vstack(result_rows)
 
     return result
 
-def get_threshold(prob_matrix:np.ndarray, session_id, MAP=False):
+
+def get_threshold(prob_matrix: np.ndarray, session_id, MAP=False):
 
     n = len(session_id)
     within_session = (session_id[:, None] == session_id).astype(int)
-    pmat = prob_matrix[within_session==True].reshape(-1, 1)
-    labels = np.eye(n)[within_session==True].reshape(-1, 1)
+    pmat = prob_matrix[within_session == True].reshape(-1, 1)
+    labels = np.eye(n)[within_session == True].reshape(-1, 1)
 
     # On-diagonal means same neuron. Off-diagonal means different neurons.
-    on_diag = pmat[labels==1]
-    off_diag = pmat[labels==0]
+    on_diag = pmat[labels == 1]
+    off_diag = pmat[labels == 0]
 
     # Kernel density estimation (distributions are more useful than histograms)
-    kde_on = KernelDensity(kernel='gaussian', bandwidth=0.01).fit(on_diag.reshape(-1, 1))
-    kde_off = KernelDensity(kernel='gaussian', bandwidth=0.01).fit(off_diag.reshape(-1, 1))
+    kde_on = KernelDensity(kernel="gaussian", bandwidth=0.01).fit(
+        on_diag.reshape(-1, 1)
+    )
+    kde_off = KernelDensity(kernel="gaussian", bandwidth=0.01).fit(
+        off_diag.reshape(-1, 1)
+    )
     x = np.linspace(min(off_diag), max(on_diag), 1000).reshape(-1, 1)
     y_on = np.exp(kde_on.score_samples(x))
     y_off = np.exp(kde_off.score_samples(x))
 
     # Find the threshold where the distributions intersect
     if MAP:
-        thresh = np.argwhere(np.diff(np.sign(y_off*(n-1) - y_on)))
+        thresh = np.argwhere(np.diff(np.sign(y_off * (n - 1) - y_on)))
     else:
-        thresh=np.argwhere(np.diff(np.sign(y_off - y_on)))
+        thresh = np.argwhere(np.diff(np.sign(y_off - y_on)))
     if len(thresh) == 0:
         thresh = len(x) - 1
     elif len(thresh) > 1:
         thresh = thresh[-1]
 
-    across = prob_matrix[within_session==False].reshape(-1, 1)
+    across = prob_matrix[within_session == False].reshape(-1, 1)
     diff = np.median(pmat) - np.median(across)
 
     return x[thresh].item() - diff
+
 
 def directional_filter_df(matches: pd.DataFrame):
     filtered_matches = matches.copy()
@@ -183,13 +196,18 @@ def directional_filter_df(matches: pd.DataFrame):
 
         # Check for the reverse match
         reverse_match = matches.loc[
-            (matches["RecSes1"] == r2) & (matches["ID1"] == i2) & 
-            (matches["RecSes2"] == r1) & (matches["ID2"] == i1)
+            (matches["RecSes1"] == r2)
+            & (matches["ID1"] == i2)
+            & (matches["RecSes2"] == r1)
+            & (matches["ID2"] == i1)
         ]
 
         if reverse_match.empty:
-            filtered_matches = filtered_matches.drop(idx)  # Drop if no reverse match is found
+            filtered_matches = filtered_matches.drop(
+                idx
+            )  # Drop if no reverse match is found
     return filtered_matches
+
 
 def directional_filter(sim_matrix, session_id, threshold):
     """
@@ -202,26 +220,28 @@ def directional_filter(sim_matrix, session_id, threshold):
     candidates = above_thresh & across_session
     return candidates & candidates.T
 
+
 def remove_conflicts(matches: pd.DataFrame, metric: str):
-    
+
     # Find the best match for each neuron1 (RecSes1, ID1 combination)
     # For each group, get the index of the row with maximum metric value
-    best_neuron1_indices = matches.groupby(['RecSes1', 'ID1'])[metric].idxmax()
-    
-    # Find the best match for each neuron2 (RecSes2, ID2 combination)  
-    best_neuron2_indices = matches.groupby(['RecSes2', 'ID2'])[metric].idxmax()
-    
+    best_neuron1_indices = matches.groupby(["RecSes1", "ID1"])[metric].idxmax()
+
+    # Find the best match for each neuron2 (RecSes2, ID2 combination)
+    best_neuron2_indices = matches.groupby(["RecSes2", "ID2"])[metric].idxmax()
+
     # A match is valid only if it's the best match for BOTH neurons involved
     # Take intersection of the two sets of indices
     valid_indices = set(best_neuron1_indices) & set(best_neuron2_indices)
-    
+
     # Count conflicts (total matches minus valid matches)
     num_conflicts = len(matches) - len(valid_indices)
-    
+
     # Filter to keep only valid matches
     filtered_matches = matches.loc[list(valid_indices)]
 
     return filtered_matches, num_conflicts
+
 
 def remove_conflicts_matrix(sim_matrix, candidates):
     """
@@ -265,6 +285,7 @@ def remove_conflicts_matrix(sim_matrix, candidates):
     num_conflicts = int(candidates.sum() - matches.sum())
     return matches, num_conflicts
 
+
 def get_matches(df, sim_matrix, session_id, data_dir, dist_thresh):
     """
     Process the output probability matrix to get final set of matches across sessions.
@@ -275,7 +296,9 @@ def get_matches(df, sim_matrix, session_id, data_dir, dist_thresh):
 
     matches = df.loc[df["Prob"] > sim_thresh].copy()
 
-    matches = matches.loc[matches["RecSes1"] != matches["RecSes2"]]   # only keep across-session matches
+    matches = matches.loc[
+        matches["RecSes1"] != matches["RecSes2"]
+    ]  # only keep across-session matches
     matches = directional_filter_df(matches)
 
     # spatial filtering
@@ -286,7 +309,7 @@ def get_matches(df, sim_matrix, session_id, data_dir, dist_thresh):
         positions[session] = read_pos(session_path)
     corrections = get_corrections(matches, positions)
     matches_with_dist = vectorised_drift_corrected_dist(corrections, positions, matches)
-    matches = matches_with_dist.loc[matches_with_dist["dist"]<dist_thresh]
+    matches = matches_with_dist.loc[matches_with_dist["dist"] < dist_thresh]
 
     matches = matches[[c for c in df.columns]]
     matches, confs = remove_conflicts(matches, "Prob")
@@ -294,10 +317,13 @@ def get_matches(df, sim_matrix, session_id, data_dir, dist_thresh):
     matches.insert(len(matches.columns), "match", True)
     df.insert(len(df.columns), "match", False)
     df.loc[matches.index, "match"] = True
-    df.loc[(df['RecSes1'] == df['RecSes2']) & (df['ID1'] == df['ID2']), "match"] = True
+    df.loc[(df["RecSes1"] == df["RecSes2"]) & (df["ID1"] == df["ID2"]), "match"] = True
     return df
 
-def vectorised_drift_corrected_dist(corrections, positions, matches:pd.DataFrame, nocorr=False):
+
+def vectorised_drift_corrected_dist(
+    corrections, positions, matches: pd.DataFrame, nocorr=False
+):
     """
     Vectorised drift-corrected distance computation.
     Returns matches dataframe with extra column for drift-corrected distance.
@@ -307,76 +333,97 @@ def vectorised_drift_corrected_dist(corrections, positions, matches:pd.DataFrame
 
     # Extract the x, y positions
     idx = matches.index
-    coords1 = pd.concat([positions[session].loc[:, ['ID', 'x', 'y']]
-                        .rename(columns={'ID': 'ID1', 'x': 'x1', 'y': 'y1'})
-                        .assign(RecSes1=session)
-                        for session in [sessions[0], sessions[1]]])
+    coords1 = pd.concat(
+        [
+            positions[session]
+            .loc[:, ["ID", "x", "y"]]
+            .rename(columns={"ID": "ID1", "x": "x1", "y": "y1"})
+            .assign(RecSes1=session)
+            for session in [sessions[0], sessions[1]]
+        ]
+    )
 
-    coords2 = pd.concat([positions[session].loc[:, ['ID', 'x', 'y']]
-                        .rename(columns={'ID': 'ID2', 'x': 'x2', 'y': 'y2'})
-                        .assign(RecSes2=session)
-                        for session in [sessions[1], sessions[0]]])
+    coords2 = pd.concat(
+        [
+            positions[session]
+            .loc[:, ["ID", "x", "y"]]
+            .rename(columns={"ID": "ID2", "x": "x2", "y": "y2"})
+            .assign(RecSes2=session)
+            for session in [sessions[1], sessions[0]]
+        ]
+    )
 
     # Merge with matches DataFrame
-    newmatches = matches.merge(coords1, on=['RecSes1', 'ID1'])
-    newmatches = newmatches.merge(coords2, on=['RecSes2', 'ID2'])
-    newmatches = newmatches.drop_duplicates(subset=['ID1', 'ID2', 'RecSes1', 'RecSes2'])
+    newmatches = matches.merge(coords1, on=["RecSes1", "ID1"])
+    newmatches = newmatches.merge(coords2, on=["RecSes2", "ID2"])
+    newmatches = newmatches.drop_duplicates(subset=["ID1", "ID2", "RecSes1", "RecSes2"])
     newmatches.index = idx
     matches = newmatches
 
     # Calculate shanks (rounded x coordinates)
-    matches['shank1'] = matches['x1'].round(-2).astype(int)
-    matches['shank2'] = matches['x2'].round(-2).astype(int)
+    matches["shank1"] = matches["x1"].round(-2).astype(int)
+    matches["shank2"] = matches["x2"].round(-2).astype(int)
     # Apply corrections where necessary
     if not nocorr:
         matches["idx"] = matches.index
         matches = matches.merge(
-            corrections[['rec1', 'rec2', 'shank', 'ydiff']], 
-            how='left', 
-            left_on=['RecSes1', 'RecSes2', 'shank1'], 
-            right_on=['rec1', 'rec2', 'shank']
+            corrections[["rec1", "rec2", "shank", "ydiff"]],
+            how="left",
+            left_on=["RecSes1", "RecSes2", "shank1"],
+            right_on=["rec1", "rec2", "shank"],
         )
         matches.index = matches["idx"]
-        matches.drop(['rec1', 'rec2', 'shank', 'idx'], axis=1, inplace=True)
+        matches.drop(["rec1", "rec2", "shank", "idx"], axis=1, inplace=True)
         # Apply the drift correction conditionally
-        matches['y2_corr'] = np.where(
-            matches['shank1'] != matches['shank2'], 
-            1000, 
-            matches['y2'] - matches['ydiff'].fillna(0)
+        matches["y2_corr"] = np.where(
+            matches["shank1"] != matches["shank2"],
+            1000,
+            matches["y2"] - matches["ydiff"].fillna(0),
         )
     else:
-        matches['y2_corr'] = matches['y2']
+        matches["y2_corr"] = matches["y2"]
     # Calculate the Euclidean distance
-    matches['dist'] = np.sqrt((matches['x1'] - matches['x2'])**2 + (matches['y1'] - matches['y2_corr'])**2)
+    matches["dist"] = np.sqrt(
+        (matches["x1"] - matches["x2"]) ** 2 + (matches["y1"] - matches["y2_corr"]) ** 2
+    )
     return matches
+
 
 def get_corrections(matches, positions):
 
-    pos1 = pd.concat([positions[key].assign(RecSes1=key) for key in positions.keys()], ignore_index=True)
-    pos2 = pos1.rename(columns={"RecSes1": "RecSes2", "x": "x2", "y": "y2", "ID": "ID2"})
+    pos1 = pd.concat(
+        [positions[key].assign(RecSes1=key) for key in positions.keys()],
+        ignore_index=True,
+    )
+    pos2 = pos1.rename(
+        columns={"RecSes1": "RecSes2", "x": "x2", "y": "y2", "ID": "ID2"}
+    )
 
     # Merge matches with positions data to get all necessary columns in one DataFrame
-    matches = (matches
-               .merge(pos1, left_on=["RecSes1", "ID1"], right_on=["RecSes1", "ID"], how="left")
-               .merge(pos2, left_on=["RecSes2", "ID2"], right_on=["RecSes2", "ID2"], how="left"))
-    
+    matches = matches.merge(
+        pos1, left_on=["RecSes1", "ID1"], right_on=["RecSes1", "ID"], how="left"
+    ).merge(pos2, left_on=["RecSes2", "ID2"], right_on=["RecSes2", "ID2"], how="left")
+
     # Drop rows with missing positions data
     matches = matches.dropna(subset=["x", "y", "x2", "y2"])
 
     # Calculate shank and ydiff in a vectorized way
-    matches['shank1'] = matches['x'].round(-2)
-    matches['shank2'] = matches['x2'].round(-2)
-    matches['ydiff'] = matches['y2'] - matches['y']
+    matches["shank1"] = matches["x"].round(-2)
+    matches["shank2"] = matches["x2"].round(-2)
+    matches["ydiff"] = matches["y2"] - matches["y"]
 
     # Filter only rows with matching shanks
-    matches = matches[matches['shank1'] == matches['shank2']]
+    matches = matches[matches["shank1"] == matches["shank2"]]
 
     # Group by session pairs and shank, then calculate median ydiff
-    output = (matches.groupby(['RecSes1', 'RecSes2', 'shank1'])['ydiff']
-              .median()
-              .reset_index()
-              .rename(columns={'shank1': 'shank','RecSes1':'rec1', 'RecSes2':'rec2'}))
+    output = (
+        matches.groupby(["RecSes1", "RecSes2", "shank1"])["ydiff"]
+        .median()
+        .reset_index()
+        .rename(columns={"shank1": "shank", "RecSes1": "rec1", "RecSes2": "rec2"})
+    )
     return output
+
 
 def pairwise_histogram_correlation(A, B):
     # Initialize the output correlation matrix
@@ -388,48 +435,54 @@ def pairwise_histogram_correlation(A, B):
         for j in range(num_histograms):
             # Correlate the i-th histogram in A with the j-th histogram in B
             correlation_matrix[i, j] = np.corrcoef(A[i], B[j])[0, 1]
-    
+
     return correlation_matrix
+
 
 def get_ISI_histograms(param, ISIbins):
 
     fs = 3e4
-    nclus = param['n_units']
-    KSdirs = param['KS_dirs']
-    good_units = param['good_units']
+    nclus = param["n_units"]
+    KSdirs = param["KS_dirs"]
+    good_units = param["good_units"]
 
     ISIMat = np.zeros((len(ISIbins) - 1, 2, nclus))
     index = 0
     for session in range(len(good_units)):
-
         times = np.load(os.path.join(KSdirs[session], "spike_times.npy")) / fs
         clusters = np.load(os.path.join(KSdirs[session], "spike_clusters.npy"))
 
         for clusid in tqdm(good_units[session].squeeze()):
             idx1 = np.where(clusters == clusid)[0]
 
-            for cv in range(2):    
+            for cv in range(2):
                 if idx1.size > 0:
                     if idx1.size < 50 and cv == 0:
-                        print(f"Warning: Fewer than 50 spikes for neuron {clusid}, please check your inclusion criteria")
+                        print(
+                            f"Warning: Fewer than 50 spikes for neuron {clusid}, please check your inclusion criteria"
+                        )
                     # Split idx1 into two halves
                     if cv == 0:
-                        idx1 = idx1[:len(idx1) // 2]
+                        idx1 = idx1[: len(idx1) // 2]
                     else:
-                        idx1 = idx1[len(idx1) // 2:]
-                    ISIMat[:, cv, index], _ = np.histogram(np.diff(times[idx1].astype(float)), bins=ISIbins)
+                        idx1 = idx1[len(idx1) // 2 :]
+                    ISIMat[:, cv, index], _ = np.histogram(
+                        np.diff(times[idx1].astype(float)), bins=ISIbins
+                    )
 
             index += 1
     return ISIMat
+
 
 def ISI_correlations(param):
 
     # Define ISI bins
     ISIbins = np.concatenate(([0], 5 * 10 ** np.arange(-4, 0.1, 0.1)))
     ISIMat = get_ISI_histograms(param, ISIbins)
-    A, B = ISIMat[:,0,:].T, ISIMat[:,1,:].T                                                         # pull out each cross-validation fold
+    A, B = ISIMat[:, 0, :].T, ISIMat[:, 1, :].T  # pull out each cross-validation fold
 
-    return pairwise_histogram_correlation(A, B)                                                      # compute pairwise correlations
+    return pairwise_histogram_correlation(A, B)  # compute pairwise correlations
+
 
 def get_binned_psth(param, bin_size=0.01):
     """
@@ -438,8 +491,8 @@ def get_binned_psth(param, bin_size=0.01):
     bin_size is in seconds (default 10 ms, matching MATLAB UMparam.binsz).
     """
     fs = 3e4
-    KSdirs = param['KS_dirs']
-    good_units = param['good_units']
+    KSdirs = param["KS_dirs"]
+    good_units = param["good_units"]
 
     session_psthas = []
     for session in range(len(good_units)):
@@ -449,7 +502,7 @@ def get_binned_psth(param, bin_size=0.01):
         edges = np.arange(times.min() - bin_size / 2, times.max() + bin_size, bin_size)
 
         session_units = good_units[session]
-        if hasattr(session_units, 'squeeze'):
+        if hasattr(session_units, "squeeze"):
             session_units = session_units.squeeze()
 
         sr = np.zeros((len(session_units), len(edges) - 1))
@@ -495,13 +548,13 @@ def refpop_correlations(param, bin_size=0.01):
     same population is recorded across days).
     """
     session_psthas = get_binned_psth(param, bin_size)
-    good_units = param['good_units']
+    good_units = param["good_units"]
 
     session_C1_norm, session_C2_norm = [], []
     for sr in session_psthas:
         n_fold = sr.shape[1] // 2
         C1 = np.corrcoef(sr[:, :n_fold])
-        C2 = np.corrcoef(sr[:, n_fold:2 * n_fold])
+        C2 = np.corrcoef(sr[:, n_fold : 2 * n_fold])
         # Zero out NaN from units with no spikes before setting diagonal
         C1 = np.nan_to_num(C1, nan=0.0)
         C2 = np.nan_to_num(C2, nan=0.0)
@@ -513,20 +566,20 @@ def refpop_correlations(param, bin_size=0.01):
     # Map each global unit index to its session and within-session position
     unit_session = []
     for session, units in enumerate(good_units):
-        if hasattr(units, 'squeeze'):
+        if hasattr(units, "squeeze"):
             units = units.squeeze()
         unit_session.extend([session] * len(units))
     unit_session = np.array(unit_session)
 
-    nclus = param['n_units']
+    nclus = param["n_units"]
     refPopCorr = np.zeros((nclus, nclus))
 
     for si in range(len(good_units)):
         for sj in range(len(good_units)):
             rows_i = np.where(unit_session == si)[0]
             rows_j = np.where(unit_session == sj)[0]
-            C1n = session_C1_norm[si]   # (n_si, n_si)
-            C2n = session_C2_norm[sj]   # (n_sj, n_sj)
+            C1n = session_C1_norm[si]  # (n_si, n_si)
+            C2n = session_C2_norm[sj]  # (n_sj, n_sj)
             min_n = min(C1n.shape[1], C2n.shape[1])
             # Vectorised pairwise correlation via normalised dot product
             block = (C1n[:, :min_n] @ C2n[:, :min_n].T) / min_n
@@ -541,9 +594,9 @@ def get_FR(param):
     Returns array of shape (2, n_units): FR[fold, unit].
     """
     fs = 3e4
-    nclus = param['n_units']
-    KSdirs = param['KS_dirs']
-    good_units = param['good_units']
+    nclus = param["n_units"]
+    KSdirs = param["KS_dirs"]
+    good_units = param["good_units"]
 
     FR = np.zeros((2, nclus))
     index = 0
@@ -552,14 +605,14 @@ def get_FR(param):
         clusters = np.load(os.path.join(KSdirs[session], "spike_clusters.npy"))
 
         session_units = good_units[session]
-        if hasattr(session_units, 'squeeze'):
+        if hasattr(session_units, "squeeze"):
             session_units = session_units.squeeze()
 
         for clusid in session_units:
             idx = np.where(clusters == clusid)[0]
             if idx.size > 0:
                 n = len(idx)
-                for cv, cv_idx in enumerate([idx[:n // 2], idx[n // 2:]]):
+                for cv, cv_idx in enumerate([idx[: n // 2], idx[n // 2 :]]):
                     t_cv = times[cv_idx]
                     if len(t_cv) > 1:
                         bins = np.arange(int(t_cv.min()), int(t_cv.max()) + 2)
@@ -581,7 +634,7 @@ def FR_diff(param):
     Note: the AUC function expects higher = better match, so pass
     -FR_diff(param) when calling AUC for this metric.
     """
-    FR = get_FR(param)   # (2, n_units)
+    FR = get_FR(param)  # (2, n_units)
     return np.abs(FR[1, :, np.newaxis] - FR[0, np.newaxis, :])
 
 
@@ -593,9 +646,9 @@ def get_ISI_CV(param):
     Units with fewer than 2 spikes in a fold get CV = 0.
     """
     fs = 3e4
-    nclus = param['n_units']
-    KSdirs = param['KS_dirs']
-    good_units = param['good_units']
+    nclus = param["n_units"]
+    KSdirs = param["KS_dirs"]
+    good_units = param["good_units"]
 
     CV = np.zeros((2, nclus))
     index = 0
@@ -604,14 +657,14 @@ def get_ISI_CV(param):
         clusters = np.load(os.path.join(KSdirs[session], "spike_clusters.npy"))
 
         session_units = good_units[session]
-        if hasattr(session_units, 'squeeze'):
+        if hasattr(session_units, "squeeze"):
             session_units = session_units.squeeze()
 
         for clusid in session_units:
             idx = np.where(clusters == clusid)[0]
             if idx.size > 1:
                 n = len(idx)
-                for cv, cv_idx in enumerate([idx[:n // 2], idx[n // 2:]]):
+                for cv, cv_idx in enumerate([idx[: n // 2], idx[n // 2 :]]):
                     isis = np.diff(times[cv_idx].astype(float))
                     if len(isis) > 0 and isis.mean() > 0:
                         CV[cv, index] = isis.std() / isis.mean()
@@ -629,11 +682,11 @@ def ISI_CV_diff(param):
     Note: the AUC function expects higher = better match, so pass
     -ISI_CV_diff(param) when calling AUC for this metric.
     """
-    CV = get_ISI_CV(param)   # (2, n_units)
+    CV = get_ISI_CV(param)  # (2, n_units)
     return np.abs(CV[1, :, np.newaxis] - CV[0, np.newaxis, :])
 
 
-def AUC(matches:np.ndarray, func_metric:np.ndarray, session_id):
+def AUC(matches: np.ndarray, func_metric: np.ndarray, session_id):
     """
     The AUC depends on a functional metric which is considered as ground truth. This is passed in via func_metric.
     """
@@ -648,17 +701,17 @@ def AUC(matches:np.ndarray, func_metric:np.ndarray, session_id):
     matches_across = matches[~within_session]
     sorted_indices = np.argsort(func_across)[::-1]
 
-    tp, fp = 0,0
+    tp, fp = 0, 0
     N = len(func_across) - P
     recall, fpr = [], []
 
     for idx in sorted_indices:
         if matches_across[idx]:
-            tp+=1
+            tp += 1
         else:
-            fp+=1
-        recall.append(tp/P)
-        fpr.append(fp/N)
+            fp += 1
+        recall.append(tp / P)
+        fpr.append(fp / N)
 
     # NumPy compatibility: `np.trapezoid` exists in newer NumPy versions;
     # `np.trapz` is the older equivalent.
@@ -669,6 +722,5 @@ def AUC(matches:np.ndarray, func_metric:np.ndarray, session_id):
     return auc
 
 
-if __name__ == '__main__':
-
+if __name__ == "__main__":
     pass

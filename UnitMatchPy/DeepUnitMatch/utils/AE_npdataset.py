@@ -18,16 +18,21 @@ class AE_NeuropixelsDataset(Dataset):
         - batch_size (int): Number of units to process in each batch.
     """
 
-    def __init__(self, save_path: str, batch_size = 32):
+    def __init__(self, save_path: str, batch_size=32):
         self.save_path = os.path.join(save_path, "processed_waveforms")
         self.batch_size = batch_size
 
         processed_waveform_sessions = os.listdir(self.save_path)
-        
+
         self.np_file_names = []
         for directory in processed_waveform_sessions:
             snippet_path = os.path.join(self.save_path, directory)
-            self.np_file_names.extend([os.path.join(snippet_path, filename) for filename in os.listdir(snippet_path)])
+            self.np_file_names.extend(
+                [
+                    os.path.join(snippet_path, filename)
+                    for filename in os.listdir(snippet_path)
+                ]
+            )
 
         self.n_neurons = len(self.np_file_names)
         if self.n_neurons < 1:
@@ -40,8 +45,8 @@ class AE_NeuropixelsDataset(Dataset):
         file_name = self.np_file_names[i]
         # Randomly pick 0 or 1 to choose the first half or second half of the data
         half = random.randint(0, 1)
-        with h5py.File(file_name, 'r') as f:
-            waveform = f['waveform'][()] 
+        with h5py.File(file_name, "r") as f:
+            waveform = f["waveform"][()]
             # MaxSitepos = f['MaxSitepos'][()]
         if half == 0:
             data = waveform[..., 0]  # First half
@@ -51,10 +56,11 @@ class AE_NeuropixelsDataset(Dataset):
             except:
                 data = waveform[..., 0]  # First half
         # Handle data being the wrong shape
-        if data.shape != (60,30):
+        if data.shape != (60, 30):
             print(f"File: {self.np_file_names[i]} was wrong shape: {data.shape}")
-            data = np.zeros((60,30))
+            data = np.zeros((60, 30))
         return data
+
 
 class AE_NeuropixelsDataset_cortexlab(Dataset):
     """
@@ -62,20 +68,33 @@ class AE_NeuropixelsDataset_cortexlab(Dataset):
     root/mouse/probe/location/experiment/processed_waveforms/*.npy
     root/mouse/probe/location/experiment/metadata.json
     The metadata.json file contains the good unit indices.
-    
+
     This is left here in case user's data is structured this way, as it allows you to use the train_AE.py script's
-    run() function from a command line/bash script. 
+    run() function from a command line/bash script.
     """
 
-    def __init__(self, root: str, batch_size = 32, mice = None):
+    def __init__(self, root: str, batch_size=32, mice=None):
         self.root = root
         if mice == 10:
-            self.mouse_names = ['AL031', 'AL032', 'AL036', 'AV008', 'CB015', 'CB016', 'CB017', 'CB018', 'CB020', 'EB019']
+            self.mouse_names = [
+                "AL031",
+                "AL032",
+                "AL036",
+                "AV008",
+                "CB015",
+                "CB016",
+                "CB017",
+                "CB018",
+                "CB020",
+                "EB019",
+            ]
         else:
             self.mouse_names = os.listdir(self.root)
         self.batch_size = batch_size
 
-        self.np_file_names = read_good_ids(self.root, self.batch_size, self.mouse_names, finetune=False)
+        self.np_file_names = read_good_ids(
+            self.root, self.batch_size, self.mouse_names, finetune=False
+        )
         self.n_neurons = len(self.np_file_names)
         if self.n_neurons < 1:
             print("No data! Try reducing batch size?")
@@ -89,8 +108,8 @@ class AE_NeuropixelsDataset_cortexlab(Dataset):
         file_name = self.np_file_names[i]
         # Randomly pick 0 or 1 to choose the first half or second half of the data
         half = random.randint(0, 1)
-        with h5py.File(file_name, 'r') as f:
-            waveform = f['waveform'][()] 
+        with h5py.File(file_name, "r") as f:
+            waveform = f["waveform"][()]
             # MaxSitepos = f['MaxSitepos'][()]
         if half == 0:
             data = waveform[..., 0]  # First half
@@ -100,8 +119,7 @@ class AE_NeuropixelsDataset_cortexlab(Dataset):
             except:
                 data = waveform[..., 0]  # First half
         # Handle data being the wrong shape
-        if data.shape != (60,30):
+        if data.shape != (60, 30):
             print(f"File: {self.np_file_names[i]} was wrong shape: {data.shape}")
-            data = np.zeros((60,30))
+            data = np.zeros((60, 30))
         return data
-    

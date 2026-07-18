@@ -1,4 +1,4 @@
-from . import bayes_functions 
+from . import bayes_functions
 from . import extract_raw_data
 from . import GUI
 from . import metric_functions

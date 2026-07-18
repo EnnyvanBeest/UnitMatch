@@ -2,7 +2,7 @@ import os
 import json
 
 
-def read_good_ids(root, batch_size, mouse_names, finetune:bool):
+def read_good_ids(root, batch_size, mouse_names, finetune: bool):
     """
     Output depends on whether you want to pre-train the encoder (finetune=False)
     or finetune it via contrastive learning (finetune=True). This must be specified.
@@ -29,13 +29,14 @@ def read_good_ids(root, batch_size, mouse_names, finetune:bool):
                     else:
                         for file in good_units_files:
                             np_file_names.append(file)
-    
+
     if finetune:
         return experiment_unit_map
     else:
         return np_file_names
 
-def read_good_files(experiment_path, batch_size, load_pre_merge:bool=True):
+
+def read_good_files(experiment_path, batch_size, load_pre_merge: bool = True):
     if not os.path.isdir(experiment_path):
         return None
     try:
@@ -48,11 +49,15 @@ def read_good_files(experiment_path, batch_size, load_pre_merge:bool=True):
     len_good_units = sum(good_units_index)
     if len_good_units < batch_size:
         return None
-    good_units_files = select_good_units_files(os.path.join(experiment_path, 'processed_waveforms'), 
-                                               good_units_index, load_pre_merge)
+    good_units_files = select_good_units_files(
+        os.path.join(experiment_path, "processed_waveforms"),
+        good_units_index,
+        load_pre_merge,
+    )
     return good_units_files
 
-def select_good_units_files(directory, good_units_value, load_pre_merge:bool=True):
+
+def select_good_units_files(directory, good_units_value, load_pre_merge: bool = True):
     """
     Selects the filenames of the good units based on the good_units_value array.
     Args:
@@ -67,19 +72,19 @@ def select_good_units_files(directory, good_units_value, load_pre_merge:bool=Tru
     removes = []
     for file in files:
         if load_pre_merge:
-            if '+' in file:
+            if "+" in file:
                 removes.append(file)
         else:
-            if '+' in file:
-                f = file.replace("Unit",'')
-                f = f.replace("_RawSpikes.npy", '')
-                id1 = int(f[:f.find('+')])
-                id2 = int(f[f.find('+')+1:])
+            if "+" in file:
+                f = file.replace("Unit", "")
+                f = f.replace("_RawSpikes.npy", "")
+                id1 = int(f[: f.find("+")])
+                id2 = int(f[f.find("+") + 1 :])
                 merges[id1] = id2
-            if '#' in file:
-                f = file.replace("Unit",'')
-                f = f.replace("_RawSpikes.npy", '')
-                id1 = int(f[:f.find('#')])
+            if "#" in file:
+                f = file.replace("Unit", "")
+                f = f.replace("_RawSpikes.npy", "")
+                id1 = int(f[: f.find("#")])
                 removes.append(id1)
     good_units_files = []
     for index, is_good in enumerate(good_units_value):
@@ -90,7 +95,7 @@ def select_good_units_files(directory, good_units_value, load_pre_merge:bool=Tru
                 # don't load a unit if we already loaded the unit it merged with
                 # or if it's a unit we wanted to remove
                 continue
-            else:   # load the unit, ignoring the # if it is there (for pre-merge data)
+            else:  # load the unit, ignoring the # if it is there (for pre-merge data)
                 filename = f"Unit{index}_RawSpikes.npy"
                 withhash = f"Unit{index}#_RawSpikes.npy"
             filepath = os.path.join(directory, filename)
@@ -101,4 +106,3 @@ def select_good_units_files(directory, good_units_value, load_pre_merge:bool=Tru
             else:
                 print(f"Warning: Expected file {filepath} does not exist.")
     return good_units_files
-

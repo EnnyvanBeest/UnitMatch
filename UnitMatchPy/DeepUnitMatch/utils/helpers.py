@@ -11,8 +11,10 @@ def create_dataframe(good_units, prob_matrix, session_list=None):
     if session_list is None:
         n_sessions = len(good_units)
         session_list = list(range(n_sessions))
-    session_switch = np.cumsum([np.asarray(units).squeeze().shape[0] for units in good_units])
-    session_switch = np.insert(session_switch, 0, 0)    
+    session_switch = np.cumsum(
+        [np.asarray(units).squeeze().shape[0] for units in good_units]
+    )
+    session_switch = np.insert(session_switch, 0, 0)
 
     d = {
         "RecSes1": [],
@@ -21,7 +23,7 @@ def create_dataframe(good_units, prob_matrix, session_list=None):
         "ID2": [],
         "Prob": [],
     }
-    
+
     # Generate all pairs of sessions (including within-session pairs)
     for i, ses1 in enumerate(session_list):
         for j, ses2 in enumerate(session_list):
@@ -29,11 +31,13 @@ def create_dataframe(good_units, prob_matrix, session_list=None):
             units_ses2 = np.asarray(good_units[j]).squeeze().astype(int)
             n_units_ses1 = units_ses1.shape[0]
             n_units_ses2 = units_ses2.shape[0]
-             
+
             # Extract probability matrix block for this session pair
-            prob_block = prob_matrix[session_switch[i]:session_switch[i+1], 
-                                   session_switch[j]:session_switch[j+1]]
-            
+            prob_block = prob_matrix[
+                session_switch[i] : session_switch[i + 1],
+                session_switch[j] : session_switch[j + 1],
+            ]
+
             # Add all unit pairs from this session pair
             d["RecSes1"].extend([ses1] * (n_units_ses1 * n_units_ses2))
             d["RecSes2"].extend([ses2] * (n_units_ses1 * n_units_ses2))
@@ -43,15 +47,16 @@ def create_dataframe(good_units, prob_matrix, session_list=None):
 
     df = pd.DataFrame(d)
     return df
-            
-def get_unit_id(filepath:str):
+
+
+def get_unit_id(filepath: str):
     fp = os.path.basename(filepath)
     if fp[:4] == "Unit" and fp[-14:] == "_RawSpikes.npy":
         fp = fp.replace("Unit", "")
         id = fp.replace("_RawSpikes.npy", "")
-        if '+' in id:
-            id = id[:id.find('+')]
-        if '#' in id:
+        if "+" in id:
+            id = id[: id.find("+")]
+        if "#" in id:
             id = id.replace("#", "")
         try:
             return int(id)
@@ -61,6 +66,7 @@ def get_unit_id(filepath:str):
     else:
         raise ValueError(f"Invalid filepath format for this waveform: {filepath}")
 
+
 def read_pos(path, skip_removed_units=True):
     files = os.listdir(path)
     x = []
@@ -69,12 +75,12 @@ def read_pos(path, skip_removed_units=True):
 
     for file in files:
         if skip_removed_units:
-            if '+' in file or '#' in file:
+            if "+" in file or "#" in file:
                 continue
         fp = os.path.join(path, file)
-        with h5py.File(fp, 'r') as f:
-            # waveform = f['waveform'][()] 
-            MaxSitepos = f['MaxSitepos'][()]
+        with h5py.File(fp, "r") as f:
+            # waveform = f['waveform'][()]
+            MaxSitepos = f["MaxSitepos"][()]
         x.append(MaxSitepos[0])
         y.append(MaxSitepos[1])
         filenames.append(get_unit_id(file))
