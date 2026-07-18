@@ -165,7 +165,9 @@ def extract_metric_scores(
                 total_score, within_session, euclid_dist, param, is_first_pass=True
             )
 
-            param["n_expected_matches"] = np.sum((total_score > thrs_opt).astype(int))
+            param["n_expected_matches"] = int(
+                np.sum((total_score > thrs_opt) & include_these_pairs_idx.astype(bool))
+            )
             prior_match = 1 - (param["n_expected_matches"] / len(include_these_pairs))
             candidate_pairs = total_score > thrs_opt
 
@@ -181,7 +183,9 @@ def extract_metric_scores(
     thrs_opt = mf.get_threshold(
         total_score, within_session, euclid_dist, param, is_first_pass=False
     )
-    param["n_expected_matches"] = np.sum((total_score > thrs_opt).astype(int))
+    param["n_expected_matches"] = int(
+        np.sum((total_score > thrs_opt) & include_these_pairs_idx.astype(bool))
+    )
     prior_match = 1 - (param["n_expected_matches"] / len(include_these_pairs))
     thrs_opt = np.quantile(
         total_score[include_these_pairs_idx.astype(bool)], prior_match

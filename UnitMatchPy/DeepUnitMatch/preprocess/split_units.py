@@ -95,7 +95,9 @@ def C_ratios(within, threshold_dnn, spk_df, null=False, t_r=0.002, t_c=0.0001):
     # Get the putative set of split units as off-diagonal matches that pass the thresholds
     matches_within = within.loc[within["Prob"] >= threshold_dnn]
     if null:
-        matches_within = within.loc[within["Prob"] < threshold_dnn].nsmallest(3 * len(matches_within))
+        matches_within = within.loc[within["Prob"] < threshold_dnn].nsmallest(
+            3 * len(matches_within)
+        )
         matches_within = directional_filter(matches_within)
         matches_within = matches_within.nlargest(len(matches_within), ["dist"])
     else:

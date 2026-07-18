@@ -14,6 +14,7 @@ def make_match_table(
     param,
     UIDs=None,
     matches_curated=None,
+    functional_scores=None,
 ):
     """
     Creates the match table showing information for every pair of units.
@@ -134,6 +135,11 @@ def make_match_table(
     for key, value in scores_to_include.items():
         df[key] = np.reshape(value, (n_units * n_units)).T
 
+    # add per-pair functional scores (n_units × n_units matrices) as columns
+    if functional_scores is not None:
+        for key, value in functional_scores.items():
+            df[key] = np.reshape(value, (n_units * n_units))
+
     # if you have supplied UIDs create a data frame using them and merge it to the save table
     if UIDs is not None:
         unique_id_liberal = UIDs[0]
@@ -171,14 +177,14 @@ def make_match_table(
                 ]
             ).T,
             columns=[
-                "UID1",
-                "UID2",
-                "UID Liberal 1",
-                "UID Liberal 2",
-                "UID int 1",
-                "UM UID int 2",
-                "UID Conservative 1",
-                "UID Conservative 2",
+                "UID orig 1",
+                "UID orig 2",
+                "UID Lib 1",
+                "UID Lib 2",
+                "UID 1",
+                "UID 2",
+                "UID Cons 1",
+                "UID Cons 2",
             ],
         )
         df = df.join(unique_id_df)
@@ -202,6 +208,7 @@ def save_to_output(
     UIDs=None,
     matches_curated=None,
     save_match_table=True,
+    functional_scores=None,
 ):
     """
     Saves all useful information calculated by UnitMatch to a given save_dir
@@ -294,6 +301,7 @@ def save_to_output(
             param,
             UIDs=UIDs,
             matches_curated=None,
+            functional_scores=functional_scores,
         )
         match_table_path = os.path.join(save_dir, "MatchTable.csv")
         df.to_csv(match_table_path, index=False)

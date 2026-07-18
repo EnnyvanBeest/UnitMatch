@@ -209,8 +209,12 @@ if exist('clusinfo','var') & ~isempty(Depth2Area)
         structure_id_path = atlastable.structure_id_path{find(ismember(lower(atlastable.acronym),areaopt{areaid}))};
         % Cut off last part
         parts = strsplit(structure_id_path,'/');
-        newstructure_id_path = fullfile(parts{2:end-2});
-        newstructure_id_path = ['/' strrep(newstructure_id_path,'\','/') '/'];
+        if numel(parts)>3
+            newstructure_id_path = fullfile(parts{2:end-2});
+            newstructure_id_path = ['/' strrep(newstructure_id_path,'\','/') '/'];
+        else
+            newstructure_id_path = structure_id_path;
+        end
 
 
 

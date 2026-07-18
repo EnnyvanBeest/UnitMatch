@@ -18,6 +18,7 @@ from concurrent.futures import ProcessPoolExecutor
 import pandas as pd
 from DeepUnitMatch.utils.helpers import get_locations_from_sqlite
 
+
 def process_single_location(location_data, path_lookup, param):
 
     try:

@@ -882,7 +882,7 @@ def apply_drift_correction_per_shank(
     ndarray, ndarray, ndarray
         The array of drift correction values, the avg_centroid and avg_waveform_per_tp updated with the drift correction, for all sessions
     """
-    shank_id = shank_ID_per_session(avg_centroid, session_switch, sid, param)
+    shank_id = shank_ID_per_session(avg_centroid, session_switch, sid + 1, param)
     n_shanks = param["no_shanks"]
     shank_dist = param["shank_dist"]
 
@@ -908,18 +908,16 @@ def apply_drift_correction_per_shank(
             print(
                 f"These pairs may be bad {np.argwhere(correct_shank_a != correct_shank_b)}"
             )
-            # delete pairs which are on different shanks ##sam's fix
-            bad_idxs = np.argwhere(correct_shank_a != correct_shank_b)
-            correct_shank_a = np.delete(correct_shank_a, bad_idxs)
-            correct_shank_b = np.delete(correct_shank_b, bad_idxs)
+            bad_idxs = np.flatnonzero(correct_shank_a != correct_shank_b)
+            correct_shank_a[bad_idxs] = False
+            correct_shank_b[bad_idxs] = False
 
-        drifts = centroid_a[:, correct_shank_a] - centroid_b[:, correct_shank_b]
-        drift = np.nanmedian(drifts, axis=1)
+        shank_diffs = centroid_a[:, correct_shank_a] - centroid_b[:, correct_shank_b]
+        drift = np.nanmedian(shank_diffs, axis=1)
         drift_per_shank[i, :] = drift
 
-        # need to get idx for each shank, to apply correct drift correction
-
-        shank_session_idx = session_switch[sid] + np.argwhere(shank_id == i)
+        # apply correction to session sid+1 (the session being aligned, not the reference)
+        shank_session_idx = session_switch[sid + 1] + np.argwhere(shank_id == i)
 
         avg_waveform_per_tp[0, shank_session_idx, :, :] += drift[0]
         avg_waveform_per_tp[1, shank_session_idx, :, :] += drift[1]
@@ -1130,17 +1128,16 @@ def drift_n_sessions(
             test_matches_per_shank(pairs, avg_centroid, did, param) == True
             and best_drift == True
         ):
-            drifts = np.zeros((n_sessions - 1, param["no_shanks"], 3))
-            drifts[did, :, :], avg_waveform_per_tp, avg_centroid = (
+            drift_shank, avg_waveform_per_tp, avg_centroid = (
                 apply_drift_correction_per_shank(
                     pairs, did, session_switch, avg_centroid, avg_waveform_per_tp, param
                 )
             )
+            drifts[did, :] = np.mean(drift_shank, axis=0)
             print(
                 f"Done drift correction per shank for session pair {did + 1} and {did + 2}"
             )
         elif len(pairs) > 0:  # if there exist pairs across sessions:
-            drifts = np.zeros((n_sessions - 1, 3))
             drifts[did, :], avg_waveform_per_tp, avg_centroid = (
                 apply_drift_correction_basic(
                     pairs, did, session_switch, avg_centroid, avg_waveform_per_tp

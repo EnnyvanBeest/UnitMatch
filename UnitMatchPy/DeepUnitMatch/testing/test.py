@@ -1,8 +1,10 @@
 import os
 import sys
+from pathlib import Path
 
-sys.path.insert(0, os.getcwd())
-sys.path.insert(0, os.path.join(os.getcwd(), os.pardir))
+# Ensure the DeepUnitMatch package root is on the path so `utils` is
+# importable regardless of the caller's working directory.
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from utils.losses import clip_sim, CustomClipLoss, Projector
 from utils.npdataset import (
@@ -16,9 +18,7 @@ import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import pandas as pd
-from pathlib import Path
 from sklearn.neighbors import KernelDensity
-from scipy.optimize import linear_sum_assignment
 import importlib
 from utils import helpers
 
@@ -71,7 +71,7 @@ def load_trained_model(device="cpu", read_path=None):
     if read_path is None:
         current_dir = Path(__file__).parent.parent
         read_path = current_dir / "utils" / "model"
-    checkpoint = torch.load(read_path)
+    checkpoint = torch.load(read_path, map_location=device)
     model.load_state_dict(checkpoint["model"])
     clip_loss = CustomClipLoss().to(device)
     clip_loss.load_state_dict(checkpoint["clip_loss"])
@@ -124,13 +124,14 @@ def inference(model, data_dir, unit_label_paths=None):
 
     submatrices = []
     n_batches = len(test_loader)
+    device = next(model.parameters()).device
 
     for estimates_i, _, positions_i, exp_ids_i, filepaths_i in tqdm(test_loader):
         # Forward pass
-        enc_estimates_i = model(estimates_i)  # shape [bsz, 256]
+        enc_estimates_i = model(estimates_i.to(device))  # shape [bsz, 256]
 
         for _, candidates_j, positions_j, exp_ids_j, filepaths_j in tqdm(test_loader):
-            enc_candidates_j = model(candidates_j)
+            enc_candidates_j = model(candidates_j.to(device))
             s = clip_sim(enc_estimates_i, enc_candidates_j)
             submatrices.append(s.detach().cpu().numpy())
 
@@ -367,17 +368,27 @@ def get_corrections(matches, positions):
 
 
 def pairwise_histogram_correlation(A, B):
-    # Initialize the output correlation matrix
-    num_histograms = A.shape[0]
-    correlation_matrix = np.zeros((num_histograms, num_histograms))
-
-    # Compute pairwise correlations
-    for i in range(num_histograms):
-        for j in range(num_histograms):
-            # Correlate the i-th histogram in A with the j-th histogram in B
-            correlation_matrix[i, j] = np.corrcoef(A[i], B[j])[0, 1]
-
-    return correlation_matrix
+    A = A.astype(float)
+    B = B.astype(float)
+    A -= np.nanmean(A, axis=1, keepdims=True)
+    B -= np.nanmean(B, axis=1, keepdims=True)
+    # Track rows that are undefined (any NaN remaining, or zero variance)
+    undef_A = np.any(np.isnan(A), axis=1) | (
+        np.linalg.norm(np.nan_to_num(A), axis=1) == 0
+    )
+    undef_B = np.any(np.isnan(B), axis=1) | (
+        np.linalg.norm(np.nan_to_num(B), axis=1) == 0
+    )
+    A = np.nan_to_num(A)
+    B = np.nan_to_num(B)
+    norm_A = np.linalg.norm(A, axis=1, keepdims=True)
+    norm_B = np.linalg.norm(B, axis=1, keepdims=True)
+    norm_A[norm_A == 0] = 1
+    norm_B[norm_B == 0] = 1
+    result = (A / norm_A) @ (B / norm_B).T
+    result[undef_A, :] = np.nan
+    result[:, undef_B] = np.nan
+    return result
 
 
 def get_ISI_histograms(param, ISIbins):
@@ -457,41 +468,61 @@ def get_binned_psth(param, bin_size=0.01):
     return session_psthas
 
 
-def _normalize_fingerprints(C):
+def _pairwise_corr_cols(A, B):
     """
-    Replace diagonal NaN with row mean, then standardize each row to zero mean / unit std.
-    Units with zero variance (no spikes) get an all-zero fingerprint.
+    Pairwise Pearson r between all column pairs of A (n×p) and B (n×q),
+    equivalent to MATLAB corr(A, B, 'rows', 'pairwise').
+
+    NaN entries (at most one per column in our use case) are replaced by the
+    column mean before correlating — a negligible approximation when NaNs are
+    sparse.  Columns that are entirely NaN or have zero variance yield 0.
+    Returns (p, q).
     """
-    n = C.shape[0]
-    C_f = C.copy()
-    for k in range(n):
-        C_f[k, k] = np.nanmean(C[k])
-    C_f = np.nan_to_num(C_f, nan=0.0)
-    m = C_f.mean(axis=1, keepdims=True)
-    s = C_f.std(axis=1, keepdims=True)
-    s[s == 0] = 1.0
-    return (C_f - m) / s
+    A = A.copy().astype(float)
+    B = B.copy().astype(float)
+    for M in (A, B):
+        for j in range(M.shape[1]):
+            nan_mask = np.isnan(M[:, j])
+            if nan_mask.all():
+                M[:, j] = 0.0  # all-NaN column → constant zero
+            elif nan_mask.any():
+                M[nan_mask, j] = np.nanmean(M[:, j])
+    p = A.shape[1]
+    combined = np.vstack([A.T, B.T])  # (p+q) × n
+    with np.errstate(invalid="ignore", divide="ignore"):
+        C = np.corrcoef(combined)  # (p+q) × (p+q)
+    return np.nan_to_num(C[:p, p:], nan=0.0)
 
 
-def refpop_correlations(param, bin_size=0.01):
+def refpop_correlations(param, matches=None, bin_size=0.01):
     """
-    Cross-correlation population fingerprint (refPopCorr), analogous to the
-    MATLAB ComputeFunctionalScores refPopCorr.
+    Cross-correlation population fingerprint (refPopCorr), following
+    MATLAB ComputeFunctionalScores / CrossCorrelationFingerPrint.
 
-    For each unit the fingerprint is its row in the within-session pairwise
-    correlation matrix (one fold per cross-validation half).
-    refPopCorr[i, j] = Pearson r between the fold-1 fingerprint of unit i and
-    the fold-2 fingerprint of unit j.  Higher values indicate more similar
-    population coupling (likely the same unit).
+    Within-session: fingerprint is the cross-validated pairwise correlation
+    (fold1 vs fold2), i.e. MATLAB corr(fold1, fold2, 'rows', 'pairwise').
 
-    For cross-session pairs whose sessions have different unit counts, the
-    fingerprints are truncated to the shorter length (reasonable when the
-    same population is recorded across days).
+    Cross-session: the reference population is restricted to matched units
+    (equal-length by definition of a match). Each unit's fingerprint is its
+    correlation profile with those matched reference units in its own session;
+    these equal-length vectors are then compared across sessions.
+
+    Parameters
+    ----------
+    param : dict
+        Must contain 'KS_dirs', 'good_units', 'n_units'.
+    matches : np.ndarray (n_units, n_units) bool, optional
+        Final match matrix. Required for cross-session blocks; cross-session
+        blocks are left as zero when not provided.
+    bin_size : float
+        PSTH bin size in seconds (default 10 ms, matching UMparam.binsz).
     """
     session_psthas = get_binned_psth(param, bin_size)
     good_units = param["good_units"]
+    n_sessions = len(good_units)
+    eps = 1e-7
 
-    session_C1_norm, session_C2_norm = [], []
+    session_fold1, session_fold2, session_avg = [], [], []
     for sr in session_psthas:
         n_fold = sr.shape[1] // 2
         C1 = np.corrcoef(sr[:, :n_fold])
@@ -499,32 +530,74 @@ def refpop_correlations(param, bin_size=0.01):
         # Zero out NaN from units with no spikes before setting diagonal
         C1 = np.nan_to_num(C1, nan=0.0)
         C2 = np.nan_to_num(C2, nan=0.0)
+        # z-transform average of the two folds (MATLAB: tanh(nanmean(atanh(...))))
+        avg = np.tanh(
+            0.5
+            * (
+                np.arctanh(np.clip(C1, -1 + eps, 1 - eps))
+                + np.arctanh(np.clip(C2, -1 + eps, 1 - eps))
+            )
+        )
+        # NaN the diagonal — self-correlation is excluded from fingerprints
         np.fill_diagonal(C1, np.nan)
         np.fill_diagonal(C2, np.nan)
-        session_C1_norm.append(_normalize_fingerprints(C1))
-        session_C2_norm.append(_normalize_fingerprints(C2))
+        np.fill_diagonal(avg, np.nan)
+        session_fold1.append(C1)
+        session_fold2.append(C2)
+        session_avg.append(avg)
 
-    # Map each global unit index to its session and within-session position
     unit_session = []
-    for session, units in enumerate(good_units):
+    for si, units in enumerate(good_units):
         if hasattr(units, "squeeze"):
             units = units.squeeze()
-        unit_session.extend([session] * len(units))
+        unit_session.extend([si] * len(units))
     unit_session = np.array(unit_session)
 
     nclus = param["n_units"]
     refPopCorr = np.zeros((nclus, nclus))
 
-    for si in range(len(good_units)):
-        for sj in range(len(good_units)):
-            rows_i = np.where(unit_session == si)[0]
+    for si in range(n_sessions):
+        rows_i = np.where(unit_session == si)[0]
+        n_si = len(rows_i)
+
+        for sj in range(n_sessions):
             rows_j = np.where(unit_session == sj)[0]
-            C1n = session_C1_norm[si]  # (n_si, n_si)
-            C2n = session_C2_norm[sj]  # (n_sj, n_sj)
-            min_n = min(C1n.shape[1], C2n.shape[1])
-            # Vectorised pairwise correlation via normalised dot product
-            block = (C1n[:, :min_n] @ C2n[:, :min_n].T) / min_n
-            refPopCorr[np.ix_(rows_i, rows_j)] = np.clip(block, -1, 1)
+            n_sj = len(rows_j)
+
+            if si == sj:
+                # Cross-validated within-session fingerprint:
+                # corr(fold1, fold2, 'rows', 'pairwise') — n_si observations
+                block = _pairwise_corr_cols(session_fold1[si], session_fold2[si])
+
+            else:
+                if matches is None:
+                    block = np.zeros((n_si, n_sj))
+                else:
+                    # Restrict reference population to matched units only.
+                    # Both sessions contribute exactly the same number of matched
+                    # units (one per pair), so fingerprint vectors are equal-length.
+                    match_block = matches[np.ix_(rows_i, rows_j)]  # (n_si × n_sj)
+                    match_pos = np.argwhere(match_block)  # (n_matched × 2)
+
+                    if len(match_pos) == 0:
+                        block = np.zeros((n_si, n_sj))
+                    else:
+                        local_si = match_pos[
+                            :, 0
+                        ]  # local indices of matched units in si
+                        local_sj = match_pos[
+                            :, 1
+                        ]  # local indices of matched units in sj
+
+                        # Each row is one matched unit's correlation with all session units.
+                        # Diagonal NaN (self-correlation) already set via fill_diagonal above.
+                        SC1 = session_avg[si][local_si, :]  # (n_matched × n_si)
+                        SC2 = session_avg[sj][local_sj, :]  # (n_matched × n_sj)
+
+                        # corr(SC1, SC2, 'rows', 'pairwise') → (n_si × n_sj)
+                        block = _pairwise_corr_cols(SC1, SC2)
+
+            refPopCorr[np.ix_(rows_i, rows_j)] = block
 
     return refPopCorr
 
@@ -626,6 +699,304 @@ def ISI_CV_diff(param):
     CV = get_ISI_CV(param)  # (2, n_units)
     return np.abs(CV[1, :, np.newaxis] - CV[0, np.newaxis, :])
 
+
+def get_natim_responses(param):
+    """
+    Bin spike times into stimulus-triggered PSTH per session.
+    Returns list of arrays with shape (n_time_bins, n_stimuli, n_units, max_repeats).
+    Organized as: time × stimulus × neurons × repeats
+    Time dimension: onset bins followed by offset bins (concatenated).
+    """
+    fs = 3e4
+    nclus = param["n_units"]
+    KSdirs = param["KS_dirs"]
+    good_units = param["good_units"]
+
+    session_timecourses = []
+    session_stimulus_responses = []
+    for session in range(len(good_units)):
+        times = np.load(os.path.join(KSdirs[session], "spike_times.npy")) / fs
+        clusters = np.load(os.path.join(KSdirs[session], "spike_clusters.npy"))
+
+        session_units = good_units[session]
+        if hasattr(session_units, "squeeze"):
+            session_units = session_units.squeeze()
+        n_units = len(session_units)
+
+        # Try to load trial files; if they don't exist, use NaN arrays
+        trial_path = os.path.dirname(os.path.dirname(KSdirs[session]))
+        try:
+            trials_IDs = np.load(os.path.join(trial_path, "trial.imageIDs.npy"))
+            trials_offsetTimes = np.load(
+                os.path.join(trial_path, "trial.offsetTimes.npy")
+            )
+            trials_onsetTimes = np.load(
+                os.path.join(trial_path, "trial.onsetTimes.npy")
+            )
+        except FileNotFoundError:
+            # Trial files don't exist; return NaN arrays
+            bin_size = 0.005
+            onset_window = [-0.3, 0.5]
+            offset_window = [0.0, 0.5]
+            onset_bins = np.arange(
+                onset_window[0], onset_window[1] + bin_size, bin_size
+            )
+            offset_bins = np.arange(
+                offset_window[0], offset_window[1] + bin_size, bin_size
+            )
+            n_time_bins_total = (len(onset_bins) - 1) + (len(offset_bins) - 1)
+
+            timecourse = np.full((2, n_time_bins_total, n_units), np.nan)
+            stimulus_response = np.full((2, 112, n_units), np.nan)
+
+            session_timecourses.append(timecourse)
+            session_stimulus_responses.append(stimulus_response)
+            continue
+
+        bin_size = 0.005
+        onset_window = [-0.3, 0.5]
+        offset_window = [0.0, 0.5]
+        psth, _ = get_stimulus_triggered_psth(
+            times,
+            clusters,
+            trials_onsetTimes,
+            trials_offsetTimes,
+            trials_IDs,
+            session_units,
+            onset_window=onset_window,
+            offset_window=offset_window,
+            bin_size=bin_size,
+        )
+
+        # psth shape: (time, stimulus, neurons, repeats)
+        # Average timecourse over stimuli and repeats: (fold, time, neurons)
+        timecourse1 = np.nanmean(psth[:, :, :, 1::2], axis=(1, 3))
+        timecourse2 = np.nanmean(psth[:, :, :, ::2], axis=(1, 3))
+        timecourse = np.stack(
+            [timecourse1, timecourse2], axis=0
+        )  # shape: (fold, time, neurons)
+
+        # Average response across repeats for each stimulus, using only first 200ms after onset
+        # onset_window = [-0.3, 0.5], we want time 0 to 0.2s
+        ms_after_onset = 0.2
+        bins_in_window = int(ms_after_onset / bin_size)  # 40 bins
+        onset_start_bin = int(
+            (0 - onset_window[0]) / bin_size
+        )  # skip to time 0 (60 bins)
+        onset_end_bin = onset_start_bin + bins_in_window  # 100
+        stimulus_response1 = np.nanmean(
+            psth[onset_start_bin:onset_end_bin, :, :, 1::2], axis=(0, 3)
+        )
+        stimulus_response2 = np.nanmean(
+            psth[onset_start_bin:onset_end_bin, :, :, ::2], axis=(0, 3)
+        )
+        stimulus_response = np.stack(
+            [stimulus_response1, stimulus_response2], axis=0
+        )  # shape: (fold, stimulus, neurons)
+
+        session_timecourses.append(timecourse)
+        session_stimulus_responses.append(stimulus_response)
+
+    return session_stimulus_responses, session_timecourses
+
+
+def get_stimulus_triggered_psth(
+    times,
+    clusters,
+    trials_onsetTimes,
+    trials_offsetTimes,
+    trials_IDs,
+    good_units,
+    onset_window=[-0.3, 0.5],
+    offset_window=[0, 0.5],
+    bin_size=0.005,
+):
+    """
+    Extract PSTH responses around stimulus onset and offset for each neuron.
+    Groups trials by stimulus ID, organizing responses by stimulus identity.
+    Onset and offset responses are concatenated along the time axis.
+
+    Parameters
+    ----------
+    times : np.ndarray
+        Spike times in seconds
+    clusters : np.ndarray
+        Cluster IDs for each spike
+    trials_onsetTimes : np.ndarray
+        Stimulus onset times for each trial
+    trials_offsetTimes : np.ndarray
+        Stimulus offset times for each trial
+    trials_IDs : np.ndarray
+        Stimulus IDs for each trial (groups stimulus presentations)
+    good_units : array-like
+        Unit IDs to include
+    onset_window : list
+        Time window around stimulus onset [start, end] in seconds
+    offset_window : list
+        Time window around stimulus offset [start, end] in seconds
+    bin_size : float
+        Bin size in seconds
+
+    Returns
+    -------
+    psth : np.ndarray
+        Shape (n_onset_bins + n_offset_bins, n_stimulus_types, n_units, max_repeats)
+        Dimensions: time × stimulus × neurons × repeats
+        Time dimension: onset bins [0:n_onset_bins] then offset bins [n_onset_bins:]
+    unique_stimulus_ids : np.ndarray
+        Unique stimulus IDs in order
+    """
+
+    if hasattr(good_units, "squeeze"):
+        good_units = good_units.squeeze()
+
+    good_units = np.array(good_units)
+    n_units = len(good_units)
+
+    # Get unique stimulus IDs and bin edges
+    unique_stimulus_ids = np.unique(trials_IDs)
+    n_stimulus_types = len(unique_stimulus_ids)
+
+    onset_bins = np.arange(onset_window[0], onset_window[1] + bin_size, bin_size)
+    offset_bins = np.arange(offset_window[0], offset_window[1] + bin_size, bin_size)
+    n_onset_bins = len(onset_bins) - 1
+    n_offset_bins = len(offset_bins) - 1
+    n_time_bins_total = n_onset_bins + n_offset_bins
+
+    # Count max repeats per stimulus to determine output size
+    max_repeats = 0
+    for stim_id in unique_stimulus_ids:
+        n_repeats = np.sum(trials_IDs == stim_id)
+        max_repeats = max(max_repeats, n_repeats)
+
+    # Initialize output: time (onset+offset concatenated) × stimulus × neurons × repeats
+    psth = np.zeros((n_time_bins_total, n_stimulus_types, n_units, max_repeats))
+
+    # Extract PSTH for each stimulus type
+    for stim_idx, stim_id in enumerate(unique_stimulus_ids):
+        # Get all trials with this stimulus ID
+        stim_trials = np.where(trials_IDs == stim_id)[0]
+
+        for repeat_idx, trial_idx in enumerate(stim_trials):
+            trial_onset = trials_onsetTimes[trial_idx]
+            trial_offset = trials_offsetTimes[trial_idx]
+
+            # Extract spikes around onset
+            onset_start = trial_onset + onset_window[0]
+            onset_end = trial_onset + onset_window[1]
+            onset_spike_mask = (times >= onset_start) & (times <= onset_end)
+            onset_spike_times = times[onset_spike_mask] - trial_onset
+            onset_spike_clusters = clusters[onset_spike_mask]
+
+            # Extract spikes around offset
+            offset_start = trial_offset + offset_window[0]
+            offset_end = trial_offset + offset_window[1]
+            offset_spike_mask = (times >= offset_start) & (times <= offset_end)
+            offset_spike_times = times[offset_spike_mask] - trial_offset
+            offset_spike_clusters = clusters[offset_spike_mask]
+
+            # Bin spikes for each unit
+            for unit_idx, unit in enumerate(good_units):
+                # Onset PSTH (first n_onset_bins of time axis)
+                unit_onset_spikes = onset_spike_times[onset_spike_clusters == unit]
+                if len(unit_onset_spikes) > 0:
+                    hist_onset, _ = np.histogram(unit_onset_spikes, bins=onset_bins)
+                    psth[:n_onset_bins, stim_idx, unit_idx, repeat_idx] = hist_onset
+
+                # Offset PSTH (remaining n_offset_bins of time axis)
+                unit_offset_spikes = offset_spike_times[offset_spike_clusters == unit]
+                if len(unit_offset_spikes) > 0:
+                    hist_offset, _ = np.histogram(unit_offset_spikes, bins=offset_bins)
+                    psth[
+                        n_onset_bins : n_onset_bins + n_offset_bins,
+                        stim_idx,
+                        unit_idx,
+                        repeat_idx,
+                    ] = hist_offset
+
+    return psth, unique_stimulus_ids
+
+
+def natim_correlations(param):
+    """
+    Compute pairwise correlations of natural image stimulus fingerprints across neurons.
+    Fingerprints combine average timecourse over stimuli + average response across stimuli.
+    """
+    session_stimulus_responses, session_timecourses = get_natim_responses(param)
+
+    # Concatenate fingerprints from all sessions
+    all_timecourses = np.concatenate(
+        session_timecourses, axis=2
+    )  # (fold, time, n_all_units)
+    all_stimulus_responses = np.concatenate(
+        session_stimulus_responses, axis=2
+    )  # (fold, stimulus, n_all_units)
+
+    # Compute pairwise correlations for timecourses and stimulus responses
+    timecourse_corr = pairwise_histogram_correlation(
+        all_timecourses[0, :, :].T, all_timecourses[1, :, :].T
+    )
+    stimulus_corr = pairwise_histogram_correlation(
+        all_stimulus_responses[0, :, :].T, all_stimulus_responses[1, :, :].T
+    )
+
+    # Fisher z-transform
+    z_timecourse = 0.5 * np.arctanh(timecourse_corr)
+    z_stimulus = 0.5 * np.arctanh(stimulus_corr)
+
+    # Average z-scores
+    z_fingerprint = (z_timecourse + z_stimulus) / 2.0
+
+    # Inverse transform with tanh
+    fingerprint_corr = np.tanh(z_fingerprint)
+    return fingerprint_corr
+
+
+def AUC(matches: np.ndarray, func_metric: np.ndarray, session_id):
+    """
+    The AUC depends on a functional metric which is considered as ground truth. This is passed in via func_metric.
+    """
+
+    # Filter out NaN values
+    nan_mask = np.all(~np.isfinite(func_metric), axis=1)
+    func_metric = func_metric[~nan_mask, :][:, ~nan_mask]
+    matches = matches[~nan_mask, :][:, ~nan_mask]
+    session_id = session_id[~nan_mask]
+
+    # Only across-session pairs are meaningful for cross-session AUC.
+    # P must be computed from across-session matches so that recall and FPR
+    # are correctly normalised (DeepUnitMatch already filters to across-session
+    # before calling this; UMPy's raw threshold matrix includes within-session
+    # self-matches that would otherwise inflate P and deflate recall).
+    within_session = (session_id[:, None] == session_id).astype(bool)
+    func_across = func_metric[~within_session]
+    matches_across = matches[~within_session]
+
+    P = np.sum(matches_across)
+    if P < 1:
+        raise ValueError("No matches found - can't compute AUC")
+
+    sorted_indices = np.argsort(func_across)[::-1]
+
+    tp, fp = 0, 0
+    N = len(func_across) - P
+    recall, fpr = [], []
+
+    for idx in sorted_indices:
+        if matches_across[idx]:
+            tp += 1
+        else:
+            fp += 1
+        recall.append(tp / P)
+        fpr.append(fp / N)
+
+    # NumPy compatibility: `np.trapezoid` exists in newer NumPy versions;
+    # `np.trapz` is the older equivalent.
+    if hasattr(np, "trapezoid"):
+        auc = np.trapezoid(recall, fpr)
+    else:
+        auc = np.trapz(recall, fpr)
+    return auc
 
 
 if __name__ == "__main__":

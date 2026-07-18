@@ -1,6 +1,22 @@
 function PlotUnitsOnProbe(clusinfo,UMparam,UniqueIDConversion,WaveformInfo,AddDriftBack)
-if nargin<5
+if nargin < 5 || isempty(AddDriftBack)
     AddDriftBack = 1;
+end
+
+thisDir = fileparts(mfilename('fullpath'));
+functionalScoresDir = fullfile(thisDir, '..', 'FunctionalScores');
+if exist(functionalScoresDir, 'dir')
+    addpath(functionalScoresDir);
+end
+
+if nargin >= 1 && (ischar(clusinfo) || isstring(clusinfo))
+    SaveDir = char(clusinfo);
+    if exist(fullfile(SaveDir, 'UnitMatch.mat'), 'file')
+        [clusinfo, UMparam, UniqueIDConversion, WaveformInfo] = ensureUnitMatchOutput(SaveDir);
+    else
+        [~, UMparam, UniqueIDConversion, WaveformInfo] = loadPythonOutputForMatlab(SaveDir);
+        clusinfo = struct('RecSesID', UniqueIDConversion.recsesAll, 'Good_ID', UniqueIDConversion.GoodID);
+    end
 end
 
 PlotAll = 1;
@@ -227,4 +243,48 @@ for modethis = 1:3
 
 end
 
+function [clusinfoOut, UMparamOut, UniqueIDConversionOut, WaveformInfoOut] = ensureUnitMatchOutput(SaveDir)
+    if ~ischar(SaveDir) && ~isstring(SaveDir)
+        error('SaveDir must be a path string.');
+    end
+    SaveDir = char(SaveDir);
+    matPath = fullfile(SaveDir, 'UnitMatch.mat');
+    if ~exist(matPath, 'file')
+        required = {
+            fullfile(SaveDir, 'UMparam.pickle'),
+            fullfile(SaveDir, 'ClusInfo.pickle'),
+            fullfile(SaveDir, 'MatchProb.npy'),
+            fullfile(SaveDir, 'MatchTable.csv'),
+            fullfile(SaveDir, 'WaveformInfo.npz')
+        };
+        if ~all(cellfun(@(x) exist(x, 'file') == 2, required))
+            error('UnitMatch.mat was not found and the Python output sidecars are missing.');
+        end
+
+        repoRoot = fullfile(fileparts(mfilename('fullpath')), '..', '..');
+        converterPath = fullfile(repoRoot, 'UnitMatchPy', 'PaperAnalyses', 'convert_python_batch_output_to_matlab.py');
+        pyCandidates = {'py -3', 'python', 'python3'};
+        for idx = 1:numel(pyCandidates)
+            cmd = sprintf('%s "%s" "%s"', pyCandidates{idx}, converterPath, SaveDir);
+            [status, ~] = system(cmd);
+            if status == 0 && exist(matPath, 'file')
+                break
+            end
+        end
+    end
+
+    if ~exist(matPath, 'file')
+        error('Failed to create UnitMatch.mat from the Python outputs.');
+    end
+
+    Tmp = load(matPath, 'clusinfo', 'UMparam', 'UniqueIDConversion', 'WaveformInfo');
+    if isfield(Tmp, 'clusinfo')
+        clusinfoOut = Tmp.clusinfo;
+    else
+        clusinfoOut = struct('RecSesID', Tmp.UniqueIDConversion.recsesAll, 'Good_ID', Tmp.UniqueIDConversion.GoodID);
+    end
+    UMparamOut = Tmp.UMparam;
+    UniqueIDConversionOut = Tmp.UniqueIDConversion;
+    WaveformInfoOut = Tmp.WaveformInfo;
+end
 

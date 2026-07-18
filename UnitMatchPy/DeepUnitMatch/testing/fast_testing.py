@@ -42,7 +42,9 @@ def test_models_optimized(col_names, fixed_n=True, save_names=None):
         um_lookup = None
 
     # Get all valid locations first to avoid repeated file system checks
-    valid_locations = get_locations_from_sqlite(db_path=os.path.join(PROJECT_ROOT, "matchtables.db"))
+    valid_locations = get_locations_from_sqlite(
+        db_path=os.path.join(PROJECT_ROOT, "matchtables.db")
+    )
     print(f"Found {len(valid_locations)} valid locations to process")
 
     if not valid_locations:
@@ -142,7 +144,6 @@ def get_matches_1model(mt, metric, fixed_n: int = None):
         if metric == "MatchProb":
             thresh = 0.5
         else:
-
             thresh = get_threshold_df(mt, metric=metric)
 
             within = mt.loc[
@@ -168,7 +169,6 @@ def get_matches_1model(mt, metric, fixed_n: int = None):
     matches = directional_filter(matches)
 
     if len(matches) != 0:
-
         # Resolve conflict matches by only keeping the match with highest similarity
         matches, _ = remove_conflicts(matches, metric)
 
@@ -182,7 +182,9 @@ def get_matches_1model(mt, metric, fixed_n: int = None):
     return matches.index.to_list()
 
 
-def all_results_1model(mt: pd.DataFrame, mouse: str, probe: str, loc: str, model_name: str, fixed_n=None):
+def all_results_1model(
+    mt: pd.DataFrame, mouse: str, probe: str, loc: str, model_name: str, fixed_n=None
+):
     """
     Get all the results for a single model.
     """

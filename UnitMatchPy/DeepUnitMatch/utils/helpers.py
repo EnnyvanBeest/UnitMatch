@@ -10,7 +10,9 @@ import datetime
 # PROJECT_ROOT is the directory that holds both sibling repos (DeepMatch + DeepUnitMatch)
 # alongside the shared data/results and the committed metadata_index.json.
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PROJECT_ROOT = os.path.normpath(os.path.join(REPO_ROOT, os.pardir, os.pardir, os.pardir))
+PROJECT_ROOT = os.path.normpath(
+    os.path.join(REPO_ROOT, os.pardir, os.pardir, os.pardir)
+)
 METADATA_INDEX_PATH = os.path.join(PROJECT_ROOT, "metadata_index.json")
 
 _metadata_index_cache = None
@@ -24,7 +26,7 @@ def create_dataframe(good_units, prob_matrix, session_list=None):
         n_sessions = len(good_units)
         session_list = list(range(n_sessions))
     session_switch = np.cumsum(
-        [np.asarray(units).squeeze().shape[0] for units in good_units]
+        [np.asarray(units).ravel().shape[0] for units in good_units]
     )
     session_switch = np.insert(session_switch, 0, 0)
 
@@ -39,8 +41,8 @@ def create_dataframe(good_units, prob_matrix, session_list=None):
     # Generate all pairs of sessions (including within-session pairs)
     for i, ses1 in enumerate(session_list):
         for j, ses2 in enumerate(session_list):
-            units_ses1 = np.asarray(good_units[i]).squeeze().astype(int)
-            units_ses2 = np.asarray(good_units[j]).squeeze().astype(int)
+            units_ses1 = np.asarray(good_units[i]).ravel().astype(int)
+            units_ses2 = np.asarray(good_units[j]).ravel().astype(int)
             n_units_ses1 = units_ses1.shape[0]
             n_units_ses2 = units_ses2.shape[0]
 
@@ -99,6 +101,7 @@ def read_pos(path, skip_removed_units=True):
     output = {"ID": filenames, "x": x, "y": y}
     return pd.DataFrame(output).sort_values("ID").reset_index(drop=True)
 
+
 def _load_metadata_index():
     """Load and cache the committed metadata_index.json (built once per process)."""
     global _metadata_index_cache
@@ -111,6 +114,7 @@ def _load_metadata_index():
         with open(METADATA_INDEX_PATH) as f:
             _metadata_index_cache = json.load(f)
     return _metadata_index_cache
+
 
 def loc_key_from_mt_path(mt_path: str):
     """Machine-independent 'mouse/probe/loc' key for a match-table path.
@@ -125,6 +129,7 @@ def loc_key_from_mt_path(mt_path: str):
     probe = os.path.basename(os.path.dirname(loc_dir))
     mouse = os.path.basename(os.path.dirname(os.path.dirname(loc_dir)))
     return f"{mouse}/{probe}/{loc}"
+
 
 def _index_entry(key: str):
     """Look up a 'mouse/probe/loc' key in the committed metadata index."""
@@ -165,10 +170,9 @@ def index_dates_from_loc(mouse, probe, loc):
     entry = _index_entry(f"{mouse}/{probe}/{loc}")
     dates = {}
     for recses, date_str in entry.get("dates", {}).items():
-        dates[int(recses)] = (
-            datetime.date.fromisoformat(date_str) if date_str else None
-        )
+        dates[int(recses)] = datetime.date.fromisoformat(date_str) if date_str else None
     return dates
+
 
 def pick(mt, r1, r2, tight: bool = False):
     if tight:
