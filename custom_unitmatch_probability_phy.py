@@ -5,20 +5,25 @@ from operator import itemgetter
 import numpy as np
 
 from phy import IPlugin
-from phy.apps.template import from_sparse
+
 
 def load_probability_templates(controller):
     try:
-        out = controller.model._read_array(controller.model._find_path('probability_templates.npy'))
+        out = controller.model._read_array(
+            controller.model._find_path("probability_templates.npy")
+        )
         out = np.atleast_2d(out)
         assert out.ndim == 2
         return out
     except IOError:
         return np.zeros((controller.n_templates, controller.n_templates))
 
-class UnitMatchProbabilityPlugin(IPlugin):  
+
+class UnitMatchProbabilityPlugin(IPlugin):
     def attach_to_controller(self, controller):
-        print("Will set the similarity between clusters as UnitMatch's match probability!")
+        print(
+            "Will set the similarity between clusters as UnitMatch's match probability!"
+        )
 
         # We cache this function in memory and on disk.
         # @controller.context.memcache ### not sure this is necessary, the fact that it's cached on disk makes it quite annoying if recomputing
@@ -37,11 +42,13 @@ class UnitMatchProbabilityPlugin(IPlugin):
                 temp_j = np.nonzero(controller.get_template_counts(cj))[0]
                 return float(np.max(sims[temp_j]))
 
-            out = [(cj, _sim_ij(cj)) for cj in controller.supervisor.clustering.cluster_ids]
+            out = [
+                (cj, _sim_ij(cj)) for cj in controller.supervisor.clustering.cluster_ids
+            ]
             return sorted(out, key=itemgetter(1), reverse=True)
 
         # We add the probability function.
-        controller.similarity_functions['unitmatch_probability'] = um_probability
+        controller.similarity_functions["unitmatch_probability"] = um_probability
 
         # We set the probability function to the newly-defined one.
-        controller.similarity = 'unitmatch_probability'
+        controller.similarity = "unitmatch_probability"
