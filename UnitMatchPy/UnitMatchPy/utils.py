@@ -2,11 +2,11 @@
 import numpy as np
 import pandas as pd
 import os
-import matplotlib.pyplot as plt
 import mat73
 import sqlite3
 import time
 import random
+
 
 def load_tsv(path):
     """
@@ -22,8 +22,9 @@ def load_tsv(path):
     ndarray
         The tsv as a ndarray
     """
-    df  = pd.read_csv(path, sep='\t', skiprows = 0)
+    df = pd.read_csv(path, sep="\t", skiprows=0)
     return df.values
+
 
 def get_session_number(unit_id, session_switch):
     """
@@ -42,8 +43,9 @@ def get_session_number(unit_id, session_switch):
         The session number of the unit
     """
     for i in range(len(session_switch) - 1):
-        if (session_switch[i] <= unit_id < session_switch[i+1]):
+        if session_switch[i] <= unit_id < session_switch[i + 1]:
             return i
+
 
 def get_session_data(n_units_per_session):
     """
@@ -60,18 +62,19 @@ def get_session_data(n_units_per_session):
         The calculated session information
     """
     n_sessions = len(n_units_per_session)
-    #Total number of units                  
+    # Total number of units
     n_units = n_units_per_session.sum()
 
-    sessionid = np.zeros(n_units, dtype = int)
-    #What units the a new session starts
+    sessionid = np.zeros(n_units, dtype=int)
+    # What units the a new session starts
     session_switch = np.cumsum(n_units_per_session)
     session_switch = np.insert(session_switch, 0, 0)
     for i in range(n_sessions):
-        #The session id for each unit
-        sessionid[session_switch[i]:session_switch[i+1]] = int(i)
+        # The session id for each unit
+        sessionid[session_switch[i] : session_switch[i + 1]] = int(i)
 
     return n_units, sessionid, session_switch, n_sessions
+
 
 def get_within_session(session_id, param):
     """
@@ -89,9 +92,9 @@ def get_within_session(session_id, param):
     ndarray
         A n_unit * n_unit array which marks units in the same session
     """
-    n_units = param['n_units']
+    n_units = param["n_units"]
 
-    tmp1 = np.expand_dims(session_id , axis=1)
+    tmp1 = np.expand_dims(session_id, axis=1)
     tmp2 = np.expand_dims(session_id, axis=0)
 
     within_session = np.ones((n_units, n_units))
@@ -99,7 +102,10 @@ def get_within_session(session_id, param):
 
     return within_session
 
-def filter_units_by_index(waveform, session_id, session_switch, good_units, kept_idx, param):
+
+def filter_units_by_index(
+    waveform, session_id, session_switch, good_units, kept_idx, param
+):
     """
     Re-synchronise all per-unit data structures after some units have been dropped
     (e.g. by get_snippets filtering bad waveforms).
@@ -122,7 +128,7 @@ def filter_units_by_index(waveform, session_id, session_switch, good_units, kept
         print(f"Filtering {n_dropped} unit(s) that were rejected by get_snippets.")
 
     new_waveform = waveform[kept_idx]
-    n_sessions = param['n_sessions']
+    n_sessions = param["n_sessions"]
 
     new_good_units = []
     for s in range(n_sessions):
@@ -131,21 +137,30 @@ def filter_units_by_index(waveform, session_id, session_switch, good_units, kept
         new_good_units.append(good_units[s][in_session])
 
     n_units_per_session = np.array([len(g) for g in new_good_units])
-    n_units, new_session_id, new_session_switch, _ = get_session_data(n_units_per_session)
+    n_units, new_session_id, new_session_switch, _ = get_session_data(
+        n_units_per_session
+    )
 
-    param['n_units'] = n_units
-    param['good_units'] = new_good_units
-    param['n_channels'] = new_waveform.shape[2]
+    param["n_units"] = n_units
+    param["good_units"] = new_good_units
+    param["n_channels"] = new_waveform.shape[2]
     new_within_session = get_within_session(new_session_id, param)
 
-    return new_waveform, new_session_id, new_session_switch, new_within_session, new_good_units, param
+    return (
+        new_waveform,
+        new_session_id,
+        new_session_switch,
+        new_within_session,
+        new_good_units,
+        param,
+    )
 
 
 def load_good_waveforms(wave_paths, unit_label_paths, param, good_units_only=True):
     if len(wave_paths) == len(unit_label_paths):
         n_sessions = len(wave_paths)
     else:
-        print('Warning: gave different number of paths for waveforms and labels!')
+        print("Warning: gave different number of paths for waveforms and labels!")
         return
 
     good_units = []
@@ -154,12 +169,14 @@ def load_good_waveforms(wave_paths, unit_label_paths, param, good_units_only=Tru
 
     if good_units_only:
         for i in range(len(unit_label_paths)):
-            if os.path.split(unit_label_paths[0])[1] == 'cluster_bc_unitType.tsv':
+            if os.path.split(unit_label_paths[0])[1] == "cluster_bc_unitType.tsv":
                 unit_label = load_tsv(unit_label_paths[i])
-                tmp_idx = np.argwhere(np.isin(unit_label[:, 1], ['GOOD', 'NON-SOMA GOOD']))
+                tmp_idx = np.argwhere(
+                    np.isin(unit_label[:, 1], ["GOOD", "NON-SOMA GOOD"])
+                )
             else:
                 unit_label = load_tsv(unit_label_paths[i])
-                tmp_idx = np.argwhere(unit_label[:, 1]=='good')
+                tmp_idx = np.argwhere(unit_label[:, 1] == "good")
 
             n_units_per_session_all.append(unit_label.shape[0])
             good_unit_idx = unit_label[tmp_idx, 0]
@@ -173,17 +190,25 @@ def load_good_waveforms(wave_paths, unit_label_paths, param, good_units_only=Tru
             tmp_waveform = None
             tmp = None
             try:
-                p_file = os.path.join(wave_paths[ls], f'Unit{int(good_units[ls][0].squeeze())}_RawSpikes.npy')
+                p_file = os.path.join(
+                    wave_paths[ls],
+                    f"Unit{int(good_units[ls][0].squeeze())}_RawSpikes.npy",
+                )
                 tmp = np.load(p_file)
-                tmp_waveform = np.zeros((len(good_units[ls]), tmp.shape[0], tmp.shape[1], tmp.shape[2]))
+                tmp_waveform = np.zeros(
+                    (len(good_units[ls]), tmp.shape[0], tmp.shape[1], tmp.shape[2])
+                )
 
                 for i in range(len(good_units[ls])):
-                    p_file_good = os.path.join(wave_paths[ls], f'Unit{int(good_units[ls][i].squeeze())}_RawSpikes.npy')
+                    p_file_good = os.path.join(
+                        wave_paths[ls],
+                        f"Unit{int(good_units[ls][i].squeeze())}_RawSpikes.npy",
+                    )
                     tmp_waveform[i] = np.load(p_file_good)
                 waveforms.append(tmp_waveform)
                 successful_sessions.append(ls)
             except Exception as e:
-                print(f'Error loading waveform for session {ls}: {e}')
+                print(f"Error loading waveform for session {ls}: {e}")
             finally:
                 del tmp_waveform
                 del tmp
@@ -192,30 +217,43 @@ def load_good_waveforms(wave_paths, unit_label_paths, param, good_units_only=Tru
             tmp_waveform = None
             tmp = None
             try:
-                p_file = os.path.join(wave_paths[ls], f'Unit0_RawSpikes.npy')
+                p_file = os.path.join(wave_paths[ls], "Unit0_RawSpikes.npy")
                 tmp = np.load(p_file)
-                tmp_waveform = np.zeros((len(os.listdir(wave_paths[ls])), tmp.shape[0], tmp.shape[1], tmp.shape[2]))
+                tmp_waveform = np.zeros(
+                    (
+                        len(os.listdir(wave_paths[ls])),
+                        tmp.shape[0],
+                        tmp.shape[1],
+                        tmp.shape[2],
+                    )
+                )
 
                 for i in range(len(os.listdir(wave_paths[ls]))):
-                    p_file_good = os.path.join(wave_paths[ls], f'Unit{i}_RawSpikes.npy')
+                    p_file_good = os.path.join(wave_paths[ls], f"Unit{i}_RawSpikes.npy")
                     tmp_waveform[i] = np.load(p_file_good)
                 waveforms.append(tmp_waveform)
                 successful_sessions.append(ls)
-                print(f'UnitMatch is treating all the units as good and including all units from {wave_paths[ls]}, we recommended using curated data!')
+                print(
+                    f"UnitMatch is treating all the units as good and including all units from {wave_paths[ls]}, we recommended using curated data!"
+                )
             except Exception as e:
-                print(f'Error loading waveform for session {ls}: {e}')
+                print(f"Error loading waveform for session {ls}: {e}")
             finally:
                 del tmp_waveform
                 del tmp
 
     if len(successful_sessions) < n_sessions:
         failed = [i for i in range(n_sessions) if i not in successful_sessions]
-        print(f'Warning: failed to load waveforms for {len(failed)} session(s): {failed}. Excluding from analysis.')
+        print(
+            f"Warning: failed to load waveforms for {len(failed)} session(s): {failed}. Excluding from analysis."
+        )
         good_units = [good_units[i] for i in successful_sessions]
-        n_units_per_session_all = [n_units_per_session_all[i] for i in successful_sessions]
+        n_units_per_session_all = [
+            n_units_per_session_all[i] for i in successful_sessions
+        ]
         n_sessions = len(successful_sessions)
 
-    n_units_per_session = np.zeros(n_sessions, dtype='int')
+    n_units_per_session = np.zeros(n_sessions, dtype="int")
     waveform = np.array([])
 
     for i in range(n_sessions):
@@ -226,22 +264,29 @@ def load_good_waveforms(wave_paths, unit_label_paths, param, good_units_only=Tru
 
         n_units_per_session[i] = waveforms[i].shape[0]
 
-    param['n_units'], session_id, session_switch, param['n_sessions'] = get_session_data(n_units_per_session)
+    param["n_units"], session_id, session_switch, param["n_sessions"] = (
+        get_session_data(n_units_per_session)
+    )
     within_session = get_within_session(session_id, param)
-    param['n_channels'] = waveform.shape[2]
-    param['n_units_per_session'] = n_units_per_session_all
+    param["n_channels"] = waveform.shape[2]
+    param["n_units_per_session"] = n_units_per_session_all
 
     actual_width = waveform.shape[1]
-    if param['spike_width'] != actual_width:
-        print(f"Warning: loaded waveform spike_width ({actual_width}) does not match "
-              f"param['spike_width'] ({param['spike_width']}). Updating to match data.")
-    param['spike_width'] = actual_width
-    param['peak_loc'] = int(np.floor(actual_width / 2))
-    param['waveidx'] = np.arange(param['peak_loc'] - 8, param['peak_loc'] + 15, dtype=int)
+    if param["spike_width"] != actual_width:
+        print(
+            f"Warning: loaded waveform spike_width ({actual_width}) does not match "
+            f"param['spike_width'] ({param['spike_width']}). Updating to match data."
+        )
+    param["spike_width"] = actual_width
+    param["peak_loc"] = int(np.floor(actual_width / 2))
+    param["waveidx"] = np.arange(
+        param["peak_loc"] - 8, param["peak_loc"] + 15, dtype=int
+    )
 
     return waveform, session_id, session_switch, within_session, good_units, param
 
-def get_good_units(unit_label_paths, good = True):
+
+def get_good_units(unit_label_paths, good=True):
     """
     This function is used if you want to find good units then load them in
     (first half of load_good_waveforms)
@@ -262,50 +307,64 @@ def get_good_units(unit_label_paths, good = True):
     """
     good_units = []
     for i in range(len(unit_label_paths)):
-    #see if bombcell unit labels
-        if os.path.split(unit_label_paths[0])[1] == 'cluster_bc_unitType.tsv':
+        # see if bombcell unit labels
+        if os.path.split(unit_label_paths[0])[1] == "cluster_bc_unitType.tsv":
             unit_label = load_tsv(unit_label_paths[i])
             if good == True:
-                tmp_idx = np.argwhere(np.isin(unit_label[:,1],['GOOD','NON-SOMA GOOD']))
+                tmp_idx = np.argwhere(
+                    np.isin(unit_label[:, 1], ["GOOD", "NON-SOMA GOOD"])
+                )
             else:
-                tmp_idx = unit_label[:,0].astype(np.int32)
-            tmp_idx = tmp_idx[:, np.newaxis] # keep the array shape consistent between different methods
+                tmp_idx = unit_label[:, 0].astype(np.int32)
+            tmp_idx = tmp_idx[
+                :, np.newaxis
+            ]  # keep the array shape consistent between different methods
         else:
             unit_label = load_tsv(unit_label_paths[i])
             if good == True:
-                tmp_idx = np.argwhere(unit_label[:,1] == 'good')
+                tmp_idx = np.argwhere(unit_label[:, 1] == "good")
             else:
-                tmp_idx = unit_label[:,0].astype(np.int32) # every unit index in the first column
-                
+                tmp_idx = unit_label[:, 0].astype(
+                    np.int32
+                )  # every unit index in the first column
+
         good_unit_idx = unit_label[tmp_idx, 0]
         good_units.append(good_unit_idx)
     return good_units
+
 
 def load_good_units(good_units, wave_paths, param):
     if len(wave_paths) == len(good_units):
         n_sessions = len(wave_paths)
     else:
-        print('Warning: gave different number of paths for waveforms and labels!')
+        print("Warning: gave different number of paths for waveforms and labels!")
         return
 
     waveforms = []
     for ls in range(len(wave_paths)):
         try:
-            p_file = os.path.join(wave_paths[ls], f'Unit{int(good_units[ls][0].squeeze())}_RawSpikes.npy')
+            p_file = os.path.join(
+                wave_paths[ls], f"Unit{int(good_units[ls][0].squeeze())}_RawSpikes.npy"
+            )
             tmp = np.load(p_file)
-            tmp_waveform = np.zeros((len(good_units[ls]), tmp.shape[0], tmp.shape[1], tmp.shape[2]))
+            tmp_waveform = np.zeros(
+                (len(good_units[ls]), tmp.shape[0], tmp.shape[1], tmp.shape[2])
+            )
 
             for i in range(len(good_units[ls])):
-                tmp_path_good = os.path.join(wave_paths[ls], f'Unit{int(good_units[ls][i].squeeze())}_RawSpikes.npy')
+                tmp_path_good = os.path.join(
+                    wave_paths[ls],
+                    f"Unit{int(good_units[ls][i].squeeze())}_RawSpikes.npy",
+                )
                 tmp_waveform[i] = np.load(tmp_path_good)
             waveforms.append(tmp_waveform)
         except Exception as e:
-            print(f'Error loading waveform for session {ls}: {e}')
+            print(f"Error loading waveform for session {ls}: {e}")
         finally:
             del tmp_waveform
             del tmp
 
-    n_units_per_session = np.zeros(n_sessions, dtype='int')
+    n_units_per_session = np.zeros(n_sessions, dtype="int")
     waveform = np.array([])
 
     for i in range(n_sessions):
@@ -316,14 +375,19 @@ def load_good_units(good_units, wave_paths, param):
 
         n_units_per_session[i] = waveforms[i].shape[0]
 
-    param['n_units'], session_id, session_switch, param['n_sessions'] = get_session_data(n_units_per_session)
+    param["n_units"], session_id, session_switch, param["n_sessions"] = (
+        get_session_data(n_units_per_session)
+    )
     within_session = get_within_session(session_id, param)
-    param['n_channels'] = waveform.shape[2]
-    param['n_units_per_session'] = n_units_per_session
+    param["n_channels"] = waveform.shape[2]
+    param["n_units_per_session"] = n_units_per_session
 
     return waveform, session_id, session_switch, within_session, param
 
-def evaluate_output(output_prob, param, within_session, session_switch, match_threshold = 0.5):
+
+def evaluate_output(
+    output_prob, param, within_session, session_switch, match_threshold=0.5
+):
     """
     This function evaluates summary values for the UnitMatch results by finding:
     The number of units matched to themselves across cv
@@ -349,34 +413,41 @@ def evaluate_output(output_prob, param, within_session, session_switch, match_th
     output_threshold[output_prob > match_threshold] = 1
 
     # get the number of diagonal matches
-    n_diag = np.sum(output_threshold[np.eye(param['n_units']).astype(bool)])
-    self_match = n_diag / param['n_units'] *100
-    print(f'The percentage of units matched to themselves is: {self_match:.2f}%')
-    print(f'The percentage of false -ve\'s then is: {100 - self_match:.2f}% \n')
+    n_diag = np.sum(output_threshold[np.eye(param["n_units"]).astype(bool)])
+    self_match = n_diag / param["n_units"] * 100
+    print(f"The percentage of units matched to themselves is: {self_match:.2f}%")
+    print(f"The percentage of false -ve's then is: {100 - self_match:.2f}% \n")
 
-    #off-diagonal miss-matches
+    # off-diagonal miss-matches
     n_off_diag = np.zeros_like(output_prob)
     n_off_diag = output_threshold
-    n_off_diag[within_session == 1] = 0 
-    n_off_diag[np.eye(param['n_units']) == 1] = 0 
-    false_positive_est =  n_off_diag.sum() / (param['n_units']) 
-    print(f'The rate of miss-match(es) per expected match {false_positive_est:.2f}')
+    n_off_diag[within_session == 1] = 0
+    n_off_diag[np.eye(param["n_units"]) == 1] = 0
+    false_positive_est = n_off_diag.sum() / (param["n_units"])
+    print(f"The rate of miss-match(es) per expected match {false_positive_est:.2f}")
 
-
-    #compute matlab FP per session per session
-    false_positive_est_per_session = np.zeros(param['n_sessions'])
-    for did in range(param['n_sessions']):
-        tmp_diag = output_threshold[session_switch[did]:session_switch[did + 1], session_switch[did]:session_switch[did + 1]]
+    # compute matlab FP per session per session
+    false_positive_est_per_session = np.zeros(param["n_sessions"])
+    for did in range(param["n_sessions"]):
+        tmp_diag = output_threshold[
+            session_switch[did] : session_switch[did + 1],
+            session_switch[did] : session_switch[did + 1],
+        ]
         n_units = tmp_diag.shape[0]
-        tmp_diag[np.eye(n_units) == 1] = 0 
-        false_positive_est_per_session[did] = tmp_diag.sum() / (n_units ** 2 - n_units) * 100
-        print(f'The percentage of false +ve\'s is {false_positive_est_per_session[did]:.2f}% for session {did +1}')
+        tmp_diag[np.eye(n_units) == 1] = 0
+        false_positive_est_per_session[did] = (
+            tmp_diag.sum() / (n_units**2 - n_units) * 100
+        )
+        print(
+            f"The percentage of false +ve's is {false_positive_est_per_session[did]:.2f}% for session {did + 1}"
+        )
 
-    print('\nThis assumes that the spike sorter has made no mistakes')
+    print("\nThis assumes that the spike sorter has made no mistakes")
 
-def curate_matches(matches_GUI, is_match, not_match, mode='and'):
+
+def curate_matches(matches_GUI, is_match, not_match, mode="and"):
     """
-    There are two options, 'and' 'or'. 
+    There are two options, 'and' 'or'.
     'And' gives a match if both CV give it as a match
     'Or gives a match if either CV gives it as a match
 
@@ -405,7 +476,7 @@ def curate_matches(matches_GUI, is_match, not_match, mode='and'):
 
     # if both arrays are empty leave function
     if np.logical_and(len(is_match) == 0, len(not_match) == 0):
-        print('There are no curated matches/none matches')
+        print("There are no curated matches/none matches")
         return None
 
     # if one array is empty make it have corrected shape
@@ -419,14 +490,14 @@ def curate_matches(matches_GUI, is_match, not_match, mode='and'):
     else:
         not_match = np.array(not_match)
 
-    if mode == 'and':
+    if mode == "and":
         matches_tmp = np.concatenate((matches_a, matches_b), axis=0)
         matches_tmp, counts = np.unique(matches_tmp, return_counts=True, axis=0)
         matches = matches_tmp[counts == 2]
-    elif mode == 'or':
+    elif mode == "or":
         matches = np.unique(np.concatenate((matches_a, matches_b), axis=0), axis=0)
     else:
-        print('please make mode = \'and\' or \'or\' ')
+        print("please make mode = 'and' or 'or' ")
         return None
 
     # add matches in IS Matches
@@ -439,8 +510,10 @@ def curate_matches(matches_GUI, is_match, not_match, mode='and'):
 
     return matches
 
+
 def isin_2d(test_arr, parent_arr):
-    return  (test_arr[:, None] == parent_arr).all(-1).any(-1)
+    return (test_arr[:, None] == parent_arr).all(-1).any(-1)
+
 
 def fill_missing_pos(KS_dir, n_channels):
     """
@@ -468,12 +541,14 @@ def fill_missing_pos(KS_dir, n_channels):
     ndarray, shape (n_channels, 2)
         Full channel_pos array; known positions are preserved exactly.
     """
-    print('The channel_positions.npy file does not match with the raw waveforms. '
-          'Attempting to fill in missing positions using probe geometry inference. '
-          'Please verify channel_positions and RawWaveforms shapes afterwards.')
+    print(
+        "The channel_positions.npy file does not match with the raw waveforms. "
+        "Attempting to fill in missing positions using probe geometry inference. "
+        "Please verify channel_positions and RawWaveforms shapes afterwards."
+    )
 
-    pos = np.load(os.path.join(KS_dir, 'channel_positions.npy'))
-    channel_map = np.load(os.path.join(KS_dir, 'channel_map.npy')).squeeze()
+    pos = np.load(os.path.join(KS_dir, "channel_positions.npy"))
+    channel_map = np.load(os.path.join(KS_dir, "channel_map.npy")).squeeze()
 
     # Place known positions at their correct hardware-channel indices.
     channel_pos = np.full((n_channels, 2), np.nan)
@@ -481,7 +556,7 @@ def fill_missing_pos(KS_dir, n_channels):
 
     nan_mask = np.isnan(channel_pos[:, 0])
     if not np.any(nan_mask):
-        print('Likely to be correctly filled')
+        print("Likely to be correctly filled")
         return channel_pos
 
     # --- MATLAB-style cross-column geometry inference ---
@@ -496,8 +571,8 @@ def fill_missing_pos(KS_dir, n_channels):
     y_unique = [np.unique(channel_pos[ch_order == col_i, 1]) for col_i in range(n_cols)]
 
     miss_idx = np.where(nan_mask)[0]
-    missing_chan = []    # (x, y) pairs for missing positions
-    probable_ch_idx = [] # hardware channel indices for those positions
+    missing_chan = []  # (x, y) pairs for missing positions
+    probable_ch_idx = []  # hardware channel indices for those positions
     count_id = 0
 
     for xid in range(n_cols):
@@ -505,9 +580,12 @@ def fill_missing_pos(KS_dir, n_channels):
 
         # Find the most similar column: one whose y-set is a subset or superset of y_col.
         same_idx = [
-            j for j in range(n_cols) if j != xid and (
-                np.all(np.isin(y_col, y_unique[j])) or
-                np.all(np.isin(y_unique[j], y_col))
+            j
+            for j in range(n_cols)
+            if j != xid
+            and (
+                np.all(np.isin(y_col, y_unique[j]))
+                or np.all(np.isin(y_unique[j], y_col))
             )
         ]
 
@@ -547,7 +625,9 @@ def fill_missing_pos(KS_dir, n_channels):
             step_sz,
             dtype=int,
         )
-        potential_chans = potential_chans[(potential_chans >= 0) & (potential_chans < n_channels)]
+        potential_chans = potential_chans[
+            (potential_chans >= 0) & (potential_chans < n_channels)
+        ]
 
         this_chans = miss_idx[np.isin(miss_idx, potential_chans)]
         if len(this_chans) == 0:
@@ -564,14 +644,19 @@ def fill_missing_pos(KS_dir, n_channels):
     if probable_ch_idx:
         idx_arr = np.array(probable_ch_idx)
         if np.any(np.bincount(idx_arr, minlength=n_channels) > 1):
-            raise RuntimeError('Channel map filling in failed: duplicate channel assignments.')
+            raise RuntimeError(
+                "Channel map filling in failed: duplicate channel assignments."
+            )
         missing_arr = np.array(missing_chan)
         if len(idx_arr) == len(missing_arr):
             channel_pos[idx_arr] = missing_arr
         else:
-            print('Warning: mismatch between inferred positions ({}) and channel '
-                  'indices ({}); skipping partial fill.'.format(
-                      len(missing_arr), len(idx_arr)))
+            print(
+                "Warning: mismatch between inferred positions ({}) and channel "
+                "indices ({}); skipping partial fill.".format(
+                    len(missing_arr), len(idx_arr)
+                )
+            )
 
     # Safety net: place any still-NaN channels well off-probe.
     still_nan = np.isnan(channel_pos[:, 0])
@@ -579,17 +664,24 @@ def fill_missing_pos(KS_dir, n_channels):
         x_fill = float(np.nanmedian(channel_pos[:, 0]))
         y_fill = float(np.nanmin(channel_pos[:, 1])) - 10000.0
         channel_pos[still_nan] = [x_fill, y_fill]
-        print('Warning: could not infer positions for {:d} inactive channels; '
-              'off-probe placeholder used.'.format(int(np.sum(still_nan))))
+        print(
+            "Warning: could not infer positions for {:d} inactive channels; "
+            "off-probe placeholder used.".format(int(np.sum(still_nan)))
+        )
 
     if np.allclose(channel_pos[channel_map], pos):
-        print('Likely to be correctly filled')
+        print("Likely to be correctly filled")
     else:
-        print('Error in filling channel positions, please fill in manually \n'
-              '    Have returned the known channel positions and NaN')
+        print(
+            "Error in filling channel positions, please fill in manually \n"
+            "    Have returned the known channel positions and NaN"
+        )
     return channel_pos
 
-def paths_from_KS(KS_dirs, param=None, custom_raw_waveform_paths=None, custom_bombcell_paths=None):
+
+def paths_from_KS(
+    KS_dirs, param=None, custom_raw_waveform_paths=None, custom_bombcell_paths=None
+):
     """
     This function will find specific paths to required files from a KiloSort directory
     or use custom paths if provided
@@ -615,40 +707,44 @@ def paths_from_KS(KS_dirs, param=None, custom_raw_waveform_paths=None, custom_bo
     """
     n_sessions = len(KS_dirs)
 
-    #load in the number of channels
+    # load in the number of channels
     tmp = os.getcwd()
 
     # Use custom raw waveform paths if provided, otherwise search in KS directories
     if custom_raw_waveform_paths is not None:
         if len(custom_raw_waveform_paths) != n_sessions:
-            raise ValueError(f"Number of custom raw waveform paths ({len(custom_raw_waveform_paths)}) must match number of KS directories ({n_sessions})")
+            raise ValueError(
+                f"Number of custom raw waveform paths ({len(custom_raw_waveform_paths)}) must match number of KS directories ({n_sessions})"
+            )
         wave_paths = custom_raw_waveform_paths
     elif custom_bombcell_paths is not None:
         if len(custom_bombcell_paths) != n_sessions:
-            raise ValueError(f"Number of custom raw waveform paths ({len(custom_bombcell_paths)}) must match number of KS directories ({n_sessions})")
+            raise ValueError(
+                f"Number of custom raw waveform paths ({len(custom_bombcell_paths)}) must match number of KS directories ({n_sessions})"
+            )
         wave_paths = []
         for i in range(n_sessions):
-             wave_paths.append( os.path.join(custom_bombcell_paths[i], 'RawWaveforms'))
+            wave_paths.append(os.path.join(custom_bombcell_paths[i], "RawWaveforms"))
     else:
         wave_paths = []
         for i in range(n_sessions):
-            #check if it is in KS directory
-            if os.path.exists(os.path.join(KS_dirs[i], 'RawWaveforms')):
-                wave_paths.append( os.path.join(KS_dirs[i], 'RawWaveforms'))
-            #Raw waveforms curated via bombcell
-            elif os.path.exists(os.path.join(KS_dirs[i], 'qMetrics', 'RawWaveforms')):
-                wave_paths.append( os.path.join(KS_dirs[i],'qMetrics', 'RawWaveforms'))
-            elif os.path.exists(os.path.join(KS_dirs[i], 'bombcell', 'RawWaveforms')):
-                wave_paths.append( os.path.join(KS_dirs[i],'bombcell', 'RawWaveforms'))
+            # check if it is in KS directory
+            if os.path.exists(os.path.join(KS_dirs[i], "RawWaveforms")):
+                wave_paths.append(os.path.join(KS_dirs[i], "RawWaveforms"))
+            # Raw waveforms curated via bombcell
+            elif os.path.exists(os.path.join(KS_dirs[i], "qMetrics", "RawWaveforms")):
+                wave_paths.append(os.path.join(KS_dirs[i], "qMetrics", "RawWaveforms"))
+            elif os.path.exists(os.path.join(KS_dirs[i], "bombcell", "RawWaveforms")):
+                wave_paths.append(os.path.join(KS_dirs[i], "bombcell", "RawWaveforms"))
             else:
-                raise Exception('Could not find RawWaveforms folder')
-    #load in a waveform from each session to get the number of channels and spike_width
+                raise Exception("Could not find RawWaveforms folder")
+    # load in a waveform from each session to get the number of channels and spike_width
     n_channels = []
     spike_widths = []
     for i in range(n_sessions):
         path_tmp = wave_paths[i]
         file = os.listdir(path_tmp)
-        waveform_tmp = np.load(os.path.join(path_tmp,file[0]))
+        waveform_tmp = np.load(os.path.join(path_tmp, file[0]))
         n_channels.append(waveform_tmp.shape[1])
         spike_widths.append(waveform_tmp.shape[0])
 
@@ -657,56 +753,67 @@ def paths_from_KS(KS_dirs, param=None, custom_raw_waveform_paths=None, custom_bo
     if param is not None:
         unique_widths = set(spike_widths)
         if len(unique_widths) > 1:
-            print(f"Warning: sessions have inconsistent spike_width values {spike_widths}. "
-                  f"Using the first session's value ({spike_widths[0]}); check your data.")
+            print(
+                f"Warning: sessions have inconsistent spike_width values {spike_widths}. "
+                f"Using the first session's value ({spike_widths[0]}); check your data."
+            )
         detected_width = spike_widths[0]
-        if 'spike_width' in param and param['spike_width'] != detected_width:
-            print(f"Updating spike_width from {param['spike_width']} to {detected_width} based on waveform files.")
-        param['spike_width'] = detected_width
-        param['peak_loc'] = int(np.floor(detected_width / 2))
-        param['waveidx'] = np.arange(param['peak_loc'] - 8, param['peak_loc'] + 15, dtype=int)
+        if "spike_width" in param and param["spike_width"] != detected_width:
+            print(
+                f"Updating spike_width from {param['spike_width']} to {detected_width} based on waveform files."
+            )
+        param["spike_width"] = detected_width
+        param["peak_loc"] = int(np.floor(detected_width / 2))
+        param["waveidx"] = np.arange(
+            param["peak_loc"] - 8, param["peak_loc"] + 15, dtype=int
+        )
 
-    #Load channel_pos
+    # Load channel_pos
     channel_pos = []
     for i in range(n_sessions):
-        path_tmp = os.path.join(KS_dirs[i], 'channel_positions.npy')
+        path_tmp = os.path.join(KS_dirs[i], "channel_positions.npy")
         pos_tmp = np.load(path_tmp)
         if pos_tmp.shape[0] != n_channels[i]:
-            print('Attempting to fill in missing channel positions')
+            print("Attempting to fill in missing channel positions")
             pos_tmp = fill_missing_pos(KS_dirs[i], n_channels[i])
 
         #  Want 3-D positions, however at the moment code only needs 2-D so add 1's to 0 axis position
-        pos_tmp = np.insert(pos_tmp, 0, np.ones(pos_tmp.shape[0]), axis = 1)
+        pos_tmp = np.insert(pos_tmp, 0, np.ones(pos_tmp.shape[0]), axis=1)
         channel_pos.append(pos_tmp)
 
     # Use custom BombCell paths if provided, otherwise search in KS directories
     if custom_bombcell_paths is not None:
         if len(custom_bombcell_paths) != n_sessions:
-            raise ValueError(f"Number of custom BombCell paths ({len(custom_bombcell_paths)}) must match number of KS directories ({n_sessions})")
+            raise ValueError(
+                f"Number of custom BombCell paths ({len(custom_bombcell_paths)}) must match number of KS directories ({n_sessions})"
+            )
         unit_label_paths = custom_bombcell_paths
     else:
         unit_label_paths = []
         # load Good unit Paths
         for i in range(n_sessions):
-            if os.path.exists(os.path.join(KS_dirs[i], 'cluster_bc_unitType.tsv')):
-               unit_label_paths.append( os.path.join(KS_dirs[i], 'cluster_bc_unitType.tsv')) 
-               print('Using BombCell: cluster_bc_unitType')
+            if os.path.exists(os.path.join(KS_dirs[i], "cluster_bc_unitType.tsv")):
+                unit_label_paths.append(
+                    os.path.join(KS_dirs[i], "cluster_bc_unitType.tsv")
+                )
+                print("Using BombCell: cluster_bc_unitType")
             else:
-                unit_label_paths.append( os.path.join(KS_dirs[i], 'cluster_group.tsv'))
-                print('Using cluster_group.tsv')
-    
+                unit_label_paths.append(os.path.join(KS_dirs[i], "cluster_group.tsv"))
+                print("Using cluster_group.tsv")
+
     return wave_paths, unit_label_paths, channel_pos
 
-def get_probe_geometry(channel_pos, param, verbose = False):
+
+def get_probe_geometry(channel_pos, param, verbose=False):
     """
-    From the channel positions, estimate the number of shanks and there spacing used to 
+    From the channel positions, estimate the number of shanks and there spacing used to
     identify a unit to a probe.
     needmin_new_shank_distance from param.
 
     Parameters
     ----------
     channel_pos : ndarray
-        The channel positions of a session 
+        The channel positions of a session
     param : dict
         The param dict
     verbose : bool, optional
@@ -717,31 +824,34 @@ def get_probe_geometry(channel_pos, param, verbose = False):
     param
         The param dictionary updated with the calculated params
     """
-    min_new_shank_distance = param['min_new_shank_distance']
-    x_val = np.unique(channel_pos[:,0])
-    x_val = np.sort(x_val) #make sure they are in ascending order 
+    min_new_shank_distance = param["min_new_shank_distance"]
+    x_val = np.unique(channel_pos[:, 0])
+    x_val = np.sort(x_val)  # make sure they are in ascending order
     x_spacing = np.diff(x_val)
     too_close = np.argwhere(x_spacing < min_new_shank_distance)
 
-    #remove when shanks are two close
+    # remove when shanks are two close
     x_val = np.delete(x_val, too_close + 1)
 
     n_shanks = x_val.size
     if n_shanks == 1:
-        shank_spacing = 100 #make it cover the full possible range
+        shank_spacing = 100  # make it cover the full possible range
     else:
         shank_spacing = np.abs(np.diff(x_val))[0]
 
-    #NOTE this shank_dist is the distance within a centroid would be assigned to a shank!
-    shank_dist = shank_spacing * 0.9 #the area from the start which is assigned to each probe
-    #e.g 0 -> 0.9to shank 1, 0.9-1.8 to shank 2...
-    #NOTE current shank identification doesn't work for 9+ shanks
+    # NOTE this shank_dist is the distance within a centroid would be assigned to a shank!
+    shank_dist = (
+        shank_spacing * 0.9
+    )  # the area from the start which is assigned to each probe
+    # e.g 0 -> 0.9to shank 1, 0.9-1.8 to shank 2...
+    # NOTE current shank identification doesn't work for 9+ shanks
 
-    param['no_shanks'] = n_shanks
-    param['shank_dist'] = shank_dist
+    param["no_shanks"] = n_shanks
+    param["shank_dist"] = shank_dist
     if verbose == True:
-        print(f'We have found {n_shanks} with spacing ~ {shank_spacing}')
+        print(f"We have found {n_shanks} with spacing ~ {shank_spacing}")
     return param
+
 
 def read_datapaths(mice, base):
     """
@@ -777,11 +887,15 @@ def read_datapaths(mice, base):
                 if not os.path.isdir(name_probe_location):
                     continue
                 if not os.path.exists(os.path.join(name_probe_location, "UnitMatch")):
-                    print(f"No UnitMatch folder where it was expected for mouse {mouse}")
+                    print(
+                        f"No UnitMatch folder where it was expected for mouse {mouse}"
+                    )
                 else:
                     datapath = os.path.join(name_probe_location, "UnitMatch")
                     try:
-                        f = mat73.loadmat(os.path.join(datapath, "UnitMatch.mat"), verbose=False)
+                        f = mat73.loadmat(
+                            os.path.join(datapath, "UnitMatch.mat"), verbose=False
+                        )
                     except:
                         pass
                     # find the directory to look for the raw waveforms
@@ -795,43 +909,22 @@ def read_datapaths(mice, base):
 
     return raw_waveforms_dict
 
-def get_valid_locations(root):
-    """Pre-filter valid locations to avoid repeated file system checks"""
-    valid_locations = []
-    
-    for mouse in os.listdir(root):
-        mouse_path = os.path.join(root, mouse)
-        if not os.path.isdir(mouse_path):
-            continue
-            
-        for probe in os.listdir(mouse_path):
-            probe_path = os.path.join(mouse_path, probe)
-            if not os.path.isdir(probe_path):
-                continue
-                
-            for loc in os.listdir(probe_path):
-                loc_path = os.path.join(probe_path, loc)
-                if not os.path.isdir(loc_path):
-                    continue
-                    
-                mt_path = os.path.join(loc_path, "merged_mt.csv")
-                if os.path.exists(mt_path):
-                    valid_locations.append((mouse, probe, loc, mt_path))
-    
-    return valid_locations
 
-def get_exp_id(experiment_path:str, mouse:str):
+def get_exp_id(experiment_path: str, mouse: str):
     """
     experiment_path should be a full absolute path to the desired experiment folder on the server
     (NOT LOCAL PATH)
     """
     exp_name = os.path.basename(os.path.dirname(os.path.dirname(experiment_path)))
-    experiment_id = exp_name[exp_name.find(mouse):]
-    experiment_id = experiment_id.replace(mouse, '')
+    experiment_id = exp_name[exp_name.find(mouse) :]
+    experiment_id = experiment_id.replace(mouse, "")
     experiment_id = experiment_id.replace("\\", "_")
     return experiment_id
 
-def filter_good_units_and_merge(mt_path, mouse, KS_dirs, waveforms, session_switch, param):
+
+def filter_good_units_and_merge(
+    mt_path, mouse, KS_dirs, waveforms, session_switch, param
+):
     """
     Handles merges but dimensions not guaranteed to match SQL database.
     """
@@ -847,25 +940,29 @@ def filter_good_units_and_merge(mt_path, mouse, KS_dirs, waveforms, session_swit
         experiment_id = get_exp_id(experiment, mouse)
         experiment_id = experiment_id[:60]
         if experiment_id in exp_names:
-            experiment_id += f"_{i+1}"
+            experiment_id += f"_{i + 1}"
         exp_names.add(experiment_id)
 
         good_ids = []
         merges = []
-        if not os.path.exists(os.path.join(os.path.dirname(mt_path), experiment_id, "processed_waveforms")):
+        if not os.path.exists(
+            os.path.join(os.path.dirname(mt_path), experiment_id, "processed_waveforms")
+        ):
             good_units.append(good_ids)
             print(f"Warning: Could not find processed_waveforms for {experiment_id}...")
             continue
 
-        wf_files = os.listdir(os.path.join(os.path.dirname(mt_path), experiment_id, "processed_waveforms"))
+        wf_files = os.listdir(
+            os.path.join(os.path.dirname(mt_path), experiment_id, "processed_waveforms")
+        )
         for file in wf_files:
             id = get_unit_id(file)
             if id is not None:
                 if type(id) == int:
                     good_ids.append(id)
-                elif '+' in id:
-                    id1 = int(id.split('+')[0])
-                    id2 = int(id.split('+')[1])
+                elif "+" in id:
+                    id1 = int(id.split("+")[0])
+                    id2 = int(id.split("+")[1])
                     merges.append((id1, id2))
 
         indices = np.arange(session_switch[i], session_switch[i + 1])
@@ -873,10 +970,12 @@ def filter_good_units_and_merge(mt_path, mouse, KS_dirs, waveforms, session_swit
         for merge in merges:
             if max(merge) in good_ids:
                 good_ids.remove(max(merge))
-            session_waveforms[min(merge)] = 0.5 * (session_waveforms[merge[0]] + session_waveforms[merge[1]])
+            session_waveforms[min(merge)] = 0.5 * (
+                session_waveforms[merge[0]] + session_waveforms[merge[1]]
+            )
             if min(merge) not in good_ids:
                 good_ids.append(min(merge))
-        
+
         good_ids.sort()
         filtered = session_waveforms[good_ids]
         if np.isnan(filtered).any():
@@ -887,17 +986,30 @@ def filter_good_units_and_merge(mt_path, mouse, KS_dirs, waveforms, session_swit
         good_units.append(good_ids)
 
     filtered_session_id = np.array(filtered_session_id)
-    filtered_within_session = (filtered_session_id[:, None] != filtered_session_id).astype(int)
+    filtered_within_session = (
+        filtered_session_id[:, None] != filtered_session_id
+    ).astype(int)
     filtered_waveforms = np.concatenate(filtered_waveforms, axis=0)
     filtered_session_id = np.array(filtered_session_id)
     filtered_ses_switch = np.array(filtered_ses_switch)
-    param['n_units'], param['n_sessions'] = filtered_waveforms.shape[0], len(filtered_ses_switch) - 1
+    param["n_units"], param["n_sessions"] = (
+        filtered_waveforms.shape[0],
+        len(filtered_ses_switch) - 1,
+    )
 
-    return filtered_waveforms, filtered_ses_switch, filtered_within_session, filtered_session_id, good_units, param
+    return (
+        filtered_waveforms,
+        filtered_ses_switch,
+        filtered_within_session,
+        filtered_session_id,
+        good_units,
+        param,
+    )
+
 
 def filter_good_units(mouse, probe, loc, conn, waveforms, session_switch, param):
     """
-    Guaranteed to work and match shape of match tables in SQL database, but ignores merges. 
+    Guaranteed to work and match shape of match tables in SQL database, but ignores merges.
     """
 
     filtered_waveforms = []
@@ -908,12 +1020,12 @@ def filter_good_units(mouse, probe, loc, conn, waveforms, session_switch, param)
 
     mt = pd.read_sql_query(f"SELECT RecSes1,ID1 FROM '{mouse}_{probe}_{loc}'", conn)
     ids = {}
-    sessions = mt['RecSes1'].unique()
+    sessions = mt["RecSes1"].unique()
     sessions.sort()
 
     for i, session in enumerate(sessions):
-        df = mt.loc[mt['RecSes1'] == session]
-        good_ids = df['ID1'].unique()
+        df = mt.loc[mt["RecSes1"] == session]
+        good_ids = df["ID1"].unique()
         good_ids.sort()
         ids[session] = good_ids
         indices = np.arange(session_switch[i], session_switch[i + 1])
@@ -925,41 +1037,65 @@ def filter_good_units(mouse, probe, loc, conn, waveforms, session_switch, param)
         filtered_ses_switch.append(filtered_ses_switch[-1] + filtered.shape[0])
         filtered_session_id.extend([i] * filtered.shape[0])
         good_units.append(good_ids)
-    
+
     filtered_session_id = np.array(filtered_session_id)
-    filtered_within_session = (filtered_session_id[:, None] != filtered_session_id).astype(int)
+    filtered_within_session = (
+        filtered_session_id[:, None] != filtered_session_id
+    ).astype(int)
     filtered_waveforms = np.concatenate(filtered_waveforms, axis=0)
     filtered_session_id = np.array(filtered_session_id)
     filtered_ses_switch = np.array(filtered_ses_switch)
-    param['n_units'], param['n_sessions'] = filtered_waveforms.shape[0], len(filtered_ses_switch) - 1
+    param["n_units"], param["n_sessions"] = (
+        filtered_waveforms.shape[0],
+        len(filtered_ses_switch) - 1,
+    )
 
-    return filtered_waveforms, filtered_ses_switch, filtered_within_session, filtered_session_id, good_units, param
+    return (
+        filtered_waveforms,
+        filtered_ses_switch,
+        filtered_within_session,
+        filtered_session_id,
+        good_units,
+        param,
+    )
 
-def get_unit_id(filepath:str):
+
+def get_unit_id(filepath: str):
     "This version of get_unit_id is mostly for internal use. The DeepUnitMatch.ipynb notebook uses the one in DeepUnitMatch/utils/helpers.py"
     fp = os.path.basename(filepath)
     if fp[:4] == "Unit" and fp[-14:] == "_RawSpikes.npy":
         fp = fp.replace("Unit", "")
         id = fp.replace("_RawSpikes.npy", "")
-        if '+' in id:
+        if "+" in id:
             return id
-        if '#' in id:
+        if "#" in id:
             return None
         try:
             return int(id)
         except:
             print(id)
-            raise ValueError(f"Invalid filepath format for this waveform: {filepath}", 
-                         "Filename for waveform XX should be UnitXX_RawSpikes.npy")
+            raise ValueError(
+                f"Invalid filepath format for this waveform: {filepath}",
+                "Filename for waveform XX should be UnitXX_RawSpikes.npy",
+            )
     else:
-        raise ValueError(f"Invalid filepath format for this waveform: {filepath}", 
-                         "Filename for waveform XX should be UnitXX_RawSpikes.npy")
+        raise ValueError(
+            f"Invalid filepath format for this waveform: {filepath}",
+            "Filename for waveform XX should be UnitXX_RawSpikes.npy",
+        )
 
-def retry_db_operation(operation_func, max_retries=None, initial_delay=0.1, max_delay=30.0, 
-                      backoff_multiplier=2.0, jitter_range=0.1):
+
+def retry_db_operation(
+    operation_func,
+    max_retries=None,
+    initial_delay=0.1,
+    max_delay=30.0,
+    backoff_multiplier=2.0,
+    jitter_range=0.1,
+):
     """
     Retry database operations with exponential backoff to handle SQLite locking issues.
-    
+
     Parameters
     ----------
     operation_func : callable
@@ -974,12 +1110,12 @@ def retry_db_operation(operation_func, max_retries=None, initial_delay=0.1, max_
         Multiplier for exponential backoff
     jitter_range : float, default 0.1
         Random jitter as fraction of delay to add randomness
-    
+
     Returns
     -------
     Any
         Result of the operation_func if successful
-        
+
     Raises
     ------
     sqlite3.Error
@@ -987,56 +1123,61 @@ def retry_db_operation(operation_func, max_retries=None, initial_delay=0.1, max_
     """
     attempt = 0
     delay = initial_delay
-    
+
     while True:
         try:
             return operation_func()
         except (sqlite3.OperationalError, sqlite3.DatabaseError) as e:
             # Check if it's a database lock error
             error_str = str(e).lower()
-            if ("database is locked" in error_str or 
-                "cannot commit" in error_str or 
-                "database disk image is malformed" in error_str or
-                "attempt to write a readonly database" in error_str):
-                
+            if (
+                "database is locked" in error_str
+                or "cannot commit" in error_str
+                or "database disk image is malformed" in error_str
+                or "attempt to write a readonly database" in error_str
+            ):
                 attempt += 1
-                
+
                 # If max_retries is set and exceeded, raise the error
                 if max_retries is not None and attempt > max_retries:
                     print(f"Database operation failed after {max_retries} retries: {e}")
                     raise e
-                
+
                 # Calculate delay with jitter
                 jitter = random.uniform(-jitter_range, jitter_range) * delay
                 actual_delay = min(delay + jitter, max_delay)
-                
+
                 if attempt <= 5 or attempt % 10 == 0:  # Reduce log spam
-                    print(f"Database locked, retrying in {actual_delay:.2f} seconds (attempt {attempt})...")
-                
+                    print(
+                        f"Database locked, retrying in {actual_delay:.2f} seconds (attempt {attempt})..."
+                    )
+
                 time.sleep(actual_delay)
-                
+
                 # Exponential backoff
                 delay = min(delay * backoff_multiplier, max_delay)
             else:
                 # For other types of database errors, re-raise immediately
                 raise e
 
+
 def create_robust_db_connection(db_path, timeout=30.0):
     """
     Create a robust SQLite database connection with retry logic.
-    
+
     Parameters
     ----------
     db_path : str
         Path to the SQLite database file
     timeout : float, default 30.0
         Database timeout in seconds
-        
+
     Returns
     -------
     tuple
         (connection, cursor) objects
     """
+
     def _connect():
         conn = sqlite3.connect(db_path, timeout=timeout)
         # Set WAL mode for better concurrency (allows readers while writing)
@@ -1044,40 +1185,53 @@ def create_robust_db_connection(db_path, timeout=30.0):
         # Set busy timeout
         conn.execute(f"PRAGMA busy_timeout={int(timeout * 1000)}")
         # Optimize for concurrent access
-        conn.execute("PRAGMA synchronous=NORMAL")  # Faster than FULL, still safe with WAL
-        conn.execute("PRAGMA cache_size=10000")    # Larger cache
-        conn.execute("PRAGMA temp_store=memory")   # Use memory for temporary tables
+        conn.execute(
+            "PRAGMA synchronous=NORMAL"
+        )  # Faster than FULL, still safe with WAL
+        conn.execute("PRAGMA cache_size=10000")  # Larger cache
+        conn.execute("PRAGMA temp_store=memory")  # Use memory for temporary tables
         cursor = conn.cursor()
         return conn, cursor
-    
+
     return retry_db_operation(_connect)
-    
-def add_col_to_sql(conn, cursor, mouse, probe, loc, col_name, data, indices=None, overwrite=False):
+
+
+def add_col_to_sql(
+    conn, cursor, mouse, probe, loc, col_name, data, indices=None, overwrite=False
+):
     table_name = f"{mouse}_{probe}_{loc}"
-    
+
     # Check if column already exists
     cursor.execute(f"PRAGMA table_info({table_name})")
     columns = [column[1] for column in cursor.fetchall()]
-    
+
     if col_name in columns:
         if not overwrite:
-            raise ValueError(f"Column '{col_name}' already exists in table '{table_name}'. Use overwrite=True to replace it.")
+            raise ValueError(
+                f"Column '{col_name}' already exists in table '{table_name}'. Use overwrite=True to replace it."
+            )
     else:
         cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {col_name} REAL")
 
     cursor.execute("BEGIN TRANSACTION")
-    cursor.execute("CREATE TEMP TABLE temp_update (rowid INTEGER PRIMARY KEY, value REAL)")
+    cursor.execute(
+        "CREATE TEMP TABLE temp_update (rowid INTEGER PRIMARY KEY, value REAL)"
+    )
 
     cursor.execute(f"SELECT rowid FROM {table_name} ORDER BY rowid")
     rowids = [item[0] for item in cursor.fetchall()]
 
     if indices is None:
-        assert len(rowids) == len(data), f"Length of data ({len(data)}) does not match number of rows ({len(rowids)})."
+        assert len(rowids) == len(data), (
+            f"Length of data ({len(data)}) does not match number of rows ({len(rowids)})."
+        )
         insert_data = [(int(rowid), float(d)) for rowid, d in zip(rowids, data)]
     else:
-        assert len(indices) == len(data), f"Length of data ({len(data)}) does not match length of indices ({len(indices)})."
+        assert len(indices) == len(data), (
+            f"Length of data ({len(data)}) does not match length of indices ({len(indices)})."
+        )
         insert_data = [(int(rowids[i]), float(d)) for i, d in zip(indices, data)]
-    
+
     cursor.executemany("INSERT INTO temp_update VALUES (?, ?)", insert_data)
     cursor.execute(f"""
         UPDATE {table_name} 
@@ -1086,6 +1240,7 @@ def add_col_to_sql(conn, cursor, mouse, probe, loc, col_name, data, indices=None
     """)
     cursor.execute("DROP TABLE temp_update")
     cursor.execute("COMMIT")
+
 
 def fill_missing_values(waveforms):
     """
