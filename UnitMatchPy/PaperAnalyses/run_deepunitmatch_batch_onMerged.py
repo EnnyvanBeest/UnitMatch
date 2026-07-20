@@ -69,7 +69,7 @@ BASE_OUTPUT = r'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE
 DEVICE = 'cuda' if test.torch.cuda.is_available() else 'cpu'
 print(f'Device: {DEVICE}')
 THRESH = 0.5
-REDO   = True   # if True, rerun even when output already exists
+REDO   = False   # if True, rerun even when output already exists
 WRITE_MATLAB_COMPAT = False
 
 
