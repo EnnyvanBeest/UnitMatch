@@ -40,7 +40,7 @@ dependencies = [
   "tensorboard",
   "seaborn",
   "matplotlib_venn",
-  "statsmodels"
+  "statsmodels",
   "mat73" 
 ]
 

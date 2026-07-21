@@ -48,7 +48,7 @@ def merge_match_tables(df_um, df_dum):
 
 def import_csv_to_sqlite(mt_path_um, mt_path_dum, m, p, l):
 
-    db_file = os.path.join(PROJECT_ROOT, f"matchtables.db")
+    db_file = os.path.join(PROJECT_ROOT, "matchtables.db")
 
     # Define the table name in SQLite
     table_name = f"{m}_{p}_{l}"  # Change this
@@ -102,7 +102,9 @@ def import_csv_to_sqlite(mt_path_um, mt_path_dum, m, p, l):
         if conn:
             conn.rollback()  # Roll back changes if anything went wrong
     except pd.errors.EmptyDataError:
-        print(f"Error: CSV file '{mt_path_um}' or '{mt_path_dum}' is empty or not found.")
+        print(
+            f"Error: CSV file '{mt_path_um}' or '{mt_path_dum}' is empty or not found."
+        )
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
         if conn:
@@ -124,7 +126,11 @@ if __name__ == "__main__":
                 print(f"  Processing probe: {probe}")
                 for loc in os.listdir(os.path.join(data_root, mouse, probe)):
                     print(f"    Processing location: {loc}")
-                    mt_path_um = os.path.join(data_root, mouse, probe, loc, "DeepUnitMatch","MatchTable.csv")
-                    mt_path_dum = os.path.join(data_root, mouse, probe, loc, 'UMPy',"MatchTable.csv")
+                    mt_path_um = os.path.join(
+                        data_root, mouse, probe, loc, "DeepUnitMatch", "MatchTable.csv"
+                    )
+                    mt_path_dum = os.path.join(
+                        data_root, mouse, probe, loc, "UMPy", "MatchTable.csv"
+                    )
                     if os.path.exists(mt_path_um) & os.path.exists(mt_path_dum):
                         import_csv_to_sqlite(mt_path_um, mt_path_dum, mouse, probe, loc)

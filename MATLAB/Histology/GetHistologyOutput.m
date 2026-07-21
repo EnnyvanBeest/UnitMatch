@@ -163,7 +163,7 @@ if exist('clusinfo','var') & ~isempty(Depth2Area)
 
     % Calculate all distances
     if all(isnan(clusinfo.AdjustedDepth))
-        keyboard
+        clusinfo.AdjustedDepth(isnan(clusinfo.AdjustedDepth)) = clusinfo.depth; % Just take normal depth
     end
     allDists = abs(clusinfo.AdjustedDepth - Depth2Area.Depth') + abs(clusinfo.Shank - Depth2Area.Shank') * 1000;
 

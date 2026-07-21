@@ -81,7 +81,7 @@ def _unit_id_to_filepath(session_dir: str, unit_id: int):
 
 
 class NeuropixelsDataset(Dataset):
-    def __init__(self, save_path: str, batch_size = 32, mode='val'):
+    def __init__(self, save_path: str, batch_size=32, mode="val"):
         """
         Initialises a dataset for testing or training.
 
@@ -94,14 +94,21 @@ class NeuropixelsDataset(Dataset):
         self.save_path = os.path.join(save_path, "processed_waveforms")
         self.batch_size = batch_size
         self.mode = mode
-        
+
         self.experiment_unit_map = {}
 
         for id, session in enumerate(os.listdir(self.save_path)):
             full_session_path = os.path.join(self.save_path, session)
-            self.experiment_unit_map[id] = [os.path.join(full_session_path, file) for file in os.listdir(full_session_path)]
+            self.experiment_unit_map[id] = [
+                os.path.join(full_session_path, file)
+                for file in os.listdir(full_session_path)
+            ]
 
-        self.all_files = [(exp, file) for exp, files in self.experiment_unit_map.items() for file in files]
+        self.all_files = [
+            (exp, file)
+            for exp, files in self.experiment_unit_map.items()
+            for file in files
+        ]
 
         if len(self.all_files) < 1:
             print("No data in test dataset! Try a smaller batch size?")
@@ -113,20 +120,20 @@ class NeuropixelsDataset(Dataset):
 
     def __getitem__(self, i):
         experiment_path, neuron_file = self.all_files[i]
-        with h5py.File(neuron_file, 'r') as f:
-            waveform = f['waveform'][()] # waveform [T,C,2]
-            MaxSitepos = f['MaxSitepos'][()]
-        if waveform.shape != (60,30,2):
-            waveform = np.zeros((60,30,2))
+        with h5py.File(neuron_file, "r") as f:
+            waveform = f["waveform"][()]  # waveform [T,C,2]
+            MaxSitepos = f["MaxSitepos"][()]
+        if waveform.shape != (60, 30, 2):
+            waveform = np.zeros((60, 30, 2))
             # assert False, f"Waveform shape is not (60,30,2) but {waveform.shape}"
-        ## do data augmentation 
-        if self.mode == 'train':
+        ## do data augmentation
+        if self.mode == "train":
             waveform_fh = self._augment_original(waveform[..., 0])
             waveform_sh = self._augment_original(waveform[..., 1])
         else:
             waveform_fh = waveform[..., 0]
             waveform_sh = waveform[..., 1]
-            
+
         return waveform_fh, waveform_sh, MaxSitepos, experiment_path, neuron_file
 
     def _augment_original(self, data):
@@ -141,10 +148,14 @@ class NeuropixelsDataset(Dataset):
             # Indices for even channels, excluding the last one
             even_indices = np.arange(1, C - 1, 2)
             # Shift odd channels up, excluding the last odd channel
-            if len(odd_indices) > 1:  # Check if there are at least 2 odd channels to roll
+            if (
+                len(odd_indices) > 1
+            ):  # Check if there are at least 2 odd channels to roll
                 data[:, odd_indices[:-1]] = data[:, odd_indices[1:]]
             # Shift even channels up, excluding the last even channel
-            if len(even_indices) > 1:  # Check if there are at least 2 even channels to roll
+            if (
+                len(even_indices) > 1
+            ):  # Check if there are at least 2 even channels to roll
                 data[:, even_indices[:-1]] = data[:, even_indices[1:]]
         elif roll_choice == "roll_down":
             # implement roll_down augmentation
@@ -157,10 +168,12 @@ class NeuropixelsDataset(Dataset):
                 data[:, even_indices] = data[:, even_indices - 2]
 
         return data
-    
+
 
 class NeuropixelsDataset_cortexlab(Dataset):
-    def __init__(self, data_dir: str, batch_size=1, mode="val", unit_order: str = "filesystem"):
+    def __init__(
+        self, data_dir: str, batch_size=1, mode="val", unit_order: str = "filesystem"
+    ):
         """
         Initialises a dataset for testing or training.
 
@@ -181,14 +194,18 @@ class NeuropixelsDataset_cortexlab(Dataset):
 
         sessions = list(os.listdir(self.data_dir))
         # Deterministic session ordering. Prefer numeric ordering when folder names are integers.
-        sessions = sorted(sessions, key=lambda s: int(s) if str(s).isdigit() else str(s))
+        sessions = sorted(
+            sessions, key=lambda s: int(s) if str(s).isdigit() else str(s)
+        )
         for id, session in enumerate(sessions):
             session_dir = os.path.join(self.data_dir, session)
             if self.unit_order == "unitmatch":
                 unit_ids = _load_good_unit_ids_from_labels(session_dir)
                 if unit_ids is None:
                     # Fallback: keep existing behavior if label files aren't present
-                    self.experiment_unit_map[id] = self.select_good_units_files(session_dir, load_pre_merge=False)
+                    self.experiment_unit_map[id] = self.select_good_units_files(
+                        session_dir, load_pre_merge=False
+                    )
                 else:
                     ordered_files = []
                     for unit_id in unit_ids:
@@ -201,7 +218,9 @@ class NeuropixelsDataset_cortexlab(Dataset):
                 try:
                     unit_ids = list(self.unit_order[id])
                 except Exception:
-                    raise ValueError("When unit_order is a list/tuple, it must provide unit IDs per session in order.")
+                    raise ValueError(
+                        "When unit_order is a list/tuple, it must provide unit IDs per session in order."
+                    )
                 ordered_files = []
                 for unit_id in unit_ids:
                     fp = _unit_id_to_filepath(session_dir, int(unit_id))
@@ -209,10 +228,16 @@ class NeuropixelsDataset_cortexlab(Dataset):
                         ordered_files.append(fp)
                 self.experiment_unit_map[id] = ordered_files
             else:
-                self.experiment_unit_map[id] = self.select_good_units_files(session_dir, load_pre_merge=False)
+                self.experiment_unit_map[id] = self.select_good_units_files(
+                    session_dir, load_pre_merge=False
+                )
 
-        self.all_files = [(exp, file) for exp, files in self.experiment_unit_map.items() for file in files]
-                     
+        self.all_files = [
+            (exp, file)
+            for exp, files in self.experiment_unit_map.items()
+            for file in files
+        ]
+
         if len(self.all_files) < 1:
             print("No data in test dataset! Try a smaller batch size?")
         else:
@@ -223,22 +248,22 @@ class NeuropixelsDataset_cortexlab(Dataset):
 
     def __getitem__(self, i):
         experiment_path, neuron_file = self.all_files[i]
-        with h5py.File(neuron_file, 'r') as f:
-            waveform = f['waveform'][()] # waveform [T,C,2]
-            MaxSitepos = f['MaxSitepos'][()]
-        if waveform.shape != (60,30,2):
-            waveform = np.zeros((60,30,2))
+        with h5py.File(neuron_file, "r") as f:
+            waveform = f["waveform"][()]  # waveform [T,C,2]
+            MaxSitepos = f["MaxSitepos"][()]
+        if waveform.shape != (60, 30, 2):
+            waveform = np.zeros((60, 30, 2))
             # assert False, f"Waveform shape is not (60,30,2) but {waveform.shape}"
-        ## do data augmentation 
-        if self.mode == 'train':
+        ## do data augmentation
+        if self.mode == "train":
             waveform_fh = self._augment_original(waveform[..., 0])
             waveform_sh = self._augment_original(waveform[..., 1])
         else:
             waveform_fh = waveform[..., 0]
             waveform_sh = waveform[..., 1]
-            
+
         return waveform_fh, waveform_sh, MaxSitepos, experiment_path, neuron_file
-    
+
     def _augment_original(self, data):
         # Apply random augmentations to data, shape [T,C]
         roll_choice = random.choice(["roll_up", "roll_down", "none"])
@@ -251,10 +276,14 @@ class NeuropixelsDataset_cortexlab(Dataset):
             # Indices for even channels, excluding the last one
             even_indices = np.arange(1, C - 1, 2)
             # Shift odd channels up, excluding the last odd channel
-            if len(odd_indices) > 1:  # Check if there are at least 2 odd channels to roll
+            if (
+                len(odd_indices) > 1
+            ):  # Check if there are at least 2 odd channels to roll
                 data[:, odd_indices[:-1]] = data[:, odd_indices[1:]]
             # Shift even channels up, excluding the last even channel
-            if len(even_indices) > 1:  # Check if there are at least 2 even channels to roll
+            if (
+                len(even_indices) > 1
+            ):  # Check if there are at least 2 even channels to roll
                 data[:, even_indices[:-1]] = data[:, even_indices[1:]]
         elif roll_choice == "roll_down":
             # implement roll_down augmentation
@@ -267,8 +296,8 @@ class NeuropixelsDataset_cortexlab(Dataset):
                 data[:, even_indices] = data[:, even_indices - 2]
 
         return data
-    
-    def select_good_units_files(self, directory, load_pre_merge:bool=True):
+
+    def select_good_units_files(self, directory, load_pre_merge: bool = True):
         """
         Selects the filenames of the good units based on the good_units_value array.
         Args:
@@ -284,19 +313,19 @@ class NeuropixelsDataset_cortexlab(Dataset):
         indices = []
         for file in files:
             if load_pre_merge:
-                if '+' in file:
+                if "+" in file:
                     removes.append(file)
             else:
-                if '+' in file:
-                    f = file.replace("Unit",'')
-                    f = f.replace("_RawSpikes.npy", '')
-                    id1 = int(f[:f.find('+')])
-                    id2 = int(f[f.find('+')+1:])
+                if "+" in file:
+                    f = file.replace("Unit", "")
+                    f = f.replace("_RawSpikes.npy", "")
+                    id1 = int(f[: f.find("+")])
+                    id2 = int(f[f.find("+") + 1 :])
                     merges[id1] = id2
-                if '#' in file:
-                    f = file.replace("Unit",'')
-                    f = f.replace("_RawSpikes.npy", '')
-                    id1 = int(f[:f.find('#')])
+                if "#" in file:
+                    f = file.replace("Unit", "")
+                    f = f.replace("_RawSpikes.npy", "")
+                    id1 = int(f[: f.find("#")])
                     removes.append(id1)
             indices.append(get_unit_id(file))
         indices = sorted(set(indices))  # Remove duplicates, deterministic order
@@ -308,7 +337,7 @@ class NeuropixelsDataset_cortexlab(Dataset):
                 # don't load a unit if we already loaded the unit it merged with
                 # or if it's a unit we wanted to remove
                 continue
-            else:   # load the unit, ignoring the # if it is there (for pre-merge data)
+            else:  # load the unit, ignoring the # if it is there (for pre-merge data)
                 filename = f"Unit{index}_RawSpikes.npy"
                 withhash = f"Unit{index}#_RawSpikes.npy"
             filepath = os.path.join(directory, filename)
@@ -331,7 +360,11 @@ class TrainExperimentBatchSampler(Sampler):
     def _create_batches(self):
         batches = []
         for experiment, unit_paths in self.data_source.experiment_unit_map.items():
-            file_to_idx = {file: idx for idx, (exp, file) in enumerate(self.data_source.all_files) if exp == experiment}
+            file_to_idx = {
+                file: idx
+                for idx, (exp, file) in enumerate(self.data_source.all_files)
+                if exp == experiment
+            }
             experiment_indices = [file_to_idx[file] for file in unit_paths]
             batches.append(experiment_indices)
         return batches
@@ -342,7 +375,7 @@ class TrainExperimentBatchSampler(Sampler):
             if self.shuffle:
                 random.shuffle(experiment_indices)
             for i in range(0, len(experiment_indices), self.batch_size):
-                batch = experiment_indices[i:i + self.batch_size]
+                batch = experiment_indices[i : i + self.batch_size]
                 # Check if the last batch is smaller than batch_size
                 if len(batch) < self.batch_size:
                     # Resample additional items from the experiment_indices to fill the batch
@@ -355,14 +388,19 @@ class TrainExperimentBatchSampler(Sampler):
         return iter(iter_batches)
 
     def __len__(self):
-        total_batches = sum((len(exp_indices) + self.batch_size - 1) // self.batch_size for exp_indices in self.experiment_batches)
+        total_batches = sum(
+            (len(exp_indices) + self.batch_size - 1) // self.batch_size
+            for exp_indices in self.experiment_batches
+        )
         return total_batches
+
 
 class ValidationExperimentBatchSampler(Sampler):
     """
     Creates one batch per experiment with all data points for validation.
     Optionally shuffles data within each experiment batch in each iteration.
     """
+
     def __init__(self, data_source, shuffle=False):
         self.data_source = data_source
         self.shuffle = shuffle
@@ -373,7 +411,11 @@ class ValidationExperimentBatchSampler(Sampler):
         batches = []
         for experiment, unit_paths in self.data_source.experiment_unit_map.items():
             # Create a mapping from file paths to indices
-            file_to_idx = {file: idx for idx, (exp, file) in enumerate(self.data_source.all_files) if exp == experiment}
+            file_to_idx = {
+                file: idx
+                for idx, (exp, file) in enumerate(self.data_source.all_files)
+                if exp == experiment
+            }
             experiment_indices = [file_to_idx[file] for file in unit_paths]
             # Each experiment is a single batch with all its units
             batches.append(experiment_indices)
