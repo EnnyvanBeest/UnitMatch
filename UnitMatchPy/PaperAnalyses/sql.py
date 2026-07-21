@@ -4,7 +4,8 @@ import os
 
 # Paths relative to the repo root. PROJECT_ROOT is the repo's parent directory,
 # which holds the data/results folders alongside this repo.
-PROJECT_ROOT = r'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026V2'
+# PROJECT_ROOT = r'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026V2'
+PROJECT_ROOT = r'\\znas\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026_V3_OnMergedData'
 
 
 def pandas_to_sqlite_type(dtype):
