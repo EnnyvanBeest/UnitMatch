@@ -373,11 +373,28 @@ def _prepare_session(merged_dir):
 
 
 def run_deep_unit_match(sess):
-    """Run the full DeepUnitMatch pipeline for one pre-loaded session."""
+    """Run the full DeepUnitMatch pipeline (default trained model) for one pre-loaded session."""
     merged_dir = sess["merged_dir"]
-    print(f"\n--- DeepUnitMatch: {merged_dir}")
-
     save_dir = get_save_dir(merged_dir)
+
+    print("Loading DeepUnitMatch model …")
+    model = test.load_trained_model(device=DEVICE)
+
+    run_deep_unit_match_core(sess, save_dir, model, label="DeepUnitMatch")
+
+
+def run_deep_unit_match_core(sess, save_dir, model, label="DeepUnitMatch"):
+    """
+    Run the full DeepUnitMatch pipeline for one pre-loaded session, given an
+    already-loaded model and an explicit output directory.
+
+    Factored out of run_deep_unit_match() so alternative trained models (see
+    run_deepunitmatch_batch_onMerged_extramodels.py) can reuse the exact same
+    inference/matching/saving logic against a different checkpoint and save_dir.
+    """
+    merged_dir = sess["merged_dir"]
+    print(f"\n--- {label}: {merged_dir}")
+
     tmp_path = os.path.join(save_dir, "tmp_waveforms")
     print(f"Save dir : {save_dir}")
     os.makedirs(save_dir, exist_ok=True)
@@ -390,10 +407,6 @@ def run_deep_unit_match(sess):
     session_switch = sess["session_switch"]
     good_units = sess["good_units"]
     channel_pos = sess["channel_pos"]
-
-    # ── load model ───────────────────────────────────────────────────────────
-    print("Loading DeepUnitMatch model …")
-    model = test.load_trained_model(device=DEVICE)
 
     # ── preprocess with DeepUnitMatch (get_snippets → HDF5) ─────────────────
     print("Preprocessing waveforms (get_snippets) …")
@@ -559,7 +572,7 @@ def run_deep_unit_match(sess):
             distance_matrix[np.ix_(mask, mask)] = centroid_dist
 
     # ── final matches ────────────────────────────────────────────────────────
-    final_matches = test.directional_filter(probs, session_id, THRESH)
+    final_matches = test.directional_filter_matrix(probs, session_id, THRESH)
     n_matches = int(np.sum(final_matches)) // 2
     print(f"  {n_matches} matches found (threshold={THRESH})")
 

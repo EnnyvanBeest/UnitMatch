@@ -564,7 +564,7 @@ def run_deep_unit_match(sess):
             distance_matrix[np.ix_(mask, mask)] = centroid_dist
 
     # ── final matches ────────────────────────────────────────────────────────
-    final_matches = test.directional_filter(probs, session_id, THRESH)
+    final_matches = test.directional_filter_matrix(probs, session_id, THRESH)
     n_matches = int(np.sum(final_matches)) // 2
     print(f"  {n_matches} matches found (threshold={THRESH})")
 
