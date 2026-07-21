@@ -694,7 +694,7 @@ def ISI_CV_diff(param):
     CV = get_ISI_CV(param)   # (2, n_units)
     return np.abs(CV[1, :, np.newaxis] - CV[0, np.newaxis, :])
 
-def get_natim_responses(param):
+def get_natim_responses(param, merged_architecture=False):
     """
     Bin spike times into stimulus-triggered PSTH per session.
     Returns list of arrays with shape (n_time_bins, n_stimuli, n_units, max_repeats).
@@ -718,7 +718,10 @@ def get_natim_responses(param):
         n_units = len(session_units)
 
         # Try to load trial files; if they don't exist, use NaN arrays
-        trial_path = os.path.dirname(os.path.dirname(KSdirs[session]))
+        if merged_architecture:
+            trial_path = KSdirs[session]
+        else:
+            trial_path = os.path.dirname(os.path.dirname(KSdirs[session]))
         try:
             trials_IDs = np.load(os.path.join(trial_path, "trial.imageIDs.npy"))
             trials_offsetTimes = np.load(os.path.join(trial_path, "trial.offsetTimes.npy"))
