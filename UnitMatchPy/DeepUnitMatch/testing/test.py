@@ -64,19 +64,33 @@ def _parse_unitmatch_good_units(unit_label_paths):
     return good_units
 
 
-def load_trained_model(device="cpu", read_path=None):
+def load_trained_model(device="cpu", read_path=None, n_output=256):
 
-    model = SpatioTemporalCNN_V2(n_channel=30, n_time=60, n_output=256).to(device)
+    model = SpatioTemporalCNN_V2(n_channel=30, n_time=60, n_output=n_output).to(device)
     model = model.double()
     if read_path is None:
         current_dir = Path(__file__).parent.parent
         read_path = current_dir / "utils" / "model"
     checkpoint = torch.load(read_path, map_location=device)
-    model.load_state_dict(checkpoint["model"])
-    clip_loss = CustomClipLoss().to(device)
-    clip_loss.load_state_dict(checkpoint["clip_loss"])
+
+    if "n_output" in checkpoint and checkpoint["n_output"] != n_output:
+        raise ValueError(
+            f"Checkpoint {read_path} was trained with n_output={checkpoint['n_output']}, "
+            f"but n_output={n_output} was requested."
+        )
+
+    if "clip_loss" in checkpoint:
+        # Fine-tuned (clip-loss) checkpoint: checkpoint["model"] is the encoder alone.
+        model.load_state_dict(checkpoint["model"])
+        clip_loss = CustomClipLoss().to(device)
+        clip_loss.load_state_dict(checkpoint["clip_loss"])
+        clip_loss.eval()
+    else:
+        # Autoencoder-only checkpoint: checkpoint["model"] holds encoder.*/decoder.*
+        # keys for the full SpatioTemporalAutoEncoder_V2; checkpoint["encoder"] is
+        # the encoder-only state dict we actually need here.
+        model.load_state_dict(checkpoint["encoder"])
     model.eval()
-    clip_loss.eval()
 
     # Load projector
     projector = Projector(
@@ -204,6 +218,18 @@ def directional_filter(matches: pd.DataFrame):
     ]
 
     return matches[valid_mask]
+
+
+def directional_filter_matrix(sim_matrix, session_id, threshold):
+    """
+    Matrix version of directional_filter.
+    Returns a boolean matrix where (i,j) is True only if both (i,j) and (j,i)
+    exceed the threshold and belong to different sessions.
+    """
+    above_thresh = sim_matrix > threshold
+    across_session = session_id[:, None] != session_id[None, :]
+    candidates = above_thresh & across_session
+    return candidates & candidates.T
 
 
 def remove_conflicts(matches: pd.DataFrame, metric: str):
