@@ -49,6 +49,7 @@ sys.path.insert(0, os.path.join(_HERE, "DeepUnitMatch"))
 
 import argparse
 
+import batch_lock
 import UnitMatchPy.default_params as default_params
 import UnitMatchPy.utils as util
 import UnitMatchPy.overlord as ov
@@ -272,6 +273,19 @@ def umpy_results_exist(merged_dir):
     """Return True when the UMPy sentinel output file is present."""
     sentinel = os.path.join(get_umpy_save_dir(merged_dir), "MatchingOverview.png")
     return os.path.isfile(sentinel)
+
+
+def get_group_lock_path(merged_dir):
+    """
+    Lock file marking 'a run is currently processing this group' (DeepUnitMatch
+    + UMPy together), so multiple machines pointed at the same BASE_INPUT/
+    BASE_OUTPUT can split work across groups without double-processing one.
+    See batch_lock.py. Named distinctly from the extramodels script's lock so
+    the two scripts can run on the same group concurrently without blocking
+    each other.
+    """
+    subfolder = os.path.relpath(os.path.dirname(merged_dir), BASE_INPUT)
+    return os.path.join(BASE_OUTPUT, subfolder, ".processing.lock")
 
 
 # ── shared session loader ─────────────────────────────────────────────────────
@@ -916,31 +930,45 @@ def main():
             print("  Skipping both pipelines (results exist, REDO=False).")
             continue
 
-        sess = _prepare_session(merged_dir)
-        if sess is None:
-            continue
+        lock_path = get_group_lock_path(merged_dir)
+        with batch_lock.try_lock(lock_path) as acquired:
+            if not acquired:
+                print(f"  Skipping (already being processed by another run): {lock_path}")
+                continue
 
-        if run_deep:
-            try:
-                run_deep_unit_match(sess)
-            except Exception as e:
-                print(f"  DeepUnitMatch FAILED: {e}")
-                traceback.print_exc()
-        else:
-            print(
-                f"  Skipping DeepUnitMatch (results exist, REDO=False): {get_save_dir(merged_dir)}"
-            )
+            # re-check now that we hold the lock: another machine may have
+            # finished this group while we were scanning/waiting for the lock
+            run_deep = not results_exist(merged_dir) or REDO
+            run_ump = not umpy_results_exist(merged_dir) or REDO
+            if not run_deep and not run_ump:
+                print("  Skipping both pipelines (completed by another run).")
+                continue
 
-        if run_ump:
-            try:
-                run_umpy(sess)
-            except Exception as e:
-                print(f"  UMPy FAILED: {e}")
-                traceback.print_exc()
-        else:
-            print(
-                f"  Skipping UMPy (results exist, REDO=False): {get_umpy_save_dir(merged_dir)}"
-            )
+            sess = _prepare_session(merged_dir)
+            if sess is None:
+                continue
+
+            if run_deep:
+                try:
+                    run_deep_unit_match(sess)
+                except Exception as e:
+                    print(f"  DeepUnitMatch FAILED: {e}")
+                    traceback.print_exc()
+            else:
+                print(
+                    f"  Skipping DeepUnitMatch (results exist, REDO=False): {get_save_dir(merged_dir)}"
+                )
+
+            if run_ump:
+                try:
+                    run_umpy(sess)
+                except Exception as e:
+                    print(f"  UMPy FAILED: {e}")
+                    traceback.print_exc()
+            else:
+                print(
+                    f"  Skipping UMPy (results exist, REDO=False): {get_umpy_save_dir(merged_dir)}"
+                )
 
     print("\nAll done.")
 

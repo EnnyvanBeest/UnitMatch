@@ -33,6 +33,7 @@ sys.path.insert(0, _HERE)
 sys.path.insert(0, os.path.dirname(_HERE))
 sys.path.insert(0, os.path.join(_HERE, "DeepUnitMatch"))
 
+import batch_lock
 import run_deepunitmatch_batch_onMerged as base_batch
 from DeepUnitMatch.testing import test
 
@@ -42,6 +43,7 @@ EXTRA_MODELS_ROOT = os.path.join(
 EXCLUDED_N_OUTPUT_DIRS = {"256-chinesecharacters"}
 
 REDO = False  # if True, rerun even when output already exists
+RUN_UNFINETUNED_N_OUTPUT_MODELS = False  # if False, skip the after_ae (not fine-tuned) n_output checkpoints
 
 
 # ── extra-model discovery ────────────────────────────────────────────────────
@@ -87,6 +89,8 @@ def discover_extra_models():
             continue
 
         for stage in ("after_ae", "after_ae_and_finetune"):
+            if stage == "after_ae" and not RUN_UNFINETUNED_N_OUTPUT_MODELS:
+                continue
             stage_dir = d / stage
             if not stage_dir.is_dir():
                 continue
@@ -118,6 +122,18 @@ def extra_results_exist(merged_dir, model_info):
     """Return True when the sentinel output file is present for this dataset/model combo."""
     sentinel = os.path.join(get_extra_save_dir(merged_dir, model_info), "MatchingOverview.png")
     return os.path.isfile(sentinel)
+
+
+def get_group_lock_path(merged_dir):
+    """
+    Lock file marking 'a run is currently processing all pending extra models
+    for this group', so multiple machines pointed at the same BASE_INPUT/
+    BASE_OUTPUT can split work across groups without double-processing one.
+    See batch_lock.py. Named distinctly from run_deepunitmatch_batch_onMerged's
+    lock so the two scripts can run on the same group concurrently.
+    """
+    subfolder = os.path.relpath(os.path.dirname(merged_dir), base_batch.BASE_INPUT)
+    return os.path.join(base_batch.BASE_OUTPUT, subfolder, ".processing_extramodels.lock")
 
 
 # ── model cache ───────────────────────────────────────────────────────────────
@@ -185,20 +201,35 @@ def main():
             print("  Skipping all extra models (results exist, REDO=False).")
             continue
 
-        sess = base_batch._prepare_session(merged_dir)
-        if sess is None:
-            continue
+        lock_path = get_group_lock_path(merged_dir)
+        with batch_lock.try_lock(lock_path) as acquired:
+            if not acquired:
+                print(f"  Skipping (already being processed by another run): {lock_path}")
+                continue
 
-        for model_info in pending:
-            save_dir = get_extra_save_dir(merged_dir, model_info)
-            try:
-                model = get_model_for_checkpoint(model_cache, model_info)
-                base_batch.run_deep_unit_match_core(
-                    sess, save_dir, model, label=model_info["subfolder_name"]
-                )
-            except Exception as e:
-                print(f"  {model_info['subfolder_name']} FAILED: {e}")
-                traceback.print_exc()
+            # re-check now that we hold the lock: another machine may have
+            # finished this group while we were scanning/waiting for the lock
+            pending = [
+                m for m in extra_models if REDO or not extra_results_exist(merged_dir, m)
+            ]
+            if not pending:
+                print("  Skipping all extra models (completed by another run).")
+                continue
+
+            sess = base_batch._prepare_session(merged_dir)
+            if sess is None:
+                continue
+
+            for model_info in pending:
+                save_dir = get_extra_save_dir(merged_dir, model_info)
+                try:
+                    model = get_model_for_checkpoint(model_cache, model_info)
+                    base_batch.run_deep_unit_match_core(
+                        sess, save_dir, model, label=model_info["subfolder_name"]
+                    )
+                except Exception as e:
+                    print(f"  {model_info['subfolder_name']} FAILED: {e}")
+                    traceback.print_exc()
 
     print("\nAll done.")
 
