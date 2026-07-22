@@ -19,6 +19,7 @@
 
 import os
 import sys
+import datetime
 import traceback
 import argparse
 from pathlib import Path
@@ -42,7 +43,12 @@ EXTRA_MODELS_ROOT = os.path.join(
 )
 EXCLUDED_N_OUTPUT_DIRS = {"256-chinesecharacters"}
 
-REDO = False  # if True, rerun even when output already exists
+
+# See batch_lock.sentinel_is_fresh() / run_deepunitmatch_batch_onMerged.py's
+# REDO_FROM_DATE for what this does: a dataset/model combo is skipped once its
+# MatchingOverview.png exists and is at least this new. None falls back to
+# plain "skip if present"; a far-future date reproduces old REDO=True.
+REDO_FROM_DATE = datetime.datetime(2026, 7, 23)
 RUN_UNFINETUNED_N_OUTPUT_MODELS = False  # if False, skip the after_ae (not fine-tuned) n_output checkpoints
 
 
@@ -119,9 +125,9 @@ def get_extra_save_dir(merged_dir, model_info):
 
 
 def extra_results_exist(merged_dir, model_info):
-    """Return True when the sentinel output file is present for this dataset/model combo."""
+    """Return True when the sentinel output file is present and fresh for this dataset/model combo (see REDO_FROM_DATE)."""
     sentinel = os.path.join(get_extra_save_dir(merged_dir, model_info), "MatchingOverview.png")
-    return os.path.isfile(sentinel)
+    return batch_lock.sentinel_is_fresh(sentinel, REDO_FROM_DATE)
 
 
 def get_group_lock_path(merged_dir):
@@ -195,10 +201,10 @@ def main():
         print(f"\n[{i + 1}/{len(groups)}] {merged_dir}")
 
         pending = [
-            m for m in extra_models if REDO or not extra_results_exist(merged_dir, m)
+            m for m in extra_models if not extra_results_exist(merged_dir, m)
         ]
         if not pending:
-            print("  Skipping all extra models (results exist, REDO=False).")
+            print("  Skipping all extra models (results exist and are fresh).")
             continue
 
         lock_path = get_group_lock_path(merged_dir)
@@ -210,7 +216,7 @@ def main():
             # re-check now that we hold the lock: another machine may have
             # finished this group while we were scanning/waiting for the lock
             pending = [
-                m for m in extra_models if REDO or not extra_results_exist(merged_dir, m)
+                m for m in extra_models if not extra_results_exist(merged_dir, m)
             ]
             if not pending:
                 print("  Skipping all extra models (completed by another run).")

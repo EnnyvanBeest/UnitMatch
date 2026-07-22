@@ -4,6 +4,7 @@ import os
 import sys
 import pickle
 import shutil
+import datetime
 import h5py
 import scipy.io
 from pathlib import Path
@@ -11,6 +12,9 @@ import matplotlib.pyplot as plt
 
 sys.path.insert(0, os.getcwd())
 sys.path.insert(0, os.path.join(os.getcwd(), "testing"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import batch_lock
 
 DUM_NONMERGED_DATAPATH = (
     r"\\znas\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026V2"
@@ -26,7 +30,19 @@ MAX_C_RATIO = 1.0
 # Lets re-runs skip sessions that are already done instead of re-copying
 # waveforms and redoing the merge over the network every time.
 MERGE_COMPLETE_MARKER = "merge_complete.flag"
-REDO = False  # if True, reprocess sessions even if already marked complete
+# See batch_lock.sentinel_is_fresh() / run_deepunitmatch_batch_onMerged.py's
+# REDO_FROM_DATE for what this does: a session is skipped once its
+# merge_complete.flag exists and is at least this new. None falls back to
+# plain "skip if present"; a far-future date reproduces old REDO=True.
+#
+# This matters more here than in the other batch scripts: this script's
+# within-session merge decisions are read from run_deepunitmatch_batch.py's
+# DeepUnitMatch/MatchTable.csv (UID 1 == UID 2 pairs, see run_merging_process
+# below), which depends on DUM's Naive Bayes match probabilities. A fix to
+# DUM's matching (e.g. its adaptive prior/threshold) changes that MatchTable,
+# so previously-merged sessions must be treated as stale even though their own
+# merge_complete.flag file didn't change.
+REDO_FROM_DATE = datetime.datetime(2026, 7, 23)
 
 
 def _decode_hdf5_str(f, ref_or_ds):
@@ -215,7 +231,9 @@ def run_merging_process(UMparam_files, source_dirs, MAX_C_RATIO=1.0):
             os.path.join(target_dir, str(idx)) for idx in range(len(data["KS_dirs"]))
         ]
         already_done = [
-            (not REDO) and os.path.isfile(os.path.join(d, MERGE_COMPLETE_MARKER))
+            batch_lock.sentinel_is_fresh(
+                os.path.join(d, MERGE_COMPLETE_MARKER), REDO_FROM_DATE
+            )
             for d in target_KSDirs
         ]
         if all(already_done):

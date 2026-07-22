@@ -12,11 +12,40 @@
 # indefinitely.
 
 import contextlib
+import datetime
 import os
 import socket
 import time
 
 STALE_AFTER_SECONDS = 24 * 3600  # reclaim locks older than this
+
+
+def sentinel_is_fresh(sentinel_path, redo_from_date=None):
+    """
+    Return True when `sentinel_path` exists and doesn't need redoing.
+
+    This is the shared "should we skip this unit of work" check used in place
+    of a plain os.path.isfile() so batch scripts can recover from an algorithm
+    change without a blanket REDO=True (which forces every group through the
+    lock/reprocess path, including ones a concurrent run already redid since
+    the change -- see run_deepunitmatch_batch_onMerged.py's module docstring
+    for the incident this was added for).
+
+    redo_from_date : datetime.datetime or None
+        If None, only existence is checked (classic "skip if present"
+        behaviour). If set, a sentinel older than this datetime is treated as
+        stale (needs redoing) even though it exists -- e.g. set it to the date
+        a bug fix landed so only output computed before the fix gets redone.
+        This is independent of, and composes with, try_lock()/STALE_AFTER_SECONDS
+        above: staleness decides *whether* a group needs work; the lock still
+        decides whether *this* process is allowed to do that work right now.
+    """
+    if not os.path.isfile(sentinel_path):
+        return False
+    if redo_from_date is None:
+        return True
+    mtime = datetime.datetime.fromtimestamp(os.path.getmtime(sentinel_path))
+    return mtime >= redo_from_date
 
 
 @contextlib.contextmanager

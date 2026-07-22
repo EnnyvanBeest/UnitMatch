@@ -12,6 +12,7 @@
 import os
 import sys
 import copy
+import datetime
 import traceback
 import numpy as np
 import scipy.io
@@ -29,6 +30,7 @@ sys.path.insert(0, os.path.join(_HERE, "DeepUnitMatch"))
 
 import argparse
 
+import batch_lock
 import UnitMatchPy.default_params as default_params
 import UnitMatchPy.utils as util
 import UnitMatchPy.overlord as ov
@@ -52,7 +54,11 @@ BASE_OUTPUT = r"\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE
 DEVICE = "cuda" if test.torch.cuda.is_available() else "cpu"
 print(f"Device: {DEVICE}")
 THRESH = 0.5
-REDO = True  # if True, rerun even when output already exists
+# See batch_lock.sentinel_is_fresh() / run_deepunitmatch_batch_onMerged.py's
+# REDO_FROM_DATE for what this does: a group is skipped once its
+# MatchingOverview.png exists and is at least this new. None falls back to
+# plain "skip if present"; a far-future date reproduces old REDO=True.
+REDO_FROM_DATE = datetime.datetime(2026, 7, 23)
 WRITE_MATLAB_COMPAT = False
 
 
@@ -248,9 +254,9 @@ def get_umpy_save_dir(mat_path):
 
 
 def results_exist(mat_path):
-    """Return True when the DeepUnitMatch sentinel output file is present."""
+    """Return True when the DeepUnitMatch sentinel output file is present and fresh (see REDO_FROM_DATE)."""
     sentinel = os.path.join(get_save_dir(mat_path), "MatchingOverview.png")
-    return os.path.isfile(sentinel)
+    return batch_lock.sentinel_is_fresh(sentinel, REDO_FROM_DATE)
 
 
 def ensure_matlab_compatible_output(save_dir):
@@ -286,9 +292,9 @@ def ensure_matlab_compatible_output(save_dir):
 
 
 def umpy_results_exist(mat_path):
-    """Return True when the UMPy sentinel output file is present."""
+    """Return True when the UMPy sentinel output file is present and fresh (see REDO_FROM_DATE)."""
     sentinel = os.path.join(get_umpy_save_dir(mat_path), "MatchingOverview.png")
-    return os.path.isfile(sentinel)
+    return batch_lock.sentinel_is_fresh(sentinel, REDO_FROM_DATE)
 
 
 # ── shared session loader ─────────────────────────────────────────────────────
@@ -395,6 +401,7 @@ def run_deep_unit_match(sess):
     session_switch = sess["session_switch"]
     good_units = sess["good_units"]
     channel_pos = sess["channel_pos"]
+    within_session = sess["within_session"]
 
     # ── load model ───────────────────────────────────────────────────────────
     print("Loading DeepUnitMatch model …")
@@ -419,7 +426,7 @@ def run_deep_unit_match(sess):
 
     # re-sync arrays if any units were rejected by get_snippets
     if len(kept_idx) < len(waveform):
-        waveform, session_id, session_switch, _, good_units, param = (
+        waveform, session_id, session_switch, within_session, good_units, param = (
             util.filter_units_by_index(
                 waveform, session_id, session_switch, good_units, kept_idx, param
             )
@@ -472,7 +479,7 @@ def run_deep_unit_match(sess):
                 session_list=[r1, r2],
             )
             matches = test.get_matches(
-                df, sim_mat, session_id[indices], data_dir, dist_thresh=50
+                df, sim_mat, session_id[indices], data_dir, dist_thresh=param["max_dist"]
             )
             pair_matches_cache[(r1, r2)] = matches
 
@@ -550,7 +557,29 @@ def run_deep_unit_match(sess):
 
             scores_to_incl = {"similarity": sim_mat, "distance": centroid_dist}
             n_units = int(np.sqrt(len(matches)))
-            priors = np.array([1 - 2 / n_units, 2 / n_units])
+
+            # Adaptive match-count prior, mirroring UMPy's post-drift-correction
+            # n_expected_matches estimate (overlord.extract_metric_scores,
+            # is_first_pass=False) instead of a fixed "2 expected matches per
+            # unit" heuristic. raw_dist is the same peak-timepoint,
+            # min-over-flips physical distance (um) that centroid_metrics()
+            # above rescales into centroid_dist -- reused here unscaled.
+            waveidx_arr = np.asarray(param["waveidx"])
+            peak_idx = int(np.flatnonzero(waveidx_arr == param["peak_loc"])[0])
+            raw_dist = np.nanmin(euclid_dist[:, peak_idx, :, :], axis=1)
+            within_session_pair = within_session[np.ix_(mask, mask)]
+            include_these_pairs_idx = raw_dist < param["max_dist"]
+            param_pair = dict(param, n_units=n_units)
+            thrs_opt = mf.get_threshold(
+                sim_mat, within_session_pair, raw_dist, param_pair, is_first_pass=False
+            )
+            n_expected_matches = int(
+                np.sum((sim_mat > thrs_opt) & include_these_pairs_idx)
+            )
+            n_candidate_pairs = max(int(np.sum(include_these_pairs_idx)), 1)
+            prior_match = 1 - (n_expected_matches / n_candidate_pairs)
+            priors = np.array([prior_match, 1 - prior_match])
+
             parameter_kernels = bf.get_parameter_kernels(
                 scores_to_incl, labels, np.unique(labels), param
             )
@@ -564,9 +593,10 @@ def run_deep_unit_match(sess):
             distance_matrix[np.ix_(mask, mask)] = centroid_dist
 
     # ── final matches ────────────────────────────────────────────────────────
-    final_matches = test.directional_filter_matrix(probs, session_id, THRESH)
+    match_threshold = param.get("match_threshold", THRESH)
+    final_matches = test.directional_filter_matrix(probs, session_id, match_threshold)
     n_matches = int(np.sum(final_matches)) // 2
-    print(f"  {n_matches} matches found (threshold={THRESH})")
+    print(f"  {n_matches} matches found (threshold={match_threshold})")
 
     # ── assign unique IDs ────────────────────────────────────────────────────
     UIDs = aid.assign_unique_id(probs, param, clus_info)
@@ -904,11 +934,11 @@ def main():
     for i, mat_path in enumerate(mat_files):
         print(f"\n[{i + 1}/{len(mat_files)}] {mat_path}")
 
-        run_deep = not results_exist(mat_path) or REDO
-        run_ump = not umpy_results_exist(mat_path) or REDO
+        run_deep = not results_exist(mat_path)
+        run_ump = not umpy_results_exist(mat_path)
 
         if not run_deep and not run_ump:
-            print("  Skipping both pipelines (results exist, REDO=False).")
+            print("  Skipping both pipelines (results exist and are fresh).")
             continue
 
         sess = _prepare_session(mat_path)
@@ -923,7 +953,7 @@ def main():
                 traceback.print_exc()
         else:
             print(
-                f"  Skipping DeepUnitMatch (results exist, REDO=False): {get_save_dir(mat_path)}"
+                f"  Skipping DeepUnitMatch (results exist and are fresh): {get_save_dir(mat_path)}"
             )
 
         if run_ump:
@@ -934,7 +964,7 @@ def main():
                 traceback.print_exc()
         else:
             print(
-                f"  Skipping UMPy (results exist, REDO=False): {get_umpy_save_dir(mat_path)}"
+                f"  Skipping UMPy (results exist and are fresh): {get_umpy_save_dir(mat_path)}"
             )
 
     print("\nAll done.")
