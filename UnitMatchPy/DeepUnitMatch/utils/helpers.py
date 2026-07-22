@@ -10,9 +10,10 @@ import datetime
 # PROJECT_ROOT is the directory that holds both sibling repos (DeepMatch + DeepUnitMatch)
 # alongside the shared data/results and the committed metadata_index.json.
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PROJECT_ROOT = os.path.normpath(
-    os.path.join(REPO_ROOT, os.pardir, os.pardir, os.pardir)
-)
+# PROJECT_ROOT = os.path.normpath(
+#     os.path.join(REPO_ROOT, os.pardir, os.pardir, os.pardir)
+# )
+PROJECT_ROOT = r"\\znas\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026_V3_OnMergedData"
 METADATA_INDEX_PATH = os.path.join(PROJECT_ROOT, "metadata_index.json")
 
 _metadata_index_cache = None
@@ -204,9 +205,10 @@ def get_locations_from_sqlite(db_path="matchtables.db"):
     for table in tables:
         name = table[0]
         parts = name.split("_")
-        if len(parts) == 3:
-            mouse, probe, loc = parts
-            locations.append((mouse, probe, loc))
+        mouse = parts[0]
+        probe = parts[1]
+        loc = "_".join(parts[2:])  # Join remaining parts for loc    
+        locations.append((mouse, probe, loc))
     return locations
 
 

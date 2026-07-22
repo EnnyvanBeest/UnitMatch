@@ -1,3 +1,6 @@
+import os, sys
+sys.path.insert(0, r"C:\Users\celia\OneDrive - University College London\Documents\GitHub\UnitMatch\UnitMatchPy\DeepUnitMatch")
+
 import os
 import pandas as pd
 import numpy as np
@@ -20,6 +23,7 @@ from utils.helpers import (
 # PROJECT_ROOT (defined in utils.helpers) is the directory holding the shared
 # data/results and metadata_index.json alongside the sibling repos.
 RESULTS_DIR = os.path.join(PROJECT_ROOT, "results")
+DATABASE_PATH = os.path.join(PROJECT_ROOT, "matchtables.db")
 
 
 def test_models_optimized(col_names, fixed_n=True, save_names=None):
@@ -34,16 +38,18 @@ def test_models_optimized(col_names, fixed_n=True, save_names=None):
     results_dir = RESULTS_DIR
 
     if fixed_n:
-        results_dir = os.path.join(results_dir, "N_set_by_UM")
         # Load UM_results once and create a lookup dictionary for fast access
-        UM_results = pd.read_csv(os.path.join(results_dir, "MatchProbNew_results.csv"))
+        UM_results = pd.read_csv(os.path.join(results_dir, "UM Probabilities_UMPy_results.csv"))
         um_lookup = create_um_lookup(UM_results)
+
+        # Save the new results in a subdirectory to avoid overwriting the original results
+        results_dir = os.path.join(results_dir, "N_set_by_UM")
     else:
         um_lookup = None
 
     # Get all valid locations first to avoid repeated file system checks
     valid_locations = get_locations_from_sqlite(
-        db_path=os.path.join(PROJECT_ROOT, "matchtables.db")
+        db_path=DATABASE_PATH
     )
     print(f"Found {len(valid_locations)} valid locations to process")
 
@@ -141,7 +147,7 @@ def get_matches_1model(mt, metric, fixed_n: int = None):
     ]
 
     if not fixed_n:
-        if metric == "MatchProb":
+        if "UM Probabilities" in metric :
             thresh = 0.5
         else:
             thresh = get_threshold_df(mt, metric=metric)
@@ -160,7 +166,7 @@ def get_matches_1model(mt, metric, fixed_n: int = None):
         ]
     else:
         # For fixed_n, sort once and reuse
-        if metric == "CentroidDist":
+        if metric == "centroid_distance":
             matches = across.sort_values(by=metric, ascending=True)
         else:
             matches = across.sort_values(by=metric, ascending=False)
@@ -219,18 +225,22 @@ def all_results_1model(
         else:
             match_indices = get_matches_1model(df, metric=model_name, fixed_n=None)
 
-        # Skip if no matches found
+        # Nan if no matches found
         if not match_indices:
-            continue
-
-        # Calculate metrics
-        if "newRPC" in df.columns and "newISI" in df.columns:
-            RpcAuc = AUC(df, match_indices, "newRPC")
-            IsiAuc = AUC(df, match_indices, "newISI")
+            AUC_isi = np.nan
+            AUC_fr = np.nan
+            AUC_isi_cv = np.nan
+            AUC_refpop_UMPy = np.nan
+            AUC_refpop_DeepUnitMatch = np.nan
+            N = 0
         else:
-            RpcAuc = AUC(df, match_indices, "refPopCorr")
-            IsiAuc = AUC(df, match_indices, "ISICorr")
-        N = len(match_indices)
+            # Calculate metrics
+            AUC_isi = AUC(df, match_indices, "ISI_correlations")
+            AUC_fr = AUC(df, match_indices, "FR_diff")
+            AUC_isi_cv = AUC(df, match_indices, "ISI_CV_diff")
+            AUC_refpop_UMPy = AUC(df, match_indices, "refpop_correlations_UMPy")
+            AUC_refpop_DeepUnitMatch = AUC(df, match_indices, "refpop_correlations_DeepUnitMatch")
+            N = len(match_indices)
 
         date1 = metadata_cache.get(r1)
         date2 = metadata_cache.get(r2)
@@ -248,8 +258,11 @@ def all_results_1model(
                 "day2": date2,
                 "r1": r1,
                 "r2": r2,
-                "AUCrpc": RpcAuc,
-                "AUCisi": IsiAuc,
+                "AUCisi": AUC_isi,
+                "AUCfr": AUC_fr,
+                "AUCisi_cv": AUC_isi_cv,
+                "AUC_refpop_UMPy": AUC_refpop_UMPy,
+                "AUC_refpop_DeepUnitMatch": AUC_refpop_DeepUnitMatch,
                 "N": N,
                 "delta_days": (date2 - date1).days,
             }
@@ -278,7 +291,7 @@ def process_single_location(location_data, col_names, um_lookup, fixed_n=True):
 
     try:
         # Connect to database (each process needs its own connection)
-        conn = sqlite3.connect(os.path.join(PROJECT_ROOT, "matchtables.db"))
+        conn = sqlite3.connect(DATABASE_PATH)
         cursor = conn.cursor()
 
         # Check if table exists and get columns
@@ -295,22 +308,20 @@ def process_single_location(location_data, col_names, um_lookup, fixed_n=True):
             return None
 
         # Build SQL query based on available columns
-        if "newRPC" in columns:
-            base_cols = "ID1,ID2,RecSes1,RecSes2,newRPC,newISI"
-        else:
-            base_cols = "ID1,ID2,RecSes1,RecSes2,refPopCorr,ISICorr"
+        base_cols = ["ID1", "ID2", "RecSes1", "RecSes2", "ISI_correlations", "FR_diff", "ISI_CV_diff", "refpop_correlations_UMPy", "refpop_correlations_DeepUnitMatch"]
 
-        # Check which model columns exist
         existing_cols = [col for col in col_names if col in columns]
         if not existing_cols:
             print(f"No requested columns found in {mouse}_{probe}_{loc}.")
             conn.close()
             return None
 
-        query_cols = base_cols + "," + ",".join(existing_cols)
+        query_cols = ", ".join(quote_ident(col) for col in base_cols + existing_cols)
+        table_name = quote_ident(f"{mouse}_{probe}_{loc}")
+        query = f"SELECT {query_cols} FROM {table_name};"
 
         # Single database query for all needed data
-        mt = pd.read_sql_query(f"SELECT {query_cols} FROM {mouse}_{probe}_{loc};", conn)
+        mt = pd.read_sql_query(query, conn)
         conn.close()
 
         # Get fixed_n data
@@ -373,16 +384,17 @@ def AUC(mt, indices, func_metric):
 
     return auc
 
+def quote_ident(name):
+    return '"' + str(name).replace('"', '""') + '"'
+
+
 
 if __name__ == "__main__":
     start = time.time()
 
     col_names = [
-        "NBProb18mice_40Spat",
-        "NBProb18mice_80Spat",
-        "NBProb18mice_NoSpat",
-        "NBProb18mice_10Spat",
-        "NBProbuntrained_NoSpat",
+        "UM Probabilities_UMPy",
+        "UM Probabilities_DeepUnitMatch"
     ]
 
     test_models_optimized(col_names, fixed_n=False)

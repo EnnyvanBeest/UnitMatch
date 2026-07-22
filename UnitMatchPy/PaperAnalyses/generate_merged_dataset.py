@@ -274,6 +274,14 @@ def run_merging_process(UMparam_files, source_dirs, MAX_C_RATIO=1.0):
                 if os.path.exists(source_file):
                     shutil.copy2(source_file, target_file)  # preserves metadata
 
+            # Move natural images info if exists
+            natural_images_folder = os.path.dirname(os.path.dirname(KSDir))
+            for file_name in ['trial.imageIDs.npy', 'trial.offsetTimes.npy', 'trial.onsetTimes.npy']:
+                    source_file = os.path.join(natural_images_folder, file_name)
+                    target_file = os.path.join(target_KSDir, file_name)
+                    if os.path.exists(source_file):
+                        shutil.copy2(source_file, target_file)  # preserves metadata
+
             # cluster_bc_unitType.tsv is always *derived* from the original
             # UnitMatch.mat's GoodID rather than copied from the KS session's own
             # bombcell output. This matches run_deepunitmatch_batch.py, which never
