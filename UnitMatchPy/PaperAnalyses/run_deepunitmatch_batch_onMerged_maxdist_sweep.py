@@ -66,7 +66,7 @@ DEFAULT_NEIGHBOUR_DIST = default_params.get_default_param()["neighbour_dist"]
 # See batch_lock.sentinel_is_fresh() / run_deepunitmatch_batch_onMerged.py's
 # REDO_FROM_DATE for what this does. A dataset/max_dist/method combo is
 # skipped once its MatchingOverview.png exists and is at least this new.
-REDO_FROM_DATE = datetime.datetime(2026, 7, 23)
+REDO_FROM_DATE = datetime.datetime(2026, 7, 22, 19, 0, 0)
 
 
 # ── sweep-point helpers ──────────────────────────────────────────────────────

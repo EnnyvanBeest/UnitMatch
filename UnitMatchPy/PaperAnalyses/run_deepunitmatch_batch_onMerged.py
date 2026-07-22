@@ -83,7 +83,7 @@ THRESH = 0.5
 # correctly recognised as up to date instead of being reprocessed forever.
 # Set to None to fall back to plain "skip if present". Set to a far-future
 # date for the old unconditional REDO=True behaviour.
-REDO_FROM_DATE = datetime.datetime(2026, 7, 23)
+REDO_FROM_DATE = datetime.datetime(2026, 7, 22, 19, 0, 0)
 WRITE_MATLAB_COMPAT = False
 
 

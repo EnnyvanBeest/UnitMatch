@@ -58,7 +58,7 @@ THRESH = 0.5
 # REDO_FROM_DATE for what this does: a group is skipped once its
 # MatchingOverview.png exists and is at least this new. None falls back to
 # plain "skip if present"; a far-future date reproduces old REDO=True.
-REDO_FROM_DATE = datetime.datetime(2026, 7, 23)
+REDO_FROM_DATE = datetime.datetime(2026, 7, 22, 19, 0, 0)
 WRITE_MATLAB_COMPAT = False
 
 

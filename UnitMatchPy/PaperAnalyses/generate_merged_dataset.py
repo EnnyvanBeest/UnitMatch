@@ -42,7 +42,7 @@ MERGE_COMPLETE_MARKER = "merge_complete.flag"
 # DUM's matching (e.g. its adaptive prior/threshold) changes that MatchTable,
 # so previously-merged sessions must be treated as stale even though their own
 # merge_complete.flag file didn't change.
-REDO_FROM_DATE = datetime.datetime(2026, 7, 23)
+REDO_FROM_DATE = datetime.datetime(2026, 7, 22, 19, 0, 0)
 
 
 def _decode_hdf5_str(f, ref_or_ds):

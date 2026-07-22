@@ -39,7 +39,7 @@ addpath(genpath(NPY_MATLAB_REPO));
 % the length(f1)/size(f1,1) bug fix in EMD_unit_match.m, landed after that
 % point). Set REDO_FROM_DATE to NaT to disable the date-based check (freshness
 % vs manifest.json still applies); a far-future date forces redo of everything.
-REDO_FROM_DATE = datetime(2026, 7, 23);
+REDO_FROM_DATE = datetime(2026, 7, 22, 19, 0, 0);
 
 [groups, parents] = find_merged_groups(BASE_INPUT);
 fprintf('Found %d group(s) under %s\n', numel(groups), BASE_INPUT);
