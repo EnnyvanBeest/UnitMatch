@@ -743,9 +743,25 @@ def run_umpy(sess):
     than a neural-net similarity score.
     """
     merged_dir = sess["merged_dir"]
-    print(f"\n--- UMPy: {merged_dir}")
-
     save_dir = get_umpy_save_dir(merged_dir)
+    run_umpy_core(sess, save_dir, label="UMPy")
+
+
+def run_umpy_core(sess, save_dir, label="UMPy"):
+    """
+    Run the full UMPy pipeline for one pre-loaded session, given an explicit
+    output directory.
+
+    Factored out of run_umpy() so alternative parameter sweeps (see
+    run_deepunitmatch_batch_onMerged_maxdist_sweep.py) can reuse the exact same
+    extraction/matching/saving logic against a modified param dict (e.g. a
+    different max_dist) and a different save_dir -- mirrors how
+    run_deep_unit_match_core was factored out of run_deep_unit_match() for the
+    extramodels script.
+    """
+    merged_dir = sess["merged_dir"]
+    print(f"\n--- {label}: {merged_dir}")
+
     print(f"Save dir : {save_dir}")
     os.makedirs(save_dir, exist_ok=True)
 
