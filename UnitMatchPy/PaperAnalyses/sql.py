@@ -4,7 +4,8 @@ import os
 
 # Paths relative to the repo root. PROJECT_ROOT is the repo's parent directory,
 # which holds the data/results folders alongside this repo.
-PROJECT_ROOT = r"\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026V2"
+# PROJECT_ROOT = r'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026V2'
+PROJECT_ROOT = r'\\znas\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026_V3_OnMergedData'
 
 
 def pandas_to_sqlite_type(dtype):
@@ -23,40 +24,47 @@ def pandas_to_sqlite_type(dtype):
         return "TEXT"
 
 
-def merge_match_tables(df_um, df_dum):
+def merge_match_tables(df_1, df_2, sub1, sub2):
     """Merge two match-table dataframes by columns.
 
     Columns that exist in both frames and have identical values are kept once.
-    Columns that exist in both frames but differ are renamed to <name>_um and
-    <name>_dum so both versions are preserved. Columns unique to one frame are
+    Columns that exist in both frames but differ are renamed to <name>_<sub1> and
+    <name>_<sub2> so both versions are preserved. Columns unique to one frame are
     kept with their original names.
     """
-    df_um = df_um.copy()
-    df_dum = df_dum.copy()
+    df_1 = df_1.copy()
+    df_2 = df_2.copy()
 
-    shared_columns = sorted(set(df_um.columns) & set(df_dum.columns))
+    shared_columns = sorted(set(df_1.columns) & set(df_2.columns))
     for col in shared_columns:
-        if df_um[col].equals(df_dum[col]):
-            df_dum.drop(columns=[col], inplace=True)
+        if df_1[col].equals(df_2[col]):
+            df_2.drop(columns=[col], inplace=True)
         else:
-            df_um.rename(columns={col: f"{col}_um"}, inplace=True)
-            df_dum.rename(columns={col: f"{col}_dum"}, inplace=True)
+            df_1.rename(columns={col: f"{col}_{sub1}"}, inplace=True)
+            df_2.rename(columns={col: f"{col}_{sub2}"}, inplace=True)
 
-    return pd.concat([df_um, df_dum], axis=1)
+    return pd.concat([df_1, df_2], axis=1)
 
 
-def import_csv_to_sqlite(mt_path_um, mt_path_dum, m, p, l):
+def import_csv_to_sqlite(mt_paths, models, m, p, l):
 
-    db_file = os.path.join(PROJECT_ROOT, "matchtables.db")
+    db_file = os.path.join(PROJECT_ROOT, "matchtables_new.db")
 
     # Define the table name in SQLite
     table_name = f"{m}_{p}_{l}"  # Change this
 
-    print(f"Reading data from '{mt_path_um}' and '{mt_path_dum}'...")
-    df_um = pd.read_csv(mt_path_um)
-    df_dum = pd.read_csv(mt_path_dum)
-
-    df_merged = merge_match_tables(df_um, df_dum)
+    print(f"Reading data from the provided paths...")
+    df_merged = pd.read_csv(mt_paths[0])
+    if len(mt_paths) > 1:
+        df_2 = pd.read_csv(mt_paths[1])
+        df_merged = merge_match_tables(df_merged, df_2, models[0], models[1])
+        for idx, path in enumerate(mt_paths[2:]):
+            if os.path.exists(path):
+                df_tomerge = pd.read_csv(path)
+                df_merged = merge_match_tables(df_merged, df_tomerge, '', models[idx + 2])
+            else:
+                print(f"Warning: File not found at {path}. Skipping this file.")
+    df_merged.rename(columns={'RecSes 1': 'RecSes1', 'RecSes 2': 'RecSes2'}, inplace=True)
 
     column_defs = []
     print("Generating SQL column definitions from merged DataFrame...")
@@ -102,7 +110,7 @@ def import_csv_to_sqlite(mt_path_um, mt_path_dum, m, p, l):
             conn.rollback()  # Roll back changes if anything went wrong
     except pd.errors.EmptyDataError:
         print(
-            f"Error: CSV file '{mt_path_um}' or '{mt_path_dum}' is empty or not found."
+            f"Error: CSV file '{mt_paths[0]}' or '{mt_paths[1]}' or another one is empty or not found."
         )
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
@@ -117,6 +125,7 @@ def import_csv_to_sqlite(mt_path_um, mt_path_dum, m, p, l):
 
 if __name__ == "__main__":
     data_root = PROJECT_ROOT
+    models = ["DeepUnitMatch", "UMPy"]
 
     for mouse in os.listdir(data_root):
         if os.path.isdir(os.path.join(data_root, mouse)):
@@ -125,11 +134,16 @@ if __name__ == "__main__":
                 print(f"  Processing probe: {probe}")
                 for loc in os.listdir(os.path.join(data_root, mouse, probe)):
                     print(f"    Processing location: {loc}")
-                    mt_path_um = os.path.join(
-                        data_root, mouse, probe, loc, "DeepUnitMatch", "MatchTable.csv"
-                    )
-                    mt_path_dum = os.path.join(
-                        data_root, mouse, probe, loc, "UMPy", "MatchTable.csv"
-                    )
-                    if os.path.exists(mt_path_um) & os.path.exists(mt_path_dum):
-                        import_csv_to_sqlite(mt_path_um, mt_path_dum, mouse, probe, loc)
+                    mt_paths = []
+                    models_found = []
+                    for model in models:
+                        mt_path = os.path.join(
+                            data_root, mouse, probe, loc, model, "MatchTable.csv"
+                        )
+                        if not os.path.exists(mt_path):
+                            print(f"      Warning: MatchTable.csv not found for {model} at {mt_path}")
+                        else:
+                            mt_paths.append(mt_path)
+                            models_found.append(model)
+
+                    import_csv_to_sqlite(mt_paths, models_found, mouse, probe, loc)
