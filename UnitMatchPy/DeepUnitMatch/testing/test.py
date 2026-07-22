@@ -632,13 +632,17 @@ def get_FR(param):
     """
     Compute mean firing rate (spikes/s) per unit for two cross-validation halves.
     Returns array of shape (2, n_units): FR[fold, unit].
+    Units with too few spikes in a fold to bin a rate get FR = NaN -- not
+    enough data to estimate a rate, distinct from a genuine near-zero rate,
+    which would otherwise look like "identical firing rate" and bias
+    FR_diff toward spuriously resembling a match for unrelated sparse units.
     """
     fs = 3e4
     nclus = param["n_units"]
     KSdirs = param["KS_dirs"]
     good_units = param["good_units"]
 
-    FR = np.zeros((2, nclus))
+    FR = np.full((2, nclus), np.nan)
     index = 0
     for session in range(len(good_units)):
         times = np.load(os.path.join(KSdirs[session], "spike_times.npy")) / fs
@@ -671,11 +675,22 @@ def FR_diff(param):
     FRDiff[i, j] = |FR_fold2[i] - FR_fold1[j]|.
     Lower values indicate more similar firing rates (likely same unit).
 
+    Units where either fold's FR is NaN (get_FR: too few spikes to bin a
+    rate) are NaN across their *entire* row and column here, not just the
+    entries that directly involve the missing fold -- AUC() only checks for
+    fully-NaN rows, so a unit must be excluded symmetrically (both as itself
+    and as a comparison partner) or its still-finite fold would silently leak
+    into other units' comparisons while the unit itself goes unexcluded.
+
     Note: the AUC function expects higher = better match, so pass
     -FR_diff(param) when calling AUC for this metric.
     """
     FR = get_FR(param)  # (2, n_units)
-    return np.abs(FR[1, :, np.newaxis] - FR[0, np.newaxis, :])
+    diff = np.abs(FR[1, :, np.newaxis] - FR[0, np.newaxis, :])
+    invalid = np.isnan(FR[0]) | np.isnan(FR[1])
+    diff[invalid, :] = np.nan
+    diff[:, invalid] = np.nan
+    return diff
 
 
 def get_ISI_CV(param):
@@ -683,14 +698,17 @@ def get_ISI_CV(param):
     Compute the coefficient of variation (CV = std/mean) of interspike intervals
     per unit for two cross-validation halves.
     Returns array of shape (2, n_units): CV[fold, unit].
-    Units with fewer than 2 spikes in a fold get CV = 0.
+    Units with fewer than 2 spikes in a fold get CV = NaN -- not enough data to
+    estimate regularity, distinct from a genuinely low (near-zero) CV, which
+    would otherwise look like "perfectly regular firing" and bias ISI_CV_diff
+    toward spuriously resembling a match for unrelated sparse units.
     """
     fs = 3e4
     nclus = param["n_units"]
     KSdirs = param["KS_dirs"]
     good_units = param["good_units"]
 
-    CV = np.zeros((2, nclus))
+    CV = np.full((2, nclus), np.nan)
     index = 0
     for session in range(len(good_units)):
         times = np.load(os.path.join(KSdirs[session], "spike_times.npy")) / fs
@@ -719,11 +737,22 @@ def ISI_CV_diff(param):
     CVDiff[i, j] = |CV_fold2[i] - CV_fold1[j]|.
     Lower values indicate more similar firing regularity (likely same unit).
 
+    Units where either fold's CV is NaN (get_ISI_CV: too few spikes to
+    estimate) are NaN across their *entire* row and column here, not just the
+    entries that directly involve the missing fold -- AUC() only checks for
+    fully-NaN rows, so a unit must be excluded symmetrically (both as itself
+    and as a comparison partner) or its still-finite fold would silently leak
+    into other units' comparisons while the unit itself goes unexcluded.
+
     Note: the AUC function expects higher = better match, so pass
     -ISI_CV_diff(param) when calling AUC for this metric.
     """
     CV = get_ISI_CV(param)  # (2, n_units)
-    return np.abs(CV[1, :, np.newaxis] - CV[0, np.newaxis, :])
+    diff = np.abs(CV[1, :, np.newaxis] - CV[0, np.newaxis, :])
+    invalid = np.isnan(CV[0]) | np.isnan(CV[1])
+    diff[invalid, :] = np.nan
+    diff[:, invalid] = np.nan
+    return diff
 
 def get_natim_responses(param, merged_architecture=False):
     """
