@@ -1,7 +1,20 @@
 import os
+import json
 import pickle
 import pandas as pd
 import numpy as np
+
+
+def save_auc_summary(save_dir, auc_summary):
+    """
+    Save the scalar AUC values computed for this output (one per functional
+    score) as a small standalone JSON file. Otherwise these numbers only ever
+    get printed to console/logs -- MatchTable.csv holds the raw per-pair
+    functional-score matrices, which let you recompute an AUC but don't store
+    the number itself anywhere discoverable alongside the rest of the output.
+    """
+    with open(os.path.join(save_dir, "AUC_summary.json"), "w") as f:
+        json.dump(auc_summary, f, indent=2)
 
 
 def make_match_table(

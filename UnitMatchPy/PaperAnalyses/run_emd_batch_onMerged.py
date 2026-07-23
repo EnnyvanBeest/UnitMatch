@@ -299,6 +299,16 @@ def aggregate_group(merged_dir):
         print(f"AUC (ISI correlations):            {auc_isi:.3f}")
         functional_scores["ISI_correlations"] = isicorr
 
+        isikl = test.ISI_KL_divergence(param)
+        auc_isikl = test.AUC(final_matches, -isikl, session_id)
+        print(f"AUC (ISI KL divergence):           {auc_isikl:.3f}")
+        functional_scores["ISI_KL_divergence"] = isikl
+
+        isiwass = test.ISI_wasserstein_distance(param)
+        auc_isiwass = test.AUC(final_matches, -isiwass, session_id)
+        print(f"AUC (ISI Wasserstein distance):    {auc_isiwass:.3f}")
+        functional_scores["ISI_wasserstein_distance"] = isiwass
+
         refpopcorr = test.refpop_correlations(param, matches=final_matches)
         auc_refpop = test.AUC(final_matches, refpopcorr, session_id)
         print(f"AUC (ref. pop. correlation):       {auc_refpop:.3f}")
@@ -354,6 +364,9 @@ def aggregate_group(merged_dir):
         save_match_table=True,
         functional_scores=functional_scores if functional_scores else None,
     )
+    su.save_auc_summary(
+        emd_dir, test.auc_summary_from_functional_scores(functional_scores, final_matches, session_id)
+    )
 
     fig, ax = plt.subplots(figsize=(5, 5))
     im = ax.imshow(final_matches, cmap="viridis", aspect="auto")
@@ -368,6 +381,8 @@ def aggregate_group(merged_dir):
     if functional_scores:
         score_meta = {
             "ISI_correlations": ("ISI correlations", "viridis"),
+            "ISI_KL_divergence": ("ISI KL divergence", "magma"),
+            "ISI_wasserstein_distance": ("ISI Wasserstein distance", "magma"),
             "refpop_correlations": ("Ref. pop. correlations", "viridis"),
             "FR_diff": ("Firing rate difference", "magma"),
             "ISI_CV_diff": ("ISI CV difference", "magma"),

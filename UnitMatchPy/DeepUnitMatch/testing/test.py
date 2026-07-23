@@ -462,6 +462,142 @@ def ISI_correlations(param):
     return pairwise_histogram_correlation(A, B)  # compute pairwise correlations
 
 
+def _isi_histogram_to_pmf(A, eps=1e-6):
+    """
+    Normalize each row of A (raw ISI histogram counts, one row per unit) into
+    a probability mass function, with a small additive (Laplace-style)
+    smoothing so KL divergence never divides by / takes the log of zero.
+
+    Rows that sum to zero (no valid ISIs in that fold -- too few spikes) are
+    marked undefined and returned as NaN, rather than smoothed into a
+    degenerate near-uniform PMF that would look like real data.
+    """
+    A = A.astype(float)
+    totals = A.sum(axis=1)
+    undef = (totals == 0) | np.any(np.isnan(A), axis=1)
+    safe_totals = np.where(totals == 0, 1.0, totals)[:, None]
+    P = (A + eps) / (safe_totals + eps * A.shape[1])
+    P[undef, :] = np.nan
+    return P, undef
+
+
+def _pairwise_kl_divergence(P, Q, chunk_size=500):
+    """
+    KL(P_i || Q_j) for every pair (i, j): sum_b P_i[b] * log(P_i[b] / Q_j[b]).
+    Chunked over i to bound memory for large unit counts (mirrors
+    metric_functions.get_euclidean_metrics_chunked's chunking pattern) --
+    KL(P_i||Q_j) = sum_b P_i[b]*log(P_i[b]) - sum_b P_i[b]*log(Q_j[b]), so the
+    first (i-only) term is precomputed once and the second is a single matrix
+    product per chunk rather than an O(n^2 * n_bins) broadcasted array.
+
+    Asymmetric like FR_diff/ISI_CV_diff/ISI_correlations' own (i, j) fold
+    comparison -- not symmetrized, so entry (i, j) and (j, i) are genuinely
+    different comparisons (fold 0 of i vs fold 1 of j, and vice versa).
+    """
+    n = P.shape[0]
+    out = np.full((n, n), np.nan)
+    logQ = np.log(Q)
+    for start in range(0, n, chunk_size):
+        end = min(start + chunk_size, n)
+        Pc = P[start:end]
+        logPc = np.log(Pc)
+        self_term = np.nansum(Pc * logPc, axis=1)  # depends only on i
+        cross_term = Pc @ logQ.T  # (chunk, n): sum_b P_i[b] * log(Q_j[b])
+        out[start:end, :] = self_term[:, None] - cross_term
+    return out
+
+
+def _pairwise_wasserstein_distance(P, Q, bin_widths, chunk_size=500):
+    """
+    1D Wasserstein-1 (earth mover's) distance between P_i and Q_j for every
+    pair (i, j), using the closed form for piecewise-constant distributions
+    sharing the same (possibly non-uniform) bin edges:
+        W1 = sum_k |CDF_P(k) - CDF_Q(k)| * bin_width(k)
+    equivalent to scipy.stats.wasserstein_distance but vectorised across all
+    pairs at once -- scipy has no batched/pairwise version, and an O(n^2) loop
+    of per-pair scipy calls does not scale to realistic unit counts. Chunked
+    over i to bound memory.
+    """
+    n = P.shape[0]
+    out = np.full((n, n), np.nan)
+    cdf_Q = np.cumsum(Q, axis=1)
+    for start in range(0, n, chunk_size):
+        end = min(start + chunk_size, n)
+        cdf_Pc = np.cumsum(P[start:end], axis=1)
+        diff = np.abs(cdf_Pc[:, None, :] - cdf_Q[None, :, :])  # (chunk, n, n_bins)
+        out[start:end, :] = diff @ bin_widths
+    return out
+
+
+def ISI_KL_divergence(param):
+    """
+    Pairwise KL divergence between cross-validated ISI distributions --
+    complements ISI_correlations (Pearson correlation between the same
+    histograms) with a genuine distributional divergence: it penalises
+    probability-mass mismatches regardless of how far apart the mismatched
+    ISI values are (contrast with ISI_wasserstein_distance below).
+
+    KLDiv[i, j] = KL(unit i's fold-0 ISI histogram || unit j's fold-1 ISI
+    histogram). Lower values indicate more similar ISI distributions (likely
+    same unit). Units with no valid ISIs in either fold are NaN across their
+    *entire* row and column (see _isi_histogram_to_pmf) -- necessary because
+    AUC() only checks for fully-NaN rows, so a unit with an undefined fold
+    must be excluded symmetrically (both as itself and as a comparison
+    partner) or its still-defined fold would silently leak into other units'
+    comparisons while the unit itself goes unexcluded.
+
+    Note: the AUC function expects higher = better match, so pass
+    -ISI_KL_divergence(param) when calling AUC for this metric.
+    """
+    ISIbins = np.concatenate(([0], 5 * 10 ** np.arange(-4, 0.1, 0.1)))
+    ISIMat = get_ISI_histograms(param, ISIbins)
+    A, B = ISIMat[:, 0, :].T, ISIMat[:, 1, :].T  # (n_units, n_bins) each
+
+    P, undef_P = _isi_histogram_to_pmf(A)
+    Q, undef_Q = _isi_histogram_to_pmf(B)
+
+    kl = _pairwise_kl_divergence(P, Q, chunk_size=param.get("chunk_size", 500))
+
+    invalid = undef_P | undef_Q
+    kl[invalid, :] = np.nan
+    kl[:, invalid] = np.nan
+    return kl
+
+
+def ISI_wasserstein_distance(param):
+    """
+    Pairwise 1D Wasserstein (earth mover's) distance between cross-validated
+    ISI distributions, using the actual ISI bin values (seconds) as the
+    support -- unlike ISI_KL_divergence, this is sensitive to *how far apart*
+    differing ISI values are, not just whether probability mass differs.
+
+    WassDist[i, j]: unit i's fold-0 ISI histogram vs unit j's fold-1 ISI
+    histogram. Lower values indicate more similar distributions (likely same
+    unit). Units with no valid ISIs in either fold are NaN across their
+    entire row and column (see ISI_KL_divergence's docstring for why this
+    must be symmetric).
+
+    Note: the AUC function expects higher = better match, so pass
+    -ISI_wasserstein_distance(param) when calling AUC for this metric.
+    """
+    ISIbins = np.concatenate(([0], 5 * 10 ** np.arange(-4, 0.1, 0.1)))
+    ISIMat = get_ISI_histograms(param, ISIbins)
+    A, B = ISIMat[:, 0, :].T, ISIMat[:, 1, :].T
+
+    P, undef_P = _isi_histogram_to_pmf(A)
+    Q, undef_Q = _isi_histogram_to_pmf(B)
+    bin_widths = np.diff(ISIbins)
+
+    wass = _pairwise_wasserstein_distance(
+        P, Q, bin_widths, chunk_size=param.get("chunk_size", 500)
+    )
+
+    invalid = undef_P | undef_Q
+    wass[invalid, :] = np.nan
+    wass[:, invalid] = np.nan
+    return wass
+
+
 def get_binned_psth(param, bin_size=0.01):
     """
     Bin spike times into a population activity matrix per session.
@@ -1054,6 +1190,36 @@ def AUC(matches: np.ndarray, func_metric: np.ndarray, session_id):
     else:
         auc = np.trapz(recall, fpr)
     return auc
+
+
+# Functional scores where *lower* means a better match (so AUC() -- which
+# expects higher = better -- must be called on the negated matrix). Single
+# source of truth for this sign convention, instead of repeating the choice
+# at every pipeline call site that computes an AUC for these metrics.
+NEGATE_FOR_AUC = {"FR_diff", "ISI_CV_diff", "ISI_KL_divergence", "ISI_wasserstein_distance"}
+
+
+def auc_summary_from_functional_scores(functional_scores, matches, session_id):
+    """
+    Recompute the scalar AUC for every functional score already collected in
+    functional_scores (the same dict save_to_output writes into
+    MatchTable.csv columns), applying the correct sign convention per metric
+    (see NEGATE_FOR_AUC). Used to persist a small AUC_summary.json alongside
+    the rest of a pipeline's output -- otherwise these numbers only ever get
+    printed to console/logs.
+
+    A metric that raises inside AUC() (e.g. no across-session matches survive
+    after dropping its NaN rows) is silently omitted from the summary rather
+    than failing the whole thing.
+    """
+    summary = {}
+    for key, value in functional_scores.items():
+        signed = -value if key in NEGATE_FOR_AUC else value
+        try:
+            summary[key] = float(AUC(matches, signed, session_id))
+        except Exception:
+            pass
+    return summary
 
 
 if __name__ == "__main__":

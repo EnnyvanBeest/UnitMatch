@@ -634,6 +634,16 @@ def run_deep_unit_match_core(sess, save_dir, model, label="DeepUnitMatch"):
         print(f"AUC (ISI correlations):            {auc_isi:.3f}")
         functional_scores["ISI_correlations"] = isicorr
 
+        isikl = test.ISI_KL_divergence(param)
+        auc_isikl = test.AUC(final_matches, -isikl, session_id)
+        print(f"AUC (ISI KL divergence):           {auc_isikl:.3f}")
+        functional_scores["ISI_KL_divergence"] = isikl
+
+        isiwass = test.ISI_wasserstein_distance(param)
+        auc_isiwass = test.AUC(final_matches, -isiwass, session_id)
+        print(f"AUC (ISI Wasserstein distance):    {auc_isiwass:.3f}")
+        functional_scores["ISI_wasserstein_distance"] = isiwass
+
         refpopcorr = test.refpop_correlations(param, matches=final_matches)
         auc_refpop = test.AUC(final_matches, refpopcorr, session_id)
         print(f"AUC (ref. pop. correlation):       {auc_refpop:.3f}")
@@ -680,6 +690,9 @@ def run_deep_unit_match_core(sess, save_dir, model, label="DeepUnitMatch"):
         functional_scores=functional_scores if functional_scores else None,
     )
     ensure_matlab_compatible_output(save_dir)
+    su.save_auc_summary(
+        save_dir, test.auc_summary_from_functional_scores(functional_scores, final_matches, session_id)
+    )
 
     # ── save diagnostic figures ───────────────────────────────────────────────
     fig, axes = plt.subplots(1, 3, figsize=(15, 5))
@@ -709,6 +722,8 @@ def run_deep_unit_match_core(sess, save_dir, model, label="DeepUnitMatch"):
     if functional_scores:
         score_meta = {
             "ISI_correlations": ("ISI correlations", "viridis", None),
+            "ISI_KL_divergence": ("ISI KL divergence", "magma", None),
+            "ISI_wasserstein_distance": ("ISI Wasserstein distance", "magma", None),
             "refpop_correlations": ("Ref. pop. correlations", "viridis", None),
             "FR_diff": ("Firing rate difference", "magma", None),
             "ISI_CV_diff": ("ISI CV difference", "magma", None),
@@ -836,6 +851,16 @@ def run_umpy_core(sess, save_dir, label="UMPy"):
         print(f"AUC (ISI correlations):            {auc_isi:.3f}")
         functional_scores["ISI_correlations"] = isicorr
 
+        isikl = test.ISI_KL_divergence(param)
+        auc_isikl = test.AUC(final_matches_bool, -isikl, session_id)
+        print(f"AUC (ISI KL divergence):           {auc_isikl:.3f}")
+        functional_scores["ISI_KL_divergence"] = isikl
+
+        isiwass = test.ISI_wasserstein_distance(param)
+        auc_isiwass = test.AUC(final_matches_bool, -isiwass, session_id)
+        print(f"AUC (ISI Wasserstein distance):    {auc_isiwass:.3f}")
+        functional_scores["ISI_wasserstein_distance"] = isiwass
+
         refpopcorr = test.refpop_correlations(param, matches=final_matches_bool)
         auc_refpop = test.AUC(final_matches_bool, refpopcorr, session_id)
         print(f"AUC (ref. pop. correlation):       {auc_refpop:.3f}")
@@ -887,6 +912,10 @@ def run_umpy_core(sess, save_dir, label="UMPy"):
         functional_scores=functional_scores if functional_scores else None,
     )
     ensure_matlab_compatible_output(save_dir)
+    su.save_auc_summary(
+        save_dir,
+        test.auc_summary_from_functional_scores(functional_scores, final_matches_bool, session_id),
+    )
 
     # ── save diagnostic figures ───────────────────────────────────────────────
     fig, axes = plt.subplots(1, 3, figsize=(15, 5))
@@ -916,6 +945,8 @@ def run_umpy_core(sess, save_dir, label="UMPy"):
     if functional_scores:
         score_meta = {
             "ISI_correlations": ("ISI correlations", "viridis", None),
+            "ISI_KL_divergence": ("ISI KL divergence", "magma", None),
+            "ISI_wasserstein_distance": ("ISI Wasserstein distance", "magma", None),
             "refpop_correlations": ("Ref. pop. correlations", "viridis", None),
             "FR_diff": ("Firing rate difference", "magma", None),
             "ISI_CV_diff": ("ISI CV difference", "magma", None),
