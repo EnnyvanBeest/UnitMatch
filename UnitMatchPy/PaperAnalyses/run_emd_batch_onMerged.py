@@ -181,6 +181,17 @@ def stage_group(merged_dir):
     return stage_dir
 
 
+def get_stage_lock_path(merged_dir):
+    """
+    Lock file marking 'a run is currently staging this group', so multiple
+    machines pointed at the same BASE_INPUT/BASE_OUTPUT can split work across
+    groups without double-processing one. See batch_lock.py. Lives inside
+    _stage/ so it can't collide with the aggregate-phase lock (which lives in
+    the EMD group dir itself) even though both are named ".processing.lock".
+    """
+    return os.path.join(get_stage_dir(merged_dir), ".processing.lock")
+
+
 def run_stage():
     print(f"Scanning for merged-data groups under:\n  {BASE_INPUT}\n")
     groups = find_merged_groups()
@@ -195,11 +206,24 @@ def run_stage():
         if batch_lock.sentinel_is_fresh(stage_path, STAGE_REDO_FROM_DATE):
             print(f"  Skipping (manifest exists and is fresh): {stage_path}")
             continue
-        try:
-            stage_group(merged_dir)
-        except Exception as e:
-            print(f"  Staging FAILED: {e}")
-            traceback.print_exc()
+
+        lock_path = get_stage_lock_path(merged_dir)
+        with batch_lock.try_lock(lock_path) as acquired:
+            if not acquired:
+                print(f"  Skipping (already being processed by another run): {lock_path}")
+                continue
+
+            # re-check now that we hold the lock: another machine may have
+            # finished this group while we were scanning/waiting for the lock
+            if batch_lock.sentinel_is_fresh(stage_path, STAGE_REDO_FROM_DATE):
+                print(f"  Skipping (completed by another run): {stage_path}")
+                continue
+
+            try:
+                stage_group(merged_dir)
+            except Exception as e:
+                print(f"  Staging FAILED: {e}")
+                traceback.print_exc()
 
     print(
         "\nStaging done. Now run the MATLAB driver, e.g.:\n"
@@ -404,6 +428,15 @@ def aggregate_group(merged_dir):
     print(f"  Results saved to: {emd_dir}")
 
 
+def get_aggregate_lock_path(merged_dir):
+    """
+    Lock file marking 'a run is currently aggregating this group'. See
+    get_stage_lock_path -- lives in the EMD group dir itself so it can't
+    collide with the stage-phase lock (which lives in _stage/).
+    """
+    return os.path.join(get_emd_dir(merged_dir), ".processing.lock")
+
+
 def run_aggregate():
     print(f"Scanning for merged-data groups under:\n  {BASE_INPUT}\n")
     groups = find_merged_groups()
@@ -417,11 +450,24 @@ def run_aggregate():
         if emd_results_exist(merged_dir):
             print(f"  Skipping (results exist and are fresh): {get_emd_dir(merged_dir)}")
             continue
-        try:
-            aggregate_group(merged_dir)
-        except Exception as e:
-            print(f"  Aggregation FAILED: {e}")
-            traceback.print_exc()
+
+        lock_path = get_aggregate_lock_path(merged_dir)
+        with batch_lock.try_lock(lock_path) as acquired:
+            if not acquired:
+                print(f"  Skipping (already being processed by another run): {lock_path}")
+                continue
+
+            # re-check now that we hold the lock: another machine may have
+            # finished this group while we were scanning/waiting for the lock
+            if emd_results_exist(merged_dir):
+                print(f"  Skipping (completed by another run): {get_emd_dir(merged_dir)}")
+                continue
+
+            try:
+                aggregate_group(merged_dir)
+            except Exception as e:
+                print(f"  Aggregation FAILED: {e}")
+                traceback.print_exc()
 
     print("\nAll done.")
 

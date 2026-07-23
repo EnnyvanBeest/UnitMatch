@@ -297,6 +297,21 @@ def umpy_results_exist(mat_path):
     return batch_lock.sentinel_is_fresh(sentinel, REDO_FROM_DATE)
 
 
+def get_group_lock_path(mat_path):
+    """
+    Lock file marking 'a run is currently processing this group' (DeepUnitMatch
+    + UMPy together), so multiple machines pointed at the same BASE_INPUT/
+    BASE_OUTPUT can split work across mat files without double-processing one.
+    See batch_lock.py. Mirrors run_deepunitmatch_batch_onMerged.py's lock --
+    this script previously had no cross-machine lock at all (only the
+    REDO_FROM_DATE freshness check above), so running it from multiple
+    machines at once would have them all discover the same mat_files and
+    duplicate/race on the same output.
+    """
+    subfolder = os.path.relpath(os.path.dirname(mat_path), BASE_INPUT)
+    return os.path.join(BASE_OUTPUT, os.path.dirname(subfolder), ".processing.lock")
+
+
 # ── shared session loader ─────────────────────────────────────────────────────
 
 
@@ -972,31 +987,45 @@ def main():
             print("  Skipping both pipelines (results exist and are fresh).")
             continue
 
-        sess = _prepare_session(mat_path)
-        if sess is None:
-            continue
+        lock_path = get_group_lock_path(mat_path)
+        with batch_lock.try_lock(lock_path) as acquired:
+            if not acquired:
+                print(f"  Skipping (already being processed by another run): {lock_path}")
+                continue
 
-        if run_deep:
-            try:
-                run_deep_unit_match(sess)
-            except Exception as e:
-                print(f"  DeepUnitMatch FAILED: {e}")
-                traceback.print_exc()
-        else:
-            print(
-                f"  Skipping DeepUnitMatch (results exist and are fresh): {get_save_dir(mat_path)}"
-            )
+            # re-check now that we hold the lock: another machine may have
+            # finished this group while we were scanning/waiting for the lock
+            run_deep = not results_exist(mat_path)
+            run_ump = not umpy_results_exist(mat_path)
+            if not run_deep and not run_ump:
+                print("  Skipping both pipelines (completed by another run).")
+                continue
 
-        if run_ump:
-            try:
-                run_umpy(sess)
-            except Exception as e:
-                print(f"  UMPy FAILED: {e}")
-                traceback.print_exc()
-        else:
-            print(
-                f"  Skipping UMPy (results exist and are fresh): {get_umpy_save_dir(mat_path)}"
-            )
+            sess = _prepare_session(mat_path)
+            if sess is None:
+                continue
+
+            if run_deep:
+                try:
+                    run_deep_unit_match(sess)
+                except Exception as e:
+                    print(f"  DeepUnitMatch FAILED: {e}")
+                    traceback.print_exc()
+            else:
+                print(
+                    f"  Skipping DeepUnitMatch (results exist and are fresh): {get_save_dir(mat_path)}"
+                )
+
+            if run_ump:
+                try:
+                    run_umpy(sess)
+                except Exception as e:
+                    print(f"  UMPy FAILED: {e}")
+                    traceback.print_exc()
+            else:
+                print(
+                    f"  Skipping UMPy (results exist and are fresh): {get_umpy_save_dir(mat_path)}"
+                )
 
     print("\nAll done.")
 
