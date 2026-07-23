@@ -637,7 +637,12 @@ def _pairwise_corr_cols(A, B):
 
     NaN entries (at most one per column in our use case) are replaced by the
     column mean before correlating — a negligible approximation when NaNs are
-    sparse.  Columns that are entirely NaN or have zero variance yield 0.
+    sparse. Columns that are entirely NaN or have zero variance are genuinely
+    undefined and returned as NaN, not 0 -- a fabricated "0 correlation"
+    would misleadingly look like a real, informative fingerprint mismatch
+    rather than "no data" (mirrors pairwise_histogram_correlation's own
+    compute-with-a-safe-placeholder-then-remask pattern, which already gets
+    this right).
     Returns (p, q).
     """
     A = A.copy().astype(float)
@@ -646,14 +651,24 @@ def _pairwise_corr_cols(A, B):
         for j in range(M.shape[1]):
             nan_mask = np.isnan(M[:, j])
             if nan_mask.all():
-                M[:, j] = 0.0  # all-NaN column → constant zero
+                M[:, j] = 0.0  # placeholder (constant zero -> corrcoef gives NaN, remasked below)
             elif nan_mask.any():
                 M[nan_mask, j] = np.nanmean(M[:, j])
     p = A.shape[1]
     combined = np.vstack([A.T, B.T])  # (p+q) × n
     with np.errstate(invalid="ignore", divide="ignore"):
         C = np.corrcoef(combined)  # (p+q) × (p+q)
-    return np.nan_to_num(C[:p, p:], nan=0.0)
+    result = C[:p, p:]
+    # A zero-variance column produces an entirely-NaN row/column in result --
+    # use *all* (not any) to detect it: a normal column that merely pairs
+    # against one such undefined column has exactly one NaN entry, not a
+    # fully undefined row/column, and must not be masked out wholesale.
+    undef_A = np.all(np.isnan(result), axis=1)
+    undef_B = np.all(np.isnan(result), axis=0)
+    result = np.nan_to_num(result, nan=0.0)
+    result[undef_A, :] = np.nan
+    result[:, undef_B] = np.nan
+    return result
 
 
 def refpop_correlations(param, matches=None, bin_size=0.01):
@@ -689,9 +704,12 @@ def refpop_correlations(param, matches=None, bin_size=0.01):
         n_fold = sr.shape[1] // 2
         C1 = np.corrcoef(sr[:, :n_fold])
         C2 = np.corrcoef(sr[:, n_fold : 2 * n_fold])
-        # Zero out NaN from units with no spikes before setting diagonal
-        C1 = np.nan_to_num(C1, nan=0.0)
-        C2 = np.nan_to_num(C2, nan=0.0)
+        # NaN here means a unit had zero variance in that fold (e.g. no
+        # spikes) -- genuinely undefined, not "0 correlation". Left as NaN:
+        # it propagates cleanly through arctanh/tanh below (no warning, no
+        # crash -- verified), and _pairwise_corr_cols already knows how to
+        # handle NaN-containing columns for the within-session block that
+        # uses these arrays directly.
         # z-transform average of the two folds (MATLAB: tanh(nanmean(atanh(...))))
         avg = np.tanh(
             0.5
