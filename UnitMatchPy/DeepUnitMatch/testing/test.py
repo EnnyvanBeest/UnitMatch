@@ -1211,6 +1211,17 @@ def auc_summary_from_functional_scores(functional_scores, matches, session_id):
     A metric that raises inside AUC() (e.g. no across-session matches survive
     after dropping its NaN rows) is silently omitted from the summary rather
     than failing the whole thing.
+
+    Also includes "n_matches_across_sessions": the count of matches in
+    `matches` restricted to across-session pairs -- excluding within-recording
+    matches (including the trivial unit-matches-itself diagonal), regardless
+    of whether a given pipeline's raw `matches` matrix already excludes
+    within-session pairs itself (DeepUnitMatch's directional_filter_matrix and
+    the EMD aggregator's final_matches both already do; UMPy's raw threshold
+    matrix does not -- see AUC()'s own within_session filtering for why that
+    matters). Applying the same across-session mask here regardless keeps the
+    count consistent across all three, rather than depending on each
+    pipeline's own filtering behaviour.
     """
     summary = {}
     for key, value in functional_scores.items():
@@ -1219,6 +1230,9 @@ def auc_summary_from_functional_scores(functional_scores, matches, session_id):
             summary[key] = float(AUC(matches, signed, session_id))
         except Exception:
             pass
+
+    across_session = session_id[:, None] != session_id[None, :]
+    summary["n_matches_across_sessions"] = int(np.sum(matches & across_session)) // 2
     return summary
 
 
