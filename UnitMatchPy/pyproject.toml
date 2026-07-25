@@ -36,6 +36,9 @@ dependencies = [
   "h5py>=3.8,<4.0",
   "scikit-learn>=1.2,<2.0",
   "mtscomp",
+  # CPU build by default (PyPI's plain torch wheel has no CUDA support).
+  # For GPU: pip install -r requirements-cuda.txt BEFORE installing this
+  # package -- see README.md's "GPU (CUDA) users" section.
   "torch>=2.1,<3.0",
   "tensorboard",
   "seaborn",

@@ -1,0 +1,18 @@
+# Installs the CUDA-enabled PyTorch build instead of the CPU-only default.
+#
+# PyPI's plain `torch` wheel is CPU-only -- CUDA builds are published only on
+# PyTorch's own package index. Run this BEFORE `pip install .` / `pip install
+# -e .` / `pip install UnitMatchPy`: once torch is installed and satisfies the
+# version range below (matching pyproject.toml's own constraint), those
+# commands see it already satisfied and leave it alone, rather than
+# overwriting it with the CPU build.
+#
+# Windows/Linux with an NVIDIA GPU only -- skip this file on macOS (no CUDA)
+# or on a machine with no GPU. See README.md's "GPU (CUDA) install" section.
+#
+# Check https://pytorch.org/get-started/locally for the current recommended
+# cu### tag if this one is no longer the latest -- driver backward
+# compatibility means an older tag than your driver's max-supported CUDA
+# version is normally fine.
+--extra-index-url https://download.pytorch.org/whl/cu126
+torch>=2.1,<3.0

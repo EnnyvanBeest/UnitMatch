@@ -31,6 +31,34 @@ conda create -n UMPy python=3.11 pip #(press y when prompted)
 conda activate UMPy
 ```
 
+### GPU (CUDA) users: install this first
+
+Skip this if you're on macOS (no CUDA) or don't have an NVIDIA GPU -- Option A/B below
+will just install the CPU build automatically, no extra steps needed.
+
+If you do have an NVIDIA GPU (Windows/Linux) and want DeepUnitMatch to run on it, install
+the CUDA-enabled PyTorch build **before** Option A or B below:
+
+```bash
+pip install --extra-index-url https://download.pytorch.org/whl/cu126 torch
+```
+
+(if you've cloned this repo, `pip install -r requirements-cuda.txt` from this folder does
+the same thing). Do this first because plain `pip install UnitMatchPy` / `pip install -e .`
+alone always installs the CPU-only build -- PyPI's default `torch` wheel is CPU-only, and
+pip has no way to detect that a GPU is present. Once torch is already installed and
+satisfies the version range Option A/B ask for, they'll leave it alone instead of
+overwriting it with the CPU build.
+
+Verify it worked:
+
+```bash
+python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+```
+
+This should print a version ending in `+cuXXX` (not `+cpu`) and `True`. If it's not, see
+`pyproject.toml`'s `torch` dependency comment, or check `nvidia-smi` shows a working driver.
+
 Then install using pip (options below). This step should take less than few minutes.
 
 ### Option A: Install the released package (PyPI)

@@ -146,68 +146,89 @@ ts = size(mwf{1}, 3);
 
 % ---- every session pair, mirroring the exhaustive r1<r2 loop the Python ----
 % ---- batch script uses for UMPy/DeepUnitMatch                          ----
-for i = 1:nSessions - 1
-    for j = i + 1:nSessions
-        folder1 = sessions(i).folder;
-        folder2 = sessions(j).folder;
-        result_dir = fullfile(emd_dir, sprintf('result_%s_%s', folder1, folder2));
-        out_mat = fullfile(result_dir, 'Output.mat');
-        if isfile(out_mat)
-            out_info = dir(out_mat);
-            out_datetime = datetime(out_info.datenum, 'ConvertFrom', 'datenum');
-            fresh_vs_manifest = out_datetime >= manifest_datetime;
-            fresh_vs_date = isnat(REDO_FROM_DATE) || out_datetime >= REDO_FROM_DATE;
-            if fresh_vs_manifest && fresh_vs_date
-                fprintf('  Skipping %s vs %s (exists and fresh)\n', folder1, folder2);
-                continue
-            end
-            fprintf('  Re-matching %s vs %s (existing Output.mat is stale)...\n', folder1, folder2);
-        else
-            fprintf('  Matching %s vs %s ...\n', folder1, folder2);
+% parfor: each pair is independent (reads only the already-loaded mwf/
+% clusterIds, writes only to its own pair-unique result_dir/EMD_intermediate
+% folder), so there's no cross-iteration state or output collision. Requires
+% Parallel Computing Toolbox to actually run in parallel -- if it isn't
+% installed, parfor transparently falls back to plain serial execution
+% (unlike Optimization Toolbox/linprog, which hard-errors when missing), so
+% this is safe to leave in regardless of the machine it runs on. If you have
+% many cores but see little speedup, check that linprog isn't already
+% internally multithreading each worker into oversubscription (e.g. via
+% maxNumCompThreads or by capping the pool size below the core count).
+pairIdx = nchoosek(1:nSessions, 2); % each row = [i, j], i<j
+nPairs = size(pairIdx, 1);
+
+parfor p = 1:nPairs
+    i = pairIdx(p, 1);
+    j = pairIdx(p, 2);
+    folder1 = sessions(i).folder;
+    folder2 = sessions(j).folder;
+    result_dir = fullfile(emd_dir, sprintf('result_%s_%s', folder1, folder2));
+    out_mat = fullfile(result_dir, 'Output.mat');
+    if isfile(out_mat)
+        out_info = dir(out_mat);
+        out_datetime = datetime(out_info.datenum, 'ConvertFrom', 'datenum');
+        fresh_vs_manifest = out_datetime >= manifest_datetime;
+        fresh_vs_date = isnat(REDO_FROM_DATE) || out_datetime >= REDO_FROM_DATE;
+        if fresh_vs_manifest && fresh_vs_date
+            fprintf('  Skipping %s vs %s (exists and fresh)\n', folder1, folder2);
+            continue
         end
+        fprintf('  Re-matching %s vs %s (existing Output.mat is stale)...\n', folder1, folder2);
+    else
+        fprintf('  Matching %s vs %s ...\n', folder1, folder2);
+    end
 
-        clear input
-        input.input_path = stage_root;
-        input.data_path1 = folder1;
-        input.data_path2 = folder2;
-        input.chan_pos = chan_pos_emd;
-        input.chan_map = (0:size(chan_pos_emd, 1) - 1)'; % unused: nChanPos == nChanMW here
-        input.EMD_path = fullfile(result_dir, 'EMD_intermediate');
-        input.KSLabel_name = 'cluster_KSLabel.tsv'; % unused (bUseKSlabel=0 in create_EMD_input)
-        input.shank = -1;
-        input.fs = 30000;
-        input.ts = ts;
-        input.l2_weights = 1500;
-        input.threshold = 10; % z distance threshold for matched units, um
-        input.validation = 0;
-        input.xStep = xStep;
-        input.zStep = zStep;
-        input.dim_mask = logical([1, 1, 1, 0, 0, 0, 0, 0, 0, 1]);
-        input.dim_mask_physical = logical([1, 1, 1, 0, 0, 0, 0, 0, 0, 0]);
-        input.dim_mask_wf = logical([0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
-        input.diagDistCalc = false;
-        input.result_path = result_dir;
-        input.input_name = 'input_pre.mat';
-        input.input_name_post = 'input_post.mat';
-        input.filename_pre = 'EMD_pre.mat';
-        input.filename_post = 'EMD_post.mat';
+    input = struct();
+    input.input_path = stage_root;
+    input.data_path1 = folder1;
+    input.data_path2 = folder2;
+    input.chan_pos = chan_pos_emd;
+    input.chan_map = (0:size(chan_pos_emd, 1) - 1)'; % unused: nChanPos == nChanMW here
+    input.EMD_path = fullfile(result_dir, 'EMD_intermediate');
+    input.KSLabel_name = 'cluster_KSLabel.tsv'; % unused (bUseKSlabel=0 in create_EMD_input)
+    input.shank = -1;
+    input.fs = 30000;
+    input.ts = ts;
+    input.l2_weights = 1500;
+    input.threshold = 10; % z distance threshold for matched units, um
+    input.validation = 0;
+    input.xStep = xStep;
+    input.zStep = zStep;
+    input.dim_mask = logical([1, 1, 1, 0, 0, 0, 0, 0, 0, 1]);
+    input.dim_mask_physical = logical([1, 1, 1, 0, 0, 0, 0, 0, 0, 0]);
+    input.dim_mask_wf = logical([0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+    input.diagDistCalc = false;
+    input.result_path = result_dir;
+    input.input_name = 'input_pre.mat';
+    input.input_name_post = 'input_post.mat';
+    input.filename_pre = 'EMD_pre.mat';
+    input.filename_post = 'EMD_post.mat';
 
-        try
-            NT_main(input, mwf{i}, mwf{j});
+    try
+        NT_main(input, mwf{i}, mwf{j});
 
-            % Stash the per-session cluster-id lists (parallel to mwf{i}/mwf{j}
-            % rows) alongside Yuan's own Output.mat, so the Python aggregator
-            % can translate f1_labels/f2_labels (positions into mwf{i}/mwf{j})
-            % back to actual cluster IDs.
-            s_out = load(out_mat, 'output');
-            output = s_out.output;
-            output.cluster_ids_1 = clusterIds{i};
-            output.cluster_ids_2 = clusterIds{j};
-            save(out_mat, 'output');
-        catch ME
-            fprintf('  FAILED %s vs %s: %s\n', folder1, folder2, ME.message);
-            disp(getReport(ME));
-        end
+        % Stash the per-session cluster-id lists (parallel to mwf{i}/mwf{j}
+        % rows) alongside Yuan's own Output.mat, so the Python aggregator
+        % can translate f1_labels/f2_labels (positions into mwf{i}/mwf{j})
+        % back to actual cluster IDs.
+        s_out = load(out_mat, 'output');
+        output = s_out.output;
+        output.cluster_ids_1 = clusterIds{i};
+        output.cluster_ids_2 = clusterIds{j};
+        % save(out_mat, 'output') looks up 'output' by name in the caller's
+        % workspace, which parfor doesn't support (PFSV). -fromstruct saves
+        % each *field* of a struct as its own top-level variable instead, so
+        % wrap output in a one-field struct to get the same single
+        % top-level "output" variable the unmodified NT_main itself writes
+        % (and that the Python aggregator reads back via mat["output"]).
+        save_wrapper = struct();
+        save_wrapper.output = output;
+        save(out_mat, '-fromstruct', save_wrapper);
+    catch ME
+        fprintf('  FAILED %s vs %s: %s\n', folder1, folder2, ME.message);
+        disp(getReport(ME));
     end
 end
 end
