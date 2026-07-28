@@ -349,7 +349,7 @@ def aggregate_group(merged_dir):
         functional_scores["ISI_CV_diff"] = cvdiff
 
         try:
-            natimcorr = test.natim_correlations(param)
+            natimcorr = test.natim_correlations(param, merged_architecture=True)
             auc_natim = test.AUC(final_matches, natimcorr, session_id)
             print(f"AUC (nat. image correlations):     {auc_natim:.3f}")
             functional_scores["natim_correlations"] = natimcorr

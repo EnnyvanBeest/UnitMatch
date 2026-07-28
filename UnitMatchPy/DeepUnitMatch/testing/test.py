@@ -1128,12 +1128,23 @@ def get_stimulus_triggered_psth(
     return psth, unique_stimulus_ids
 
 
-def natim_correlations(param):
+def natim_correlations(param, merged_architecture=False):
     """
     Compute pairwise correlations of natural image stimulus fingerprints across neurons.
     Fingerprints combine average timecourse over stimuli + average response across stimuli.
+
+    merged_architecture must match how param["KS_dirs"] is laid out: True when
+    KS_dirs points at a merged-dataset tree (trial.imageIDs.npy etc. copied
+    directly into each session folder by generate_merged_dataset.py), False
+    for the original per-mouse, non-merged KS directories (trial files live
+    two levels up -- see get_natim_responses). Passing the wrong value means
+    get_natim_responses looks in the wrong place, silently finds nothing
+    (FileNotFoundError -> NaN fallback per session), and this score quietly
+    disappears from functional_scores instead of erroring.
     """
-    session_stimulus_responses, session_timecourses = get_natim_responses(param)
+    session_stimulus_responses, session_timecourses = get_natim_responses(
+        param, merged_architecture=merged_architecture
+    )
 
     # Concatenate fingerprints from all sessions
     all_timecourses = np.concatenate(
