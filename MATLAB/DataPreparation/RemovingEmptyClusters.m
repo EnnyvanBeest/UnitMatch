@@ -16,7 +16,14 @@ waveforms = nan(nclus,size(sp.waveforms,2));
 
 emptyclus = [];
 for clusid=1:nclus
-    oriclusid = unique(sp.clu(find(sp.clu == clusinfo.cluster_id(clusid))));
+    % Use the original (pre-curation) template assignment, not sp.clu, to
+    % find which template(s) contributed to this cluster: after
+    % merging/splitting in Phy, sp.clu holds the new cluster_id itself, so
+    % looking it up in sp.clu is a no-op and never detects merges. A
+    % merged cluster's id can also exceed the number of original
+    % templates, which is what sp.temps/sp.templateDepths/etc. are
+    % indexed by.
+    oriclusid = unique(sp.spikeTemplates(sp.clu == clusinfo.cluster_id(clusid)));
     if isempty(oriclusid)
         emptyclus = [emptyclus clusid];
     elseif numel(oriclusid)==1
@@ -48,6 +55,19 @@ for clusid=1:nclus
     end
 end
 
+% Store the remapped per-cluster arrays back into sp, now aligned with
+% clusinfo.cluster_id (one row per cluster instead of one row per
+% original template) -- needed because downstream code (e.g.
+% ExtractKilosortData.m) indexes sp.templateDepths/sp.templateXpos by
+% position in clusinfo.cluster_id.
+sp.temps = temps;
+sp.pcFeatInd = pcFeatInd;
+sp.templateDepths = templateDepths;
+sp.templateXpos = templateXpos;
+sp.tempAmps = tempAmps;
+sp.tempsUnW = tempsUnW;
+sp.templateDuration = templateDuration;
+sp.waveforms = waveforms;
 
 if any(emptyclus)
     disp(['Found ' num2str(length(emptyclus)) ' empty clusters. Removing from clusinfo'])
