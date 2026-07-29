@@ -32,6 +32,8 @@ def merge_match_tables(df_1, df_2, sub1, sub2):
     frames and equal within 1e-13, one copy is kept; if they differ more than
     that, an error is raised. All other columns are treated as unique to each
     input and are suffixed.
+
+    COULD JUST USE df.merge() INSTEAD?
     """
 
     shared_columns_to_keep = ["RecSes 1", "RecSes 2", "ID1", "ID2", 
@@ -163,7 +165,7 @@ if __name__ == "__main__":
               "UMPy_maxdist=20", "UMPy_maxdist=50", "UMPy_maxdist=100", "UMPy_maxdist=inf",
               "DUM_W_ij=1","DUM_W_ij=5","DUM_W_ij=10","DUM_W_ij=15","DUM_W_ij=20", 
               "n_output=8_after_ae_and_finetune", "n_output=32_after_ae_and_finetune", "n_output=128_after_ae_and_finetune", "n_output=256_after_ae_and_finetune", 
-              "EMD"
+              "EMD", "DANT", "DANT_no_functional"
               ]
 
     for mouse in os.listdir(data_root):
