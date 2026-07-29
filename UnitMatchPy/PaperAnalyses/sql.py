@@ -1,10 +1,11 @@
 import sqlite3
 import pandas as pd
 import os
+import numpy as np
 
 # Paths relative to the repo root. PROJECT_ROOT is the repo's parent directory,
 # which holds the data/results folders alongside this repo.
-# PROJECT_ROOT = r'\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026V2'
+# PROJECT_ROOT = r'\\znas\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026V2'
 PROJECT_ROOT = r'\\znas\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026_V3_OnMergedData'
 
 
@@ -27,28 +28,55 @@ def pandas_to_sqlite_type(dtype):
 def merge_match_tables(df_1, df_2, sub1, sub2):
     """Merge two match-table dataframes by columns.
 
-    Columns that exist in both frames and have identical values are kept once.
-    Columns that exist in both frames but differ are renamed to <name>_<sub1> and
-    <name>_<sub2> so both versions are preserved. Columns unique to one frame are
-    kept with their original names.
+    The predefined shared columns are checked first: if they are present in both
+    frames and equal within 1e-13, one copy is kept; if they differ more than
+    that, an error is raised. All other columns are treated as unique to each
+    input and are suffixed.
     """
+
+    shared_columns_to_keep = ["RecSes 1", "RecSes 2", "ID1", "ID2", 
+                              "ISI_correlations", "ISI_KL_divergence", "ISI_wasserstein_distance",
+                              "FR_diff", "ISI_CV_diff",
+                              "UID orig 1", "UID orig 2",
+                              #"natim_correlations"
+                              ]
+                              
+    tol = 1e-12
+
+    suff_sub1 = f"_{sub1}" if sub1 is not None else ""
+    suff_sub2 = f"_{sub2}" if sub2 is not None else ""
+
     df_1 = df_1.copy()
     df_2 = df_2.copy()
 
-    shared_columns = sorted(set(df_1.columns) & set(df_2.columns))
-    for col in shared_columns:
-        if df_1[col].equals(df_2[col]):
+    for col in shared_columns_to_keep:
+        if col in df_1.columns and col in df_2.columns:
+            if not np.allclose(
+                df_1[col].to_numpy(),
+                df_2[col].to_numpy(),
+                equal_nan=True,
+                rtol=0.0,
+                atol=tol,
+            ):
+                raise ValueError(f"Shared column '{col}' differs between inputs.")
             df_2.drop(columns=[col], inplace=True)
-        else:
-            df_1.rename(columns={col: f"{col}_{sub1}"}, inplace=True)
-            df_2.rename(columns={col: f"{col}_{sub2}"}, inplace=True)
+        elif col in df_1.columns or col in df_2.columns:
+            print(f"Expected shared column '{col}' is missing from one input frame.")
+
+    for col in list(df_1.columns):
+        if col not in shared_columns_to_keep:
+            df_1.rename(columns={col: f"{col}{suff_sub1}"}, inplace=True)
+
+    for col in list(df_2.columns):
+        if col not in shared_columns_to_keep:
+            df_2.rename(columns={col: f"{col}{suff_sub2}"}, inplace=True)
 
     return pd.concat([df_1, df_2], axis=1)
 
 
 def import_csv_to_sqlite(mt_paths, models, m, p, l):
 
-    db_file = os.path.join(PROJECT_ROOT, "matchtables_new.db")
+    db_file = os.path.join(PROJECT_ROOT, "matchtables.db")
 
     # Define the table name in SQLite
     table_name = f"{m}_{p}_{l}"  # Change this
@@ -57,16 +85,19 @@ def import_csv_to_sqlite(mt_paths, models, m, p, l):
     df_merged = pd.read_csv(mt_paths[0])
     if len(mt_paths) > 1:
         df_2 = pd.read_csv(mt_paths[1])
+        print(f"Merging models {models[0]} and {models[1]}...")
         df_merged = merge_match_tables(df_merged, df_2, models[0], models[1])
         for idx, path in enumerate(mt_paths[2:]):
             if os.path.exists(path):
                 df_tomerge = pd.read_csv(path)
-                df_merged = merge_match_tables(df_merged, df_tomerge, '', models[idx + 2])
+                print(f"Merging with model {models[idx + 2]}...")
+                df_merged = merge_match_tables(df_merged, df_tomerge, None, models[idx + 2])
             else:
                 print(f"Warning: File not found at {path}. Skipping this file.")
     df_merged.rename(columns={'RecSes 1': 'RecSes1', 'RecSes 2': 'RecSes2'}, inplace=True)
 
     column_defs = []
+
     print("Generating SQL column definitions from merged DataFrame...")
     for col_name in df_merged.columns:
         dtype = df_merged[col_name].dtype
@@ -125,7 +156,15 @@ def import_csv_to_sqlite(mt_paths, models, m, p, l):
 
 if __name__ == "__main__":
     data_root = PROJECT_ROOT
-    models = ["DeepUnitMatch", "UMPy"]
+    # models = ["DeepUnitMatch", "UMPy"]
+    models = ["DeepUnitMatch",
+              "UMPy", 
+              "DUM_maxdist=20", "DUM_maxdist=50", "DUM_maxdist=100", "DUM_maxdist=inf", 
+              "UMPy_maxdist=20", "UMPy_maxdist=50", "UMPy_maxdist=100", "UMPy_maxdist=inf",
+              "DUM_W_ij=1","DUM_W_ij=5","DUM_W_ij=10","DUM_W_ij=15","DUM_W_ij=20", 
+              "n_output=8_after_ae_and_finetune", "n_output=32_after_ae_and_finetune", "n_output=128_after_ae_and_finetune", "n_output=256_after_ae_and_finetune", 
+              "EMD"
+              ]
 
     for mouse in os.listdir(data_root):
         if os.path.isdir(os.path.join(data_root, mouse)):
@@ -146,4 +185,7 @@ if __name__ == "__main__":
                             mt_paths.append(mt_path)
                             models_found.append(model)
 
-                    import_csv_to_sqlite(mt_paths, models_found, mouse, probe, loc)
+                    if len(mt_paths) > 0:
+                        import_csv_to_sqlite(mt_paths, models_found, mouse, probe, loc)
+                    else:
+                        print('No valid MatchTable.csv found.')
