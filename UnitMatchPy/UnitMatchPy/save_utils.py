@@ -3,7 +3,7 @@ import json
 import pickle
 import pandas as pd
 import numpy as np
-
+from pathlib import Path
 
 def save_auc_summary(save_dir, auc_summary):
     """
@@ -638,3 +638,115 @@ def save_prob_for_phy(probability, param, clus_info):
             matrix_prob = session_output
 
         np.save(save_file_tmp, matrix_prob)
+
+
+def make_UnitMatch_folder_from_sorting_analyzers(analyzers, save_dir):
+    """
+    Creates a folder called `save_dir` for a single session,
+    which can be used to run UnitMatch.
+    
+    The output folder has the structure
+
+    unitmatch_dir/
+        Session{i}/
+            # (num_units, 3) dimensional array of channel locations
+            channel_locations.npy 
+            
+            # List of curated labels, using BombCell
+            bombcell_labels.tsv 
+            
+            # (num_time_samples, num_channels, 2) array of average waveforms 
+            # for each unit. Each file contains the average waveform for both
+            # the first half and the second half of the recording.
+            Unit0_RawSpikes.npy
+            Unit1_RawSpikes.npy
+            ...                
+            UnitN_RawSpikes.npy
+
+            # waveform specific params, from si waveform extension
+            waveform_params.json
+    """
+
+    # only import spikeinterface here, so that non-si users don't need to have it in their env
+    import spikeinterface.full as si
+
+    save_dir = Path(save_dir)
+    save_dir.mkdir(exist_ok=True)
+
+    required_extensions = ['random_spikes', 'waveforms', 'templates', 'template_metrics', 'quality_metrics']
+
+    for session_index, analyzer in enumerate(analyzers):
+
+        missing_extensions = []
+        for extension in required_extensions:
+            if not analyzer.has_extension(extension):
+                missing_extensions.append(extension)
+        if len(missing_extensions) > 0:
+            raise ValueError(f"Analyzer must have {missing_extensions} extensions computed.\n" \
+                "Please compute them by running `sorting_analyzer.compute({missing_extensions})")
+
+        session_dir = save_dir / f'Session{session_index}'
+        session_dir.mkdir()
+
+        # TEMPLATES / RAWSPIKES
+
+        half_samples = analyzer.get_num_samples() // 2
+        waveforms = analyzer.get_extension('waveforms')
+        random_spikes = analyzer.get_extension('random_spikes')
+
+        for unit_id in analyzer.unit_ids:
+
+            both_halves_average_waveform_dense = np.zeros((np.shape(waveforms.get_data())[1], analyzer.get_num_channels(), 2))
+
+            unit_random_spikes = random_spikes.get_selected_indices_in_spike_train(unit_id = unit_id, segment_index=0)
+            first_half_mask = analyzer.sorting.get_unit_spike_train(unit_id = unit_id)[unit_random_spikes] < half_samples
+
+            first_half_waveforms = waveforms.get_waveforms_one_unit(unit_id = unit_id)[first_half_mask]
+            second_half_waveforms = waveforms.get_waveforms_one_unit(unit_id = unit_id)[~first_half_mask]
+
+            first_half_average_waveform_sparse = np.average(first_half_waveforms, axis=0)
+            second_half_average_waveform_sparse = np.average(second_half_waveforms, axis=0)
+
+            channel_indices = analyzer.sparsity.unit_id_to_channel_indices[unit_id]
+
+            both_halves_average_waveform_dense[:, channel_indices, 0] = first_half_average_waveform_sparse[:, :channel_indices.size]
+            both_halves_average_waveform_dense[:, channel_indices, 1] = second_half_average_waveform_sparse[:, :channel_indices.size]
+
+            np.save(session_dir / f"Unit{unit_id}_RawSpikes.npy", both_halves_average_waveform_dense)
+
+        # UNIT CURATION
+
+        bombcell_labels = si.bombcell_label_units(analyzer)
+        bombcell_labels.to_csv(session_dir / "bombcell_labels.tsv", sep='\t')
+
+        # CHANNEL POSITION
+        
+        channel_locations = analyzer.get_channel_locations()
+        if channel_locations.shape[1] == 2:
+            channel_locations_3D = np.zeros((np.shape(channel_locations)[0], 3))
+            channel_locations_3D[:,0:2] = channel_locations
+        else:
+            channel_locations_3D = channel_locations
+
+        np.save(session_dir / "channel_locations.npy", channel_locations_3D)
+
+        # WAVEFORM PARAMS
+
+        ms_before = analyzer.get_extension('waveforms').params.get('ms_before')
+        ms_after = analyzer.get_extension('waveforms').params.get('ms_after')
+
+        spike_width = int( (ms_after + ms_before) * analyzer.sampling_frequency/1000 )
+        peak_loc = int( spike_width * ms_before / (ms_before + ms_after) )
+
+        waveidx = np.arange(peak_loc - 8, peak_loc + 15, dtype=int)
+        # make waveidx json serializable
+        waveidx = [int(idx) for idx in waveidx]
+
+        params_waveform = {
+            'spike_width': spike_width,
+            'peak_loc': peak_loc,
+            'waveidx': waveidx
+        }
+
+        with open(session_dir / "waveform_params.json", "w") as f:
+            json.dump(params_waveform, f, indent=2)
