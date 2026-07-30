@@ -277,11 +277,11 @@ def load_good_waveforms(wave_paths, unit_label_paths, param, good_units_only=Tru
             f"Warning: loaded waveform spike_width ({actual_width}) does not match "
             f"param['spike_width'] ({param['spike_width']}). Updating to match data."
         )
-    param["spike_width"] = actual_width
-    param["peak_loc"] = int(np.floor(actual_width / 2))
-    param["waveidx"] = np.arange(
-        param["peak_loc"] - 8, param["peak_loc"] + 15, dtype=int
-    )
+        param["spike_width"] = actual_width
+        param["peak_loc"] = int(np.floor(actual_width / 2))
+        param["waveidx"] = np.arange(
+            param["peak_loc"] - 8, param["peak_loc"] + 15, dtype=int
+        )
 
     return waveform, session_id, session_switch, within_session, good_units, param
 
