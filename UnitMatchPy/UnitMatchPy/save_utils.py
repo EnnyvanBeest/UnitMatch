@@ -3,7 +3,7 @@ import json
 import pickle
 import pandas as pd
 import numpy as np
-
+from pathlib import Path
 
 def save_auc_summary(save_dir, auc_summary):
     """
@@ -674,9 +674,11 @@ def make_UnitMatch_folder_from_sorting_analyzer(analyzer, save_dir, session_id):
         raise ValueError(f"Analyzer must have {missing_extensions} extensions computed.\n" \
             "Please compute them by running `sorting_analyzer.compute({missing_extensions})")
 
-    save_dir.mkdir()
+    save_dir = Path(save_dir)
+
+    save_dir.mkdir(exist_ok=True)
     session_dir = save_dir / f'Session{session_id}'
-    session_dir.mkdir(exist_ok=True)
+    session_dir.mkdir()
 
     # TEMPLATES
 
@@ -730,6 +732,8 @@ def make_UnitMatch_folder_from_sorting_analyzer(analyzer, save_dir, session_id):
     waveidx = np.arange(
         peak_loc - 8, peak_loc + 15, dtype=int
     )
+    # make it json serializable
+    waveidx = [int(idx) for idx in waveidx]
 
     params_waveform = {
         'spike_width': spike_width,
