@@ -14,11 +14,26 @@
 # ("DeepUnitMatch", "UMPy", "EMD", "DANT", "DANT_no_functional",
 # "DUM_maxdist=20", "n_output=64_after_ae_and_finetune", ...). The mouse is
 # taken as the first path component of <dataset>.
+#
+# Two parallel analyses are produced for every score:
+#   - dataset-level: every dataset is its own point, mouse-to-mouse variation
+#     is handled by a random intercept in a linear mixed-effects model.
+#   - mouse-averaged: each mouse's datasets are averaged first into a single
+#     point per mouse per model, so the simpler paired-t-test/ANOVA machinery
+#     (no random effects needed) can be used instead -- at the cost of
+#     discarding within-mouse dataset-to-dataset variability.
+# Both get pairwise post-hoc comparisons across all models (Holm-Bonferroni
+# corrected across pairs within a score) drawn as significance brackets on
+# the plots for pairs whose corrected p < 0.05.
+#
+# Output (plots, CSVs, stats text files) is written to BASE_OUTPUT/auc_summary_report
+# alongside the rest of the pipeline's output, not into this git checkout.
 
 import os
 import sys
 import json
 import warnings
+from itertools import combinations
 
 import numpy as np
 import pandas as pd
@@ -27,6 +42,8 @@ import matplotlib
 matplotlib.use("Agg")  # non-interactive backend
 import matplotlib.pyplot as plt
 import statsmodels.formula.api as smf
+from statsmodels.stats.multitest import multipletests
+from scipy.stats import ttest_rel
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
@@ -37,22 +54,24 @@ import run_deepunitmatch_batch_onMerged as base_batch
 # Point this at whichever BASE_OUTPUT tree you want to summarise (defaults to
 # the merged-data comparison tree, where DUM/UMPy/EMD/DANT/sweeps all live).
 BASE_OUTPUT = base_batch.BASE_OUTPUT
-OUTPUT_DIR = os.path.join(_HERE, "auc_summary_report")
+OUTPUT_DIR = os.path.join(BASE_OUTPUT, "auc_summary_report")
 
 # Restrict to specific model/method subfolder names (e.g.
 # {"DeepUnitMatch", "UMPy", "EMD", "DANT", "DANT_no_functional"}), or None to
 # include every AUC_summary.json found under BASE_OUTPUT (main models,
 # maxdist sweep, extra checkpoints, everything).
-MODELS_TO_INCLUDE = {"DeepUnitMatch", "UMPy", "EMD", "DANT", "DANT_no_functional"}
-
-# Reference level for the mixed model (every other model's coefficient is
-# then "difference from this model, averaged over mice"). Falls back to
+MODELS_TO_INCLUDE = {"DeepUnitMatch","n_output=256_after_ae_and_finetune", "EMD", "DANT", "DANT_no_functional"}
+#MODELS_TO_INCLUDE = {"DeepUnitMatch","n_output=256_after_ae_and_finetune","n_output=128_after_ae_and_finetune","n_output=32_after_ae_and_finetune","n_output=8_after_ae_and_finetune"}
+# Reference level for the "vs reference" summaries (every other model's
+# coefficient/mean-difference is "difference from this model"). Falls back to
 # whichever model sorts first for a given score if this one has no data there.
 REFERENCE_MODEL = "UMPy"
 
-# Counts are heavily right-skewed; fit the mixed model on log1p(count)
-# instead of the raw value (plots still show raw counts).
+# Counts are heavily right-skewed; fit stats on log1p(count) instead of the
+# raw value (plots still show raw counts).
 LOG_TRANSFORM_FOR_STATS = {"n_matches_across_sessions"}
+
+ALPHA = 0.05
 
 
 # ── collect ──────────────────────────────────────────────────────────────────
@@ -130,14 +149,85 @@ def collect_auc_summaries(base_output=BASE_OUTPUT, models_to_include=MODELS_TO_I
     return pd.DataFrame(rows)
 
 
+def average_over_mice(df_long):
+    """
+    Collapse dataset-level rows to one value per (mouse, model, score) by
+    averaging across that mouse's datasets. This removes the pseudoreplication
+    from unequal numbers of datasets per mouse, at the cost of losing
+    within-mouse dataset-to-dataset variability -- the "simple" companion to
+    the dataset-level mixed-effects analysis, where mouse no longer needs to
+    be modelled as a random effect because each mouse now contributes exactly
+    one point per model.
+    """
+    return df_long.groupby(["mouse", "model", "score"], as_index=False)["value"].mean()
+
+
+# ── significance annotation ─────────────────────────────────────────────────
+
+
+def _p_to_stars(p):
+    if p < 0.001:
+        return "***"
+    if p < 0.01:
+        return "**"
+    if p < ALPHA:
+        return "*"
+    return None
+
+
+def add_significance_brackets(ax, model_order, pvals_adj, y_values):
+    """
+    Draw a horizontal bracket + star label between each pair of models (by
+    x-position) whose corrected p-value is below ALPHA, stacked bottom-to-top
+    by increasing span so overlapping brackets don't collide.
+
+    pvals_adj: dict {frozenset({model_a, model_b}): p_adj}.
+    """
+    if not pvals_adj:
+        return
+
+    sig_pairs = []
+    for pair, p in pvals_adj.items():
+        stars = _p_to_stars(p)
+        if stars is None:
+            continue
+        m1, m2 = tuple(pair)
+        if m1 not in model_order or m2 not in model_order:
+            continue
+        i1, i2 = sorted((model_order.index(m1), model_order.index(m2)))
+        sig_pairs.append((i1, i2, stars))
+
+    if not sig_pairs:
+        return
+
+    sig_pairs.sort(key=lambda t: t[1] - t[0])  # narrower spans stacked lower
+
+    y_values = np.asarray(y_values, dtype=float)
+    y_values = y_values[~np.isnan(y_values)]
+    y_top = y_values.max() if y_values.size else 1.0
+    y_bottom = y_values.min() if y_values.size else 0.0
+    y_range = (y_top - y_bottom) or abs(y_top) or 1.0
+    step = 0.09 * y_range
+    base = y_top + 0.08 * y_range
+
+    for level, (i1, i2, stars) in enumerate(sig_pairs):
+        y = base + level * step
+        tick = step * 0.15
+        ax.plot([i1, i1, i2, i2], [y, y + tick, y + tick, y], color="black", linewidth=1, clip_on=False)
+        ax.text((i1 + i2) / 2, y + tick, stars, ha="center", va="bottom", fontsize=11, clip_on=False)
+
+    ax.set_ylim(top=base + len(sig_pairs) * step + step)
+
+
 # ── plotting ─────────────────────────────────────────────────────────────────
 
 
-def plot_score(df_long, score, output_dir):
+def plot_score(df_long, score, output_dir, pvals_adj=None):
     """
     One figure per score: x = model, y = value, one point per dataset
     (jittered horizontally so overlapping datasets stay visible), coloured
-    by mouse, with a black bar marking each model's mean.
+    by mouse, with a black bar marking each model's mean, and significance
+    brackets for any pairwise comparison in pvals_adj below ALPHA.
     """
     sub = df_long[df_long["score"] == score].dropna(subset=["value"])
     if sub.empty:
@@ -179,6 +269,8 @@ def plot_score(df_long, score, output_dir):
         for m in mice
     ]
     ax.legend(handles=handles, title="mouse", bbox_to_anchor=(1.02, 1), loc="upper left", fontsize=8)
+
+    add_significance_brackets(ax, models, pvals_adj, sub["value"].values)
     fig.tight_layout()
 
     out_path = os.path.join(output_dir, f"{score}.png")
@@ -187,7 +279,60 @@ def plot_score(df_long, score, output_dir):
     return out_path
 
 
-# ── statistics ───────────────────────────────────────────────────────────────
+def plot_score_mouse_avg(df_mouse, score, output_dir, pvals_adj=None):
+    """
+    Mouse-averaged companion to plot_score: one point per mouse (averaged
+    over that mouse's datasets), thin lines connecting each mouse's points
+    across models to make the paired comparisons visible, and significance
+    brackets for any pairwise comparison in pvals_adj below ALPHA.
+    """
+    sub = df_mouse[df_mouse["score"] == score].dropna(subset=["value"])
+    if sub.empty:
+        return None
+
+    models = sorted(sub["model"].unique())
+    mice = sorted(sub["mouse"].unique())
+    cmap = plt.get_cmap("tab10" if len(mice) <= 10 else "tab20")
+    colour_for = {m: cmap(i % cmap.N) for i, m in enumerate(mice)}
+
+    fig, ax = plt.subplots(figsize=(max(6, 1.2 * len(models)), 5))
+
+    wide = sub.pivot(index="mouse", columns="model", values="value")
+    for mouse in wide.index:
+        ys = [wide.loc[mouse, m] if m in wide.columns else np.nan for m in models]
+        xs = list(range(len(models)))
+        ax.plot(xs, ys, color=colour_for[mouse], alpha=0.5, linewidth=1, zorder=2)
+        ax.scatter(xs, ys, color=[colour_for[mouse]] * len(xs), s=45, edgecolors="k", linewidths=0.4, zorder=3)
+
+    for xi, model in enumerate(models):
+        vals = sub[sub["model"] == model]["value"]
+        ax.hlines(vals.mean(), xi - 0.25, xi + 0.25, colors="black", linewidth=2, zorder=4)
+
+    ax.set_xticks(range(len(models)))
+    ax.set_xticklabels(models, rotation=30, ha="right")
+    ax.set_ylabel(score)
+    ax.set_title(f"{score} (averaged per mouse)")
+    ax.grid(axis="y", alpha=0.3)
+
+    handles = [
+        plt.Line2D(
+            [0], [0], marker="o", linestyle="", color=colour_for[m],
+            label=m, markeredgecolor="k", markeredgewidth=0.3,
+        )
+        for m in mice
+    ]
+    ax.legend(handles=handles, title="mouse", bbox_to_anchor=(1.02, 1), loc="upper left", fontsize=8)
+
+    add_significance_brackets(ax, models, pvals_adj, sub["value"].values)
+    fig.tight_layout()
+
+    out_path = os.path.join(output_dir, f"{score}_mouse_averaged.png")
+    fig.savefig(out_path, dpi=150)
+    plt.close(fig)
+    return out_path
+
+
+# ── statistics: dataset-level (mixed model) ─────────────────────────────────
 
 
 def fit_mixed_model(df_long, score, reference_model=REFERENCE_MODEL):
@@ -222,6 +367,130 @@ def fit_mixed_model(df_long, score, reference_model=REFERENCE_MODEL):
     return result
 
 
+def pairwise_mixed_pvalues(df_long, score):
+    """
+    Post-hoc: refit the mixed model above for every pair of models (each
+    pair using only mice/datasets that have that pair) to get a p-value for
+    that specific pairwise difference, then Holm-Bonferroni correct across
+    all pairs computed for this score. Returns {frozenset({m1, m2}): p_adj}.
+    """
+    sub = df_long[df_long["score"] == score].dropna(subset=["value"]).copy()
+    models = sorted(sub["model"].unique())
+    if len(models) < 2:
+        return {}
+
+    if score in LOG_TRANSFORM_FOR_STATS:
+        sub["value"] = np.log1p(sub["value"])
+
+    raw_pvals = {}
+    for m1, m2 in combinations(models, 2):
+        pair_sub = sub[sub["model"].isin([m1, m2])].copy()
+        if pair_sub["mouse"].nunique() < 2:
+            continue
+        pair_sub["model"] = pd.Categorical(pair_sub["model"], categories=[m1, m2])
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            try:
+                result = smf.mixedlm("value ~ C(model)", pair_sub, groups=pair_sub["mouse"]).fit()
+            except Exception:
+                continue
+        coef_names = [c for c in result.pvalues.index if c not in ("Intercept", "Group Var")]
+        if not coef_names:
+            continue
+        raw_pvals[frozenset((m1, m2))] = result.pvalues[coef_names[0]]
+
+    return _holm_correct(raw_pvals)
+
+
+def _holm_correct(raw_pvals):
+    """dict {pair: p_raw} -> dict {pair: p_adj} via Holm-Bonferroni across all pairs."""
+    if not raw_pvals:
+        return {}
+    pairs = list(raw_pvals.keys())
+    pvals = [raw_pvals[p] for p in pairs]
+    _, p_adj, _, _ = multipletests(pvals, method="holm")
+    return dict(zip(pairs, p_adj))
+
+
+# ── statistics: mouse-averaged (paired t-test) ──────────────────────────────
+
+
+def fit_paired_ttest_vs_reference(df_mouse, score, reference_model=REFERENCE_MODEL):
+    """
+    Simple companion to fit_mixed_model for the mouse-averaged data: a paired
+    t-test of each other model against reference_model, paired on mouse (only
+    mice with both models present are used). No random-effects machinery
+    needed here since each mouse already contributes exactly one point per
+    model.
+
+    Returns a report string, or None if fewer than 2 models have data.
+    """
+    sub = df_mouse[df_mouse["score"] == score].dropna(subset=["value"]).copy()
+    if sub["model"].nunique() < 2:
+        return None
+
+    if score in LOG_TRANSFORM_FOR_STATS:
+        sub["value"] = np.log1p(sub["value"])
+
+    ref = reference_model if reference_model in sub["model"].unique() else sorted(sub["model"].unique())[0]
+    wide = sub.pivot(index="mouse", columns="model", values="value")
+    if ref not in wide.columns:
+        return None
+
+    lines = [f"Paired t-test vs reference model '{ref}' (paired on mouse):"]
+    for model in sorted(c for c in wide.columns if c != ref):
+        paired = wide[[ref, model]].dropna()
+        if len(paired) < 2:
+            lines.append(f"  {model}: skipped (fewer than 2 mice with both models present)")
+            continue
+        stat, p = ttest_rel(paired[model], paired[ref])
+        mean_diff = (paired[model] - paired[ref]).mean()
+        lines.append(f"  {model}: mean diff = {mean_diff:+.4f}, t = {stat:.3f}, p = {p:.4g}, n_mice = {len(paired)}")
+    return "\n".join(lines)
+
+
+def pairwise_paired_ttest_pvalues(df_mouse, score):
+    """
+    Post-hoc for the mouse-averaged data: paired t-test for every pair of
+    models (paired on mouse, using only mice with both models present),
+    Holm-Bonferroni corrected across all pairs computed for this score.
+    Returns {frozenset({m1, m2}): p_adj}.
+    """
+    sub = df_mouse[df_mouse["score"] == score].dropna(subset=["value"]).copy()
+    models = sorted(sub["model"].unique())
+    if len(models) < 2:
+        return {}
+
+    if score in LOG_TRANSFORM_FOR_STATS:
+        sub["value"] = np.log1p(sub["value"])
+
+    wide = sub.pivot(index="mouse", columns="model", values="value")
+
+    raw_pvals = {}
+    for m1, m2 in combinations(models, 2):
+        if m1 not in wide.columns or m2 not in wide.columns:
+            continue
+        paired = wide[[m1, m2]].dropna()
+        if len(paired) < 2:
+            continue
+        _, p = ttest_rel(paired[m1], paired[m2])
+        raw_pvals[frozenset((m1, m2))] = p
+
+    return _holm_correct(raw_pvals)
+
+
+def _format_posthoc_lines(pvals_adj):
+    lines = ["  Post-hoc pairwise comparisons (Holm-Bonferroni corrected across pairs):"]
+    if not pvals_adj:
+        lines.append("    (skipped: fewer than 2 comparable models/mice)")
+        return lines
+    for pair, p in sorted(pvals_adj.items(), key=lambda kv: kv[1]):
+        m1, m2 = tuple(pair)
+        stars = _p_to_stars(p) or "ns"
+        lines.append(f"    {m1} vs {m2}: p_adj = {p:.4g} ({stars})")
+    return lines
+
+
 # ── main ─────────────────────────────────────────────────────────────────────
 
 
@@ -242,9 +511,16 @@ def main():
     df_long.to_csv(csv_path, index=False)
     print(f"Wrote long-form table to {csv_path}")
 
+    df_mouse = average_over_mice(df_long)
+    mouse_csv_path = os.path.join(OUTPUT_DIR, "auc_summary_mouse_averaged.csv")
+    df_mouse.to_csv(mouse_csv_path, index=False)
+    print(f"Wrote mouse-averaged table to {mouse_csv_path}")
+
+    # ── dataset-level: mixed model + post-hoc pairwise ──
     stats_lines = []
     for score in sorted(df_long["score"].unique()):
-        png_path = plot_score(df_long, score, OUTPUT_DIR)
+        pvals_adj = pairwise_mixed_pvalues(df_long, score)
+        png_path = plot_score(df_long, score, OUTPUT_DIR, pvals_adj=pvals_adj)
         if png_path:
             print(f"  Plotted {score} -> {png_path}")
 
@@ -257,11 +533,38 @@ def main():
             stats_lines.append("  (skipped: fewer than 2 models or fewer than 2 mice with data)")
             continue
         stats_lines.append(str(result.summary()))
+        stats_lines.append("")
+        stats_lines.extend(_format_posthoc_lines(pvals_adj))
 
     stats_path = os.path.join(OUTPUT_DIR, "mixed_model_summaries.txt")
     with open(stats_path, "w") as f:
         f.write("\n".join(stats_lines))
-    print(f"\nWrote mixed-effects model summaries to {stats_path}")
+    print(f"\nWrote dataset-level (mixed-model) stats to {stats_path}")
+
+    # ── mouse-averaged: paired t-test + post-hoc pairwise ──
+    mouse_stats_lines = []
+    for score in sorted(df_mouse["score"].unique()):
+        pvals_adj_mouse = pairwise_paired_ttest_pvalues(df_mouse, score)
+        png_path = plot_score_mouse_avg(df_mouse, score, OUTPUT_DIR, pvals_adj=pvals_adj_mouse)
+        if png_path:
+            print(f"  Plotted {score} (mouse-averaged) -> {png_path}")
+
+        header = f"\n{'=' * 70}\n{score}"
+        if score in LOG_TRANSFORM_FOR_STATS:
+            header += " (fit on log1p(value))"
+        mouse_stats_lines.append(header + f"\n{'=' * 70}")
+        simple_summary = fit_paired_ttest_vs_reference(df_mouse, score)
+        if simple_summary is None:
+            mouse_stats_lines.append("  (skipped: fewer than 2 models with data)")
+            continue
+        mouse_stats_lines.append(simple_summary)
+        mouse_stats_lines.append("")
+        mouse_stats_lines.extend(_format_posthoc_lines(pvals_adj_mouse))
+
+    mouse_stats_path = os.path.join(OUTPUT_DIR, "mouse_averaged_stats.txt")
+    with open(mouse_stats_path, "w") as f:
+        f.write("\n".join(mouse_stats_lines))
+    print(f"Wrote mouse-averaged stats to {mouse_stats_path}")
 
 
 if __name__ == "__main__":

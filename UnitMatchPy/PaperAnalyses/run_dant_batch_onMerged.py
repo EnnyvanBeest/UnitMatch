@@ -91,15 +91,27 @@ import matplotlib
 matplotlib.use("Agg")  # non-interactive backend for batch runs
 import matplotlib.pyplot as plt
 
-# Upstream bug: pyDANT's IterativeClustering.py calls np.atanh, which has
-# never existed in numpy (numpy's hyperbolic arctangent has always been
-# arctanh, not atanh -- confirmed across the current release and the fresh
-# git clone, so this isn't a version-skew issue). Likely a MATLAB->Python
-# porting slip (MATLAB's builtin is atanh()). Monkeypatched here rather than
-# hand-edited in site-packages so the fix travels with this script to every
-# machine and survives reinstalls.
+# Upstream compatibility gap: pyDANT's IterativeClustering.py calls np.atanh,
+# which numpy only added in 2.0.0 (as an Array-API-standard-compatible alias
+# for the older arctanh) -- so this crashes with AttributeError on any numpy
+# < 2.0 (e.g. our own 1.26.4), even though it works fine for anyone on a
+# recent numpy. Monkeypatched here rather than hand-edited in site-packages,
+# or pinning numpy>=2.0, so the fix travels with this script to every machine
+# regardless of which numpy version is installed there.
 if not hasattr(np, "atanh"):
     np.atanh = np.arctanh
+
+# Upstream bug: pyDANT's ComputeWaveformFeatures.py prints a micro sign (μm)
+# unconditionally after every successful motion-estimation iteration. Windows'
+# legacy console codepage (cp1252) can't encode it and crashes with
+# UnicodeEncodeError -- confirmed directly (reproduced end-to-end against real
+# data: the run completes fine with this reconfigured, crashes without it).
+# Reconfiguring stdout/stderr to UTF-8 is the standard fix for this class of
+# Windows-console issue and has no effect on Linux/Mac, where stdout is
+# already UTF-8.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
@@ -131,7 +143,7 @@ N_JOBS = -1
 
 # See batch_lock.sentinel_is_fresh() / run_deepunitmatch_batch_onMerged.py's
 # REDO_FROM_DATE for what this does.
-REDO_FROM_DATE = datetime.datetime(2026, 7, 22, 19, 0, 0)
+REDO_FROM_DATE = datetime.datetime(2026, 7, 30, 16, 0, 0)
 
 # Two variants swept per group -- see module docstring for the "with vs
 # without functional data" rationale. Both are otherwise identical (same
@@ -139,7 +151,22 @@ REDO_FROM_DATE = datetime.datetime(2026, 7, 22, 19, 0, 0)
 # which features are allowed in.
 DANT_VARIANTS = {
     "DANT": {
-        "motionEstimation_features": [["AutoCorr"], ["Waveform", "AutoCorr"]],
+        # A single combined feature set from the very first iteration, not a
+        # staged "AutoCorr-only warmup then add Waveform" (pyDANT's own
+        # default motionEstimation.features is staged that way, e.g.
+        # [["AutoCorr","PETH"], ["Waveform","AutoCorr","PETH"]] -- we
+        # originally mirrored that pattern). Confirmed via direct repro
+        # against real data that the staged version can produce a
+        # degenerate first-iteration clustering (AutoCorr alone finding
+        # "matches" that turn out to be almost entirely same-session, i.e.
+        # useless for drift estimation) which crashes pyDANT's own
+        # computeMotion with zero cross-session pairs to work with, for
+        # datasets where AutoCorr alone isn't very discriminative. Using
+        # Waveform+AutoCorr together from iteration 0 avoids that
+        # degenerate state entirely (confirmed: 0 -> ~12,000 cross-session
+        # candidate pairs on the same real dataset) without changing what
+        # the final clustering step (clustering_features, below) uses.
+        "motionEstimation_features": [["Waveform", "AutoCorr"]],
         "clustering_features": ["Waveform", "AutoCorr"],
     },
     "DANT_no_functional": {
@@ -314,19 +341,36 @@ def score_and_save_variant(merged_dir, variant, sess, n_units):
     input_dir = get_dant_shared_input_dir(merged_dir)
     dant_settings = make_dant_settings(input_dir, output_dir, variant)
     print(f"  [{variant}] Running pyDANT (features: clustering={dant_settings['clustering']['features']}) ...")
-    runDANT(dant_settings)
 
-    cluster_matrix_path = os.path.join(output_dir, "ClusterMatrix.npy")
-    if not os.path.isfile(cluster_matrix_path):
-        print(f"  [{variant}] ERROR: pyDANT did not produce {cluster_matrix_path}, skipping.")
-        return
-    final_matches = np.load(cluster_matrix_path).astype(bool)
-    if final_matches.shape != (n_units, n_units):
-        print(
-            f"  [{variant}] ERROR: ClusterMatrix.npy shape {final_matches.shape} != expected "
-            f"({n_units}, {n_units}), skipping."
-        )
-        return
+    # We keep pyDANT's own defaults untouched (e.g. clustering.max_distance),
+    # so it can legitimately fail on some datasets -- e.g. zero cross-session
+    # candidate pairs within max_distance on the raw, uncorrected first
+    # motion-estimation pass, which crashes its LinearDiscriminantAnalysis fit
+    # with a "0 samples" error. Rather than leaving this dataset/variant with
+    # no output at all (which would (a) bias the cross-model comparison in
+    # DANT's favour, since only the datasets it can solve would ever be
+    # counted, and (b) leave no sentinel file, so it gets retried and fails
+    # the same way on every future run), record it as zero matches -- the
+    # same fair-comparison treatment any model finding zero matches gets.
+    failure_reason = None
+    try:
+        runDANT(dant_settings)
+
+        cluster_matrix_path = os.path.join(output_dir, "ClusterMatrix.npy")
+        if not os.path.isfile(cluster_matrix_path):
+            raise RuntimeError(f"pyDANT did not produce {cluster_matrix_path}")
+        final_matches = np.load(cluster_matrix_path).astype(bool)
+        if final_matches.shape != (n_units, n_units):
+            raise RuntimeError(
+                f"ClusterMatrix.npy shape {final_matches.shape} != expected ({n_units}, {n_units})"
+            )
+    except Exception as e:
+        print(f"  [{variant}] pyDANT failed ({e}); recording as zero matches for a fair comparison.")
+        traceback.print_exc()
+        failure_reason = str(e)
+        final_matches = np.zeros((n_units, n_units), dtype=bool)
+        with open(os.path.join(dant_dir, "DANT_FAILURE.txt"), "w") as f:
+            f.write(failure_reason + "\n")
 
     n_matches = int(np.sum(final_matches)) // 2
     print(f"  [{variant}] {n_matches} matches found")
@@ -418,7 +462,10 @@ def score_and_save_variant(merged_dir, variant, sess, n_units):
 
     fig, ax = plt.subplots(figsize=(5, 5))
     im = ax.imshow(final_matches, cmap="viridis", aspect="auto")
-    ax.set_title(f"{variant} matches (n={n_matches})")
+    title = f"{variant} matches (n={n_matches})"
+    if failure_reason:
+        title += "\n(pyDANT run failed -- recorded as zero matches, see DANT_FAILURE.txt)"
+    ax.set_title(title)
     ax.set_xlabel("Unit")
     ax.set_ylabel("Unit")
     fig.colorbar(im, ax=ax)
