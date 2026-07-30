@@ -232,14 +232,16 @@ def all_results_1model(
             AUC_isi_cv = np.nan
             AUC_refpop_UMPy = np.nan
             AUC_refpop_DeepUnitMatch = np.nan
+            AUC_refpop_model = np.nan
             N = 0
         else:
             # Calculate metrics
             AUC_isi = AUC(df, match_indices, "ISI_correlations")
             AUC_fr = AUC(df, match_indices, "FR_diff")
             AUC_isi_cv = AUC(df, match_indices, "ISI_CV_diff")
-            AUC_refpop_UMPy = AUC(df, match_indices, "refpop_correlations_UMPy")
-            AUC_refpop_DeepUnitMatch = AUC(df, match_indices, "refpop_correlations_DeepUnitMatch")
+            AUC_refpop_UMPy = AUC(df, match_indices, "refpop_correlations_UMPy") # always here for ref
+            AUC_refpop_DeepUnitMatch = AUC(df, match_indices, "refpop_correlations_DeepUnitMatch") # always here for ref
+            AUC_refpop_model = AUC(df, match_indices, model_name.replace("UM Probabilities", "refpop_correlations")) # may be duplicated
             N = len(match_indices)
 
         date1 = metadata_cache.get(r1)
@@ -263,6 +265,7 @@ def all_results_1model(
                 "AUCisi_cv": AUC_isi_cv,
                 "AUC_refpop_UMPy": AUC_refpop_UMPy,
                 "AUC_refpop_DeepUnitMatch": AUC_refpop_DeepUnitMatch,
+                "AUC_refpop_model": AUC_refpop_model,
                 "N": N,
                 "delta_days": (date2 - date1).days,
             }
@@ -308,7 +311,10 @@ def process_single_location(location_data, col_names, um_lookup, fixed_n=True):
             return None
 
         # Build SQL query based on available columns
-        base_cols = ["ID1", "ID2", "RecSes1", "RecSes2", "ISI_correlations", "FR_diff", "ISI_CV_diff", "refpop_correlations_UMPy", "refpop_correlations_DeepUnitMatch"]
+        base_cols = ["ID1", "ID2", "RecSes1", "RecSes2", "ISI_correlations", "ISI_KL_divergence", "ISI_wasserstein_distance", 
+                     "FR_diff", "ISI_CV_diff", "natim_correlations_DeepUnitMatch"]
+
+        base_cols += [name.replace("UM Probabilities", "refpop_correlations") for name in col_names]
 
         existing_cols = [col for col in col_names if col in columns]
         if not existing_cols:
@@ -392,10 +398,16 @@ def quote_ident(name):
 if __name__ == "__main__":
     start = time.time()
 
-    col_names = [
-        "UM Probabilities_UMPy",
-        "UM Probabilities_DeepUnitMatch"
-    ]
+    models = ["DeepUnitMatch",
+              "UMPy", 
+              "DUM_maxdist=20", "DUM_maxdist=50", "DUM_maxdist=100", "DUM_maxdist=inf", 
+              "UMPy_maxdist=20", "UMPy_maxdist=50", "UMPy_maxdist=100", "UMPy_maxdist=inf",
+              "DUM_W_ij=1","DUM_W_ij=5","DUM_W_ij=10","DUM_W_ij=15","DUM_W_ij=20", 
+              "n_output=8_after_ae_and_finetune", "n_output=32_after_ae_and_finetune", "n_output=128_after_ae_and_finetune", "n_output=256_after_ae_and_finetune", 
+              "EMD"
+              ]
+
+    col_names = [f"UM Probabilities_{model}" for model in models]
 
     test_models_optimized(col_names, fixed_n=False)
     test_models_optimized(col_names, fixed_n=True)
