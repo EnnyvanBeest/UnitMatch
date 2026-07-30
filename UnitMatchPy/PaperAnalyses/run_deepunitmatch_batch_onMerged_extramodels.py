@@ -3,7 +3,7 @@
 # sessions/good units are derived) once per "extra" trained DNN checkpoint
 # under DeepUnitMatch/ExtraModels, instead of the single default model.
 #
-# Two experiment families are discovered under DeepUnitMatch/ExtraModels:
+# Three experiment families are discovered under DeepUnitMatch/ExtraModels:
 #   loss_sensitivity_experiment/W_ij=<x>/ckpt_epoch_*
 #       -> saved to BASE_OUTPUT/<dataset>/DUM_W_ij=<x>
 #   n_output_experiment/n_output=<x>/{after_ae,after_ae_and_finetune}/ckpt_epoch_*
@@ -11,6 +11,14 @@
 #          and      BASE_OUTPUT/<dataset>/n_output=<x>_after_ae_and_finetune
 # ('n_output=256-chinesecharacters' is a different training dataset, not a
 # point on the n_output sweep, and is skipped.)
+#   untrained_baseline/ckpt_epoch_* and unfinetuned_baseline/ckpt_epoch_*
+#   (see ExtraModels/make_baseline_models.py for how these are generated)
+#       -> saved to BASE_OUTPUT/<dataset>/DUM_untrained
+#          and      BASE_OUTPUT/<dataset>/DUM_unfinetuned
+#   These two are always run (not gated by RUN_UNFINETUNED_N_OUTPUT_MODELS)
+#   since they are the explicit "no training at all" / "AE-only, no
+#   finetune" baselines for the production default model (n_output=256),
+#   not points on the n_output sweep.
 #
 # Each such folder sits alongside the DeepUnitMatch/ and UMPy/ subfolders that
 # run_deepunitmatch_batch_onMerged.py writes for the same dataset, using the
@@ -111,6 +119,23 @@ def discover_extra_models():
                     "subfolder_name": f"n_output={x}_{stage}",
                 }
             )
+
+    for baseline_dir, subfolder_name in (
+        ("untrained_baseline", "DUM_untrained"),
+        ("unfinetuned_baseline", "DUM_unfinetuned"),
+    ):
+        d = Path(EXTRA_MODELS_ROOT) / baseline_dir
+        ckpts = sorted(d.glob("ckpt_epoch_*"))
+        if not ckpts:
+            print(f"  WARNING: no checkpoint found in {d}, skipping.")
+            continue
+        models.append(
+            {
+                "checkpoint": str(ckpts[0]),
+                "n_output": 256,
+                "subfolder_name": subfolder_name,
+            }
+        )
 
     return models
 
