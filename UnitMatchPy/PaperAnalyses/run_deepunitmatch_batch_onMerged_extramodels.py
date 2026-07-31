@@ -11,14 +11,25 @@
 #          and      BASE_OUTPUT/<dataset>/n_output=<x>_after_ae_and_finetune
 # ('n_output=256-chinesecharacters' is a different training dataset, not a
 # point on the n_output sweep, and is skipped.)
-#   untrained_baseline/ckpt_epoch_* and unfinetuned_baseline/ckpt_epoch_*
-#   (see ExtraModels/make_baseline_models.py for how these are generated)
+#   {untrained,unfinetuned,finetuned_only}_baseline/ckpt_epoch_*
+#   (copied from the canonical DeepUnitMatch training archive -- see
+#   ExtraModels/make_baseline_models.py for provenance and how to refresh
+#   them. finetuned_only comes from a real 50-epoch train_finetune.py run
+#   whose --finetune pointed at an AE experiment that was itself never
+#   trained, i.e. train_AE.py --total_epoch 0's random-init-only checkpoint
+#   -- so it's CLIP finetuning on top of a frozen random backbone, no AE
+#   pretraining)
 #       -> saved to BASE_OUTPUT/<dataset>/DUM_untrained
 #          and      BASE_OUTPUT/<dataset>/DUM_unfinetuned
-#   These two are always run (not gated by RUN_UNFINETUNED_N_OUTPUT_MODELS)
+#          and      BASE_OUTPUT/<dataset>/DUM_finetuned_only
+#   These three are always run (not gated by RUN_UNFINETUNED_N_OUTPUT_MODELS)
 #   since they are the explicit "no training at all" / "AE-only, no
-#   finetune" baselines for the production default model (n_output=256),
-#   not points on the n_output sweep.
+#   finetune" / "finetuned only, no AE pretraining" baselines for the
+#   production default model (n_output=256), not points on the n_output
+#   sweep. Together with the default model they isolate what each of the two
+#   training stages (AE pretraining, CLIP finetuning) contributes on its
+#   own: untrained = neither stage; unfinetuned = AE only; finetuned_only =
+#   CLIP finetuning only (frozen random backbone); default = both.
 #
 # Each such folder sits alongside the DeepUnitMatch/ and UMPy/ subfolders that
 # run_deepunitmatch_batch_onMerged.py writes for the same dataset, using the
@@ -123,8 +134,14 @@ def discover_extra_models():
     for baseline_dir, subfolder_name in (
         ("untrained_baseline", "DUM_untrained"),
         ("unfinetuned_baseline", "DUM_unfinetuned"),
+        ("finetuned_only_baseline", "DUM_finetuned_only"),
     ):
         d = Path(EXTRA_MODELS_ROOT) / baseline_dir
+        if not d.is_dir():
+            # finetuned_only_baseline requires an actual training run (see
+            # train/train_finetune.py's --finetune/from_scratch option) and
+            # may not exist yet -- skip quietly rather than warn.
+            continue
         ckpts = sorted(d.glob("ckpt_epoch_*"))
         if not ckpts:
             print(f"  WARNING: no checkpoint found in {d}, skipping.")

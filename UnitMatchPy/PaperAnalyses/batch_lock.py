@@ -18,6 +18,7 @@ import socket
 import time
 
 STALE_AFTER_SECONDS = 24 * 3600  # reclaim locks older than this
+EARLY_RECLAIM_GRACE_SECONDS = 2 * 3600  # see try_lock()'s redo_from_date param
 
 
 def sentinel_is_fresh(sentinel_path, redo_from_date=None):
@@ -49,7 +50,8 @@ def sentinel_is_fresh(sentinel_path, redo_from_date=None):
 
 
 @contextlib.contextmanager
-def try_lock(lock_path, stale_after=STALE_AFTER_SECONDS):
+def try_lock(lock_path, stale_after=STALE_AFTER_SECONDS, redo_from_date=None,
+             early_reclaim_grace=EARLY_RECLAIM_GRACE_SECONDS):
     """
     Attempt to acquire an exclusive lock at `lock_path`.
 
@@ -57,13 +59,34 @@ def try_lock(lock_path, stale_after=STALE_AFTER_SECONDS):
     the lock file is removed automatically on exit, whether the work
     succeeds or raises. Yields False if another run already holds the lock
     (caller should skip this unit of work).
+
+    redo_from_date : datetime.datetime or None
+        If set (typically the same value passed to sentinel_is_fresh()), a
+        lock older than `early_reclaim_grace` whose mtime predates this date
+        is reclaimed immediately instead of waiting the full `stale_after`
+        window -- it was necessarily taken by a process running code from
+        before a known fix, so its output needs redoing regardless of
+        whether that process is still running. `early_reclaim_grace` still
+        guards against yanking the lock out from under a run that started
+        shortly before the fix landed and is legitimately still in
+        progress -- there's no cross-machine way to check liveness directly
+        (see module docstring), so this is a smaller, but still real, safety
+        margin than the full stale_after window.
     """
     os.makedirs(os.path.dirname(lock_path), exist_ok=True)
 
     try:
-        age = time.time() - os.path.getmtime(lock_path)
+        lock_mtime_epoch = os.path.getmtime(lock_path)
+        age = time.time() - lock_mtime_epoch
+        reclaim, reason = False, ""
         if age > stale_after:
-            print(f"  Reclaiming stale lock ({age / 3600:.1f}h old): {lock_path}")
+            reclaim, reason = True, f"{age / 3600:.1f}h old"
+        elif redo_from_date is not None and age > early_reclaim_grace:
+            lock_mtime = datetime.datetime.fromtimestamp(lock_mtime_epoch)
+            if lock_mtime < redo_from_date:
+                reclaim, reason = True, f"{age / 3600:.1f}h old, predates redo_from_date={redo_from_date}"
+        if reclaim:
+            print(f"  Reclaiming lock ({reason}): {lock_path}")
             os.remove(lock_path)
     except FileNotFoundError:
         pass

@@ -149,6 +149,205 @@ def collect_auc_summaries(base_output=BASE_OUTPUT, models_to_include=MODELS_TO_I
     return pd.DataFrame(rows)
 
 
+def compute_matching_failures(df_long):
+    """
+    Per model, count datasets where matching effectively failed: either the
+    model produced no AUC_summary.json at all for that dataset (crashed or
+    was skipped before save_utils.save_auc_summary ran), or it ran but found
+    zero across-session matches (n_matches_across_sessions == 0 -- always
+    present whenever AUC_summary.json exists, since
+    test.auc_summary_from_functional_scores computes it unconditionally,
+    unlike the per-score AUCs which are silently *omitted* from the JSON on
+    failure rather than recorded as 0/NaN -- see collect_auc_summaries()).
+
+    A model that fails outright on a dataset never shows up as a bad value in
+    the per-score plots above (it's just absent from that score's points), so
+    it's reported here separately instead of being folded into the AUC
+    comparison.
+
+    Returns a DataFrame with columns: model, n_no_output, n_zero_matches,
+    n_failed, n_datasets, frac_failed.
+    """
+    all_datasets = set(df_long["dataset"].unique())
+    n_total = len(all_datasets)
+    rows = []
+    for model in sorted(df_long["model"].unique()):
+        attempted = df_long[(df_long["model"] == model) & (df_long["score"] == "n_matches_across_sessions")]
+        attempted_datasets = set(attempted["dataset"])
+        no_output = all_datasets - attempted_datasets
+        zero_matches = set(attempted.loc[attempted["value"] == 0, "dataset"])
+        rows.append(
+            {
+                "model": model,
+                "n_no_output": len(no_output),
+                "n_zero_matches": len(zero_matches),
+                "n_failed": len(no_output) + len(zero_matches),
+                "n_datasets": n_total,
+                "frac_failed": (len(no_output) + len(zero_matches)) / n_total if n_total else np.nan,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def plot_matching_failures(fail_df, output_dir):
+    """
+    Stacked bar per model: datasets where the model produced no output at all
+    (crashed/skipped, bottom colour flipped to be on top for visibility)
+    stacked on datasets where it ran but found zero across-session matches --
+    see compute_matching_failures().
+    """
+    if fail_df.empty or fail_df["n_failed"].sum() == 0:
+        return None
+
+    models = fail_df["model"].tolist()
+    x = np.arange(len(models))
+    n_total = fail_df["n_datasets"].iloc[0]
+
+    fig, ax = plt.subplots(figsize=(max(6, 1.2 * len(models)), 5))
+    ax.bar(x, fail_df["n_zero_matches"], label="ran, zero matches found", color="tab:orange")
+    ax.bar(x, fail_df["n_no_output"], bottom=fail_df["n_zero_matches"], label="no output produced", color="tab:red")
+
+    for xi, n_failed in zip(x, fail_df["n_failed"]):
+        if n_failed > 0:
+            ax.text(xi, n_failed + 0.02 * n_total, str(int(n_failed)), ha="center", va="bottom", fontsize=9)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(models, rotation=30, ha="right")
+    ax.set_ylabel(f"# datasets with failed matching (of {n_total})")
+    ax.set_title("Matching failures per model")
+    ax.grid(axis="y", alpha=0.3)
+    ax.legend(fontsize=8)
+    fig.tight_layout()
+
+    out_path = os.path.join(output_dir, "matching_failures.png")
+    fig.savefig(out_path, dpi=150)
+    plt.close(fig)
+    return out_path
+
+
+def compute_n_matches_vs_auc_summary(df_long):
+    """
+    Per (score, model): mean +/- s.d. of AUC, plus a *geometric* mean +/- s.d.
+    of n_matches_across_sessions, across that model's datasets, and the
+    dataset count each is over. Companion table for plot_n_matches_vs_auc()'s
+    one-point-per-model summary (see there for why this is averaged rather
+    than one point per dataset).
+
+    n_matches_across_sessions is heavily right-skewed (a handful of datasets
+    can have orders of magnitude more matches than the rest -- the same
+    reason LOG_TRANSFORM_FOR_STATS fits mixed models on log1p(value) for it
+    elsewhere in this script): a linear mean/s.d. is dominated by those
+    outlier datasets and produces error bars wide enough to span almost the
+    whole log axis, which defeats the point of averaging. Averaging
+    log1p(n_matches) and mapping back with expm1 instead gives a "typical
+    dataset" centre and a spread that reflects multiplicative variation.
+    """
+    scores = sorted(s for s in df_long["score"].unique() if s != "n_matches_across_sessions")
+    n_matches = df_long[df_long["score"] == "n_matches_across_sessions"][["mouse", "dataset", "model", "value"]]
+    n_matches = n_matches.rename(columns={"value": "n_matches"})
+    n_matches["log_n_matches"] = np.log1p(n_matches["n_matches"])
+
+    rows = []
+    for score in scores:
+        sub = df_long[df_long["score"] == score][["mouse", "dataset", "model", "value"]]
+        sub = sub.merge(n_matches, on=["mouse", "dataset", "model"], how="inner")
+        sub = sub.dropna(subset=["value", "n_matches"])
+
+        auc = sub.groupby("model")["value"].agg(auc_mean="mean", auc_std="std")
+        log_n = sub.groupby("model")["log_n_matches"].agg(log_mean="mean", log_std="std")
+        n_datasets = sub.groupby("model").size().rename("n_datasets")
+        summary = pd.concat([auc, log_n, n_datasets], axis=1)
+
+        # A model with only one dataset for this score has an undefined
+        # (NaN) s.d. -- treat that as zero spread rather than propagating
+        # NaN into the plotted error bar.
+        log_std = summary["log_std"].fillna(0.0)
+        summary["n_matches_geomean"] = np.expm1(summary["log_mean"])
+        summary["n_matches_geo_low"] = np.expm1(summary["log_mean"] - log_std).clip(lower=0.0)
+        summary["n_matches_geo_high"] = np.expm1(summary["log_mean"] + log_std)
+        summary = summary.drop(columns=["log_mean", "log_std"])
+
+        summary.insert(0, "score", score)
+        rows.append(summary.reset_index())
+
+    if not rows:
+        return pd.DataFrame(
+            columns=[
+                "score", "model", "auc_mean", "auc_std",
+                "n_matches_geomean", "n_matches_geo_low", "n_matches_geo_high", "n_datasets",
+            ]
+        )
+    return pd.concat(rows, ignore_index=True)
+
+
+def plot_n_matches_vs_auc(summary_df, output_dir):
+    """
+    One figure, one subplot per functional score: x = geometric mean
+    n_matches_across_sessions (log scale), y = mean AUC for that score, one
+    point per model with error bars showing +/- 1 s.d. across that model's
+    datasets (log-space for x, linear for y -- see
+    compute_n_matches_vs_auc_summary() for why x uses a geometric mean/s.d.).
+    Averaged rather than one point per dataset (which is unreadable once
+    there are hundreds of datasets) so match yield and match quality stay
+    readable together per model -- e.g. a model that only reaches a high AUC
+    by finding very few (easy) matches sits at low x, whereas a model doing
+    well on both axes sits at high x and high y.
+
+    A model's mean here is implicitly conditioned on "datasets where it
+    found at least one match" (see compute_matching_failures() for the
+    zero-match/no-output failure modes, which contribute no data point at
+    all here).
+    """
+    if summary_df.empty:
+        return None
+
+    scores = sorted(summary_df["score"].unique())
+    models = sorted(summary_df["model"].unique())
+    cmap = plt.get_cmap("tab10" if len(models) <= 10 else "tab20")
+    colour_for = {m: cmap(i % cmap.N) for i, m in enumerate(models)}
+
+    ncols = min(3, len(scores))
+    nrows = int(np.ceil(len(scores) / ncols))
+    fig, axes = plt.subplots(nrows, ncols, figsize=(5 * ncols, 4.5 * nrows), squeeze=False)
+
+    for i, score in enumerate(scores):
+        ax = axes[i // ncols][i % ncols]
+        sub = summary_df[summary_df["score"] == score]
+        for _, row in sub.iterrows():
+            x, y = row["n_matches_geomean"], row["auc_mean"]
+            y_std = row["auc_std"] if np.isfinite(row["auc_std"]) else 0.0
+            xerr = [[x - row["n_matches_geo_low"]], [row["n_matches_geo_high"] - x]]
+            ax.errorbar(
+                x, y, xerr=xerr, yerr=y_std,
+                fmt="o", color=colour_for[row["model"]], ecolor=colour_for[row["model"]],
+                elinewidth=1, capsize=3, markersize=7, markeredgecolor="k", markeredgewidth=0.5,
+                label=row["model"],
+            )
+        ax.set_xscale("log")
+        ax.set_xlabel("n_matches_across_sessions (geometric mean ± s.d.)")
+        ax.set_ylabel(f"AUC ({score})")
+        ax.set_title(score)
+        ax.grid(alpha=0.3)
+
+    for j in range(len(scores), nrows * ncols):
+        axes[j // ncols][j % ncols].set_visible(False)
+
+    handles = [
+        plt.Line2D(
+            [0], [0], marker="o", linestyle="", color=colour_for[m],
+            label=m, markeredgecolor="k", markeredgewidth=0.3,
+        )
+        for m in models
+    ]
+    fig.legend(handles=handles, title="model", bbox_to_anchor=(1.0, 0.5), loc="center left", fontsize=8)
+    fig.tight_layout()
+
+    out_path = os.path.join(output_dir, "n_matches_vs_auc.png")
+    fig.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return out_path
+
+
 def average_over_mice(df_long):
     """
     Collapse dataset-level rows to one value per (mouse, model, score) by
@@ -510,6 +709,22 @@ def main():
     csv_path = os.path.join(OUTPUT_DIR, "auc_summary_long.csv")
     df_long.to_csv(csv_path, index=False)
     print(f"Wrote long-form table to {csv_path}")
+
+    fail_df = compute_matching_failures(df_long)
+    fail_csv_path = os.path.join(OUTPUT_DIR, "matching_failures.csv")
+    fail_df.to_csv(fail_csv_path, index=False)
+    print(f"Wrote matching-failure counts to {fail_csv_path}")
+    fail_png = plot_matching_failures(fail_df, OUTPUT_DIR)
+    if fail_png:
+        print(f"Plotted matching failures -> {fail_png}")
+
+    n_matches_auc_summary = compute_n_matches_vs_auc_summary(df_long)
+    n_matches_auc_csv = os.path.join(OUTPUT_DIR, "n_matches_vs_auc_summary.csv")
+    n_matches_auc_summary.to_csv(n_matches_auc_csv, index=False)
+    print(f"Wrote n_matches-vs-AUC summary to {n_matches_auc_csv}")
+    n_matches_auc_png = plot_n_matches_vs_auc(n_matches_auc_summary, OUTPUT_DIR)
+    if n_matches_auc_png:
+        print(f"Plotted n_matches vs AUC -> {n_matches_auc_png}")
 
     df_mouse = average_over_mice(df_long)
     mouse_csv_path = os.path.join(OUTPUT_DIR, "auc_summary_mouse_averaged.csv")

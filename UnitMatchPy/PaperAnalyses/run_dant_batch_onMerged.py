@@ -545,7 +545,7 @@ def main():
             continue
 
         lock_path = get_dant_lock_path(merged_dir)
-        with batch_lock.try_lock(lock_path) as acquired:
+        with batch_lock.try_lock(lock_path, redo_from_date=REDO_FROM_DATE) as acquired:
             if not acquired:
                 print(f"  Skipping (already being processed by another run): {lock_path}")
                 continue
