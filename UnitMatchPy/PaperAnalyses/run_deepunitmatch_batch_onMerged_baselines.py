@@ -1,20 +1,18 @@
 # Batch wrapper: runs DeepUnitMatch on the *merged* dataset (see
 # run_deepunitmatch_batch_onMerged.py for how that tree is built and how
-# sessions/good units are derived) once per "extra" trained DNN checkpoint
-# under DeepUnitMatch/ExtraModels, instead of the single default model.
+# sessions/good units are derived) once per baseline checkpoint under
+# DeepUnitMatch/BaselineModels, instead of the single default model.
 #
-# Two experiment families are discovered under DeepUnitMatch/ExtraModels:
-#   loss_sensitivity_experiment/W_ij=<x>/ckpt_epoch_*
-#       -> saved to BASE_OUTPUT/<dataset>/DUM_W_ij=<x>
-#   n_output_experiment/n_output=<x>/{after_ae,after_ae_and_finetune}/ckpt_epoch_*
-#       -> saved to BASE_OUTPUT/<dataset>/n_output=<x>_after_ae
-#          and      BASE_OUTPUT/<dataset>/n_output=<x>_after_ae_and_finetune
-# ('n_output=256-chinesecharacters' is a different training dataset, not a
-# point on the n_output sweep, and is skipped.)
-#
-# The untrained/unfinetuned/finetuned_only baselines live under
-# DeepUnitMatch/BaselineModels instead and are run by the sibling script
-# run_deepunitmatch_batch_onMerged_baselines.py, not this one.
+# These three checkpoints (see BaselineModels/make_baseline_models.py for
+# provenance) isolate what each of the two training stages (AE pretraining,
+# CLIP finetuning) contributes on its own, relative to the production
+# default model (which goes through both):
+#   untrained_baseline/ckpt_epoch_*        -> BASE_OUTPUT/<dataset>/DUM_untrained
+#       Random weights, evaluated as-is -- neither stage.
+#   unfinetuned_baseline/ckpt_epoch_*      -> BASE_OUTPUT/<dataset>/DUM_unfinetuned
+#       AE-pretrained only, never CLIP-finetuned.
+#   finetuned_only_baseline/ckpt_epoch_*   -> BASE_OUTPUT/<dataset>/DUM_finetuned_only
+#       CLIP-finetuned on top of a frozen random backbone -- never AE-pretrained.
 #
 # Each such folder sits alongside the DeepUnitMatch/ and UMPy/ subfolders that
 # run_deepunitmatch_batch_onMerged.py writes for the same dataset, using the
@@ -42,36 +40,41 @@ import batch_lock
 import run_deepunitmatch_batch_onMerged as base_batch
 from DeepUnitMatch.testing import test
 
-EXTRA_MODELS_ROOT = os.path.join(
-    os.path.dirname(_HERE), "DeepUnitMatch", "ExtraModels"
+BASELINE_MODELS_ROOT = os.path.join(
+    os.path.dirname(_HERE), "DeepUnitMatch", "BaselineModels"
 )
-EXCLUDED_N_OUTPUT_DIRS = {"256-chinesecharacters"}
 
+# (folder name under BaselineModels, output subfolder name under BASE_OUTPUT)
+BASELINE_DIRS = (
+    ("untrained_baseline", "DUM_untrained"),
+    ("unfinetuned_baseline", "DUM_unfinetuned"),
+    ("finetuned_only_baseline", "DUM_finetuned_only"),
+)
 
 # See batch_lock.sentinel_is_fresh() / run_deepunitmatch_batch_onMerged.py's
 # REDO_FROM_DATE for what this does: a dataset/model combo is skipped once its
 # MatchingOverview.png exists and is at least this new. None falls back to
 # plain "skip if present"; a far-future date reproduces old REDO=True.
 REDO_FROM_DATE = datetime.datetime(2026, 7, 22, 19, 0, 0)
-RUN_UNFINETUNED_N_OUTPUT_MODELS = False  # if False, skip the after_ae (not fine-tuned) n_output checkpoints
 
 
-# ── extra-model discovery ────────────────────────────────────────────────────
+# ── baseline-model discovery ─────────────────────────────────────────────────
 
 
-def discover_extra_models():
+def discover_baseline_models():
     """
-    Scan DeepUnitMatch/ExtraModels for trained checkpoints.
+    Scan DeepUnitMatch/BaselineModels for the untrained/unfinetuned/
+    finetuned_only checkpoints.
 
     Returns a list of dicts: {"checkpoint": path, "n_output": int, "subfolder_name": str}
     """
     models = []
 
-    loss_root = Path(EXTRA_MODELS_ROOT) / "loss_sensitivity_experiment"
-    for d in sorted(loss_root.glob("W_ij=*")):
+    for baseline_dir, subfolder_name in BASELINE_DIRS:
+        d = Path(BASELINE_MODELS_ROOT) / baseline_dir
         if not d.is_dir():
+            print(f"  WARNING: {d} not found, skipping.")
             continue
-        x = d.name.split("=", 1)[1]
         ckpts = sorted(d.glob("ckpt_epoch_*"))
         if not ckpts:
             print(f"  WARNING: no checkpoint found in {d}, skipping.")
@@ -80,41 +83,9 @@ def discover_extra_models():
             {
                 "checkpoint": str(ckpts[0]),
                 "n_output": 256,
-                "subfolder_name": f"DUM_W_ij={x}",
+                "subfolder_name": subfolder_name,
             }
         )
-
-    nout_root = Path(EXTRA_MODELS_ROOT) / "n_output_experiment"
-    for d in sorted(nout_root.glob("n_output=*")):
-        if not d.is_dir():
-            continue
-        x = d.name.split("=", 1)[1]
-        if x in EXCLUDED_N_OUTPUT_DIRS:
-            print(f"  Skipping {d.name} (excluded).")
-            continue
-        try:
-            n_output = int(x)
-        except ValueError:
-            print(f"  WARNING: could not parse n_output from {d.name}, skipping.")
-            continue
-
-        for stage in ("after_ae", "after_ae_and_finetune"):
-            if stage == "after_ae" and not RUN_UNFINETUNED_N_OUTPUT_MODELS:
-                continue
-            stage_dir = d / stage
-            if not stage_dir.is_dir():
-                continue
-            ckpts = sorted(stage_dir.glob("ckpt_epoch_*"))
-            if not ckpts:
-                print(f"  WARNING: no checkpoint found in {stage_dir}, skipping.")
-                continue
-            models.append(
-                {
-                    "checkpoint": str(ckpts[0]),
-                    "n_output": n_output,
-                    "subfolder_name": f"n_output={x}_{stage}",
-                }
-            )
 
     return models
 
@@ -122,28 +93,28 @@ def discover_extra_models():
 # ── path helpers ─────────────────────────────────────────────────────────────
 
 
-def get_extra_save_dir(merged_dir, model_info):
-    """Output dir for a given merged-data group + extra model, mirroring get_save_dir/get_umpy_save_dir."""
+def get_baseline_save_dir(merged_dir, model_info):
+    """Output dir for a given merged-data group + baseline model, mirroring get_save_dir/get_umpy_save_dir."""
     subfolder = os.path.relpath(os.path.dirname(merged_dir), base_batch.BASE_INPUT)
     return os.path.join(base_batch.BASE_OUTPUT, subfolder, model_info["subfolder_name"])
 
 
-def extra_results_exist(merged_dir, model_info):
+def baseline_results_exist(merged_dir, model_info):
     """Return True when the sentinel output file is present and fresh for this dataset/model combo (see REDO_FROM_DATE)."""
-    sentinel = os.path.join(get_extra_save_dir(merged_dir, model_info), "MatchingOverview.png")
+    sentinel = os.path.join(get_baseline_save_dir(merged_dir, model_info), "MatchingOverview.png")
     return batch_lock.sentinel_is_fresh(sentinel, REDO_FROM_DATE)
 
 
 def get_group_lock_path(merged_dir):
     """
-    Lock file marking 'a run is currently processing all pending extra models
-    for this group', so multiple machines pointed at the same BASE_INPUT/
-    BASE_OUTPUT can split work across groups without double-processing one.
-    See batch_lock.py. Named distinctly from run_deepunitmatch_batch_onMerged's
-    lock so the two scripts can run on the same group concurrently.
+    Lock file marking 'a run is currently processing all pending baseline
+    models for this group', so multiple machines pointed at the same
+    BASE_INPUT/BASE_OUTPUT can split work across groups without
+    double-processing one. See batch_lock.py. Named distinctly from the other
+    batch scripts' locks so they can all run on the same group concurrently.
     """
     subfolder = os.path.relpath(os.path.dirname(merged_dir), base_batch.BASE_INPUT)
-    return os.path.join(base_batch.BASE_OUTPUT, subfolder, ".processing_extramodels.lock")
+    return os.path.join(base_batch.BASE_OUTPUT, subfolder, ".processing_baselines.lock")
 
 
 # ── model cache ───────────────────────────────────────────────────────────────
@@ -170,7 +141,7 @@ def get_model_for_checkpoint(cache, model_info):
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Run DeepUnitMatch on the merged dataset with each extra trained model."
+        description="Run DeepUnitMatch on the merged dataset with each baseline (untrained/unfinetuned/finetuned_only) model."
     )
     parser.add_argument(
         "--write-matlab-compat",
@@ -184,12 +155,12 @@ def main():
     args = parse_args()
     base_batch.WRITE_MATLAB_COMPAT = args.write_matlab_compat
 
-    extra_models = discover_extra_models()
-    if not extra_models:
-        print("No extra models found under:\n  " + EXTRA_MODELS_ROOT)
+    baseline_models = discover_baseline_models()
+    if not baseline_models:
+        print("No baseline models found under:\n  " + BASELINE_MODELS_ROOT)
         return
-    print(f"Found {len(extra_models)} extra model(s):")
-    for m in extra_models:
+    print(f"Found {len(baseline_models)} baseline model(s):")
+    for m in baseline_models:
         print(f"  {m['subfolder_name']}  (n_output={m['n_output']})  <- {m['checkpoint']}")
 
     print(f"\nScanning for merged-data groups under:\n  {base_batch.BASE_INPUT}\n")
@@ -205,10 +176,10 @@ def main():
         print(f"\n[{i + 1}/{len(groups)}] {merged_dir}")
 
         pending = [
-            m for m in extra_models if not extra_results_exist(merged_dir, m)
+            m for m in baseline_models if not baseline_results_exist(merged_dir, m)
         ]
         if not pending:
-            print("  Skipping all extra models (results exist and are fresh).")
+            print("  Skipping all baseline models (results exist and are fresh).")
             continue
 
         lock_path = get_group_lock_path(merged_dir)
@@ -220,10 +191,10 @@ def main():
             # re-check now that we hold the lock: another machine may have
             # finished this group while we were scanning/waiting for the lock
             pending = [
-                m for m in extra_models if not extra_results_exist(merged_dir, m)
+                m for m in baseline_models if not baseline_results_exist(merged_dir, m)
             ]
             if not pending:
-                print("  Skipping all extra models (completed by another run).")
+                print("  Skipping all baseline models (completed by another run).")
                 continue
 
             sess = base_batch._prepare_session(merged_dir)
@@ -231,7 +202,7 @@ def main():
                 continue
 
             for model_info in pending:
-                save_dir = get_extra_save_dir(merged_dir, model_info)
+                save_dir = get_baseline_save_dir(merged_dir, model_info)
                 try:
                     model = get_model_for_checkpoint(model_cache, model_info)
                     base_batch.run_deep_unit_match_core(

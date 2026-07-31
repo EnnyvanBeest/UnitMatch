@@ -1,5 +1,6 @@
 # One-off copier for the three baseline checkpoints used to sanity-check the
-# trained DeepUnitMatch models in run_deepunitmatch_batch_onMerged_extramodels.py.
+# trained DeepUnitMatch models in
+# PaperAnalyses/run_deepunitmatch_batch_onMerged_baselines.py.
 #
 # Source: the canonical DeepUnitMatch training archive
 # (ModelExp/{AE_experiments,experiments}/<exp_name>/ckpt/...), e.g.
@@ -19,13 +20,14 @@
 #
 #   finetuned_only_baseline/ckpt_epoch_49
 #       = ModelExp/experiments/untrainedAE/ckpt/ckpt_epoch_49
-#       Started from a randomly initialized encoder (no AE pretraining --
-#       ModelExp/AE_experiments/untrainedAE/ckpt/ckpt_epoch_0, a *different*
-#       random init than untrained_baseline above) and CLIP-loss finetuned
-#       for 50 epochs via train/train_finetune.py's --finetune-omitted /
-#       from_scratch=True path: same freeze policy as the production model
-#       (only FcBlock/projector/clip_loss are trained; the conv backbone
-#       stays at its random init throughout).
+#       CLIP-loss finetuned for 50 epochs (train/train_finetune.py), but its
+#       --finetune pointed at ModelExp/AE_experiments/untrainedAE/ckpt/
+#       ckpt_epoch_0 -- an AE experiment that was itself never trained
+#       (train/train_AE.py --total_epoch 0, i.e. a *different* random init
+#       than untrained_baseline above). Same freeze policy as the production
+#       model (only FcBlock/projector/clip_loss are trained; the conv
+#       backbone stays at its random init throughout) -- so this isolates
+#       CLIP finetuning with no AE pretraining at all.
 #
 # All three were already produced (not by this script) as part of the
 # original DeepUnitMatch training run family. Re-run this only if the
@@ -68,7 +70,7 @@ def copy_baselines(archive_root):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Copy the untrained/unfinetuned/finetuned_only baseline "
-        "checkpoints from the DeepUnitMatch training archive into ExtraModels."
+        "checkpoints from the DeepUnitMatch training archive into BaselineModels."
     )
     parser.add_argument(
         "--archive-root",
