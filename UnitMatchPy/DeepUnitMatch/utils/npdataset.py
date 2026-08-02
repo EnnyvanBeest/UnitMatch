@@ -123,21 +123,67 @@ class NeuropixelsDataset(Dataset):
         with h5py.File(neuron_file, "r") as f:
             waveform = f["waveform"][()]  # waveform [T,C,2]
             MaxSitepos = f["MaxSitepos"][()]
+            # Per-channel geometry (offset from MaxSitepos) + validity mask,
+            # written by preprocess/param_fun.py. Older cached files won't
+            # have these fields -- fall back to "no geometry" (all-zero
+            # position, all-invalid mask), which the model treats as
+            # contributing nothing, i.e. behaves like before this was added.
+            channel_pos = (
+                f["ChannelPos"][()]
+                if "ChannelPos" in f
+                else np.zeros((waveform.shape[1], 2))
+            )
+            channel_valid = (
+                f["ChannelValid"][()]
+                if "ChannelValid" in f
+                else np.zeros(waveform.shape[1], dtype=bool)
+            )
         if waveform.shape != (60, 30, 2):
             waveform = np.zeros((60, 30, 2))
+            channel_pos = np.zeros((30, 2))
+            channel_valid = np.zeros(30, dtype=bool)
             # assert False, f"Waveform shape is not (60,30,2) but {waveform.shape}"
         ## do data augmentation
         if self.mode == "train":
-            waveform_fh = self._augment_original(waveform[..., 0])
-            waveform_sh = self._augment_original(waveform[..., 1])
+            waveform_fh, channel_pos_fh, channel_valid_fh = self._augment(
+                waveform[..., 0], channel_pos, channel_valid
+            )
+            waveform_sh, channel_pos_sh, channel_valid_sh = self._augment(
+                waveform[..., 1], channel_pos, channel_valid
+            )
         else:
             waveform_fh = waveform[..., 0]
             waveform_sh = waveform[..., 1]
+            channel_pos_fh = channel_pos_sh = channel_pos
+            channel_valid_fh = channel_valid_sh = channel_valid
 
-        return waveform_fh, waveform_sh, MaxSitepos, experiment_path, neuron_file
+        return (
+            waveform_fh,
+            waveform_sh,
+            MaxSitepos,
+            channel_pos_fh,
+            channel_valid_fh,
+            channel_pos_sh,
+            channel_valid_sh,
+            experiment_path,
+            neuron_file,
+        )
 
-    def _augment_original(self, data):
-        # Apply random augmentations to data, shape [T,C]
+    def _augment(self, data, channel_pos, channel_valid):
+        """
+        Apply random augmentations to a waveform (shape [T,C]) and its paired
+        per-channel geometry (channel_pos [C,2], channel_valid [C]).
+
+        - roll_up/roll_down simulate probe drift by shifting which physical
+          channel's recording occupies which slot; channel_pos/channel_valid
+          are rolled identically so slot k's geometry always describes
+          whichever channel now sits in slot k.
+        - amplitude/noise jitter simulates cross-day gain and noise-floor
+          differences, which spatial roll alone doesn't capture.
+        """
+        data = data.copy()
+        channel_pos = channel_pos.copy()
+        channel_valid = channel_valid.copy()
         roll_choice = random.choice(["roll_up", "roll_down", "none"])
 
         if roll_choice == "roll_up":
@@ -152,11 +198,15 @@ class NeuropixelsDataset(Dataset):
                 len(odd_indices) > 1
             ):  # Check if there are at least 2 odd channels to roll
                 data[:, odd_indices[:-1]] = data[:, odd_indices[1:]]
+                channel_pos[odd_indices[:-1]] = channel_pos[odd_indices[1:]]
+                channel_valid[odd_indices[:-1]] = channel_valid[odd_indices[1:]]
             # Shift even channels up, excluding the last even channel
             if (
                 len(even_indices) > 1
             ):  # Check if there are at least 2 even channels to roll
                 data[:, even_indices[:-1]] = data[:, even_indices[1:]]
+                channel_pos[even_indices[:-1]] = channel_pos[even_indices[1:]]
+                channel_valid[even_indices[:-1]] = channel_valid[even_indices[1:]]
         elif roll_choice == "roll_down":
             # implement roll_down augmentation
             C = data.shape[1]  # Number of channels
@@ -164,10 +214,22 @@ class NeuropixelsDataset(Dataset):
             even_indices = np.arange(3, C, 2)
             if len(odd_indices) > 0:  # Check if there are odd channels to roll
                 data[:, odd_indices] = data[:, odd_indices - 2]
+                channel_pos[odd_indices] = channel_pos[odd_indices - 2]
+                channel_valid[odd_indices] = channel_valid[odd_indices - 2]
             if len(even_indices) > 0:  # Check if there are even channels to roll
                 data[:, even_indices] = data[:, even_indices - 2]
+                channel_pos[even_indices] = channel_pos[even_indices - 2]
+                channel_valid[even_indices] = channel_valid[even_indices - 2]
 
-        return data
+        # Amplitude/noise jitter: simulate cross-day gain and noise-floor
+        # variability so the encoder learns to be invariant to it, not just
+        # to spatial drift.
+        scale = np.random.uniform(0.85, 1.15)
+        data = data * scale
+        noise_std = 0.05 * (np.std(data) + 1e-8)
+        data = data + np.random.normal(0, noise_std, size=data.shape)
+
+        return data, channel_pos, channel_valid
 
 
 class NeuropixelsDataset_cortexlab(Dataset):
@@ -251,21 +313,67 @@ class NeuropixelsDataset_cortexlab(Dataset):
         with h5py.File(neuron_file, "r") as f:
             waveform = f["waveform"][()]  # waveform [T,C,2]
             MaxSitepos = f["MaxSitepos"][()]
+            # Per-channel geometry (offset from MaxSitepos) + validity mask,
+            # written by preprocess/param_fun.py. Older cached files won't
+            # have these fields -- fall back to "no geometry" (all-zero
+            # position, all-invalid mask), which the model treats as
+            # contributing nothing, i.e. behaves like before this was added.
+            channel_pos = (
+                f["ChannelPos"][()]
+                if "ChannelPos" in f
+                else np.zeros((waveform.shape[1], 2))
+            )
+            channel_valid = (
+                f["ChannelValid"][()]
+                if "ChannelValid" in f
+                else np.zeros(waveform.shape[1], dtype=bool)
+            )
         if waveform.shape != (60, 30, 2):
             waveform = np.zeros((60, 30, 2))
+            channel_pos = np.zeros((30, 2))
+            channel_valid = np.zeros(30, dtype=bool)
             # assert False, f"Waveform shape is not (60,30,2) but {waveform.shape}"
         ## do data augmentation
         if self.mode == "train":
-            waveform_fh = self._augment_original(waveform[..., 0])
-            waveform_sh = self._augment_original(waveform[..., 1])
+            waveform_fh, channel_pos_fh, channel_valid_fh = self._augment(
+                waveform[..., 0], channel_pos, channel_valid
+            )
+            waveform_sh, channel_pos_sh, channel_valid_sh = self._augment(
+                waveform[..., 1], channel_pos, channel_valid
+            )
         else:
             waveform_fh = waveform[..., 0]
             waveform_sh = waveform[..., 1]
+            channel_pos_fh = channel_pos_sh = channel_pos
+            channel_valid_fh = channel_valid_sh = channel_valid
 
-        return waveform_fh, waveform_sh, MaxSitepos, experiment_path, neuron_file
+        return (
+            waveform_fh,
+            waveform_sh,
+            MaxSitepos,
+            channel_pos_fh,
+            channel_valid_fh,
+            channel_pos_sh,
+            channel_valid_sh,
+            experiment_path,
+            neuron_file,
+        )
 
-    def _augment_original(self, data):
-        # Apply random augmentations to data, shape [T,C]
+    def _augment(self, data, channel_pos, channel_valid):
+        """
+        Apply random augmentations to a waveform (shape [T,C]) and its paired
+        per-channel geometry (channel_pos [C,2], channel_valid [C]).
+
+        - roll_up/roll_down simulate probe drift by shifting which physical
+          channel's recording occupies which slot; channel_pos/channel_valid
+          are rolled identically so slot k's geometry always describes
+          whichever channel now sits in slot k.
+        - amplitude/noise jitter simulates cross-day gain and noise-floor
+          differences, which spatial roll alone doesn't capture.
+        """
+        data = data.copy()
+        channel_pos = channel_pos.copy()
+        channel_valid = channel_valid.copy()
         roll_choice = random.choice(["roll_up", "roll_down", "none"])
 
         if roll_choice == "roll_up":
@@ -280,11 +388,15 @@ class NeuropixelsDataset_cortexlab(Dataset):
                 len(odd_indices) > 1
             ):  # Check if there are at least 2 odd channels to roll
                 data[:, odd_indices[:-1]] = data[:, odd_indices[1:]]
+                channel_pos[odd_indices[:-1]] = channel_pos[odd_indices[1:]]
+                channel_valid[odd_indices[:-1]] = channel_valid[odd_indices[1:]]
             # Shift even channels up, excluding the last even channel
             if (
                 len(even_indices) > 1
             ):  # Check if there are at least 2 even channels to roll
                 data[:, even_indices[:-1]] = data[:, even_indices[1:]]
+                channel_pos[even_indices[:-1]] = channel_pos[even_indices[1:]]
+                channel_valid[even_indices[:-1]] = channel_valid[even_indices[1:]]
         elif roll_choice == "roll_down":
             # implement roll_down augmentation
             C = data.shape[1]  # Number of channels
@@ -292,10 +404,22 @@ class NeuropixelsDataset_cortexlab(Dataset):
             even_indices = np.arange(3, C, 2)
             if len(odd_indices) > 0:  # Check if there are odd channels to roll
                 data[:, odd_indices] = data[:, odd_indices - 2]
+                channel_pos[odd_indices] = channel_pos[odd_indices - 2]
+                channel_valid[odd_indices] = channel_valid[odd_indices - 2]
             if len(even_indices) > 0:  # Check if there are even channels to roll
                 data[:, even_indices] = data[:, even_indices - 2]
+                channel_pos[even_indices] = channel_pos[even_indices - 2]
+                channel_valid[even_indices] = channel_valid[even_indices - 2]
 
-        return data
+        # Amplitude/noise jitter: simulate cross-day gain and noise-floor
+        # variability so the encoder learns to be invariant to it, not just
+        # to spatial drift.
+        scale = np.random.uniform(0.85, 1.15)
+        data = data * scale
+        noise_std = 0.05 * (np.std(data) + 1e-8)
+        data = data + np.random.normal(0, noise_std, size=data.shape)
+
+        return data, channel_pos, channel_valid
 
     def select_good_units_files(self, directory, load_pre_merge: bool = True):
         """

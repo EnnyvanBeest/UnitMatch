@@ -80,24 +80,44 @@ class CustomClipLoss(torch.nn.Module):
         scores = scores / self.temp_tau
         return F.softmax(scores, dim=1)
 
+    def _weighted_logits(self, logits):
+        """Add a hard-negative bias to off-diagonal logits *before* softmax.
+
+        Scaling post-softmax probabilities and feeding them back into
+        cross_entropy (the previous implementation) applies softmax twice,
+        which is not a valid reweighting. Adding log(negative_weight) to the
+        off-diagonal logits is the correct equivalent: after softmax, the
+        negative terms' probability mass is scaled by exactly
+        `negative_weight` relative to the positive term, so the model is
+        pushed harder to separate positives from negatives without breaking
+        the softmax normalization.
+        """
+        n_rows, n_cols = logits.shape
+        mask = ~torch.eye(n_rows, n_cols, dtype=torch.bool, device=logits.device)
+        bias = torch.zeros_like(logits)
+        bias[mask] = torch.log(torch.as_tensor(self.negative_weight, device=logits.device, dtype=logits.dtype))
+        return logits + bias
+
     def forward(self, estimate, candidate):
-        """Forward method for ClipLoss."""
+        """Forward method for ClipLoss.
+
+        Symmetrized like standard CLIP: loss is averaged over the
+        estimate->candidate direction and the candidate->estimate direction
+        (restricted to the first len(estimate) candidates, the only ones
+        with a known positive match), instead of only supervising one
+        direction.
+        """
         assert estimate.size(0) <= candidate.size(0), (
             "need at least as many targets as estimates"
         )
-        scores = self.get_probabilities(estimate, candidate)
-        # Initialize the weight tensor with ones for all elements
-        weight_tensor = torch.ones_like(scores)
-        mask = ~torch.eye(
-            scores.size(0), scores.size(1), dtype=torch.bool, device=scores.device
-        )
-        # Set the off-diagonal elements (negative pairs) to the desired higher weight
-        weight_tensor[mask] = (
-            self.negative_weight
-        )  # Increase the weight for negative pairs
-        weighted_scores = scores * weight_tensor
-        target = torch.arange(len(scores), device=estimate.device)
-        return F.cross_entropy(weighted_scores, target)
+        n = estimate.size(0)
+        logits = self.get_scores(estimate, candidate) / self.temp_tau  # [n, n_candidates]
+        weighted_logits = self._weighted_logits(logits)
+        target = torch.arange(n, device=estimate.device)
+
+        loss_e2c = F.cross_entropy(weighted_logits, target)
+        loss_c2e = F.cross_entropy(weighted_logits[:, :n].t(), target)
+        return 0.5 * (loss_e2c + loss_c2e)
 
 
 def clip_prob(estimates, candidates, temp_tau=1.0):

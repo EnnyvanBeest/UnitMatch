@@ -34,6 +34,8 @@ def merge_split_unit(row, spk_df: pd.DataFrame, data_dir):
     with h5py.File(wave1, "r") as f1:
         waveform1 = f1["waveform"][()]
         msp1 = f1["MaxSitepos"][()]
+        channel_pos1 = f1["ChannelPos"][()] if "ChannelPos" in f1 else None
+        channel_valid1 = f1["ChannelValid"][()] if "ChannelValid" in f1 else None
     with h5py.File(wave2, "r") as f2:
         waveform2 = f2["waveform"][()]
     new_waveform = weight1 * waveform1 + weight2 * waveform2
@@ -45,6 +47,12 @@ def merge_split_unit(row, spk_df: pd.DataFrame, data_dir):
         "waveform": new_waveform,  # (60,30,2)
         "MaxSitepos": msp1,
     }
+    # Merged unit keeps unit 1's channel selection/geometry (its waveform
+    # already dominates the weighted average in the common case).
+    if channel_pos1 is not None:
+        new_data["ChannelPos"] = channel_pos1
+    if channel_valid1 is not None:
+        new_data["ChannelValid"] = channel_valid1
     with h5py.File(save_path, "w") as f:
         for key, value in new_data.items():
             f.create_dataset(key, data=value)

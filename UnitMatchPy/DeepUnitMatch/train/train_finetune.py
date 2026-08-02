@@ -37,15 +37,29 @@ def validation(epoch, model, projector, val_loader, clip_loss, writer):
         progress_bar = tqdm.tqdm(
             total=len(val_loader), desc="Epoch {:3d}".format(epoch)
         )
-        for estimates, candidates, _, _, _ in val_loader:
+        for (
+            estimates,
+            candidates,
+            _,
+            ch_pos_e,
+            ch_valid_e,
+            ch_pos_c,
+            ch_valid_c,
+            _,
+            _,
+        ) in val_loader:
             if torch.cuda.is_available():
                 estimates = estimates.cuda()
                 candidates = candidates.cuda()
+                ch_pos_e = ch_pos_e.cuda()
+                ch_valid_e = ch_valid_e.cuda()
+                ch_pos_c = ch_pos_c.cuda()
+                ch_valid_c = ch_valid_c.cuda()
 
             bsz = estimates.shape[0]
             # Forward pass
-            enc_estimates = model(estimates)  # shape [bsz, channel*time]
-            enc_candidates = model(candidates)  # shape [bsz, channel*time]
+            enc_estimates = model(estimates, ch_pos_e, ch_valid_e)  # shape [bsz, channel*time]
+            enc_candidates = model(candidates, ch_pos_c, ch_valid_c)  # shape [bsz, channel*time]
             proj_estimates = projector(enc_estimates)
             proj_candidates = projector(enc_candidates)
             loss_clip = clip_loss(proj_estimates, proj_candidates)
@@ -89,14 +103,28 @@ def train(epoch, model, projector, optimizer, train_loader, clip_loss, writer):
         clip_loss = clip_loss.cuda()
 
     progress_bar = tqdm.tqdm(total=len(train_loader), desc="Epoch {:3d}".format(epoch))
-    for estimates, candidates, _, _, _ in train_loader:
+    for (
+        estimates,
+        candidates,
+        _,
+        ch_pos_e,
+        ch_valid_e,
+        ch_pos_c,
+        ch_valid_c,
+        _,
+        _,
+    ) in train_loader:
         bsz = estimates.shape[0]
         if torch.cuda.is_available():
             estimates = estimates.cuda()
             candidates = candidates.cuda()
+            ch_pos_e = ch_pos_e.cuda()
+            ch_valid_e = ch_valid_e.cuda()
+            ch_pos_c = ch_pos_c.cuda()
+            ch_valid_c = ch_valid_c.cuda()
         optimizer.zero_grad()
-        enc_estimates = model(estimates)  # shape [bsz, channel*time]
-        enc_candidates = model(candidates)  # shape [bsz, channel*time]
+        enc_estimates = model(estimates, ch_pos_e, ch_valid_e)  # shape [bsz, channel*time]
+        enc_candidates = model(candidates, ch_pos_c, ch_valid_c)  # shape [bsz, channel*time]
         proj_estimates = projector(enc_estimates)
         proj_candidates = projector(enc_candidates)
         loss_clip = clip_loss(proj_estimates, proj_candidates)
@@ -152,10 +180,14 @@ def run(args):
     read_path = os.path.join(ckpt_finetune_folder, ckpt_lst[-1])
     print("load checkpoint from %s" % (read_path))
     checkpoint = torch.load(read_path)
-    model.load_state_dict(checkpoint["encoder"])
-    for name, param in model.named_parameters():
-        if "FcBlock" not in name:
-            param.requires_grad = False
+    # strict=False: the AE checkpoint predates the ChannelPositionalBias
+    # ("pos_bias.*") submodule, so those params are simply missing from it
+    # and stay at their random init.
+    missing, unexpected = model.load_state_dict(checkpoint["encoder"], strict=False)
+    if missing:
+        print(f"load_state_dict: missing keys (left at random init): {missing}")
+    if unexpected:
+        print(f"load_state_dict: unexpected keys (ignored): {unexpected}")
 
     projector = Projector(
         input_dim=256, output_dim=128, hidden_dim=128, n_hidden_layers=1, dropout=0.1
@@ -165,20 +197,24 @@ def run(args):
     # clip_loss = ClipLoss1D().to(device)
     clip_loss = CustomClipLoss().to(device)
 
-    encoder_fc_params = [
-        param
-        for name, param in model.named_parameters()
-        if "FcBlock" in name and param.requires_grad
+    # The backbone is no longer frozen: reconstruction-pretraining optimizes
+    # for pixel fidelity, not discriminability, so leaving the conv/spatial
+    # feature extractor frozen during finetuning meant it was never actually
+    # shaped by the matching objective. It still gets a much smaller LR than
+    # the FcBlock/projector/clip_loss since it starts from a good init and
+    # shouldn't be disrupted as fast.
+    backbone_params = [
+        param for name, param in model.named_parameters() if "FcBlock" not in name
     ]
-    projector_params = list(
-        projector.parameters()
-    )  # Assuming projector is defined elsewhere
-    clip_loss_params = list(
-        clip_loss.parameters()
-    )  # Assuming clip_loss is defined elsewhere
+    encoder_fc_params = [
+        param for name, param in model.named_parameters() if "FcBlock" in name
+    ]
+    projector_params = list(projector.parameters())
+    clip_loss_params = list(clip_loss.parameters())
 
     # Combine parameters from different parts with their respective learning rates
     optimizer_params = [
+        {"params": backbone_params, "lr": args.lr_backbone},
         {
             "params": encoder_fc_params,
             "lr": args.lr_enc,
@@ -238,6 +274,7 @@ def run(args):
 def run_finetune(
     exp_name,
     dataset,
+    lr_backbone=2 * 1e-6,
     lr_enc=2 * 1e-5,
     lr_proj=1.1 * 1e-4,
     save_freq=1,
@@ -250,6 +287,7 @@ def run_finetune(
 
     args = Namespace(
         exp_name=exp_name,
+        lr_backbone=lr_backbone,
         lr_enc=lr_enc,
         lr_proj=lr_proj,
         save_freq=save_freq,
@@ -313,10 +351,14 @@ def run_finetune(
     read_path = os.path.join(ckpt_finetune_folder, ckpt_lst[-1])
     print("load checkpoint from %s" % (read_path))
     checkpoint = torch.load(read_path)
-    model.load_state_dict(checkpoint["encoder"])
-    for name, param in model.named_parameters():
-        if "FcBlock" not in name:
-            param.requires_grad = False
+    # strict=False: the AE checkpoint predates the ChannelPositionalBias
+    # ("pos_bias.*") submodule, so those params are simply missing from it
+    # and stay at their random init.
+    missing, unexpected = model.load_state_dict(checkpoint["encoder"], strict=False)
+    if missing:
+        print(f"load_state_dict: missing keys (left at random init): {missing}")
+    if unexpected:
+        print(f"load_state_dict: unexpected keys (ignored): {unexpected}")
 
     projector = Projector(
         input_dim=256, output_dim=128, hidden_dim=128, n_hidden_layers=1, dropout=0.1
@@ -325,16 +367,20 @@ def run_finetune(
 
     clip_loss = CustomClipLoss().to(device)
 
+    # Backbone stays trainable (see run()'s comment for why), with a much
+    # smaller LR than the FcBlock/projector/clip_loss.
+    backbone_params = [
+        param for name, param in model.named_parameters() if "FcBlock" not in name
+    ]
     encoder_fc_params = [
-        param
-        for name, param in model.named_parameters()
-        if "FcBlock" in name and param.requires_grad
+        param for name, param in model.named_parameters() if "FcBlock" in name
     ]
     projector_params = list(projector.parameters())
     clip_loss_params = list(clip_loss.parameters())
 
     # Combine parameters from different parts with their respective learning rates
     optimizer_params = [
+        {"params": backbone_params, "lr": args.lr_backbone},
         {
             "params": encoder_fc_params,
             "lr": args.lr_enc,
@@ -405,6 +451,13 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="Load the AE encoder from the path ./checkpoint/$finetune",
+    )
+    arg_parser.add_argument(
+        "--lr_backbone",
+        "-lb",
+        type=float,
+        default=2 * 1e-6,
+        help="Learning rate for the conv/spatial backbone (now trainable during finetuning, not frozen)",
     )
     arg_parser.add_argument(
         "--lr_enc",

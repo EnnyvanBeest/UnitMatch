@@ -60,12 +60,42 @@ class Conv1DSeq(nn.Module):
         return outputs
 
 
+class ChannelPositionalBias(nn.Module):
+    """
+    Maps each channel's (x, z) offset relative to the unit's peak channel to
+    a learned scalar bias for that channel, added to the waveform before the
+    first conv block. Lets the encoder use true probe geometry (real
+    inter-channel spacing, which column a channel is on) instead of relying
+    on convolution to infer it purely from an arbitrary 1D channel-slot
+    ordering. Padded (non-recorded) channel slots contribute zero bias,
+    since channel_valid gates them out.
+    """
+
+    def __init__(self, hidden_dim=16):
+        super().__init__()
+        self.mlp = nn.Sequential(
+            nn.Linear(2, hidden_dim),
+            nn.GELU(),
+            nn.Linear(hidden_dim, 1),
+        )
+
+    def forward(self, channel_pos, channel_valid):
+        """
+        channel_pos: (bsz, n_channel, 2)
+        channel_valid: (bsz, n_channel)
+        returns: (bsz, n_channel) bias, zeroed wherever channel_valid is False
+        """
+        bias = self.mlp(channel_pos).squeeze(-1)  # (bsz, n_channel)
+        return bias * channel_valid.to(bias.dtype)
+
+
 class SpatioTemporalCNN_V2(nn.Module):
     def __init__(self, n_channel, n_time, n_output=256):
         super().__init__()
         self.n_channel = n_channel
         self.n_time = n_time
         self.n_output = n_output
+        self.pos_bias = ChannelPositionalBias()
         self.ConvBlock1 = Conv1DSeq(
             self.n_channel,
             [self.n_channel, self.n_channel],
@@ -106,11 +136,16 @@ class SpatioTemporalCNN_V2(nn.Module):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
-    def forward(self, x):
+    def forward(self, x, channel_pos=None, channel_valid=None):
         """
         :inputs: (batch_size, n_time, n_channels)
+        :channel_pos: optional (batch_size, n_channels, 2) channel position relative to peak channel
+        :channel_valid: optional (batch_size, n_channels) validity mask for channel_pos
         :return outputs: (batch_size, self.n_output)
         """
+        if channel_pos is not None and channel_valid is not None:
+            bias = self.pos_bias(channel_pos, channel_valid)  # (bsz, n_channel)
+            x = x + bias.unsqueeze(1)  # broadcast the per-channel bias over time
         x = self.ConvBlock1(x)  # after this, the shape is [bsz, C, T]
         x = self.ConvBlock2(x)  # after this, the shape is [bsz, T, C]
         x = x.permute(0, 2, 1)
