@@ -85,6 +85,7 @@ class ChannelPositionalBias(nn.Module):
         channel_valid: (bsz, n_channel)
         returns: (bsz, n_channel) bias, zeroed wherever channel_valid is False
         """
+        channel_pos = channel_pos.to(self.mlp[0].weight.dtype)
         bias = self.mlp(channel_pos).squeeze(-1)  # (bsz, n_channel)
         return bias * channel_valid.to(bias.dtype)
 
