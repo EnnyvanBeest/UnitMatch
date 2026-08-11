@@ -175,15 +175,7 @@ def extract_Rwaveforms(waveform, ChannelPos, ChannelMap, param):
     )
     if sorted_goodChannelMap[0] == -1 and sorted_goodpos[0] == -1:
         # we have a spike sorting error so need to 0 this recording
-        return (
-            np.array([-1, -1]),
-            np.array([-1, -1]),
-            [0],
-            [0],
-            np.zeros((1, 1, 1)),
-            np.zeros((RnChannels, 2)),
-            np.zeros(RnChannels, dtype=bool),
-        )
+        return np.array([-1, -1]), np.array([-1, -1]), [0], [0], np.zeros((1, 1, 1))
     Rwaveform = waveform[:, sorted_goodChannelMap, :]  # selecting the good channels
 
     ## this part is tricks to make the data proper for DNN training
@@ -214,48 +206,12 @@ def extract_Rwaveforms(waveform, ChannelPos, ChannelMap, param):
         constant_values=(NewGlobalMean, NewGlobalMean),
     )
 
-    # Per-channel position relative to the peak/max-amplitude channel (so it's
-    # translation-invariant to the unit's absolute depth on the probe), plus a
-    # validity mask marking which of the RnChannels slots are real recorded
-    # channels vs. padding. Padded slots get position (0, 0) -- harmless,
-    # since the model zeroes out the positional bias wherever valid=False.
-    RelChannelPos = sorted_goodpos - MaxSitepos
-    RelChannelPos = np.pad(
-        RelChannelPos,
-        ((pad_before, pad_after), (0, 0)),
-        "constant",
-        constant_values=0,
-    )
-    ChannelValid = np.zeros(RnChannels, dtype=bool)
-    ChannelValid[pad_before : pad_before + num_good_channels] = True
-
-    return (
-        MaxSiteMean,
-        MaxSitepos,
-        sorted_goodChannelMap,
-        sorted_goodpos,
-        Rwaveform,
-        RelChannelPos,
-        ChannelValid,
-    )
+    return MaxSiteMean, MaxSitepos, sorted_goodChannelMap, sorted_goodpos, Rwaveform
 
 
-def save_waveforms_hdf5(
-    file_name,
-    Rwaveform,
-    MaxSitepos,
-    session,
-    save_path=None,
-    channel_pos=None,
-    channel_valid=None,
-):
+def save_waveforms_hdf5(file_name, Rwaveform, MaxSitepos, session, save_path=None):
     """
     Saves the preprocessed, reduced waveform and the max site position as a HDF5 file.
-
-    channel_pos: (RnChannels, 2) position of each channel slot relative to
-    MaxSitepos, and channel_valid: (RnChannels,) bool marking real vs. padded
-    channel slots. Both optional so older callers still work; datasets that
-    load these files fall back to "no geometry" when the fields are absent.
     """
     processed_root = _resolve_processed_root(save_path)
     dest_directory = processed_root / str(session)
@@ -277,10 +233,6 @@ def save_waveforms_hdf5(
         "waveform": Rwaveform,  # (60,30,2)
         "MaxSitepos": MaxSitepos,
     }
-    if channel_pos is not None:
-        new_data["ChannelPos"] = channel_pos
-    if channel_valid is not None:
-        new_data["ChannelValid"] = channel_valid
     with h5py.File(dest_path, "w") as f:
         for key, value in new_data.items():
             f.create_dataset(key, data=value)
@@ -357,8 +309,6 @@ def get_snippets(
                     sorted_goodChannelMap,
                     sorted_goodpos,
                     Rwaveform,
-                    RelChannelPos,
-                    ChannelValid,
                 ) = extract_Rwaveforms(unit, ChannelPos, ChannelMap, params)
             elif not np.any(np.isnan(unit[:, :, 1])) and not np.any(
                 np.isinf(unit[:, :, 1])
@@ -370,8 +320,6 @@ def get_snippets(
                     sorted_goodChannelMap,
                     sorted_goodpos,
                     Rwaveform,
-                    RelChannelPos,
-                    ChannelValid,
                 ) = extract_Rwaveforms(unit, ChannelPos, ChannelMap, params)
             else:
                 print(f"Corrupted data where unexpected in {i}th unit")
@@ -384,8 +332,6 @@ def get_snippets(
                 sorted_goodChannelMap,
                 sorted_goodpos,
                 Rwaveform,
-                RelChannelPos,
-                ChannelValid,
             ) = extract_Rwaveforms(unit, ChannelPos, ChannelMap, params)
 
         if Rwaveform.shape != (params["RnTime"], params["RnChannels"], 2):
@@ -399,8 +345,6 @@ def get_snippets(
             MaxSitepos,
             session_id[i],
             save_path=save_path,
-            channel_pos=RelChannelPos,
-            channel_valid=ChannelValid,
         )
 
         processed_waveforms.append(Rwaveform)

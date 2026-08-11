@@ -79,14 +79,9 @@ def load_trained_model(device="cpu", read_path=None, n_output=256):
             f"but n_output={n_output} was requested."
         )
 
-    # strict=False: checkpoints saved before the ChannelPositionalBias
-    # ("pos_bias.*") submodule was added (e.g. utils/model_PreJuly2026) are
-    # missing those keys; they're left at random init and, since such old
-    # preprocessed data has no ChannelValid field either (all-invalid mask),
-    # never actually get used -- see ChannelPositionalBias.forward.
     if "clip_loss" in checkpoint:
         # Fine-tuned (clip-loss) checkpoint: checkpoint["model"] is the encoder alone.
-        model.load_state_dict(checkpoint["model"], strict=False)
+        model.load_state_dict(checkpoint["model"])
         clip_loss = CustomClipLoss().to(device)
         clip_loss.load_state_dict(checkpoint["clip_loss"])
         clip_loss.eval()
@@ -94,7 +89,7 @@ def load_trained_model(device="cpu", read_path=None, n_output=256):
         # Autoencoder-only checkpoint: checkpoint["model"] holds encoder.*/decoder.*
         # keys for the full SpatioTemporalAutoEncoder_V2; checkpoint["encoder"] is
         # the encoder-only state dict we actually need here.
-        model.load_state_dict(checkpoint["encoder"], strict=False)
+        model.load_state_dict(checkpoint["encoder"])
     model.eval()
 
     # Load projector
@@ -145,36 +140,12 @@ def inference(model, data_dir, unit_label_paths=None):
     n_batches = len(test_loader)
     device = next(model.parameters()).device
 
-    for (
-        estimates_i,
-        _,
-        positions_i,
-        ch_pos_i,
-        ch_valid_i,
-        _,
-        _,
-        exp_ids_i,
-        filepaths_i,
-    ) in tqdm(test_loader):
+    for estimates_i, _, positions_i, exp_ids_i, filepaths_i in tqdm(test_loader):
         # Forward pass
-        enc_estimates_i = model(
-            estimates_i.to(device), ch_pos_i.to(device), ch_valid_i.to(device)
-        )  # shape [bsz, 256]
+        enc_estimates_i = model(estimates_i.to(device))  # shape [bsz, 256]
 
-        for (
-            _,
-            candidates_j,
-            positions_j,
-            _,
-            _,
-            ch_pos_j,
-            ch_valid_j,
-            exp_ids_j,
-            filepaths_j,
-        ) in tqdm(test_loader):
-            enc_candidates_j = model(
-                candidates_j.to(device), ch_pos_j.to(device), ch_valid_j.to(device)
-            )
+        for _, candidates_j, positions_j, exp_ids_j, filepaths_j in tqdm(test_loader):
+            enc_candidates_j = model(candidates_j.to(device))
             s = clip_sim(enc_estimates_i, enc_candidates_j)
             submatrices.append(s.detach().cpu().numpy())
 
