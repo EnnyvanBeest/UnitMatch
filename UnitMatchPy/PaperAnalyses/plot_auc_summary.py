@@ -60,7 +60,10 @@ OUTPUT_DIR = os.path.join(BASE_OUTPUT, "auc_summary_report")
 # {"DeepUnitMatch", "UMPy", "EMD", "DANT", "DANT_no_functional"}), or None to
 # include every AUC_summary.json found under BASE_OUTPUT (main models,
 # maxdist sweep, extra checkpoints, everything).
-MODELS_TO_INCLUDE = {"DeepUnitMatch","DeepUnitMatch_AssignUniqueID_Conservative", "DeepUnitMatch_AssignUniqueID", "UMPy","UMPy_AssignUniqueID_Conservative", "UMPy_AssignUniqueID", "EMD", "DANT", "DANT_no_functional"}
+# MODELS_TO_INCLUDE = None
+MODELS_TO_INCLUDE = {"DeepUnitMatch_AssignUniqueID_Conservative", "DeepUnitMatch_AssignUniqueID", "UMPy_AssignUniqueID_Conservative", "UMPy_AssignUniqueID", "EMD", "DANT", "DANT_no_functional"}
+
+#MODELS_TO_INCLUDE = {"DUM_NewModelAug2026","DeepUnitMatch","DeepUnitMatch_AssignUniqueID_Conservative", "DeepUnitMatch_AssignUniqueID", "UMPy","UMPy_AssignUniqueID_Conservative", "UMPy_AssignUniqueID", "EMD", "DANT", "DANT_no_functional"}
 #MODELS_TO_INCLUDE = {"DeepUnitMatch","n_output=256_after_ae_and_finetune","n_output=128_after_ae_and_finetune","n_output=32_after_ae_and_finetune","n_output=8_after_ae_and_finetune"}
 # Reference level for the "vs reference" summaries (every other model's
 # coefficient/mean-difference is "difference from this model"). Falls back to
@@ -72,6 +75,20 @@ REFERENCE_MODEL = "EMD"
 LOG_TRANSFORM_FOR_STATS = {"n_matches_across_sessions"}
 
 ALPHA = 0.05
+
+# A dataset is kept only if at least one included model found this many
+# across-session matches (n_matches_across_sessions) -- datasets where every
+# model stayed below this never demonstrated enough tracked matches to trust
+# a score/AUC comparison on, regardless of which model is being looked at.
+# Also used by plot_auc_vs_delta_days.py (via get_passing_datasets()) to
+# apply the same dataset-level cutoff there.
+MIN_MATCHES_TO_INCLUDE = 20
+
+
+def savefig_with_svg(fig, out_path, **kwargs):
+    """Save out_path (a .png path) plus an editable .svg copy alongside it (e.g. for Inkscape)."""
+    fig.savefig(out_path, **kwargs)
+    fig.savefig(os.path.splitext(out_path)[0] + ".svg", **{k: v for k, v in kwargs.items() if k != "dpi"})
 
 
 # ── collect ──────────────────────────────────────────────────────────────────
@@ -149,6 +166,34 @@ def collect_auc_summaries(base_output=BASE_OUTPUT, models_to_include=MODELS_TO_I
     return pd.DataFrame(rows)
 
 
+def get_passing_datasets(df_long, min_matches=MIN_MATCHES_TO_INCLUDE):
+    """
+    Datasets where at least one included model's n_matches_across_sessions
+    reaches min_matches -- see MIN_MATCHES_TO_INCLUDE.
+    """
+    n_matches = df_long[df_long["score"] == "n_matches_across_sessions"]
+    best = n_matches.groupby("dataset")["value"].max()
+    return set(best[best >= min_matches].index)
+
+
+def filter_low_match_datasets(df_long, min_matches=MIN_MATCHES_TO_INCLUDE):
+    """
+    Drop every row belonging to a dataset that fails get_passing_datasets()
+    -- not just its n_matches_across_sessions rows -- so a dataset no model
+    could find enough matches in doesn't contribute a spuriously extreme
+    point to any score's comparison plot either.
+    """
+    passing = get_passing_datasets(df_long, min_matches)
+    all_datasets = set(df_long["dataset"].unique())
+    dropped = all_datasets - passing
+    if dropped:
+        print(
+            f"Dropping {len(dropped)}/{len(all_datasets)} dataset(s) with < {min_matches} "
+            f"matches in every included model: {sorted(dropped)}"
+        )
+    return df_long[df_long["dataset"].isin(passing)]
+
+
 def compute_matching_failures(df_long):
     """
     Per model, count datasets where matching effectively failed: either the
@@ -220,7 +265,7 @@ def plot_matching_failures(fail_df, output_dir):
     fig.tight_layout()
 
     out_path = os.path.join(output_dir, "matching_failures.png")
-    fig.savefig(out_path, dpi=150)
+    savefig_with_svg(fig, out_path, dpi=150)
     plt.close(fig)
     return out_path
 
@@ -343,7 +388,7 @@ def plot_n_matches_vs_auc(summary_df, output_dir):
     fig.tight_layout()
 
     out_path = os.path.join(output_dir, "n_matches_vs_auc.png")
-    fig.savefig(out_path, dpi=150, bbox_inches="tight")
+    savefig_with_svg(fig, out_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
     return out_path
 
@@ -473,7 +518,7 @@ def plot_score(df_long, score, output_dir, pvals_adj=None):
     fig.tight_layout()
 
     out_path = os.path.join(output_dir, f"{score}.png")
-    fig.savefig(out_path, dpi=150)
+    savefig_with_svg(fig, out_path, dpi=150)
     plt.close(fig)
     return out_path
 
@@ -526,7 +571,7 @@ def plot_score_mouse_avg(df_mouse, score, output_dir, pvals_adj=None):
     fig.tight_layout()
 
     out_path = os.path.join(output_dir, f"{score}_mouse_averaged.png")
-    fig.savefig(out_path, dpi=150)
+    savefig_with_svg(fig, out_path, dpi=150)
     plt.close(fig)
     return out_path
 
@@ -717,6 +762,13 @@ def main():
     fail_png = plot_matching_failures(fail_df, OUTPUT_DIR)
     if fail_png:
         print(f"Plotted matching failures -> {fail_png}")
+
+    # Everything below (n_matches-vs-AUC, score comparisons, mixed models,
+    # mouse-averaged stats) uses only datasets where at least one included
+    # model found enough matches to trust -- see filter_low_match_datasets().
+    # compute_matching_failures() above ran on the full set so it still
+    # reports on datasets this drops.
+    df_long = filter_low_match_datasets(df_long)
 
     n_matches_auc_summary = compute_n_matches_vs_auc_summary(df_long)
     n_matches_auc_csv = os.path.join(OUTPUT_DIR, "n_matches_vs_auc_summary.csv")

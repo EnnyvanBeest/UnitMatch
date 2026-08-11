@@ -2,9 +2,13 @@
 # shared network folder (e.g. \\znas.cortexlab.net\...) from several
 # computers at once.
 #
-# Locking is advisory and file-based: "acquiring" means atomically creating
-# a lock file with os.O_CREAT | os.O_EXCL, which is atomic both locally and
-# on SMB network shares (maps to CreateFile(..., CREATE_NEW) on Windows).
+# Locking is advisory and file-based: "acquiring" means creating a lock file
+# with os.O_CREAT | os.O_EXCL, which maps to CreateFile(..., CREATE_NEW) on
+# Windows and is *supposed* to be atomic both locally and on SMB network
+# shares -- in practice this has been observed to fail on at least one share
+# (two processes both got a successful open() for the same path within a
+# short window of each other), so try_lock() also does a write-then-verify
+# check after "winning" the open() -- see its docstring.
 # There's no cross-machine way to tell whether the process that created a
 # lock is still alive, so a lock is instead reclaimed once it's older than
 # `stale_after` seconds -- long enough that it's very unlikely a real run is
@@ -14,11 +18,14 @@
 import contextlib
 import datetime
 import os
+import random
 import socket
 import time
+import uuid
 
 STALE_AFTER_SECONDS = 24 * 3600  # reclaim locks older than this
 EARLY_RECLAIM_GRACE_SECONDS = 2 * 3600  # see try_lock()'s redo_from_date param
+LOCK_VERIFY_DELAY_SECONDS = 1.5  # see try_lock()'s write-then-verify step
 
 
 def sentinel_is_fresh(sentinel_path, redo_from_date=None):
@@ -59,6 +66,17 @@ def try_lock(lock_path, stale_after=STALE_AFTER_SECONDS, redo_from_date=None,
     the lock file is removed automatically on exit, whether the work
     succeeds or raises. Yields False if another run already holds the lock
     (caller should skip this unit of work).
+
+    os.O_CREAT | os.O_EXCL is supposed to make lock creation atomic even on
+    SMB network shares (see module docstring), but that's been observed to
+    not hold in practice on at least one share: two processes both got a
+    successful open() for the same lock_path within a short window of each
+    other and both proceeded to do the work. To guard against that, after
+    "winning" the open() we write a unique token, wait briefly for any
+    near-simultaneous writer to land its own write, then re-read the file
+    back -- only the process whose token is still there actually holds the
+    lock; the loser yields False without touching the file (it now belongs
+    to whoever really won).
 
     redo_from_date : datetime.datetime or None
         If set (typically the same value passed to sentinel_is_fresh()), a
@@ -103,16 +121,54 @@ def try_lock(lock_path, stale_after=STALE_AFTER_SECONDS, redo_from_date=None,
         yield False
         return
 
+    # Unique per-attempt token to identify our own write below, distinct from
+    # whatever a concurrent racer writes to the same path.
+    token = f"{socket.gethostname()}:{os.getpid()}:{time.time_ns()}:{uuid.uuid4().hex}"
+
     try:
         with os.fdopen(fd, "w") as f:
             f.write(
                 f"host={socket.gethostname()}\n"
                 f"pid={os.getpid()}\n"
                 f"started={time.ctime()}\n"
+                f"token={token}\n"
             )
+    except OSError as e:
+        print(f"  WARNING: could not write lock {lock_path}: {e}")
+        yield False
+        return
+
+    # Give any near-simultaneous writer time to land its own write, then
+    # re-read: whichever process wrote last "wins" the file's contents on
+    # disk, so only proceed if it's still us.
+    time.sleep(LOCK_VERIFY_DELAY_SECONDS + random.uniform(0, LOCK_VERIFY_DELAY_SECONDS))
+    try:
+        with open(lock_path, "r") as f:
+            on_disk = f.read()
+    except OSError as e:
+        print(f"  WARNING: could not verify lock {lock_path}: {e}")
+        yield False
+        return
+
+    if token not in on_disk:
+        print(f"  Lost lock race for {lock_path} (another process's write won); not proceeding.")
+        yield False
+        return
+
+    try:
         yield True
     finally:
+        # Only remove the lock if it's still ours -- e.g. a stale-reclaim by
+        # another process while we were running would mean it's no longer
+        # our lock to delete.
         try:
-            os.remove(lock_path)
+            with open(lock_path, "r") as f:
+                on_disk = f.read()
+            if token in on_disk:
+                os.remove(lock_path)
+            else:
+                print(f"  WARNING: lock {lock_path} was reclaimed by another process before we finished; not removing it.")
+        except FileNotFoundError:
+            pass
         except OSError as e:
             print(f"  WARNING: could not remove lock {lock_path}: {e}")
