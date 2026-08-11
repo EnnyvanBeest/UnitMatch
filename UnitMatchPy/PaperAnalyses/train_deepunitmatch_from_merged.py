@@ -45,11 +45,11 @@ sys.path.insert(0, os.path.dirname(_HERE))
 sys.path.insert(0, os.path.join(_HERE, "DeepUnitMatch"))
 
 import run_deepunitmatch_batch_onMerged as batch_pipeline  # reuses find_merged_groups / _prepare_session
-from DeepUnitMatch.utils import param_fun
+from DeepUnitMatch.utils import param_fun_v2 as param_fun
 from DeepUnitMatch.utils.AE_npdataset import AE_NeuropixelsDataset
-from DeepUnitMatch.utils.npdataset import NeuropixelsDataset_cortexlab
+from DeepUnitMatch.utils.npdataset_v2 import NeuropixelsDataset_cortexlab
 from DeepUnitMatch.train import train_AE as train_ae_mod
-from DeepUnitMatch.train import train_finetune as train_finetune_mod
+from DeepUnitMatch.train import train_finetunev2 as train_finetune_mod
 
 BASE_INPUT = batch_pipeline.BASE_INPUT  # raw KS-style merged tree -- read-only
 # New sibling folder for this training run's preprocessed snippets. Never
