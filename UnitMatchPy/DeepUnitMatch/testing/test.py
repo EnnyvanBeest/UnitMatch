@@ -71,6 +71,9 @@ def load_trained_model(device="cpu", read_path=None, n_output=256):
     if read_path is None:
         current_dir = Path(__file__).parent.parent
         read_path = current_dir / "utils" / "model"
+
+    print(f"Loading model from {read_path}...")
+
     checkpoint = torch.load(read_path, map_location=device)
 
     if "n_output" in checkpoint and checkpoint["n_output"] != n_output:
@@ -253,6 +256,27 @@ def remove_conflicts(matches: pd.DataFrame, metric: str):
 
     return filtered_matches, num_conflicts
 
+def remove_conflicts2(matches: pd.DataFrame, metric: str):
+    if matches.empty:
+        return matches, 0
+
+    matches = matches.copy()
+    matches[metric] = pd.to_numeric(matches[metric], errors="coerce")
+
+    max_for_neuron1 = matches.groupby(["RecSes1", "ID1"])[metric].transform("max")
+    max_for_neuron2 = matches.groupby(["RecSes2", "ID2"])[metric].transform("max")
+
+    valid_mask = (
+        matches[metric].notna()
+        & (matches[metric] == max_for_neuron1)
+        & (matches[metric] == max_for_neuron2)
+    )
+
+    # Keep all rows, but zero out the ones that are not maximal for both neurons
+    matches.loc[~valid_mask, metric] = 0
+
+    num_conflicts = int((~valid_mask).sum())
+    return matches, num_conflicts
 
 def get_matches(df, sim_matrix, session_id, data_dir, dist_thresh):
     """
