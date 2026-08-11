@@ -207,7 +207,11 @@ def get_locations_from_sqlite(db_path="matchtables.db"):
         parts = name.split("_")
         mouse = parts[0]
         probe = parts[1]
-        loc = "_".join(parts[2:])  # Join remaining parts for loc    
+        loc = "_".join(parts[2:])  # Join remaining parts for loc  
+
+        # if mouse != "AL036" or probe != "19011116882" or loc != "2":
+        #   continue
+
         locations.append((mouse, probe, loc))
     return locations
 
@@ -248,3 +252,30 @@ def save_final_results(results_accumulator, results_dir, save_names=None):
 
         df_final.to_csv(final_path, index=False)
         print(f"Saved {len(df_final)} results for {save_name}")
+
+def avg_across_directions(mt: pd.DataFrame, columns: list):
+    """
+    Take the entire match table and average across rows in each direction.
+    """
+
+    # Create DataFrame for forward direction
+    forward = mt.loc[mt["RecSes1"] < mt["RecSes2"]].copy()
+
+    # Create a MultiIndex for efficient lookup
+    mt_indexed = mt.set_index(["RecSes1", "ID1", "RecSes2", "ID2"])
+
+    # Create a reversed index for lookup
+    reverse_indices = [
+        (r2, i2, r1, i1)
+        for r1, i1, r2, i2 in zip(
+            forward["RecSes1"], forward["ID1"], forward["RecSes2"], forward["ID2"]
+        )
+    ]
+
+    # Get the reverse values for all rows at once
+    reverse_values = mt_indexed.loc[reverse_indices, columns].values
+
+    # Calculate average and update forward DataFrame
+    forward.loc[:, columns] = (forward[columns].values + reverse_values) / 2
+
+    return forward
