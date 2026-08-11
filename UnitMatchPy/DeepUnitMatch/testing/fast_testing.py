@@ -4,11 +4,12 @@ sys.path.insert(0, r"C:\Users\celia\OneDrive - University College London\Documen
 import os
 import pandas as pd
 import numpy as np
+import random  
 import sqlite3
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import time
 from sklearn.neighbors import KernelDensity
-from testing.test import remove_conflicts, directional_filter
+from testing.test import remove_conflicts2, directional_filter
 from utils.helpers import (
     PROJECT_ROOT,
     index_dates_from_loc,
@@ -23,7 +24,7 @@ from utils.helpers import (
 # PROJECT_ROOT (defined in utils.helpers) is the directory holding the shared
 # data/results and metadata_index.json alongside the sibling repos.
 RESULTS_DIR = os.path.join(PROJECT_ROOT, "results")
-DATABASE_PATH = os.path.join(PROJECT_ROOT, "matchtables.db")
+DATABASE_PATH = os.path.join(PROJECT_ROOT, "matchtables_xval.db")
 
 
 def test_models_optimized(col_names, fixed_n=True, save_names=None):
@@ -78,6 +79,7 @@ def test_models_optimized(col_names, fixed_n=True, save_names=None):
         # Process completed jobs
         for i, future in enumerate(as_completed(future_to_location)):
             location = future_to_location[future]
+
             try:
                 location_results = future.result()
                 if location_results:
@@ -171,19 +173,25 @@ def get_matches_1model(mt, metric, fixed_n: int = None):
         else:
             matches = across.sort_values(by=metric, ascending=False)
 
+
     # Only allow a match if it is above threshold when comparing in both directions
     matches = directional_filter(matches)
-
+    
     if len(matches) != 0:
         # Resolve conflict matches by only keeping the match with highest similarity
-        matches, _ = remove_conflicts(matches, metric)
+        matches, _ = remove_conflicts2(matches, metric)
 
     # Ensure consistent ordering (keep a single direction per session pair)
     matches = matches.loc[matches["RecSes1"] < matches["RecSes2"]]
-    matches = matches.sort_values(by=metric, ascending=False)
 
+    # Add a random timebreaker column to randomize order of ties 
+    if not matches.empty:
+        matches["random_tiebreaker"] = [random.random() for _ in range(len(matches))]  
+        matches = matches.sort_values(by=[metric, "random_tiebreaker"], ascending=[False, True])
+        matches = matches.drop(columns=["random_tiebreaker"])
+    
     if fixed_n is not None:
-        matches = matches.head(fixed_n)
+        matches = matches.head(fixed_n) # keep best N matches
 
     return matches.index.to_list()
 
@@ -194,9 +202,9 @@ def all_results_1model(
     """
     Get all the results for a single model.
     """
-    # Early exit for invalid data
-    if len(mt) < 20**2:
-        return None
+    # # Early exit for invalid data
+    # if len(mt) < 20**2:
+    #     return None
 
     sessions = sorted(mt["RecSes1"].unique())  # Sort once and reuse
 
@@ -210,7 +218,6 @@ def all_results_1model(
         session_pairs = fixed_n[["r1", "r2"]].drop_duplicates().values.tolist()
     else:
         session_pairs = [(r1, r2) for r1 in sessions for r2 in sessions if r1 < r2]
-
     # Process each session pair
     for r1, r2 in session_pairs:
         # Get the subset of the match table
@@ -227,21 +234,24 @@ def all_results_1model(
 
         # Nan if no matches found
         if not match_indices:
+            # print(mouse, probe, loc, r1, r2, "No matches found for model", model_name)
             AUC_isi = np.nan
             AUC_fr = np.nan
             AUC_isi_cv = np.nan
             AUC_refpop_UMPy = np.nan
             AUC_refpop_DeepUnitMatch = np.nan
             AUC_refpop_model = np.nan
+            AUC_natim = np.nan
             N = 0
         else:
             # Calculate metrics
             AUC_isi = AUC(df, match_indices, "ISI_correlations")
             AUC_fr = AUC(df, match_indices, "FR_diff")
             AUC_isi_cv = AUC(df, match_indices, "ISI_CV_diff")
-            AUC_refpop_UMPy = AUC(df, match_indices, "refpop_correlations_UMPy") # always here for ref
+            AUC_refpop_UMPy = AUC(df, match_indices, "refpop_correlations_UMPy") if "refpop_correlations_UMPy" in df.keys() else np.nan
             AUC_refpop_DeepUnitMatch = AUC(df, match_indices, "refpop_correlations_DeepUnitMatch") # always here for ref
             AUC_refpop_model = AUC(df, match_indices, model_name.replace("UM Probabilities", "refpop_correlations")) # may be duplicated
+            AUC_natim = AUC(df, match_indices, "natim_correlations_DeepUnitMatch") if mouse != 'AV009' else np.nan # not in visual cortex
             N = len(match_indices)
 
         date1 = metadata_cache.get(r1)
@@ -260,12 +270,13 @@ def all_results_1model(
                 "day2": date2,
                 "r1": r1,
                 "r2": r2,
-                "AUCisi": AUC_isi,
-                "AUCfr": AUC_fr,
-                "AUCisi_cv": AUC_isi_cv,
+                "AUC_isi": AUC_isi,
+                "AUC_fr": AUC_fr,
+                "AUC_isi_cv": AUC_isi_cv,
                 "AUC_refpop_UMPy": AUC_refpop_UMPy,
                 "AUC_refpop_DeepUnitMatch": AUC_refpop_DeepUnitMatch,
                 "AUC_refpop_model": AUC_refpop_model,
+                "AUC_natim": AUC_natim,
                 "N": N,
                 "delta_days": (date2 - date1).days,
             }
@@ -311,24 +322,35 @@ def process_single_location(location_data, col_names, um_lookup, fixed_n=True):
             return None
 
         # Build SQL query based on available columns
-        base_cols = ["ID1", "ID2", "RecSes1", "RecSes2", "ISI_correlations", "ISI_KL_divergence", "ISI_wasserstein_distance", 
-                     "FR_diff", "ISI_CV_diff", "natim_correlations_DeepUnitMatch"]
-
+        base_cols = [
+            "ID1", "ID2", "RecSes1", "RecSes2", "ISI_correlations", "ISI_KL_divergence", "ISI_wasserstein_distance", 
+            "FR_diff", "ISI_CV_diff", 
+            "natim_correlations_DeepUnitMatch", 
+            "refpop_correlations_DeepUnitMatch", 
+            "refpop_correlations_UMPy",
+            ]
         base_cols += [name.replace("UM Probabilities", "refpop_correlations") for name in col_names]
+        base_cols = np.unique(base_cols).tolist()  # Remove duplicates
 
-        existing_cols = [col for col in col_names if col in columns]
-        if not existing_cols:
-            print(f"No requested columns found in {mouse}_{probe}_{loc}.")
-            conn.close()
-            return None
+        missing_cols = [col for col in col_names if col not in columns]
+        if missing_cols:
+            print(f"Columns {missing_cols} are requested but not found in {mouse}_{probe}_{loc}.")
 
-        query_cols = ", ".join(quote_ident(col) for col in base_cols + existing_cols)
+        all_cols = base_cols + col_names
+
+        query_cols = ", ".join(quote_ident(col) for col in all_cols)
         table_name = quote_ident(f"{mouse}_{probe}_{loc}")
         query = f"SELECT {query_cols} FROM {table_name};"
 
         # Single database query for all needed data
         mt = pd.read_sql_query(query, conn)
         conn.close()
+
+        # Columns inexistant in the database will be loaded as strings, let's convert them to NaNs
+        mt = mt.rename(columns={col: col.replace('"', '') for col in mt.keys() if '"' in col})
+
+        for col in all_cols:
+            mt[col] = pd.to_numeric(mt[col], errors='coerce')
 
         # Get fixed_n data
         if fixed_n:
@@ -339,7 +361,7 @@ def process_single_location(location_data, col_names, um_lookup, fixed_n=True):
 
         # Process each model
         results = {}
-        for col_name in existing_cols:
+        for col_name in col_names:
             model_name = col_name
             result = all_results_1model(
                 mt, mouse, probe, loc, model_name=model_name, fixed_n=UM_N
@@ -356,39 +378,57 @@ def process_single_location(location_data, col_names, um_lookup, fixed_n=True):
         return None
 
 
+# def AUC(mt, indices, func_metric):
+#     """
+#     Optimized version of AUC calculation function.
+#     """
+#     matches_indices = set(indices)
+#     P = len(matches_indices)
+#     if P < 1:
+#         return np.nan
+
+#     # Filter only across-session matches
+#     across = mt.loc[mt["RecSes1"] != mt["RecSes2"]]
+
+#     # Get the total number of non-matches
+#     N_a = len(across) - P
+
+#     if N_a <= 0:  # Edge case protection
+#         return np.nan
+
+#     sorted_indices = across.sort_values(by=func_metric, ascending=False).index
+
+#     is_match = np.array([idx in matches_indices for idx in sorted_indices], dtype=bool)
+
+#     # Calculate cumulative values
+#     tp_cumsum = np.cumsum(is_match)
+#     fp_cumsum = np.cumsum(~is_match)
+
+#     # Calculate recall and false positive rate arrays
+#     recall = tp_cumsum / P
+#     fpr = fp_cumsum / N_a
+
+#     auc = np.trapz(recall, fpr)
+
+#     return auc
+
+from sklearn.metrics import roc_auc_score
 def AUC(mt, indices, func_metric):
-    """
-    Optimized version of AUC calculation function.
-    """
-    matches_indices = set(indices)
-    P = len(matches_indices)
-    if P < 1:
+    across = mt.loc[mt["RecSes1"] != mt["RecSes2"]].copy()
+
+    mask = across[func_metric].notna()
+    across = across.loc[mask]
+
+    if across.empty:
         return np.nan
 
-    # Filter only across-session matches
-    across = mt.loc[mt["RecSes1"] != mt["RecSes2"]]
+    y_true = across.index.isin(indices).astype(int)
+    y_score = across[func_metric].to_numpy()
 
-    # Get the total number of non-matches
-    N_a = len(across) - P
-
-    if N_a <= 0:  # Edge case protection
+    if len(np.unique(y_true)) < 2:
         return np.nan
 
-    sorted_indices = across.sort_values(by=func_metric, ascending=False).index
-
-    is_match = np.array([idx in matches_indices for idx in sorted_indices], dtype=bool)
-
-    # Calculate cumulative values
-    tp_cumsum = np.cumsum(is_match)
-    fp_cumsum = np.cumsum(~is_match)
-
-    # Calculate recall and false positive rate arrays
-    recall = tp_cumsum / P
-    fpr = fp_cumsum / N_a
-
-    auc = np.trapz(recall, fpr)
-
-    return auc
+    return roc_auc_score(y_true, y_score)
 
 def quote_ident(name):
     return '"' + str(name).replace('"', '""') + '"'
@@ -398,13 +438,19 @@ def quote_ident(name):
 if __name__ == "__main__":
     start = time.time()
 
-    models = ["DeepUnitMatch",
-              "UMPy", 
-              "DUM_maxdist=20", "DUM_maxdist=50", "DUM_maxdist=100", "DUM_maxdist=inf", 
-              "UMPy_maxdist=20", "UMPy_maxdist=50", "UMPy_maxdist=100", "UMPy_maxdist=inf",
-              "DUM_W_ij=1","DUM_W_ij=5","DUM_W_ij=10","DUM_W_ij=15","DUM_W_ij=20", 
-              "n_output=8_after_ae_and_finetune", "n_output=32_after_ae_and_finetune", "n_output=128_after_ae_and_finetune", "n_output=256_after_ae_and_finetune", 
-              "EMD"
+    models = [
+              "DeepUnitMatch",
+            #   "UMPy", 
+            #   "EMD", 
+            #   "DANT", "DANT_no_functional",
+            #   "DUM_maxdist=20", "DUM_maxdist=50", "DUM_maxdist=100", "DUM_maxdist=inf", 
+            #   "UMPy_maxdist=20", "UMPy_maxdist=50", "UMPy_maxdist=100", "UMPy_maxdist=inf",
+            #   "DUM_W_ij=1","DUM_W_ij=5","DUM_W_ij=10","DUM_W_ij=15","DUM_W_ij=20", 
+            #   "n_output=8_after_ae_and_finetune", "n_output=32_after_ae_and_finetune", "n_output=128_after_ae_and_finetune", "n_output=256_after_ae_and_finetune", 
+            #   "DUM_untrained", "DUM_unfinetuned", "DUM_finetuned_only",
+              "exclude_mice_m1_1_after_ae_and_finetune", "exclude_mice_m1_2_after_ae_and_finetune", "exclude_mice_m1_3_after_ae_and_finetune",
+              "exclude_mice_m6_1_after_ae_and_finetune", "exclude_mice_m6_2_after_ae_and_finetune", "exclude_mice_m6_3_after_ae_and_finetune",
+              "exclude_mice_m12_1_after_ae_and_finetune", "exclude_mice_m12_2_after_ae_and_finetune", "exclude_mice_m12_3_after_ae_and_finetune",
               ]
 
     col_names = [f"UM Probabilities_{model}" for model in models]
