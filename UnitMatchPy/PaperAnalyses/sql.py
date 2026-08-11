@@ -78,7 +78,7 @@ def merge_match_tables(df_1, df_2, sub1, sub2):
 
 def import_csv_to_sqlite(mt_paths, models, m, p, l):
 
-    db_file = os.path.join(PROJECT_ROOT, "matchtables.db")
+    db_file = os.path.join(PROJECT_ROOT, "matchtables_xval.db")
 
     # Define the table name in SQLite
     table_name = f"{m}_{p}_{l}"  # Change this
@@ -107,7 +107,7 @@ def import_csv_to_sqlite(mt_paths, models, m, p, l):
         # Quote column names to handle spaces or reserved keywords
         safe_col_name = f'"{col_name}"'
         column_defs.append(f"{safe_col_name} {sql_type}")
-        print(f"  - Column: '{col_name}', Pandas dtype: {dtype}, SQL type: {sql_type}")
+        # print(f"  - Column: '{col_name}', Pandas dtype: {dtype}, SQL type: {sql_type}")
 
     conn = None
     try:
@@ -158,22 +158,33 @@ def import_csv_to_sqlite(mt_paths, models, m, p, l):
 
 if __name__ == "__main__":
     data_root = PROJECT_ROOT
-    # models = ["DeepUnitMatch", "UMPy"]
-    models = ["DeepUnitMatch",
-              "UMPy", 
-              "DUM_maxdist=20", "DUM_maxdist=50", "DUM_maxdist=100", "DUM_maxdist=inf", 
-              "UMPy_maxdist=20", "UMPy_maxdist=50", "UMPy_maxdist=100", "UMPy_maxdist=inf",
-              "DUM_W_ij=1","DUM_W_ij=5","DUM_W_ij=10","DUM_W_ij=15","DUM_W_ij=20", 
-              "n_output=8_after_ae_and_finetune", "n_output=32_after_ae_and_finetune", "n_output=128_after_ae_and_finetune", "n_output=256_after_ae_and_finetune", 
-              "EMD", "DANT", "DANT_no_functional"
+
+    models = [
+              "DeepUnitMatch",
+            #   "DUM_NewModelAug2026",
+            #   "UMPy", 
+            #   "EMD", "DANT", "DANT_no_functional",
+            #   "DUM_maxdist=20", "DUM_maxdist=50", "DUM_maxdist=100", "DUM_maxdist=inf", 
+            #   "UMPy_maxdist=20", "UMPy_maxdist=50", "UMPy_maxdist=100", "UMPy_maxdist=inf",
+            #   "DUM_W_ij=1","DUM_W_ij=5","DUM_W_ij=10","DUM_W_ij=15","DUM_W_ij=20", 
+            #   "n_output=8_after_ae_and_finetune", "n_output=32_after_ae_and_finetune", "n_output=128_after_ae_and_finetune", "n_output=256_after_ae_and_finetune", 
+            #   "DUM_untrained", "DUM_unfinetuned", "DUM_finetuned_only",
+              "exclude_mice_m1_1_after_ae_and_finetune", "exclude_mice_m1_2_after_ae_and_finetune", "exclude_mice_m1_3_after_ae_and_finetune",
+              "exclude_mice_m6_1_after_ae_and_finetune", "exclude_mice_m6_2_after_ae_and_finetune", "exclude_mice_m6_3_after_ae_and_finetune",
+              "exclude_mice_m12_1_after_ae_and_finetune", "exclude_mice_m12_2_after_ae_and_finetune", "exclude_mice_m12_3_after_ae_and_finetune",
               ]
 
     for mouse in os.listdir(data_root):
         if os.path.isdir(os.path.join(data_root, mouse)):
             print(f"Processing mouse: {mouse}")
             for probe in os.listdir(os.path.join(data_root, mouse)):
+                if not os.path.isdir(os.path.join(data_root, mouse, probe)):
+                    continue
                 print(f"  Processing probe: {probe}")
                 for loc in os.listdir(os.path.join(data_root, mouse, probe)):
+                    if not os.path.isdir(os.path.join(data_root, mouse, probe, loc)):
+                        continue
+
                     print(f"    Processing location: {loc}")
                     mt_paths = []
                     models_found = []
