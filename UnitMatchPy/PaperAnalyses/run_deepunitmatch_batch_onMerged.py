@@ -673,7 +673,7 @@ def run_deep_unit_match_core(sess, save_dir, model, label="DeepUnitMatch"):
     # ── save ─────────────────────────────────────────────────────────────────
     su.save_to_output(
         save_dir,
-        {"distance": distance_matrix},
+        {"distance": distance_matrix, "DNNSim": sim_matrix},
         np.argwhere(final_matches),
         probs,
         extracted_wave_properties["avg_centroid"],
