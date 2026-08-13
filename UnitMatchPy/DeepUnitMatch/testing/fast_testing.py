@@ -24,7 +24,7 @@ from utils.helpers import (
 # PROJECT_ROOT (defined in utils.helpers) is the directory holding the shared
 # data/results and metadata_index.json alongside the sibling repos.
 RESULTS_DIR = os.path.join(PROJECT_ROOT, "results")
-DATABASE_PATH = os.path.join(PROJECT_ROOT, "matchtables_xval.db")
+DATABASE_PATH = os.path.join(PROJECT_ROOT, "matchtables_algo.db")
 
 
 def test_models_optimized(col_names, fixed_n=True, save_names=None):
@@ -39,12 +39,18 @@ def test_models_optimized(col_names, fixed_n=True, save_names=None):
     results_dir = RESULTS_DIR
 
     if fixed_n:
+        ref_model = 'UMPy'
+        # ref_model = 'DeepUnitMatch'
+        # ref_model = 'DANT_no_functional'
+        # ref_model = 'DANT'
+
         # Load UM_results once and create a lookup dictionary for fast access
-        UM_results = pd.read_csv(os.path.join(results_dir, "UM Probabilities_UMPy_results.csv"))
+        UM_results = pd.read_csv(os.path.join(results_dir, f"UM Probabilities_{ref_model}_results.csv"))
         um_lookup = create_um_lookup(UM_results)
 
         # Save the new results in a subdirectory to avoid overwriting the original results
-        results_dir = os.path.join(results_dir, "N_set_by_UM")
+        results_dir = os.path.join(results_dir, f"N_set_by_{ref_model}")
+        os.makedirs(results_dir, exist_ok=True)
     else:
         um_lookup = None
 
@@ -243,6 +249,10 @@ def all_results_1model(
             AUC_refpop_model = np.nan
             AUC_natim = np.nan
             N = 0
+
+            single_match_score_isi = np.nan
+            single_match_score_refpop = np.nan
+            single_match_score_natim = np.nan
         else:
             # Calculate metrics
             AUC_isi = AUC(df, match_indices, "ISI_correlations")
@@ -253,6 +263,17 @@ def all_results_1model(
             AUC_refpop_model = AUC(df, match_indices, model_name.replace("UM Probabilities", "refpop_correlations")) # may be duplicated
             AUC_natim = AUC(df, match_indices, "natim_correlations_DeepUnitMatch") if mouse != 'AV009' else np.nan # not in visual cortex
             N = len(match_indices)
+
+            # Test single-match metric
+            S, M = build_S_and_M(df, match_indices, metric="ISI_correlations")
+            single_match_result_isi = pairwise_match_score_exact(S, M)
+            single_match_score_isi = single_match_result_isi["score"]
+            S, M = build_S_and_M(df, match_indices, metric=model_name.replace("UM Probabilities", "refpop_correlations"))
+            single_match_result_refpop = pairwise_match_score_exact(S, M)
+            single_match_score_refpop = single_match_result_refpop["score"]
+            S, M = build_S_and_M(df, match_indices, metric="natim_correlations_DeepUnitMatch")
+            single_match_result_natim = pairwise_match_score_exact(S, M)
+            single_match_score_natim = single_match_result_natim["score"]
 
         date1 = metadata_cache.get(r1)
         date2 = metadata_cache.get(r2)
@@ -277,6 +298,9 @@ def all_results_1model(
                 "AUC_refpop_DeepUnitMatch": AUC_refpop_DeepUnitMatch,
                 "AUC_refpop_model": AUC_refpop_model,
                 "AUC_natim": AUC_natim,
+                "Mean_score_isi": single_match_score_isi,
+                "Mean_score_refpop": single_match_score_refpop,
+                "Mean_score_natim": single_match_score_natim,
                 "N": N,
                 "delta_days": (date2 - date1).days,
             }
@@ -377,41 +401,6 @@ def process_single_location(location_data, col_names, um_lookup, fixed_n=True):
         print(f"Failed to process {mouse}/{probe}/{loc}: {e}")
         return None
 
-
-# def AUC(mt, indices, func_metric):
-#     """
-#     Optimized version of AUC calculation function.
-#     """
-#     matches_indices = set(indices)
-#     P = len(matches_indices)
-#     if P < 1:
-#         return np.nan
-
-#     # Filter only across-session matches
-#     across = mt.loc[mt["RecSes1"] != mt["RecSes2"]]
-
-#     # Get the total number of non-matches
-#     N_a = len(across) - P
-
-#     if N_a <= 0:  # Edge case protection
-#         return np.nan
-
-#     sorted_indices = across.sort_values(by=func_metric, ascending=False).index
-
-#     is_match = np.array([idx in matches_indices for idx in sorted_indices], dtype=bool)
-
-#     # Calculate cumulative values
-#     tp_cumsum = np.cumsum(is_match)
-#     fp_cumsum = np.cumsum(~is_match)
-
-#     # Calculate recall and false positive rate arrays
-#     recall = tp_cumsum / P
-#     fpr = fp_cumsum / N_a
-
-#     auc = np.trapz(recall, fpr)
-
-#     return auc
-
 from sklearn.metrics import roc_auc_score
 def AUC(mt, indices, func_metric):
     across = mt.loc[mt["RecSes1"] != mt["RecSes2"]].copy()
@@ -433,29 +422,154 @@ def AUC(mt, indices, func_metric):
 def quote_ident(name):
     return '"' + str(name).replace('"', '""') + '"'
 
+import numpy as np
 
+def pairwise_match_score_exact(S, M):
+    """
+    Calculate the average pairwise ranking score of all model-selected
+    matches according to S.
+
+    Parameters
+    ----------
+    S : ndarray, shape (N1, N2)
+        Similarity matrix.
+
+    M : ndarray, shape (N1, N2)
+        Binary matching matrix. M[i, j] == 1 means that (i, j) is
+        selected as a match by the model.
+
+    Returns
+    -------
+    dict
+        score: average pairwise score across all selected matches.
+               Win = 1, tie = 0.5, loss = 0.
+
+        n_matches: total number of selected matches.
+
+        coverage: fraction of units in dataset 1 for which at least
+                  one match was made.
+    """
+
+    S = np.asarray(S)
+    M = np.asarray(M)
+
+    if S.shape != M.shape:
+        raise ValueError("S and M must have the same shape.")
+
+    N1, N2 = S.shape
+
+    scores = []
+
+    for i in range(N1):
+
+        # All matches selected by the model for unit i
+        matches = np.flatnonzero(M[i])
+
+        for j in matches:
+
+            # S value of this particular model-selected match
+            model_S = S[i, j]
+
+            # All alternative candidates for this unit
+            alternatives = np.delete(S[i], j)
+
+            # Pairwise wins and ties
+            wins = np.sum(model_S > alternatives)
+            ties = np.sum(model_S == alternatives)
+
+            # Tie receives half credit
+            score = (wins + 0.5 * ties) / len(alternatives)
+
+            scores.append(score)
+
+    n_matches = len(scores)
+
+    # Number of units with at least one match
+    n_units_matched = np.sum(np.any(M != 0, axis=1))
+
+    return {
+        "score": np.mean(scores) if scores else np.nan,
+        "n_matches": n_matches,
+        "coverage": n_units_matched / np.min([N1, N2]),
+    }
+
+def build_S_and_M(df, match_indices, metric="ISI_correlations"):
+    """
+    Build S and M for a single session pair.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Subset for one r1/r2 pair, containing at least:
+        ID1, ID2, and the metric column (e.g. "ISI_correlations").
+    match_indices : list-like
+        Row indices in df that are selected matches.
+    metric : str
+        Name of the pairwise similarity metric to store in S.
+
+    Returns
+    -------
+    S : np.ndarray, shape (N1, N2)
+        Similarity matrix.
+    M : np.ndarray, shape (N1, N2)
+        Binary match matrix.
+    """
+    # Keep only actual unit-to-unit pairs from this session pair
+    d = df.copy()
+    d = d.loc[d["RecSes1"] != d["RecSes2"]].copy()
+
+    # Sort unique neuron IDs for deterministic matrix indexing
+    ids1 = sorted(d["ID1"].unique())
+    ids2 = sorted(d["ID2"].unique())
+
+    i_map = {u: i for i, u in enumerate(ids1)}
+    j_map = {u: j for j, u in enumerate(ids2)}
+
+    N1, N2 = len(ids1), len(ids2)
+    S = np.full((N1, N2), -np.inf, dtype=float)
+    M = np.zeros((N1, N2), dtype=int)
+
+    # Fill similarity values for all observed pairs
+    for idx, row in d.iterrows():
+        i = i_map.get(row["ID1"])
+        j = j_map.get(row["ID2"])
+        if i is not None and j is not None:
+            S[i, j] = row[metric]
+
+    # Fill selected matches
+    for idx in match_indices:
+        if idx not in d.index:
+            continue
+        row = d.loc[idx]
+        i = i_map.get(row["ID1"])
+        j = j_map.get(row["ID2"])
+        if i is not None and j is not None:
+            M[i, j] = 1
+
+    return S, M
 
 if __name__ == "__main__":
     start = time.time()
 
     models = [
               "DeepUnitMatch",
-            #   "UMPy", 
+              "UMPy", 
             #   "EMD", 
-            #   "DANT", "DANT_no_functional",
+              "DANT", 
+              "DANT_no_functional",
             #   "DUM_maxdist=20", "DUM_maxdist=50", "DUM_maxdist=100", "DUM_maxdist=inf", 
             #   "UMPy_maxdist=20", "UMPy_maxdist=50", "UMPy_maxdist=100", "UMPy_maxdist=inf",
             #   "DUM_W_ij=1","DUM_W_ij=5","DUM_W_ij=10","DUM_W_ij=15","DUM_W_ij=20", 
             #   "n_output=8_after_ae_and_finetune", "n_output=32_after_ae_and_finetune", "n_output=128_after_ae_and_finetune", "n_output=256_after_ae_and_finetune", 
             #   "DUM_untrained", "DUM_unfinetuned", "DUM_finetuned_only",
-              "exclude_mice_m1_1_after_ae_and_finetune", "exclude_mice_m1_2_after_ae_and_finetune", "exclude_mice_m1_3_after_ae_and_finetune",
-              "exclude_mice_m6_1_after_ae_and_finetune", "exclude_mice_m6_2_after_ae_and_finetune", "exclude_mice_m6_3_after_ae_and_finetune",
-              "exclude_mice_m12_1_after_ae_and_finetune", "exclude_mice_m12_2_after_ae_and_finetune", "exclude_mice_m12_3_after_ae_and_finetune",
+            #   "exclude_mice_m1_1_after_ae_and_finetune", "exclude_mice_m1_2_after_ae_and_finetune", "exclude_mice_m1_3_after_ae_and_finetune",
+            #   "exclude_mice_m6_1_after_ae_and_finetune", "exclude_mice_m6_2_after_ae_and_finetune", "exclude_mice_m6_3_after_ae_and_finetune",
+            #   "exclude_mice_m12_1_after_ae_and_finetune", "exclude_mice_m12_2_after_ae_and_finetune", "exclude_mice_m12_3_after_ae_and_finetune",
               ]
 
     col_names = [f"UM Probabilities_{model}" for model in models]
 
-    test_models_optimized(col_names, fixed_n=False)
+    # test_models_optimized(col_names, fixed_n=False)
     test_models_optimized(col_names, fixed_n=True)
     end = time.time()
     print(f"Total time taken: {end - start} seconds")
