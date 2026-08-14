@@ -18,6 +18,7 @@ from utils.helpers import (
     get_locations_from_sqlite,
     save_final_results,
     save_intermediate_results,
+    avg_across_directions
 )
 
 
@@ -39,10 +40,10 @@ def test_models_optimized(col_names, fixed_n=True, save_names=None):
     results_dir = RESULTS_DIR
 
     if fixed_n:
-        ref_model = 'UMPy'
+        # ref_model = 'UMPy'
         # ref_model = 'DeepUnitMatch'
         # ref_model = 'DANT_no_functional'
-        # ref_model = 'DANT'
+        ref_model = 'DANT'
 
         # Load UM_results once and create a lookup dictionary for fast access
         UM_results = pd.read_csv(os.path.join(results_dir, f"UM Probabilities_{ref_model}_results.csv"))
@@ -182,12 +183,16 @@ def get_matches_1model(mt, metric, fixed_n: int = None):
 
     # Only allow a match if it is above threshold when comparing in both directions
     matches = directional_filter(matches)
+
+    # Average in both directions to simplify the rest
+    matches = avg_across_directions(matches, columns=[metric])
     
     if len(matches) != 0:
         # Resolve conflict matches by only keeping the match with highest similarity
         matches, _ = remove_conflicts2(matches, metric)
 
     # Ensure consistent ordering (keep a single direction per session pair)
+    # shouldn't be necessary when averaging across directions since return forward dataframe only
     matches = matches.loc[matches["RecSes1"] < matches["RecSes2"]]
 
     # Add a random timebreaker column to randomize order of ties 
@@ -198,6 +203,8 @@ def get_matches_1model(mt, metric, fixed_n: int = None):
     
     if fixed_n is not None:
         matches = matches.head(fixed_n) # keep best N matches
+    else:
+        matches = matches.loc[matches[metric] >= thresh]
 
     return matches.index.to_list()
 
@@ -220,6 +227,12 @@ def all_results_1model(
 
     results_data = []
 
+    metrics = ["ISI_correlations", "FR_diff", "ISI_CV_diff", 
+            "refpop_correlations_DeepUnitMatch", model_name.replace("UM Probabilities", "refpop_correlations"), "natim_correlations_DeepUnitMatch"]
+    if "refpop_correlations_UMPy" in mt.keys():
+        metrics.append("refpop_correlations_UMPy")
+    metrics = list(dict.fromkeys(metrics))
+
     if fixed_n is not None:
         session_pairs = fixed_n[["r1", "r2"]].drop_duplicates().values.tolist()
     else:
@@ -227,7 +240,8 @@ def all_results_1model(
     # Process each session pair
     for r1, r2 in session_pairs:
         # Get the subset of the match table
-        df = pick(mt, r1, r2)
+        # Need to get both directions for the match filtering
+        df = pick(mt, r1, r2, False).copy()
 
         # Get matches
         if fixed_n is not None:
@@ -237,6 +251,9 @@ def all_results_1model(
             match_indices = get_matches_1model(df, metric=model_name, fixed_n=n_value)
         else:
             match_indices = get_matches_1model(df, metric=model_name, fixed_n=None)
+
+        # Average over directions, and select only the way forward to simplify
+        df = avg_across_directions(df, columns=metrics)  
 
         # Nan if no matches found
         if not match_indices:
@@ -250,9 +267,9 @@ def all_results_1model(
             AUC_natim = np.nan
             N = 0
 
-            single_match_score_isi = np.nan
-            single_match_score_refpop = np.nan
-            single_match_score_natim = np.nan
+            # single_match_score_isi = np.nan
+            # single_match_score_refpop = np.nan
+            # single_match_score_natim = np.nan
         else:
             # Calculate metrics
             AUC_isi = AUC(df, match_indices, "ISI_correlations")
@@ -264,16 +281,16 @@ def all_results_1model(
             AUC_natim = AUC(df, match_indices, "natim_correlations_DeepUnitMatch") if mouse != 'AV009' else np.nan # not in visual cortex
             N = len(match_indices)
 
-            # Test single-match metric
-            S, M = build_S_and_M(df, match_indices, metric="ISI_correlations")
-            single_match_result_isi = pairwise_match_score_exact(S, M)
-            single_match_score_isi = single_match_result_isi["score"]
-            S, M = build_S_and_M(df, match_indices, metric=model_name.replace("UM Probabilities", "refpop_correlations"))
-            single_match_result_refpop = pairwise_match_score_exact(S, M)
-            single_match_score_refpop = single_match_result_refpop["score"]
-            S, M = build_S_and_M(df, match_indices, metric="natim_correlations_DeepUnitMatch")
-            single_match_result_natim = pairwise_match_score_exact(S, M)
-            single_match_score_natim = single_match_result_natim["score"]
+            # # Test single-match metric
+            # S, M = build_S_and_M(df, match_indices, metric="ISI_correlations")
+            # single_match_result_isi = pairwise_match_score_exact(S, M)
+            # single_match_score_isi = single_match_result_isi["score"]
+            # S, M = build_S_and_M(df, match_indices, metric=model_name.replace("UM Probabilities", "refpop_correlations"))
+            # single_match_result_refpop = pairwise_match_score_exact(S, M)
+            # single_match_score_refpop = single_match_result_refpop["score"]
+            # S, M = build_S_and_M(df, match_indices, metric="natim_correlations_DeepUnitMatch")
+            # single_match_result_natim = pairwise_match_score_exact(S, M)
+            # single_match_score_natim = single_match_result_natim["score"]
 
         date1 = metadata_cache.get(r1)
         date2 = metadata_cache.get(r2)
@@ -298,9 +315,9 @@ def all_results_1model(
                 "AUC_refpop_DeepUnitMatch": AUC_refpop_DeepUnitMatch,
                 "AUC_refpop_model": AUC_refpop_model,
                 "AUC_natim": AUC_natim,
-                "Mean_score_isi": single_match_score_isi,
-                "Mean_score_refpop": single_match_score_refpop,
-                "Mean_score_natim": single_match_score_natim,
+                # "Mean_score_isi": single_match_score_isi,
+                # "Mean_score_refpop": single_match_score_refpop,
+                # "Mean_score_natim": single_match_score_natim,
                 "N": N,
                 "delta_days": (date2 - date1).days,
             }
@@ -554,7 +571,7 @@ if __name__ == "__main__":
     models = [
               "DeepUnitMatch",
               "UMPy", 
-            #   "EMD", 
+              "EMD", 
               "DANT", 
               "DANT_no_functional",
             #   "DUM_maxdist=20", "DUM_maxdist=50", "DUM_maxdist=100", "DUM_maxdist=inf", 
