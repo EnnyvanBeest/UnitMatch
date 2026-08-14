@@ -501,10 +501,17 @@ def run_one_xval(
             print(f"  {name}: preprocessing incomplete for now; will retry on a later run.")
             return
 
+        # AE_NeuropixelsDataset/MultiLocationFinetuneDatasetV1 read from each
+        # location's *cached, preprocessed* folder (processed_waveforms/ under
+        # PREPROCESSED_CACHE) -- not from the raw merged_dir itself, which has
+        # no processed_waveforms/ of its own until preprocess_one_location()
+        # (called above, keyed by merged_dir) has written one there.
+        cache_locations = [get_location_out_dir(d) for d in train_locations]
+
         write_status(name, state="training_ae")
-        print(f"  {name}: training AE on {len(train_locations)} location(s) from {len(mice)} mice.")
+        print(f"  {name}: training AE on {len(cache_locations)} location(s) from {len(mice)} mice.")
         try:
-            run_ae_stage(exp_name, train_locations, args)
+            run_ae_stage(exp_name, cache_locations, args)
         except Exception as e:
             write_status(name, state="failed", error=f"AE training: {e}")
             print(f"  {name}: AE TRAINING FAILED: {e}")
@@ -512,9 +519,9 @@ def run_one_xval(
             return
 
         write_status(name, state="training_finetune")
-        print(f"  {name}: finetuning on {len(train_locations)} location(s).")
+        print(f"  {name}: finetuning on {len(cache_locations)} location(s).")
         try:
-            run_finetune_stage(exp_name, train_locations, args)
+            run_finetune_stage(exp_name, cache_locations, args)
         except Exception as e:
             write_status(name, state="failed", error=f"finetune training: {e}")
             print(f"  {name}: FINETUNE TRAINING FAILED: {e}")
