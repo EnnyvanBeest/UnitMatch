@@ -125,6 +125,21 @@ BOOTSTRAP_MAX_N = 20000
 # (2 mice gives an SEM but not a meaningful one; this errs stricter).
 MIN_MICE_PER_BIN = 3
 
+# When False (default): a (dataset, model, score, bin) with no matches (or,
+# in the vanishingly rare reverse case, no non-matches) among its candidate
+# pairs -- i.e. _auc_from_flat() has nothing to rank -- is simply skipped
+# (see dataset_score_auc/dataset_auc below), the same way figure2.ipynb
+# originally did before that notebook switched to filling with 0.5. When
+# True: that same case is scored as chance-level (0.5) instead of skipped,
+# so a model that finds zero matches somewhere it had real candidate pairs
+# to work with is punished for it (dragged toward 0.5) rather than quietly
+# not contributing a data point there and leaving the average unaffected.
+# Reaching this code path already means this dataset/bin had valid candidate
+# pairs (collect_binned_pairs() only calls _auc_from_flat on bins with data),
+# so a P<1/N<1 result here reflects this model's own failure to find matches
+# in data it did have access to, not a genuine lack of underlying data.
+PUNISH_MISSING_MATCHES = True
+
 
 def _signed_bin_ids(delta_days):
     """
@@ -247,18 +262,20 @@ def get_session_date_lookup():
 # ── AUC over a flat (already across-session, already binned) array pair ────
 
 
-def _auc_from_flat(matches_bool, metric_values):
+def _auc_from_flat(matches_bool, metric_values, punish_missing=PUNISH_MISSING_MATCHES):
     """
     Same recall/FPR/trapezoid logic as DeepUnitMatch.testing.test.AUC(), but
     over flat arrays already restricted to across-session pairs (instead of
     an (n_units, n_units) matrix + session_id) -- so it can be reused per
     delta-days bin. Returns NaN when there are no matches or no non-matches
-    to rank against (AUC() raises in the same situation).
+    to rank against (AUC() raises in the same situation) -- unless
+    punish_missing is True, in which case that case returns 0.5 (chance
+    level) instead. See PUNISH_MISSING_MATCHES.
     """
     P = int(matches_bool.sum())
     N = len(matches_bool) - P
     if P < 1 or N < 1:
-        return np.nan
+        return 0.5 if punish_missing else np.nan
     order = np.argsort(metric_values)[::-1]
     m_sorted = matches_bool[order]
     tp = np.cumsum(m_sorted)
@@ -295,6 +312,175 @@ def _uid_variant_source_model(model):
         if model.endswith("_" + suffix):
             return model[: -len("_" + suffix)], uid_cols
     return None
+
+
+# ── within-session oversplit residuals: units that should have been merged ──
+
+# A functional score (ISI_correlations, FR_diff, ...) is computed once, per
+# session, straight from spike_clusters.npy as it stands after
+# generate_merged_dataset.py's own within-session merge pass (UnitMatch's own
+# same-session UID match, gated by a refractory-contamination check) -- see
+# DeepUnitMatch/testing/test.py's get_ISI_histograms() etc., which just
+# np.load() that file per KS_dir. A unit that pass missed keeps a fragmented
+# spike train for every functional score computed against it, for every
+# model's evaluation -- not only the model whose own UID assignment happens
+# to flag it. fast_testing.py inherits the identical limitation (it reads
+# functional-score columns out of a SQL database populated by the same
+# upstream computation) -- there's no existing correction for this anywhere
+# in this codebase.
+#
+# Only DeepUnitMatch's and UMPy's own MatchTable.csv carry "UID 1"/"UID 2"/
+# "UID Cons 1"/"UID Cons 2" columns (EMD/DANT/DANT_no_functional pass
+# UIDs=None to save_to_output -- see run_emd_batch_onMerged.py /
+# run_dant_batch_onMerged.py), so those two source files are the only place
+# this residual can be detected from without touching raw spike data.
+UID_SOURCE_MODELS = ("DeepUnitMatch", "UMPy")
+
+
+def _build_within_session_duplicate_lookup(base_output, passing_datasets):
+    """
+    {dataset: {(RecSes, ID), ...}} -- units flagged by at least one of
+    DeepUnitMatch's/UMPy's own UID assignments (liberal "UID 1"/"UID 2" or
+    conservative "UID Cons 1"/"UID Cons 2") as sharing a same-session UID with
+    a DIFFERENT unit in the same session, i.e. a residual within-session
+    oversplit generate_merged_dataset.py's own upstream pass didn't catch --
+    see the module comment above.
+
+    Deliberately a union across every UID-clustering variant's own opinion
+    (not e.g. only the conservative one, and not computed per-model), so the
+    same exclusion set is used for every model's pairs in
+    collect_binned_pairs() below -- no single model's own opinion gets to
+    preferentially clean up the data it's later scored against.
+    """
+    lookup = {}
+    for dataset in passing_datasets:
+        flagged = set()
+        for source_model in UID_SOURCE_MODELS:
+            match_table_path = os.path.join(base_output, *dataset.split("/"), source_model, "MatchTable.csv")
+            if not os.path.isfile(match_table_path):
+                continue
+            header = pd.read_csv(match_table_path, nrows=0).columns
+            uid_pairs = [(a, b) for a, b in UID_VARIANT_SUFFIXES.values() if a in header and b in header]
+            if not uid_pairs:
+                continue
+
+            usecols = ["ID1", "ID2", "RecSes 1", "RecSes 2"] + [c for pair in uid_pairs for c in pair]
+            dtype_map = {"ID1": "int32", "ID2": "int32", "RecSes 1": "int32", "RecSes 2": "int32"}
+            dtype_map.update({c: "int32" for pair in uid_pairs for c in pair})
+            df = pd.read_csv(match_table_path, usecols=usecols, dtype=dtype_map)
+
+            same_session = df[(df["RecSes 1"] == df["RecSes 2"]) & (df["ID1"] != df["ID2"])]
+            for uid_a, uid_b in uid_pairs:
+                dup = same_session[same_session[uid_a] == same_session[uid_b]]
+                flagged.update(zip(dup["RecSes 1"].tolist(), dup["ID1"].tolist()))
+
+        if flagged:
+            lookup[dataset] = flagged
+    return lookup
+
+
+def _pack_recses_id(recses, ids, id_multiplier=10**7):
+    """Packs (RecSes, ID) into a single int64 key for fast np.isin() membership checks."""
+    return recses.astype(np.int64) * id_multiplier + ids.astype(np.int64)
+
+
+def _drop_within_session_duplicate_pairs(df, flagged_units):
+    """
+    Drops rows of df (an across-session MatchTable slice, with ID1/ID2/RecSes 1/
+    RecSes 2 columns) where either endpoint unit -- (RecSes 1, ID1) or
+    (RecSes 2, ID2) -- is in flagged_units (see
+    _build_within_session_duplicate_lookup()). Vectorised via a packed integer
+    key rather than a per-row Python membership check, since df can be tens of
+    millions of rows on the largest merged groups.
+
+    Returns (filtered_df, n_dropped).
+    """
+    if not flagged_units:
+        return df, 0
+    flagged_keys = np.fromiter(
+        (_pack_recses_id(np.int64(r), np.int64(i)) for r, i in flagged_units), dtype=np.int64, count=len(flagged_units)
+    )
+    key1 = _pack_recses_id(df["RecSes 1"].to_numpy(), df["ID1"].to_numpy())
+    key2 = _pack_recses_id(df["RecSes 2"].to_numpy(), df["ID2"].to_numpy())
+    drop = np.isin(key1, flagged_keys) | np.isin(key2, flagged_keys)
+    return df[~drop], int(drop.sum())
+
+
+# ── one-to-many match conflicts: does a source unit have >1 accepted match ──
+# into the same target session? ──────────────────────────────────────────────
+
+# The pipeline's own "Matches" decision has no uniqueness constraint: it's a
+# pure symmetric threshold check (run_deepunitmatch_batch_onMerged.py's
+# final_matches = test.directional_filter_matrix(probs, session_id, threshold)
+# -- see that function's 4-line body, test.py:226-235) with nothing that picks
+# a single winner when a source unit clears threshold with more than one
+# candidate in the same target session. The UID-clique "Matches" the
+# _AssignUniqueID variants use has the same exposure if a clique ever spans
+# more than one unit per session on either side. Every such row becomes an
+# independent positive-labelled sample in score_bins/dataset_bin_auc_rows/
+# dataset_level_auc_rows, so a unit with 2 accepted destinations gets 2x the
+# weight of one with a single clean match -- pseudoreplication in the ROC
+# curve, not a meaningful doubling of evidence.
+#
+# DeepUnitMatch.testing.test.remove_conflicts2() already solves exactly this
+# for fast_testing.py's own AUC computation -- but it's only ever called
+# there on a single (RecSes1, RecSes2) slice at a time (via pick()), so its
+# groupby(["RecSes1", "ID1"]) / groupby(["RecSes2", "ID2"]) is implicitly
+# scoped to one target session because RecSes1/RecSes2 are constant within
+# that slice. collect_binned_pairs() processes an entire dataset's MatchTable
+# in one pass, spanning every session pair at once -- copying those groupby
+# keys unchanged would incorrectly pit a unit's matches into two DIFFERENT
+# target sessions against each other (completely normal multi-session
+# tracking, not a conflict) instead of just the genuine one-to-many case
+# within a single target session. _resolve_match_conflicts() below adds
+# RecSes 1/RecSes 2 into both groupby keys to fix that.
+MATCH_CONFLICT_RANK_COL = "UM Probabilities"
+
+
+def _resolve_match_conflicts(df, rank_col=MATCH_CONFLICT_RANK_COL):
+    """
+    Adaptation of test.remove_conflicts2() to collect_binned_pairs()'s whole-
+    dataset scope (see the module comment above for why the groupby keys
+    differ from the original). A Matches==1 row survives only if rank_col is
+    simultaneously maximal among every other Matches==1 row sharing its
+    source unit *within the same target session*, and maximal among every
+    other row sharing its destination unit *within the same source session*;
+    every other Matches==1 row for that unit gets zeroed out.
+
+    rank_col is always the model's own decision-confidence column (never one
+    of the functional scores under test -- using one of those to decide which
+    candidate "wins" would make that score's own AUC circular against itself).
+    For EMD/DANT/DANT_no_functional this column is degenerate (always 0 or 1
+    -- see run_emd_batch_onMerged.py's final_matches.astype(float)), so every
+    tied-at-1.0 candidate for a unit stays "valid": with no real confidence
+    signal to break the tie, one-to-many matches are intentionally left
+    unresolved for those three models rather than picking an arbitrary
+    winner -- the same behaviour remove_conflicts2() itself has on any exact
+    tie, not a special case added here.
+
+    Returns a new int8 array to replace df["Matches"].
+    """
+    if rank_col not in df.columns:
+        return df["Matches"].to_numpy()
+
+    matches_arr = df["Matches"].to_numpy().copy()
+    pos_idx = np.flatnonzero(matches_arr)
+    if len(pos_idx) == 0:
+        return matches_arr
+
+    metric = pd.to_numeric(df[rank_col], errors="coerce").to_numpy()[pos_idx]
+    pos = pd.DataFrame({
+        "r1": df["RecSes 1"].to_numpy()[pos_idx], "r2": df["RecSes 2"].to_numpy()[pos_idx],
+        "id1": df["ID1"].to_numpy()[pos_idx], "id2": df["ID2"].to_numpy()[pos_idx],
+        "metric": metric, "row": pos_idx,
+    })
+
+    max_for_source = pos.groupby(["r1", "r2", "id1"])["metric"].transform("max")
+    max_for_dest = pos.groupby(["r1", "r2", "id2"])["metric"].transform("max")
+    valid = pos["metric"].notna() & (pos["metric"] == max_for_source) & (pos["metric"] == max_for_dest)
+
+    matches_arr[pos.loc[~valid, "row"].to_numpy()] = 0
+    return matches_arr
 
 
 # ── circularity: which (model, score) AUCs are not fully independent ───────
@@ -337,6 +523,11 @@ def collect_binned_pairs(
     base_output=BASE_OUTPUT,
     models_to_include=MODELS_TO_INCLUDE,
     min_matches=MIN_MATCHES_TO_INCLUDE,
+    matches_transform=None,
+    extra_usecols=None,
+    exclude_within_session_duplicates=True,
+    resolve_match_conflicts=True,
+    punish_missing_matches=PUNISH_MISSING_MATCHES,
 ):
     """
     Walk base_output for every AUC_summary.json (same discovery as
@@ -369,8 +560,44 @@ def collect_binned_pairs(
     ISI_correlations additionally drops pairs beyond the pipeline's max_dist
     (see the dist_col comment below).
 
-    Returns (score_bins, rate_bins, count_bins, dataset_level_rows, auc_long_df,
-    dataset_bin_auc_rows, dataset_bin_rate_rows):
+    matches_transform, if given, is called as matches_transform(dataset, df)
+    on each model's per-dataset MatchTable (already restricted to
+    across-session rows with a resolvable delta-days) and must return a
+    replacement array for df["Matches"] -- everything downstream (AUC, P(track),
+    dataset counts) then uses that replacement instead of the pipeline's own
+    match decision. Used by plot_auc_vs_delta_days_fixed_n.py to cap each
+    model's positive set to a reference model's own per-session-pair match
+    count, without duplicating this function. extra_usecols (a {col: dtype}
+    dict) is loaded alongside the usual columns for matches_transform's use
+    (e.g. {"ID2": "int32"}) -- not read by default since most callers don't
+    need it and it isn't free on the largest merged groups.
+
+    exclude_within_session_duplicates (default True): drop any across-session
+    pair touching a unit with an unresolved within-session oversplit residual
+    -- see _build_within_session_duplicate_lookup()'s docstring for why this
+    matters (a fragmented spike train corrupts that unit's functional-score
+    values for every model's evaluation, not just the model that flags it).
+    Exposed mainly so a caller can turn it off to compare against the
+    unfiltered behaviour.
+
+    resolve_match_conflicts (default True): if a source unit has more than
+    one Matches==1 row into the same target session (the pipeline's own
+    "Matches" decision has no uniqueness constraint -- see
+    _resolve_match_conflicts()'s docstring), keep only its highest-
+    "UM Probabilities" one and zero out the rest, so it doesn't get counted
+    as multiple independent positive samples in the AUC. Applied after
+    matches_transform (if any), so a caller's own re-derived Matches column
+    gets the same one-to-many cleanup.
+
+    punish_missing_matches (default PUNISH_MISSING_MATCHES/False): passed
+    through to every per-dataset _auc_from_flat() call that feeds
+    dataset_level_auc_rows/dataset_bin_auc_rows -- see that constant's
+    comment. Does not affect score_bins (summarise_auc()'s own pooled/
+    bootstrap AUCs take punish_missing as a separate argument, since that
+    pooling happens after this function returns).
+
+    Returns (score_bins, rate_bins, count_bins, dataset_level_rows,
+    dataset_level_auc_rows, auc_long_df, dataset_bin_auc_rows, dataset_bin_rate_rows):
       score_bins: {(model, score, bin_label): {"matches": [...], "metric": [...]}}
       rate_bins: {(model, bin_label): {"matches": [...], "total": [...]}} -- P(track):
         matches/total are unit counts (was this unit in RecSes 1 tracked into
@@ -382,12 +609,27 @@ def collect_binned_pairs(
       dataset_level_rows: [{"mouse", "dataset", "model", "score": "P_track", "value"}, ...]
         -- P(track) pooled across every ΔDay bin (unbinned), one row per
         (dataset, model): the per-dataset quantity value
-        mouse_balanced_quality_quantity() combines with auc_long_df's
+        mouse_balanced_quality_quantity() combines with dataset_level_auc_rows'
         per-dataset AUCs for a mouse-aware quality/quantity comparison.
+      dataset_level_auc_rows: [{"mouse", "dataset", "model", "score", "value"}, ...]
+        -- per-score AUC pooled across every ΔDay bin (unbinned), one row per
+        (dataset, model, score), computed from the same (possibly
+        matches_transform'd) Matches column as everything else this call
+        produced. This is the quality-side counterpart to dataset_level_rows'
+        P(track) that a caller with matches_transform set should use for
+        mouse_balanced_quality_quantity() / mixed-model score comparisons
+        instead of auc_long_df -- auc_long_df comes straight from each
+        model's own AUC_summary.json (produced once by the matching pipeline
+        and never touched by matches_transform), so mixing it with a
+        transformed P(track) would compare quantity computed one way against
+        quality computed another.
       auc_long_df: the long-form (mouse, dataset, model, score, value) table
         already built in passing here (get_passing_datasets() needs it
         anyway) -- returned so the caller doesn't have to re-walk
-        base_output a second time just to get per-dataset AUCs.
+        base_output a second time just to get per-dataset AUCs. Always
+        reflects the pipeline's own untransformed match decisions, regardless
+        of matches_transform -- see dataset_level_auc_rows above for the
+        transformed equivalent.
       dataset_bin_auc_rows / dataset_bin_rate_rows: [{"mouse", "dataset",
         "model", ["score",] "bin", "auc"/"rate"}, ...] -- like score_bins/
         rate_bins above, but per DATASET per bin rather than pooled across
@@ -412,16 +654,30 @@ def collect_binned_pairs(
     auc_long_df = auc_long_df.assign(dataset=auc_long_df["dataset"].str.replace("\\", "/", regex=False))
     print(f"{len(passing_datasets)} dataset(s) have >= {min_matches} matches in at least one included model.")
 
+    within_session_dup_lookup = {}
+    if exclude_within_session_duplicates:
+        within_session_dup_lookup = _build_within_session_duplicate_lookup(base_output, passing_datasets)
+        n_flagged_units = sum(len(v) for v in within_session_dup_lookup.values())
+        print(
+            f"Found {n_flagged_units} within-session oversplit residual(s) across "
+            f"{len(within_session_dup_lookup)} dataset(s) (flagged by DeepUnitMatch's/UMPy's own UID "
+            "assignment) -- pairs touching these will be dropped from every model's evaluation."
+        )
+
     score_bins = {}
     rate_bins = {}
     count_bins = {}
     dataset_level_rows = []
+    dataset_level_auc_rows = []
     dataset_bin_auc_rows = []
     dataset_bin_rate_rows = []
     # For subsampling an oversized single dataset/bin before computing its own
     # AUC below -- see the dataset_auc comment in the main loop.
     rng = np.random.default_rng(0)
     n_found = 0
+    n_rows_dropped_dup = 0
+    n_rows_seen = 0
+    n_matches_resolved_away = 0
 
     for root, dirs, files in os.walk(base_output, topdown=True):
         dirs[:] = [d for d in dirs if not auc_summary_mod._should_skip_dir(d)]
@@ -474,9 +730,23 @@ def collect_binned_pairs(
         # defaults for every column (esp. one column per functional score) can
         # exhaust memory on the largest merged groups; int32/int8/float32 cut
         # that per-row footprint by roughly half to eightfold.
-        usecols = ["ID1", "RecSes 1", "RecSes 2", "Matches"] + scores
-        dtype_map = {"ID1": "int32", "RecSes 1": "int32", "RecSes 2": "int32", "Matches": "int8"}
+        # ID2 is always loaded (not just via extra_usecols) since
+        # exclude_within_session_duplicates needs both endpoint units of every
+        # row to check against within_session_dup_lookup -- see
+        # _drop_within_session_duplicate_pairs(). MATCH_CONFLICT_RANK_COL
+        # ("UM Probabilities") is always loaded too when present -- every
+        # model's own MatchTable.csv has this column (save_utils.py writes it
+        # unconditionally), so this only ever falls back to skipping conflict
+        # resolution for a genuinely missing/legacy file.
+        usecols = ["ID1", "ID2", "RecSes 1", "RecSes 2", "Matches"] + scores
+        dtype_map = {"ID1": "int32", "ID2": "int32", "RecSes 1": "int32", "RecSes 2": "int32", "Matches": "int8"}
         dtype_map.update({s: "float32" for s in scores})
+        if MATCH_CONFLICT_RANK_COL in header:
+            usecols.append(MATCH_CONFLICT_RANK_COL)
+            dtype_map[MATCH_CONFLICT_RANK_COL] = "float32"
+        if extra_usecols:
+            usecols += [c for c in extra_usecols if c not in usecols]
+            dtype_map.update(extra_usecols)
         if dist_col is not None:
             usecols.append(dist_col)
             dtype_map[dist_col] = "float32"
@@ -499,6 +769,11 @@ def collect_binned_pairs(
 
         df = df[df["RecSes 1"] != df["RecSes 2"]]
 
+        n_rows_seen += len(df)
+        if within_session_dup_lookup:
+            df, n_dropped = _drop_within_session_duplicate_pairs(df, within_session_dup_lookup.get(dataset, set()))
+            n_rows_dropped_dup += n_dropped
+
         date1 = df["RecSes 1"].map(date_map)
         date2 = df["RecSes 2"].map(date_map)
         have_dates = date1.notna() & date2.notna()
@@ -511,6 +786,14 @@ def collect_binned_pairs(
 
         bin_idx = _signed_bin_ids(delta_days)
 
+        if matches_transform is not None:
+            df = df.assign(Matches=matches_transform(dataset, df))
+
+        if resolve_match_conflicts:
+            resolved = _resolve_match_conflicts(df)
+            n_matches_resolved_away += int(df["Matches"].to_numpy().sum() - resolved.sum())
+            df = df.assign(Matches=resolved)
+
         matches_bool = df["Matches"].to_numpy().astype(bool)
 
         for score in scores:
@@ -518,6 +801,36 @@ def collect_binned_pairs(
             valid = np.isfinite(signed_metric)
             if score == "ISI_correlations" and dist_col is not None:
                 valid = valid & (df[dist_col].to_numpy() > 0)
+
+            # This dataset's own AUC for this score, pooled across every ΔDay
+            # bin (unbinned) -- the per-score analogue of dataset_level_rows'
+            # P_track below, and computed from the same (possibly
+            # matches_transform'd) Matches column used everywhere else in this
+            # function. Unlike auc_long_df (read straight from each model's
+            # own AUC_summary.json, produced once by the matching pipeline
+            # itself and never touched by matches_transform), this reflects
+            # whatever Matches definition this call actually used -- needed so
+            # callers with a matches_transform (e.g.
+            # plot_auc_vs_delta_days_fixed_n.py) can build a quality-vs-
+            # quantity comparison where both sides come from the same
+            # (transformed) match set, instead of silently mixing a
+            # transformed quantity with an untransformed quality (see that
+            # module's docstring for the bug this replaces).
+            idx_valid = np.flatnonzero(valid)
+            if len(idx_valid) > BOOTSTRAP_MAX_N:
+                idx_valid = rng.choice(idx_valid, size=BOOTSTRAP_MAX_N, replace=False)
+            dataset_score_auc = _auc_from_flat(matches_bool[idx_valid], signed_metric[idx_valid], punish_missing=punish_missing_matches)
+            if np.isfinite(dataset_score_auc):
+                dataset_level_auc_rows.append(
+                    {
+                        "mouse": auc_summary_mod.mouse_from_dataset(dataset),
+                        "dataset": dataset,
+                        "model": model,
+                        "score": score,
+                        "value": dataset_score_auc,
+                    }
+                )
+
             for b in np.unique(bin_idx[valid]):
                 mask = valid & (bin_idx == b)
                 if not mask.any():
@@ -534,7 +847,9 @@ def collect_binned_pairs(
                 # across datasets/mice, rather than one AUC over every
                 # dataset's pairs pooled together). Skipped (not appended)
                 # when this one dataset doesn't have both a match and a
-                # non-match in this bin -- _auc_from_flat() returns NaN then,
+                # non-match in this bin -- _auc_from_flat() returns NaN then
+                # (or, with punish_missing_matches=True, a punished 0.5 that
+                # gets appended like any other value -- see that constant),
                 # same as it would for the pooled version.
                 #
                 # A single dataset/bin can still hold millions of pairs (same
@@ -547,7 +862,7 @@ def collect_binned_pairs(
                 idx_in_bin = np.flatnonzero(mask)
                 if len(idx_in_bin) > BOOTSTRAP_MAX_N:
                     idx_in_bin = rng.choice(idx_in_bin, size=BOOTSTRAP_MAX_N, replace=False)
-                dataset_auc = _auc_from_flat(matches_bool[idx_in_bin], signed_metric[idx_in_bin])
+                dataset_auc = _auc_from_flat(matches_bool[idx_in_bin], signed_metric[idx_in_bin], punish_missing=punish_missing_matches)
                 if np.isfinite(dataset_auc):
                     dataset_bin_auc_rows.append(
                         {
@@ -636,16 +951,28 @@ def collect_binned_pairs(
     if n_found == 0:
         raise RuntimeError(f"No usable (AUC_summary.json, MatchTable.csv, session dates) found under {base_output}")
     print(f"Processed {n_found} dataset/model MatchTable.csv files.")
+    if within_session_dup_lookup:
+        pct = 100 * n_rows_dropped_dup / n_rows_seen if n_rows_seen else 0.0
+        print(
+            f"Dropped {n_rows_dropped_dup}/{n_rows_seen} across-session row(s) ({pct:.2f}%) touching an "
+            "unresolved within-session oversplit residual (exclude_within_session_duplicates=True)."
+        )
+    if resolve_match_conflicts:
+        print(
+            f"Resolved away {n_matches_resolved_away} one-to-many match conflict row(s) (kept only the "
+            f"highest-{MATCH_CONFLICT_RANK_COL} candidate per unit per target/source session; "
+            "resolve_match_conflicts=True)."
+        )
     return (
-        score_bins, rate_bins, count_bins, dataset_level_rows, auc_long_df,
-        dataset_bin_auc_rows, dataset_bin_rate_rows,
+        score_bins, rate_bins, count_bins, dataset_level_rows, dataset_level_auc_rows,
+        auc_long_df, dataset_bin_auc_rows, dataset_bin_rate_rows,
     )
 
 
 # ── reduce to per-bin numbers + plot ────────────────────────────────────────
 
 
-def _bootstrap_auc_se(matches, metric, n_boot=N_BOOTSTRAP, max_n=BOOTSTRAP_MAX_N, rng=None):
+def _bootstrap_auc_se(matches, metric, n_boot=N_BOOTSTRAP, max_n=BOOTSTRAP_MAX_N, rng=None, punish_missing=PUNISH_MISSING_MATCHES):
     """
     Bootstrap standard error of _auc_from_flat by resampling pairs (with
     replacement) n_boot times. Resamples are drawn from a fixed max_n-sized
@@ -653,6 +980,13 @@ def _bootstrap_auc_se(matches, metric, n_boot=N_BOOTSTRAP, max_n=BOOTSTRAP_MAX_N
     for speed -- pooled bins can hold far more pairs than needed for a
     stable SE estimate, and re-sorting the full set n_boot times would be
     needlessly slow.
+
+    With punish_missing=True, a bin with no matches (or no non-matches) at
+    all yields the same P<1/N<1 condition on every resample (resampling with
+    replacement from zero positives can't produce a positive), so every
+    bootstrap draw returns the same punished 0.5 and this correctly reports
+    an SE of 0 -- no sampling uncertainty on a value that isn't actually
+    estimated from data.
     """
     if n_boot <= 0:
         return np.nan
@@ -667,11 +1001,11 @@ def _bootstrap_auc_se(matches, metric, n_boot=N_BOOTSTRAP, max_n=BOOTSTRAP_MAX_N
     aucs = np.empty(n_boot)
     for i in range(n_boot):
         idx = rng.integers(0, n, size=n)
-        aucs[i] = _auc_from_flat(matches[idx], metric[idx])
+        aucs[i] = _auc_from_flat(matches[idx], metric[idx], punish_missing=punish_missing)
     return float(np.nanstd(aucs))
 
 
-def summarise_auc(score_bins, n_boot=N_BOOTSTRAP, seed=0):
+def summarise_auc(score_bins, n_boot=N_BOOTSTRAP, seed=0, punish_missing=PUNISH_MISSING_MATCHES):
     rng = np.random.default_rng(seed)
     rows = []
     for (model, score, label), entry in score_bins.items():
@@ -684,8 +1018,8 @@ def summarise_auc(score_bins, n_boot=N_BOOTSTRAP, seed=0):
                 "bin": label,
                 "n_pairs": len(matches),
                 "n_matches": int(matches.sum()),
-                "auc": _auc_from_flat(matches, metric),
-                "auc_se": _bootstrap_auc_se(matches, metric, n_boot=n_boot, rng=rng),
+                "auc": _auc_from_flat(matches, metric, punish_missing=punish_missing),
+                "auc_se": _bootstrap_auc_se(matches, metric, n_boot=n_boot, rng=rng, punish_missing=punish_missing),
             }
         )
     return pd.DataFrame(rows)
@@ -936,6 +1270,51 @@ def test_ptrack_mouse_balanced(combined_df_long, output_dir):
     with open(stats_path, "w") as f:
         f.write("\n".join(stats_lines))
     return png_path, stats_path
+
+
+def test_functional_scores_mouse_balanced(combined_df_long, output_dir, filename="functional_score_mixed_model_summaries.txt"):
+    """
+    Same dataset-level mixed-model + Holm-Bonferroni machinery as
+    test_ptrack_mouse_balanced(), generalised to every functional score in
+    combined_df_long (not just P_track) -- one combined stats file, formatted
+    like plot_auc_summary.py's own mixed_model_summaries.txt.
+
+    test_ptrack_mouse_balanced() only needed to cover P_track itself: for a
+    caller using the pipeline's own unmodified Matches decisions, every
+    functional-score AUC already has a trustworthy dataset-level comparison
+    from plot_auc_summary.py's own main() (mixed_model_summaries.txt), so
+    regenerating those here would be redundant. That stops being true for a
+    caller with a matches_transform on collect_binned_pairs() (e.g.
+    plot_auc_vs_delta_days_fixed_n.py): its functional-score AUCs no longer
+    match the ones in AUC_summary.json, so there's no existing stats file for
+    them -- combined_df_long must be built from dataset_level_auc_rows (not
+    auc_long_df) in that case, or "quality" here would silently be the
+    pipeline's original untransformed AUCs instead of the transformed ones.
+
+    Returns (png_paths, stats_path).
+    """
+    scores = sorted(s for s in combined_df_long["score"].unique() if s != "P_track")
+    stats_lines = []
+    png_paths = []
+    for score in scores:
+        pvals_adj = auc_summary_mod.pairwise_mixed_pvalues(combined_df_long, score)
+        png_path = auc_summary_mod.plot_score(combined_df_long, score, output_dir, pvals_adj=pvals_adj)
+        if png_path:
+            png_paths.append(png_path)
+
+        result = auc_summary_mod.fit_mixed_model(combined_df_long, score)
+        stats_lines.append(f"\n{'=' * 70}\n{score}\n{'=' * 70}")
+        if result is None:
+            stats_lines.append("  (skipped: fewer than 2 models or fewer than 2 mice with data)")
+            continue
+        stats_lines.append(str(result.summary()))
+        stats_lines.append("")
+        stats_lines.extend(auc_summary_mod._format_posthoc_lines(pvals_adj))
+
+    stats_path = os.path.join(output_dir, filename)
+    with open(stats_path, "w") as f:
+        f.write("\n".join(stats_lines))
+    return png_paths, stats_path
 
 
 def _pareto_front(df, quality_col="quality", quantity_col="quantity"):
@@ -1212,8 +1591,8 @@ def main():
     print(f"Have session dates for {n_datasets_with_dates}/{len(session_date_lookup)} dataset(s).\n")
 
     (
-        score_bins, rate_bins, count_bins, dataset_level_rows, auc_long_df,
-        dataset_bin_auc_rows, dataset_bin_rate_rows,
+        score_bins, rate_bins, count_bins, dataset_level_rows, _dataset_level_auc_rows,
+        auc_long_df, dataset_bin_auc_rows, dataset_bin_rate_rows,
     ) = collect_binned_pairs(session_date_lookup)
 
     auc_df = summarise_auc(score_bins)
