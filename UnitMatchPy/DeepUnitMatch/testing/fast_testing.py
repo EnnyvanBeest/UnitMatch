@@ -18,13 +18,14 @@ from utils.helpers import (
     get_locations_from_sqlite,
     save_final_results,
     save_intermediate_results,
+    avg_across_directions
 )
 
 
 # PROJECT_ROOT (defined in utils.helpers) is the directory holding the shared
 # data/results and metadata_index.json alongside the sibling repos.
 RESULTS_DIR = os.path.join(PROJECT_ROOT, "results")
-DATABASE_PATH = os.path.join(PROJECT_ROOT, "matchtables_algo.db")
+DATABASE_PATH = os.path.join(PROJECT_ROOT, "matchtables_models.db")
 
 
 def test_models_optimized(col_names, fixed_n=True, save_names=None):
@@ -182,12 +183,16 @@ def get_matches_1model(mt, metric, fixed_n: int = None):
 
     # Only allow a match if it is above threshold when comparing in both directions
     matches = directional_filter(matches)
+
+    # Average in both directions to simplify the rest
+    matches = avg_across_directions(matches, columns=[metric])
     
     if len(matches) != 0:
         # Resolve conflict matches by only keeping the match with highest similarity
         matches, _ = remove_conflicts2(matches, metric)
 
     # Ensure consistent ordering (keep a single direction per session pair)
+    # shouldn't be necessary when averaging across directions since return forward dataframe only
     matches = matches.loc[matches["RecSes1"] < matches["RecSes2"]]
 
     # Add a random timebreaker column to randomize order of ties 
@@ -198,8 +203,10 @@ def get_matches_1model(mt, metric, fixed_n: int = None):
     
     if fixed_n is not None:
         matches = matches.head(fixed_n) # keep best N matches
+    else:
+        matches = matches.loc[matches[metric] >= thresh]
 
-    return matches.index.to_list()
+    return matches.index.to_list(), matches
 
 
 def all_results_1model(
@@ -220,6 +227,12 @@ def all_results_1model(
 
     results_data = []
 
+    metrics = ["ISI_correlations", "FR_diff", "ISI_CV_diff", 
+            "refpop_correlations_DeepUnitMatch", model_name.replace("UM Probabilities", "refpop_correlations"), "natim_correlations_DeepUnitMatch"]
+    if "refpop_correlations_UMPy" in mt.keys():
+        metrics.append("refpop_correlations_UMPy")
+    metrics = list(dict.fromkeys(metrics))
+
     if fixed_n is not None:
         session_pairs = fixed_n[["r1", "r2"]].drop_duplicates().values.tolist()
     else:
@@ -227,16 +240,20 @@ def all_results_1model(
     # Process each session pair
     for r1, r2 in session_pairs:
         # Get the subset of the match table
-        df = pick(mt, r1, r2)
+        # Need to get both directions for the match filtering
+        df = pick(mt, r1, r2, False).copy()
 
         # Get matches
         if fixed_n is not None:
             n_value = fixed_n.loc[
                 (fixed_n["r1"] == r1) & (fixed_n["r2"] == r2), "N"
             ].values[0]
-            match_indices = get_matches_1model(df, metric=model_name, fixed_n=n_value)
+            match_indices, _ = get_matches_1model(df, metric=model_name, fixed_n=n_value)
         else:
-            match_indices = get_matches_1model(df, metric=model_name, fixed_n=None)
+            match_indices, _ = get_matches_1model(df, metric=model_name, fixed_n=None)
+
+        # Average over directions, and select only the way forward to simplify
+        df = avg_across_directions(df, columns=metrics)  
 
         # Nan if no matches found
         if not match_indices:
@@ -250,9 +267,9 @@ def all_results_1model(
             AUC_natim = np.nan
             N = 0
 
-            single_match_score_isi = np.nan
-            single_match_score_refpop = np.nan
-            single_match_score_natim = np.nan
+            # single_match_score_isi = np.nan
+            # single_match_score_refpop = np.nan
+            # single_match_score_natim = np.nan
         else:
             # Calculate metrics
             AUC_isi = AUC(df, match_indices, "ISI_correlations")
@@ -264,16 +281,16 @@ def all_results_1model(
             AUC_natim = AUC(df, match_indices, "natim_correlations_DeepUnitMatch") if mouse != 'AV009' else np.nan # not in visual cortex
             N = len(match_indices)
 
-            # Test single-match metric
-            S, M = build_S_and_M(df, match_indices, metric="ISI_correlations")
-            single_match_result_isi = pairwise_match_score_exact(S, M)
-            single_match_score_isi = single_match_result_isi["score"]
-            S, M = build_S_and_M(df, match_indices, metric=model_name.replace("UM Probabilities", "refpop_correlations"))
-            single_match_result_refpop = pairwise_match_score_exact(S, M)
-            single_match_score_refpop = single_match_result_refpop["score"]
-            S, M = build_S_and_M(df, match_indices, metric="natim_correlations_DeepUnitMatch")
-            single_match_result_natim = pairwise_match_score_exact(S, M)
-            single_match_score_natim = single_match_result_natim["score"]
+            # # Test single-match metric
+            # S, M = build_S_and_M(df, match_indices, metric="ISI_correlations")
+            # single_match_result_isi = pairwise_match_score_exact(S, M)
+            # single_match_score_isi = single_match_result_isi["score"]
+            # S, M = build_S_and_M(df, match_indices, metric=model_name.replace("UM Probabilities", "refpop_correlations"))
+            # single_match_result_refpop = pairwise_match_score_exact(S, M)
+            # single_match_score_refpop = single_match_result_refpop["score"]
+            # S, M = build_S_and_M(df, match_indices, metric="natim_correlations_DeepUnitMatch")
+            # single_match_result_natim = pairwise_match_score_exact(S, M)
+            # single_match_score_natim = single_match_result_natim["score"]
 
         date1 = metadata_cache.get(r1)
         date2 = metadata_cache.get(r2)
@@ -298,9 +315,9 @@ def all_results_1model(
                 "AUC_refpop_DeepUnitMatch": AUC_refpop_DeepUnitMatch,
                 "AUC_refpop_model": AUC_refpop_model,
                 "AUC_natim": AUC_natim,
-                "Mean_score_isi": single_match_score_isi,
-                "Mean_score_refpop": single_match_score_refpop,
-                "Mean_score_natim": single_match_score_natim,
+                # "Mean_score_isi": single_match_score_isi,
+                # "Mean_score_refpop": single_match_score_refpop,
+                # "Mean_score_natim": single_match_score_natim,
                 "N": N,
                 "delta_days": (date2 - date1).days,
             }
@@ -553,15 +570,15 @@ if __name__ == "__main__":
 
     models = [
               "DeepUnitMatch",
-              "UMPy", 
+            #   "UMPy", 
             #   "EMD", 
-              "DANT", 
-              "DANT_no_functional",
+            #   "DANT", 
+            #   "DANT_no_functional",
             #   "DUM_maxdist=20", "DUM_maxdist=50", "DUM_maxdist=100", "DUM_maxdist=inf", 
             #   "UMPy_maxdist=20", "UMPy_maxdist=50", "UMPy_maxdist=100", "UMPy_maxdist=inf",
-            #   "DUM_W_ij=1","DUM_W_ij=5","DUM_W_ij=10","DUM_W_ij=15","DUM_W_ij=20", 
-            #   "n_output=8_after_ae_and_finetune", "n_output=32_after_ae_and_finetune", "n_output=128_after_ae_and_finetune", "n_output=256_after_ae_and_finetune", 
-            #   "DUM_untrained", "DUM_unfinetuned", "DUM_finetuned_only",
+              "DUM_W_ij=1","DUM_W_ij=5","DUM_W_ij=10","DUM_W_ij=15","DUM_W_ij=20", 
+              "n_output=8_after_ae_and_finetune", "n_output=32_after_ae_and_finetune", "n_output=128_after_ae_and_finetune", "n_output=256_after_ae_and_finetune", 
+              "DUM_untrained", "DUM_unfinetuned", "DUM_finetuned_only",
             #   "exclude_mice_m1_1_after_ae_and_finetune", "exclude_mice_m1_2_after_ae_and_finetune", "exclude_mice_m1_3_after_ae_and_finetune",
             #   "exclude_mice_m6_1_after_ae_and_finetune", "exclude_mice_m6_2_after_ae_and_finetune", "exclude_mice_m6_3_after_ae_and_finetune",
             #   "exclude_mice_m12_1_after_ae_and_finetune", "exclude_mice_m12_2_after_ae_and_finetune", "exclude_mice_m12_3_after_ae_and_finetune",
@@ -569,7 +586,7 @@ if __name__ == "__main__":
 
     col_names = [f"UM Probabilities_{model}" for model in models]
 
-    # test_models_optimized(col_names, fixed_n=False)
+    test_models_optimized(col_names, fixed_n=False)
     test_models_optimized(col_names, fixed_n=True)
     end = time.time()
     print(f"Total time taken: {end - start} seconds")
