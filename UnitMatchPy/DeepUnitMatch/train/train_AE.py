@@ -147,19 +147,23 @@ def run(args):
     AE_Loss = AELoss(lambda1=0.0, lambda2=1.0).to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
+    start_epoch = 0
     if args.cont:
-        # load latest checkpoint
-        ckpt_lst = os.listdir(ckpt_folder)
-        ckpt_lst.sort(key=lambda x: int(x.split("_")[-1]))
-        read_path = os.path.join(ckpt_folder, ckpt_lst[-1])
-        print("load checkpoint from %s" % (read_path))
-        checkpoint = torch.load(read_path)
-        model.load_state_dict(checkpoint["model"])
-        optimizer.load_state_dict(checkpoint["optimizer"])
-        encoder.load_state_dict(checkpoint["encoder"])
-        start_epoch = checkpoint["epoch"] + 1
-    else:
-        start_epoch = 0
+        # load latest checkpoint, if one exists yet -- --cont on a folder with
+        # no checkpoints saved yet (e.g. a freshly created exp) just starts
+        # from epoch 0 instead of crashing on ckpt_lst[-1].
+        ckpt_lst = [f for f in os.listdir(ckpt_folder) if f.startswith("ckpt_epoch_")]
+        if ckpt_lst:
+            ckpt_lst.sort(key=lambda x: int(x.split("_")[-1]))
+            read_path = os.path.join(ckpt_folder, ckpt_lst[-1])
+            print("load checkpoint from %s" % (read_path))
+            checkpoint = torch.load(read_path)
+            model.load_state_dict(checkpoint["model"])
+            optimizer.load_state_dict(checkpoint["optimizer"])
+            encoder.load_state_dict(checkpoint["encoder"])
+            start_epoch = checkpoint["epoch"] + 1
+        else:
+            print(f"--cont given but no checkpoint found in {ckpt_folder}; starting from epoch 0")
 
     if args.total_epoch == 0:
         # don't train, just save the untrained checkpoint
@@ -191,7 +195,14 @@ def run(args):
 
 
 def run_training(
-    exp_name, dataset, lr=1e-5, save_freq=1, total_epoch=300, cont=False, batchsize=32
+    exp_name,
+    dataset,
+    lr=1e-5,
+    save_freq=1,
+    total_epoch=300,
+    cont=False,
+    batchsize=32,
+    launch_tensorboard=True,
 ):
     """
     Convenience function for running training from notebooks.
@@ -204,6 +215,11 @@ def run_training(
         total_epoch: Total number of epochs (default: 300)
         cont: Whether to continue from checkpoint (default: False)
         batchsize: Batch size (default: 32)
+        launch_tensorboard: Whether to kill any running tensorboard.exe and
+            launch a new one for this run (default: True, matching prior
+            behaviour). Set False for unattended/batch/parallel callers --
+            killing another process's tensorboard.exe and fighting over port
+            6006 is not appropriate outside interactive notebook use.
     """
     from argparse import Namespace
 
@@ -234,22 +250,23 @@ def run_training(
     np_dataset = args.dataset
     print(f"Total size of dataset (train + val + test): {len(np_dataset)}")
 
-    import psutil
+    if launch_tensorboard:
+        import psutil
 
-    # Kill any existing process on port 6006
-    for proc in psutil.process_iter(["pid", "name"]):
-        try:
-            if proc.name() == "tensorboard.exe":
-                proc.kill()
-        except:
-            pass
+        # Kill any existing process on port 6006
+        for proc in psutil.process_iter(["pid", "name"]):
+            try:
+                if proc.name() == "tensorboard.exe":
+                    proc.kill()
+            except:
+                pass
 
-    tensorboard_process = subprocess.Popen(
-        ["tensorboard", "--logdir", log_folder, "--port", "6006"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    print("To view the tensorboard, click this link: http://localhost:6006")
+        tensorboard_process = subprocess.Popen(
+            ["tensorboard", "--logdir", log_folder, "--port", "6006"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        print("To view the tensorboard, click this link: http://localhost:6006")
 
     train_size = int(0.9 * len(np_dataset))
     val_size = int(0.05 * len(np_dataset))
@@ -277,19 +294,23 @@ def run_training(
     AE_Loss = AELoss(lambda1=0.0, lambda2=1.0).to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
+    start_epoch = 0
     if args.cont:
-        # load latest checkpoint
-        ckpt_lst = os.listdir(ckpt_folder)
-        ckpt_lst.sort(key=lambda x: int(x.split("_")[-1]))
-        read_path = os.path.join(ckpt_folder, ckpt_lst[-1])
-        print("load checkpoint from %s" % (read_path))
-        checkpoint = torch.load(read_path)
-        model.load_state_dict(checkpoint["model"])
-        optimizer.load_state_dict(checkpoint["optimizer"])
-        encoder.load_state_dict(checkpoint["encoder"])
-        start_epoch = checkpoint["epoch"] + 1
-    else:
-        start_epoch = 0
+        # load latest checkpoint, if one exists yet -- --cont on a folder with
+        # no checkpoints saved yet (e.g. a freshly created exp) just starts
+        # from epoch 0 instead of crashing on ckpt_lst[-1].
+        ckpt_lst = [f for f in os.listdir(ckpt_folder) if f.startswith("ckpt_epoch_")]
+        if ckpt_lst:
+            ckpt_lst.sort(key=lambda x: int(x.split("_")[-1]))
+            read_path = os.path.join(ckpt_folder, ckpt_lst[-1])
+            print("load checkpoint from %s" % (read_path))
+            checkpoint = torch.load(read_path)
+            model.load_state_dict(checkpoint["model"])
+            optimizer.load_state_dict(checkpoint["optimizer"])
+            encoder.load_state_dict(checkpoint["encoder"])
+            start_epoch = checkpoint["epoch"] + 1
+        else:
+            print(f"--cont given but no checkpoint found in {ckpt_folder}; starting from epoch 0")
 
     if args.total_epoch == 0:
         # don't train, just save the untrained checkpoint

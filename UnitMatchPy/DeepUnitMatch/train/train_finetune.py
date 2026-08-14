@@ -191,19 +191,23 @@ def run(args):
 
     optimizer = optim.Adam(optimizer_params)
 
+    start_epoch = 0
     if args.cont:
-        # load latest checkpoint
-        ckpt_lst = os.listdir(ckpt_folder)
-        ckpt_lst.sort(key=lambda x: int(x.split("_")[-1]))
-        read_path = os.path.join(ckpt_folder, ckpt_lst[-1])
-        print("load checkpoint from %s" % (read_path))
-        checkpoint = torch.load(read_path)
-        model.load_state_dict(checkpoint["model"])
-        optimizer.load_state_dict(checkpoint["optimizer"])
-        clip_loss.load_state_dict(checkpoint["clip_loss"])
-        start_epoch = checkpoint["epoch"] + 1
-    else:
-        start_epoch = 0
+        # load latest checkpoint, if one exists yet -- --cont on a folder with
+        # no checkpoints saved yet (e.g. a freshly created exp) just starts
+        # from epoch 0 instead of crashing on ckpt_lst[-1].
+        ckpt_lst = [f for f in os.listdir(ckpt_folder) if f.startswith("ckpt_epoch_")]
+        if ckpt_lst:
+            ckpt_lst.sort(key=lambda x: int(x.split("_")[-1]))
+            read_path = os.path.join(ckpt_folder, ckpt_lst[-1])
+            print("load checkpoint from %s" % (read_path))
+            checkpoint = torch.load(read_path)
+            model.load_state_dict(checkpoint["model"])
+            optimizer.load_state_dict(checkpoint["optimizer"])
+            clip_loss.load_state_dict(checkpoint["clip_loss"])
+            start_epoch = checkpoint["epoch"] + 1
+        else:
+            print(f"--cont given but no checkpoint found in {ckpt_folder}; starting from epoch 0")
 
     if args.total_epoch == 0:
         # don't train, just save the untrained checkpoint
@@ -244,7 +248,13 @@ def run_finetune(
     total_epoch=50,
     cont=False,
     batchsize=40,
+    launch_tensorboard=True,
 ):
+    """
+    launch_tensorboard: Whether to kill any running tensorboard.exe and launch
+        a new one for this run (default: True, matching prior behaviour). Set
+        False for unattended/batch/parallel callers.
+    """
 
     from argparse import Namespace
 
@@ -284,22 +294,23 @@ def run_finetune(
 
     print("train dataset length: %d" % (len(np_dataset)))
 
-    import psutil
+    if launch_tensorboard:
+        import psutil
 
-    # Kill any existing process on port 6006
-    for proc in psutil.process_iter(["pid", "name"]):
-        try:
-            if proc.name() == "tensorboard.exe":
-                proc.kill()
-        except:
-            pass
+        # Kill any existing process on port 6006
+        for proc in psutil.process_iter(["pid", "name"]):
+            try:
+                if proc.name() == "tensorboard.exe":
+                    proc.kill()
+            except:
+                pass
 
-    tensorboard_process = subprocess.Popen(
-        ["tensorboard", "--logdir", log_folder, "--port", "6006"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    print("To view the tensorboard, click this link: http://localhost:6006")
+        tensorboard_process = subprocess.Popen(
+            ["tensorboard", "--logdir", log_folder, "--port", "6006"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        print("To view the tensorboard, click this link: http://localhost:6006")
 
     model = SpatioTemporalCNN_V2(n_channel=30, n_time=60, n_output=256).to(device)
 
@@ -347,19 +358,23 @@ def run_finetune(
 
     optimizer = optim.Adam(optimizer_params)
 
+    start_epoch = 0
     if args.cont:
-        # load latest checkpoint
-        ckpt_lst = os.listdir(ckpt_folder)
-        ckpt_lst.sort(key=lambda x: int(x.split("_")[-1]))
-        read_path = os.path.join(ckpt_folder, ckpt_lst[-1])
-        print("load checkpoint from %s" % (read_path))
-        checkpoint = torch.load(read_path)
-        model.load_state_dict(checkpoint["model"])
-        optimizer.load_state_dict(checkpoint["optimizer"])
-        clip_loss.load_state_dict(checkpoint["clip_loss"])
-        start_epoch = checkpoint["epoch"] + 1
-    else:
-        start_epoch = 0
+        # load latest checkpoint, if one exists yet -- --cont on a folder with
+        # no checkpoints saved yet (e.g. a freshly created exp) just starts
+        # from epoch 0 instead of crashing on ckpt_lst[-1].
+        ckpt_lst = [f for f in os.listdir(ckpt_folder) if f.startswith("ckpt_epoch_")]
+        if ckpt_lst:
+            ckpt_lst.sort(key=lambda x: int(x.split("_")[-1]))
+            read_path = os.path.join(ckpt_folder, ckpt_lst[-1])
+            print("load checkpoint from %s" % (read_path))
+            checkpoint = torch.load(read_path)
+            model.load_state_dict(checkpoint["model"])
+            optimizer.load_state_dict(checkpoint["optimizer"])
+            clip_loss.load_state_dict(checkpoint["clip_loss"])
+            start_epoch = checkpoint["epoch"] + 1
+        else:
+            print(f"--cont given but no checkpoint found in {ckpt_folder}; starting from epoch 0")
 
     if args.total_epoch == 0:
         # don't train, just save the untrained checkpoint
