@@ -25,7 +25,7 @@ from utils.helpers import (
 # PROJECT_ROOT (defined in utils.helpers) is the directory holding the shared
 # data/results and metadata_index.json alongside the sibling repos.
 RESULTS_DIR = os.path.join(PROJECT_ROOT, "results")
-DATABASE_PATH = os.path.join(PROJECT_ROOT, "matchtables_algo.db")
+DATABASE_PATH = os.path.join(PROJECT_ROOT, "matchtables_models.db")
 
 
 def test_models_optimized(col_names, fixed_n=True, save_names=None):
@@ -40,10 +40,10 @@ def test_models_optimized(col_names, fixed_n=True, save_names=None):
     results_dir = RESULTS_DIR
 
     if fixed_n:
-        # ref_model = 'UMPy'
+        ref_model = 'UMPy'
         # ref_model = 'DeepUnitMatch'
         # ref_model = 'DANT_no_functional'
-        ref_model = 'DANT'
+        # ref_model = 'DANT'
 
         # Load UM_results once and create a lookup dictionary for fast access
         UM_results = pd.read_csv(os.path.join(results_dir, f"UM Probabilities_{ref_model}_results.csv"))
@@ -206,7 +206,7 @@ def get_matches_1model(mt, metric, fixed_n: int = None):
     else:
         matches = matches.loc[matches[metric] >= thresh]
 
-    return matches.index.to_list()
+    return matches.index.to_list(), matches
 
 
 def all_results_1model(
@@ -248,9 +248,9 @@ def all_results_1model(
             n_value = fixed_n.loc[
                 (fixed_n["r1"] == r1) & (fixed_n["r2"] == r2), "N"
             ].values[0]
-            match_indices = get_matches_1model(df, metric=model_name, fixed_n=n_value)
+            match_indices, _ = get_matches_1model(df, metric=model_name, fixed_n=n_value)
         else:
-            match_indices = get_matches_1model(df, metric=model_name, fixed_n=None)
+            match_indices, _ = get_matches_1model(df, metric=model_name, fixed_n=None)
 
         # Average over directions, and select only the way forward to simplify
         df = avg_across_directions(df, columns=metrics)  
@@ -570,15 +570,15 @@ if __name__ == "__main__":
 
     models = [
               "DeepUnitMatch",
-              "UMPy", 
-              "EMD", 
-              "DANT", 
-              "DANT_no_functional",
+            #   "UMPy", 
+            #   "EMD", 
+            #   "DANT", 
+            #   "DANT_no_functional",
             #   "DUM_maxdist=20", "DUM_maxdist=50", "DUM_maxdist=100", "DUM_maxdist=inf", 
             #   "UMPy_maxdist=20", "UMPy_maxdist=50", "UMPy_maxdist=100", "UMPy_maxdist=inf",
-            #   "DUM_W_ij=1","DUM_W_ij=5","DUM_W_ij=10","DUM_W_ij=15","DUM_W_ij=20", 
-            #   "n_output=8_after_ae_and_finetune", "n_output=32_after_ae_and_finetune", "n_output=128_after_ae_and_finetune", "n_output=256_after_ae_and_finetune", 
-            #   "DUM_untrained", "DUM_unfinetuned", "DUM_finetuned_only",
+              "DUM_W_ij=1","DUM_W_ij=5","DUM_W_ij=10","DUM_W_ij=15","DUM_W_ij=20", 
+              "n_output=8_after_ae_and_finetune", "n_output=32_after_ae_and_finetune", "n_output=128_after_ae_and_finetune", "n_output=256_after_ae_and_finetune", 
+              "DUM_untrained", "DUM_unfinetuned", "DUM_finetuned_only",
             #   "exclude_mice_m1_1_after_ae_and_finetune", "exclude_mice_m1_2_after_ae_and_finetune", "exclude_mice_m1_3_after_ae_and_finetune",
             #   "exclude_mice_m6_1_after_ae_and_finetune", "exclude_mice_m6_2_after_ae_and_finetune", "exclude_mice_m6_3_after_ae_and_finetune",
             #   "exclude_mice_m12_1_after_ae_and_finetune", "exclude_mice_m12_2_after_ae_and_finetune", "exclude_mice_m12_3_after_ae_and_finetune",
@@ -586,7 +586,7 @@ if __name__ == "__main__":
 
     col_names = [f"UM Probabilities_{model}" for model in models]
 
-    # test_models_optimized(col_names, fixed_n=False)
+    test_models_optimized(col_names, fixed_n=False)
     test_models_optimized(col_names, fixed_n=True)
     end = time.time()
     print(f"Total time taken: {end - start} seconds")
