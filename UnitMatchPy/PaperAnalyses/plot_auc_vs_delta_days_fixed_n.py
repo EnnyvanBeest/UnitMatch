@@ -11,21 +11,23 @@
 # below) and applied per ΔDay bin like plot_auc_vs_delta_days.py: for every
 # session pair, every model's positive set is *re-derived* as the top N
 # candidate pairs by that model's own "UM Probabilities" score, where N is
-# REFERENCE_MODEL's own match count for that same pair (an unordered-unit-
-# pair count, not identity -- see _build_reference_n_lookup()). This mirrors
-# fast_testing.py's get_matches_1model(fixed_n=...) closely: the ranking
-# operates over the *full* across-session candidate pool for that pair, not
-# just the pipeline's own already-decided matches, so a model can both lose
-# matches it had decided on (if they rank low) and gain ones it hadn't (if
-# they rank in the top N despite being below that model's own decision
-# threshold) -- unlike an earlier, more conservative version of this script
-# that only ever discarded a model's own decided matches and never added new
-# ones. Per-pair scores are averaged across both directions before ranking
-# (mirrors the notebooks' avg_across_directions()), and ties are broken by a
-# random draw (mirrors get_ordered_matches()'s random_tiebreaker column) --
-# not a full directional-filter/conflict-resolution pass, which the notebooks
-# also run before ranking (a one-to-one matching constraint) and this script
-# does not reproduce; see _rank_based_fixed_n_matches()'s docstring.
+# REFERENCE_MODEL's own conflict-resolved match count for that same pair (an
+# unordered-unit-pair count, not identity -- see _build_reference_n_lookup()).
+# This mirrors fast_testing.py's get_matches_1model(fixed_n=...) closely: the
+# ranking operates over the *full* across-session candidate pool for that
+# pair, not just the pipeline's own already-decided matches, so a model can
+# both lose matches it had decided on (if they rank low) and gain ones it
+# hadn't (if they rank in the top N despite being below that model's own
+# decision threshold) -- unlike an earlier, more conservative version of this
+# script that only ever discarded a model's own decided matches and never
+# added new ones. Per-pair scores are averaged across both directions before
+# ranking (mirrors the notebooks' avg_across_directions()), one-to-many
+# conflicts are resolved on that averaged score before ranking (mirrors
+# remove_conflicts2(), and runs in the same order fast_testing uses: resolve
+# conflicts, then take the top N), and ties are broken by a random draw
+# (mirrors get_ordered_matches()'s random_tiebreaker column) -- see
+# _rank_based_fixed_n_matches()'s docstring for what's still not reproduced
+# (directional_filter's require-both-directions-above-threshold check).
 #
 # "UM Probabilities" is only a real, continuously-rankable score for
 # DeepUnitMatch/UMPy-family models -- EMD/DANT/DANT_no_functional save
@@ -100,8 +102,16 @@ RANDOM_SEED = 0
 def _build_reference_n_lookup(session_date_lookup, base_output=BASE_OUTPUT, reference_model=REFERENCE_MODEL):
     """
     {dataset: {(RecSes1, RecSes2) with RecSes1 < RecSes2: N}} -- N = how many
-    unordered unit pairs reference_model's own pipeline decision ("Matches")
-    called a match for that session pair, in that dataset.
+    unordered unit pairs reference_model committed to as a match for that
+    session pair, in that dataset, AFTER resolving one-to-many conflicts
+    (dvd._resolve_match_conflicts(), ranked by "UM Probabilities" same as
+    everywhere else) -- not the raw pipeline "Matches" column's count, which
+    has no uniqueness constraint at write time (see
+    dvd._resolve_match_conflicts()'s docstring) and so can overcount relative
+    to what reference_model actually settled on for a unit. This mirrors
+    fast_testing.py's own reference N: it comes from a prior
+    get_matches_1model(fixed_n=False) run, whose remove_conflicts2() always
+    resolves conflicts before N = len(match_indices) is recorded.
 
     Datasets/pairs missing here get treated as N=0 by
     _rank_based_fixed_n_matches() (every other model's matches for that pair
@@ -142,11 +152,14 @@ def _build_reference_n_lookup(session_date_lookup, base_output=BASE_OUTPUT, refe
         if not os.path.isfile(match_table_path):
             continue
 
+        header = pd.read_csv(match_table_path, nrows=0).columns
         usecols = ["ID1", "ID2", "RecSes 1", "RecSes 2", "Matches"]
         dtype_map = {"ID1": "int32", "ID2": "int32", "RecSes 1": "int32", "RecSes 2": "int32", "Matches": "int8"}
+        if dvd.MATCH_CONFLICT_RANK_COL in header:
+            usecols.append(dvd.MATCH_CONFLICT_RANK_COL)
+            dtype_map[dvd.MATCH_CONFLICT_RANK_COL] = "float32"
         if variant is not None:
             _, (uid_col_a, uid_col_b) = variant
-            header = pd.read_csv(match_table_path, nrows=0).columns
             if uid_col_a not in header or uid_col_b not in header:
                 print(f"  {match_table_path} missing '{uid_col_a}'/'{uid_col_b}', skipping reference lookup for {dataset}.")
                 continue
@@ -157,6 +170,8 @@ def _build_reference_n_lookup(session_date_lookup, base_output=BASE_OUTPUT, refe
         if variant is not None:
             _, (uid_col_a, uid_col_b) = variant
             df["Matches"] = (df[uid_col_a] == df[uid_col_b]).astype(np.int8)
+
+        df = df.assign(Matches=dvd._resolve_match_conflicts(df))
 
         pos = df[(df["RecSes 1"] < df["RecSes 2"]) & (df["Matches"] == 1)]
         dup_flagged = dvd._build_within_session_duplicate_lookup(base_output, {dataset}).get(dataset, set())
@@ -190,13 +205,20 @@ def _rank_based_fixed_n_matches(df, ref_counts_for_dataset, rng, rank_col="UM Pr
     (mirrors get_ordered_matches()'s random_tiebreaker column).
 
     Not reproduced here: the notebooks additionally run directional_filter
-    (require both directions individually above threshold) and
-    remove_conflicts2 (a one-to-one matching constraint: at most one partner
-    per unit) before ranking. Averaging across directions already softly
-    penalises one-way-only candidates rather than excluding them outright,
-    and conflicts aren't resolved -- a unit can appear in more than one of
-    the selected top-N pairs. Both are simplifications relative to the
-    notebooks' own fixed_n comparison.
+    (require both directions individually above threshold) before ranking.
+    Averaging across directions already softly penalises one-way-only
+    candidates rather than excluding them outright -- a simplification
+    relative to the notebooks' own fixed_n comparison. One-to-many conflicts
+    (remove_conflicts2's one-partner-per-unit constraint) ARE resolved here,
+    on the direction-averaged score, before top-N ranking -- same order
+    fast_testing.get_matches_1model(fixed_n=...) uses (remove_conflicts2()
+    runs, THEN .head(fixed_n) picks winners from what's left), rather than
+    collect_binned_pairs()'s own post-hoc resolve_match_conflicts pass, which
+    would otherwise run after N is already fixed (on raw per-direction
+    "UM Probabilities" values, a different score source) and could shrink the
+    selected set below N. main() passes resolve_match_conflicts=False to
+    collect_binned_pairs() for this reason -- conflict resolution happens
+    exactly once, here.
     """
     r1 = df["RecSes 1"].to_numpy()
     r2 = df["RecSes 2"].to_numpy()
@@ -220,11 +242,32 @@ def _rank_based_fixed_n_matches(df, ref_counts_for_dataset, rng, rank_col="UM Pr
     canon["canon_id"] = canon.groupby(["sess_lo", "unit_lo", "sess_hi", "unit_hi"], sort=False).ngroup()
 
     pairs = canon.groupby("canon_id", sort=False).agg(
-        sess_lo=("sess_lo", "first"), sess_hi=("sess_hi", "first"), avg_score=("score", "mean"),
+        sess_lo=("sess_lo", "first"), sess_hi=("sess_hi", "first"),
+        unit_lo=("unit_lo", "first"), unit_hi=("unit_hi", "first"),
+        avg_score=("score", "mean"),
     )
     # NaN scores (shouldn't normally occur -- UM Probabilities is computed for
-    # every candidate pair -- but handled defensively) never win a ranking.
-    avg_score = np.nan_to_num(pairs["avg_score"].to_numpy(), nan=-np.inf)
+    # every candidate pair -- but handled defensively) never win a ranking or
+    # a conflict.
+    pairs["avg_score"] = pairs["avg_score"].fillna(-np.inf)
+
+    # Resolve one-to-many conflicts per session pair before ranking (see
+    # docstring above): a candidate survives only if its avg_score is
+    # simultaneously maximal among every other candidate sharing its "lo"
+    # endpoint unit and every other candidate sharing its "hi" endpoint unit,
+    # within the same session pair -- same both-endpoints-maximal rule as
+    # dvd._resolve_match_conflicts()/fast_testing.remove_conflicts2(), just
+    # applied to canonical (direction-averaged) candidates instead of raw
+    # rows. Losing candidates are dropped from ranking entirely (rather than
+    # zeroed-but-still-eligible, as remove_conflicts2 does) so a conflict can
+    # never consume one of the N slots -- a minor, deliberate simplification
+    # that only differs from fast_testing in the rare case where a session
+    # pair has fewer than N conflict-free candidates.
+    max_for_lo = pairs.groupby(["sess_lo", "sess_hi", "unit_lo"])["avg_score"].transform("max")
+    max_for_hi = pairs.groupby(["sess_lo", "sess_hi", "unit_hi"])["avg_score"].transform("max")
+    pairs = pairs[(pairs["avg_score"] == max_for_lo) & (pairs["avg_score"] == max_for_hi)]
+
+    avg_score = pairs["avg_score"].to_numpy()
     tiebreak = rng.random(len(pairs))
     rows_by_canon = canon.groupby("canon_id", sort=False)["row"].apply(np.asarray)
 
@@ -278,6 +321,14 @@ def main():
         models_to_include=RANK_ELIGIBLE_MODELS,
         matches_transform=matches_transform,
         extra_usecols={"ID2": "int32", "UM Probabilities": "float32"},
+        # _rank_based_fixed_n_matches() already resolves one-to-many conflicts
+        # itself, before picking the top N (see its docstring) -- running
+        # collect_binned_pairs()'s own post-hoc pass here too would re-decide
+        # conflicts from raw per-direction "UM Probabilities" values (a
+        # different score source than the direction-averaged one used for
+        # ranking) after N is already fixed, and could shrink a model's
+        # selected set below N.
+        resolve_match_conflicts=False,
     )
 
     auc_df = dvd.summarise_auc(score_bins)
