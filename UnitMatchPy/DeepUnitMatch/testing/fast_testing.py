@@ -25,7 +25,7 @@ from utils.helpers import (
 # PROJECT_ROOT (defined in utils.helpers) is the directory holding the shared
 # data/results and metadata_index.json alongside the sibling repos.
 RESULTS_DIR = os.path.join(PROJECT_ROOT, "results")
-DATABASE_PATH = os.path.join(PROJECT_ROOT, "matchtables_models.db")
+DATABASE_PATH = os.path.join(PROJECT_ROOT, "matchtables_algo.db")
 
 
 def test_models_optimized(col_names, fixed_n=True, save_names=None):
@@ -259,6 +259,8 @@ def all_results_1model(
         if not match_indices:
             # print(mouse, probe, loc, r1, r2, "No matches found for model", model_name)
             AUC_isi = np.nan
+            AUC_isi_KL = np.nan
+            AUC_isi_Wassertstein = np.nan
             AUC_fr = np.nan
             AUC_isi_cv = np.nan
             AUC_refpop_UMPy = np.nan
@@ -273,6 +275,8 @@ def all_results_1model(
         else:
             # Calculate metrics
             AUC_isi = AUC(df, match_indices, "ISI_correlations")
+            AUC_isi_KL = AUC(df, match_indices, "ISI_KL_divergence")
+            AUC_isi_Wassertstein = AUC(df, match_indices, "ISI_wasserstein_distance")
             AUC_fr = AUC(df, match_indices, "FR_diff")
             AUC_isi_cv = AUC(df, match_indices, "ISI_CV_diff")
             AUC_refpop_UMPy = AUC(df, match_indices, "refpop_correlations_UMPy") if "refpop_correlations_UMPy" in df.keys() else np.nan
@@ -309,6 +313,8 @@ def all_results_1model(
                 "r1": r1,
                 "r2": r2,
                 "AUC_isi": AUC_isi,
+                "AUC_isi_KL": AUC_isi_KL,
+                "AUC_isi_Wassertstein": AUC_isi_Wassertstein,
                 "AUC_fr": AUC_fr,
                 "AUC_isi_cv": AUC_isi_cv,
                 "AUC_refpop_UMPy": AUC_refpop_UMPy,
@@ -570,15 +576,15 @@ if __name__ == "__main__":
 
     models = [
               "DeepUnitMatch",
-            #   "UMPy", 
-            #   "EMD", 
-            #   "DANT", 
-            #   "DANT_no_functional",
+              "UMPy", 
+              "EMD", 
+              "DANT", 
+              "DANT_no_functional",
             #   "DUM_maxdist=20", "DUM_maxdist=50", "DUM_maxdist=100", "DUM_maxdist=inf", 
             #   "UMPy_maxdist=20", "UMPy_maxdist=50", "UMPy_maxdist=100", "UMPy_maxdist=inf",
-              "DUM_W_ij=1","DUM_W_ij=5","DUM_W_ij=10","DUM_W_ij=15","DUM_W_ij=20", 
-              "n_output=8_after_ae_and_finetune", "n_output=32_after_ae_and_finetune", "n_output=128_after_ae_and_finetune", "n_output=256_after_ae_and_finetune", 
-              "DUM_untrained", "DUM_unfinetuned", "DUM_finetuned_only",
+            #   "DUM_W_ij=1","DUM_W_ij=5","DUM_W_ij=10","DUM_W_ij=15","DUM_W_ij=20", 
+            #   "n_output=8_after_ae_and_finetune", "n_output=32_after_ae_and_finetune", "n_output=128_after_ae_and_finetune", "n_output=256_after_ae_and_finetune", 
+            #   "DUM_untrained", "DUM_unfinetuned", "DUM_finetuned_only",
             #   "exclude_mice_m1_1_after_ae_and_finetune", "exclude_mice_m1_2_after_ae_and_finetune", "exclude_mice_m1_3_after_ae_and_finetune",
             #   "exclude_mice_m6_1_after_ae_and_finetune", "exclude_mice_m6_2_after_ae_and_finetune", "exclude_mice_m6_3_after_ae_and_finetune",
             #   "exclude_mice_m12_1_after_ae_and_finetune", "exclude_mice_m12_2_after_ae_and_finetune", "exclude_mice_m12_3_after_ae_and_finetune",
