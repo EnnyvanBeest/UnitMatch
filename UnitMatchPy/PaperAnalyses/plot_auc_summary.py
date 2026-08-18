@@ -61,7 +61,8 @@ OUTPUT_DIR = os.path.join(BASE_OUTPUT, "auc_summary_report")
 # include every AUC_summary.json found under BASE_OUTPUT (main models,
 # maxdist sweep, extra checkpoints, everything).
 # MODELS_TO_INCLUDE = None
-MODELS_TO_INCLUDE = {"DeepUnitMatch_AssignUniqueID_Conservative", "DeepUnitMatch_AssignUniqueID", "UMPy_AssignUniqueID_Conservative", "UMPy_AssignUniqueID", "EMD", "DANT", "DANT_no_functional"}
+#MODELS_TO_INCLUDE = {"DeepUnitMatch_AssignUniqueID_Conservative", "DeepUnitMatch_AssignUniqueID", "UMPy_AssignUniqueID_Conservative", "UMPy_AssignUniqueID", "EMD", "DANT", "DANT_no_functional"}
+MODELS_TO_INCLUDE = {"DeepUnitMatch","DeepUnitMatch_AssignUniqueID_Conservative", "DeepUnitMatch_AssignUniqueID", "UMPy","UMPy_AssignUniqueID_Conservative", "UMPy_AssignUniqueID"}
 
 #MODELS_TO_INCLUDE = {"DUM_NewModelAug2026","DeepUnitMatch","DeepUnitMatch_AssignUniqueID_Conservative", "DeepUnitMatch_AssignUniqueID", "UMPy","UMPy_AssignUniqueID_Conservative", "UMPy_AssignUniqueID", "EMD", "DANT", "DANT_no_functional"}
 #MODELS_TO_INCLUDE = {"DeepUnitMatch","n_output=256_after_ae_and_finetune","n_output=128_after_ae_and_finetune","n_output=32_after_ae_and_finetune","n_output=8_after_ae_and_finetune"}
