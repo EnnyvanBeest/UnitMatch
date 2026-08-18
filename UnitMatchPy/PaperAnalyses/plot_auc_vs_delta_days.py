@@ -1,7 +1,7 @@
 # Companion to plot_auc_summary.py: instead of one AUC per dataset (pooling
 # every across-session unit-pair together regardless of how far apart the two
 # sessions were recorded), bin across-session unit-pairs by signed delta-days
-# (date(RecSes 1) - date(RecSes 2)) and compute AUC per bin per score,
+# (date(RecSes 2) - date(RecSes 1)) and compute AUC per bin per score,
 # pooling across every dataset -- to see whether/how tracking quality decays
 # as the gap between recordings grows. Every unordered session pair already
 # appears as both (i, j) and (j, i) rows in a MatchTable (see save_utils.py),
@@ -139,6 +139,23 @@ MIN_MICE_PER_BIN = 3
 # so a P<1/N<1 result here reflects this model's own failure to find matches
 # in data it did have access to, not a genuine lack of underlying data.
 PUNISH_MISSING_MATCHES = True
+
+# When False (default): every across-session candidate pair with a finite
+# functional-score value is ranked for AUC, regardless of physical distance
+# between the two units -- the historical behaviour of this module for every
+# score except ISI_correlations (which had this restriction hardcoded on
+# unconditionally, for that score only, until this toggle replaced it). When
+# True: for models with a usable dist_col (see the comment where dist_col is
+# resolved in collect_binned_pairs() -- DeepUnitMatch-family's "distance" /
+# UMPy's "centroid_dist"), every score's candidate pairs are additionally
+# restricted to dist_col > 0, i.e. pairs closer than that pipeline run's own
+# max_dist -- pairs at/beyond max_dist are trivially never a candidate match
+# for any model, so pooling them in as "easy" negatives dilutes the AUC
+# without testing waveform-based discrimination at all. Deliberately opt-in
+# rather than a standing default: it changes which pairs every score's AUC is
+# computed over, so a caller should choose it explicitly rather than have it
+# silently baked into "the" AUC number.
+RESTRICT_TO_MAX_DIST = False
 
 
 def _signed_bin_ids(delta_days):
@@ -528,6 +545,7 @@ def collect_binned_pairs(
     exclude_within_session_duplicates=True,
     resolve_match_conflicts=True,
     punish_missing_matches=PUNISH_MISSING_MATCHES,
+    restrict_to_max_dist=RESTRICT_TO_MAX_DIST,
 ):
     """
     Walk base_output for every AUC_summary.json (same discovery as
@@ -547,7 +565,7 @@ def collect_binned_pairs(
     to its own figures, so a dataset with essentially no trackable matches
     doesn't contribute a spuriously extreme point to these bins either.
 
-    Delta-days is signed (date(RecSes 1) - date(RecSes 2)), not absolute:
+    Delta-days is signed (date(RecSes 2) - date(RecSes 1)), not absolute:
     since a MatchTable is a reshaped (n_units, n_units) matrix (see
     save_utils.py), every unordered session pair already appears as both
     (i, j) and (j, i) rows, so binning signed deltas naturally spreads pairs
@@ -557,8 +575,9 @@ def collect_binned_pairs(
     NaN functional-score entries are dropped per-pair (a simpler approximation
     of test.AUC()'s whole-row masking, appropriate here since we no longer
     have the full per-unit matrix once pairs from many datasets are pooled).
-    ISI_correlations additionally drops pairs beyond the pipeline's max_dist
-    (see the dist_col comment below).
+    When restrict_to_max_dist is True, every score additionally drops pairs
+    beyond the pipeline's own max_dist (see the dist_col comment below and
+    RESTRICT_TO_MAX_DIST's module-level comment for why this is opt-in).
 
     matches_transform, if given, is called as matches_transform(dataset, df)
     on each model's per-dataset MatchTable (already restricted to
@@ -595,6 +614,12 @@ def collect_binned_pairs(
     comment. Does not affect score_bins (summarise_auc()'s own pooled/
     bootstrap AUCs take punish_missing as a separate argument, since that
     pooling happens after this function returns).
+
+    restrict_to_max_dist (default RESTRICT_TO_MAX_DIST/False): see that
+    constant's module-level comment. When True, every score's valid mask
+    (not just ISI_correlations, which used to have this hardcoded on
+    unconditionally) is additionally restricted to dist_col > 0 for models
+    with a usable dist_col.
 
     Returns (score_bins, rate_bins, count_bins, dataset_level_rows,
     dataset_level_auc_rows, auc_long_df, dataset_bin_auc_rows, dataset_bin_rate_rows):
@@ -782,7 +807,7 @@ def collect_binned_pairs(
         df = df[have_dates]
         d1 = pd.to_datetime(date1[have_dates])
         d2 = pd.to_datetime(date2[have_dates])
-        delta_days = (d1 - d2).dt.days.to_numpy()
+        delta_days = (d2 - d1).dt.days.to_numpy()
 
         bin_idx = _signed_bin_ids(delta_days)
 
@@ -799,7 +824,7 @@ def collect_binned_pairs(
         for score in scores:
             signed_metric = -df[score].to_numpy() if score in NEGATE_FOR_AUC else df[score].to_numpy()
             valid = np.isfinite(signed_metric)
-            if score == "ISI_correlations" and dist_col is not None:
+            if restrict_to_max_dist and dist_col is not None:
                 valid = valid & (df[dist_col].to_numpy() > 0)
 
             # This dataset's own AUC for this score, pooled across every ΔDay
@@ -886,8 +911,8 @@ def collect_binned_pairs(
         # computing a rate, so the denominator is units, not unit-pairs.
         per_unit = df.groupby(["RecSes 1", "RecSes 2", "ID1"], as_index=False)["Matches"].max()
         pu_delta = (
-            pd.to_datetime(per_unit["RecSes 1"].map(date_map))
-            - pd.to_datetime(per_unit["RecSes 2"].map(date_map))
+            pd.to_datetime(per_unit["RecSes 2"].map(date_map))
+            - pd.to_datetime(per_unit["RecSes 1"].map(date_map))
         ).dt.days.to_numpy()
         pu_bin_idx = _signed_bin_ids(pu_delta)
         tracked = per_unit["Matches"].to_numpy().astype(bool)
@@ -936,8 +961,8 @@ def collect_binned_pairs(
         # number of passing datasets).
         session_pairs = df[["RecSes 1", "RecSes 2"]].drop_duplicates()
         sp_delta = (
-            pd.to_datetime(session_pairs["RecSes 1"].map(date_map))
-            - pd.to_datetime(session_pairs["RecSes 2"].map(date_map))
+            pd.to_datetime(session_pairs["RecSes 2"].map(date_map))
+            - pd.to_datetime(session_pairs["RecSes 1"].map(date_map))
         ).dt.days.to_numpy()
         sp_bin_idx = _signed_bin_ids(sp_delta)
         for b in np.unique(sp_bin_idx):
@@ -1176,6 +1201,18 @@ def build_family_colours(models):
         for m, shade in zip(members, shades):
             colour_for[m] = cmap(shade)
     return colour_for
+
+
+def build_qualitative_colours(labels):
+    """
+    Simple {label: colour} map cycling a qualitative palette (tab10, or
+    tab20 if there are more than 10 labels) -- unlike build_family_colours(),
+    there's no "family" grouping to exploit for functional-score names, so
+    this is just a stable, distinct colour per label in sorted order.
+    """
+    labels = sorted(labels)
+    cmap = plt.get_cmap("tab10" if len(labels) <= 10 else "tab20")
+    return {label: cmap(i % cmap.N) for i, label in enumerate(labels)}
 
 
 # ── quality vs quantity: no single model wins both, so make the tradeoff explicit ──
@@ -1575,7 +1612,125 @@ def plot_score_summary(
 
     ax_count.set_xticks(range(len(bins_present)))
     ax_count.set_xticklabels(bins_present, rotation=45, ha="right")
-    ax_count.set_xlabel("ΔDay (RecSes 1 − RecSes 2)")
+    ax_count.set_xlabel("ΔDay (RecSes 2 − RecSes 1)")
+
+    fig.tight_layout()
+    auc_summary_mod.savefig_with_svg(fig, out_path, dpi=150)
+    plt.close(fig)
+    return out_path
+
+
+def compute_auc_diff(model_a, model_b, auc_df, scores=None, min_count=20, count_col="n_pairs"):
+    """
+    Long-form {score, bin, diff, diff_se} table of AUC(model_a) - AUC(model_b)
+    per (score, bin), restricted to bins where both models have a valid AUC
+    (after the same min_count/count_col filter plot_score_summary() applies).
+
+    diff_se uses sqrt(se_a**2 + se_b**2) -- standard error propagation for a
+    difference of two independent estimates. This is an approximation: the
+    two models' AUCs come from the same underlying datasets/bins rather than
+    fully independent samples, so their true sampling covariance isn't zero.
+    summarise_auc()'s own per-model bootstrap SE doesn't track cross-model
+    covariance either, so this is the same level of approximation already
+    used elsewhere in this module, not a new one introduced here.
+    """
+    scores = scores if scores is not None else sorted(auc_df["score"].unique())
+
+    rows = []
+    for score in scores:
+        sub = auc_df[(auc_df["score"] == score) & (auc_df[count_col] >= min_count)].dropna(subset=["auc"])
+        wide = sub[sub["model"].isin([model_a, model_b])].pivot(index="bin", columns="model", values=["auc", "auc_se"])
+        if ("auc", model_a) not in wide.columns or ("auc", model_b) not in wide.columns:
+            continue
+        both = wide[[("auc", model_a), ("auc", model_b)]].dropna()
+        for b in both.index:
+            a_auc, b_auc = wide.loc[b, ("auc", model_a)], wide.loc[b, ("auc", model_b)]
+            a_se = wide[("auc_se", model_a)].get(b, np.nan) if ("auc_se", model_a) in wide.columns else np.nan
+            b_se = wide[("auc_se", model_b)].get(b, np.nan) if ("auc_se", model_b) in wide.columns else np.nan
+            diff_se = np.sqrt(np.nan_to_num(a_se) ** 2 + np.nan_to_num(b_se) ** 2)
+            rows.append({"score": score, "bin": b, "diff": a_auc - b_auc, "diff_se": diff_se})
+
+    return pd.DataFrame(rows, columns=["score", "bin", "diff", "diff_se"])
+
+
+def plot_model_diff_summary(
+    model_a, model_b, auc_df, rate_df, count_df, colour_for_model, colour_for_score, out_path,
+    scores=None, min_count=20, count_col="n_pairs", title_suffix="",
+):
+    """
+    Companion to plot_score_summary(), for exactly two models: same P(track)
+    (top) and dataset-count (bottom) panels -- one line per model, unchanged
+    -- but the middle panel is replaced with AUC(model_a) - AUC(model_b), one
+    line per functional score, instead of one line per model for a single
+    score. Meaningful only for exactly two models -- a difference across more
+    than two doesn't have a single well-defined sign/interpretation, so
+    model_a/model_b are required arguments rather than inferred from
+    auc_df/rate_df/count_df's full model set; callers pick the pair
+    explicitly (see main()'s len(models) == 2 guard).
+
+    colour_for_model is the same model -> colour mapping plot_score_summary()
+    uses (top/bottom panels are still per-model); colour_for_score is a
+    separate score -> colour mapping (e.g. build_qualitative_colours()) for
+    the now score-keyed middle panel.
+    """
+    rate_sub = rate_df[(rate_df[count_col] >= min_count) & (rate_df["model"].isin([model_a, model_b]))]
+    if rate_sub.empty:
+        return None
+
+    diff_df = compute_auc_diff(model_a, model_b, auc_df, scores=scores, min_count=min_count, count_col=count_col)
+    if diff_df.empty:
+        return None
+
+    bins_present = _bin_order(set(rate_sub["bin"]) | set(diff_df["bin"]) | set(count_df["bin"]))
+    x_pos = {b: i for i, b in enumerate(bins_present)}
+
+    fig, (ax_rate, ax_diff, ax_count) = plt.subplots(
+        3, 1, sharex=True, figsize=(max(8, 0.5 * len(bins_present)), 9),
+        gridspec_kw={"height_ratios": [1, 2, 1]},
+    )
+
+    for model in (model_a, model_b):
+        rs = rate_sub[rate_sub["model"] == model].copy()
+        rs["x"] = rs["bin"].map(x_pos)
+        rs = rs.sort_values("x")
+        ax_rate.errorbar(
+            rs["x"], rs["match_rate"], yerr=rs["match_rate_se"],
+            marker="o", label=model, color=colour_for_model[model], linewidth=1.5, markersize=4, capsize=2,
+        )
+
+        cs = count_df[count_df["model"] == model].copy()
+        cs["x"] = cs["bin"].map(x_pos)
+        cs = cs.sort_values("x")
+        ax_count.plot(
+            cs["x"], cs["n_datasets"], marker="o", label=model,
+            color=colour_for_model[model], linewidth=1.2, markersize=4,
+        )
+
+    for score in sorted(diff_df["score"].unique()):
+        s = diff_df[diff_df["score"] == score].copy()
+        s["x"] = s["bin"].map(x_pos)
+        s = s.sort_values("x")
+        ax_diff.errorbar(
+            s["x"], s["diff"], yerr=s["diff_se"],
+            marker="o", label=score, color=colour_for_score[score], linewidth=1.5, markersize=4, capsize=2,
+        )
+
+    ax_rate.set_ylabel("P(track)")
+    ax_rate.grid(axis="y", linestyle="--", alpha=0.5)
+    ax_rate.set_title(f"{model_a} vs {model_b}: AUC difference by score vs ΔDay{title_suffix}")
+    ax_rate.legend(fontsize=8)
+
+    ax_diff.axhline(0.0, color="grey", linewidth=0.8, linestyle=":")
+    ax_diff.set_ylabel(f"AUC({model_a}) − AUC({model_b})")
+    ax_diff.grid(axis="y", linestyle="--", alpha=0.5)
+    ax_diff.legend(fontsize=8)
+
+    ax_count.set_ylabel("Datasets")
+    ax_count.grid(axis="y", linestyle="--", alpha=0.5)
+
+    ax_count.set_xticks(range(len(bins_present)))
+    ax_count.set_xticklabels(bins_present, rotation=45, ha="right")
+    ax_count.set_xlabel("ΔDay (RecSes 2 − RecSes 1)")
 
     fig.tight_layout()
     auc_summary_mod.savefig_with_svg(fig, out_path, dpi=150)
@@ -1618,6 +1773,28 @@ def main():
         result = plot_score_summary(score, auc_df, rate_df, count_df, colour_for, out_path)
         if result:
             print(f"  Plotted {score} -> {result}")
+
+    # AUC-difference-by-score summary (plot_model_diff_summary()): only
+    # meaningful for exactly two models -- see that function's docstring.
+    if len(models) == 2:
+        model_a, model_b = models
+        diff_df = compute_auc_diff(model_a, model_b, auc_df)
+        diff_csv = os.path.join(OUTPUT_DIR, f"auc_diff_vs_delta_days_{model_a}_vs_{model_b}.csv")
+        diff_df.to_csv(diff_csv, index=False)
+        print(f"Wrote {diff_csv}")
+
+        colour_for_score = build_qualitative_colours(auc_df["score"].unique())
+        diff_out_path = os.path.join(OUTPUT_DIR, f"summary_diff_{model_a}_vs_{model_b}.png")
+        result = plot_model_diff_summary(
+            model_a, model_b, auc_df, rate_df, count_df, colour_for, colour_for_score, diff_out_path
+        )
+        if result:
+            print(f"  Plotted AUC-diff summary ({model_a} vs {model_b}) -> {result}")
+    else:
+        print(
+            f"Skipping AUC-diff summary: {len(models)} model(s) included ({sorted(models)}), "
+            "plot_model_diff_summary() only supports exactly two."
+        )
 
     # Mouse-first companion to the pooled curves above: average within mouse
     # first, then across mice with SEM (mirrors summaryMatchingPlots.m's own
