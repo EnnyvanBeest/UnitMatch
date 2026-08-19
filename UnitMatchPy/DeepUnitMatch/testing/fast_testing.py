@@ -6,10 +6,11 @@ import pandas as pd
 import numpy as np
 import random  
 import sqlite3
+import pickle 
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import time
 from sklearn.neighbors import KernelDensity
-from testing.test import remove_conflicts2, directional_filter
+from testing.test import remove_conflicts2, directional_filter, get_FR
 from utils.helpers import (
     PROJECT_ROOT,
     index_dates_from_loc,
@@ -25,7 +26,7 @@ from utils.helpers import (
 # PROJECT_ROOT (defined in utils.helpers) is the directory holding the shared
 # data/results and metadata_index.json alongside the sibling repos.
 RESULTS_DIR = os.path.join(PROJECT_ROOT, "results")
-DATABASE_PATH = os.path.join(PROJECT_ROOT, "matchtables_algo.db")
+DATABASE_PATH = os.path.join(PROJECT_ROOT, "matchtables_models.db")
 
 
 def test_models_optimized(col_names, fixed_n=True, save_names=None):
@@ -40,8 +41,8 @@ def test_models_optimized(col_names, fixed_n=True, save_names=None):
     results_dir = RESULTS_DIR
 
     if fixed_n:
-        ref_model = 'UMPy'
-        # ref_model = 'DeepUnitMatch'
+        # ref_model = 'UMPy'
+        ref_model = 'DeepUnitMatch'
         # ref_model = 'DANT_no_functional'
         # ref_model = 'DANT'
 
@@ -227,6 +228,8 @@ def all_results_1model(
 
     results_data = []
 
+    mt = normalize_FR_diff(mt, mouse, probe, loc)
+
     metrics = ["ISI_correlations", "FR_diff", "ISI_CV_diff", 
             "refpop_correlations_DeepUnitMatch", model_name.replace("UM Probabilities", "refpop_correlations"), "natim_correlations_DeepUnitMatch"]
     if "refpop_correlations_UMPy" in mt.keys():
@@ -260,8 +263,9 @@ def all_results_1model(
             # print(mouse, probe, loc, r1, r2, "No matches found for model", model_name)
             AUC_isi = np.nan
             AUC_isi_KL = np.nan
-            AUC_isi_Wassertstein = np.nan
+            AUC_isi_Wasserstein = np.nan
             AUC_fr = np.nan
+            AUC_fr_norm = np.nan
             AUC_isi_cv = np.nan
             AUC_refpop_UMPy = np.nan
             AUC_refpop_DeepUnitMatch = np.nan
@@ -276,8 +280,9 @@ def all_results_1model(
             # Calculate metrics
             AUC_isi = AUC(df, match_indices, "ISI_correlations")
             AUC_isi_KL = AUC(df, match_indices, "ISI_KL_divergence")
-            AUC_isi_Wassertstein = AUC(df, match_indices, "ISI_wasserstein_distance")
+            AUC_isi_Wasserstein = AUC(df, match_indices, "ISI_wasserstein_distance")
             AUC_fr = AUC(df, match_indices, "FR_diff")
+            AUC_fr_norm = AUC(df, match_indices, "FR_diff_norm")
             AUC_isi_cv = AUC(df, match_indices, "ISI_CV_diff")
             AUC_refpop_UMPy = AUC(df, match_indices, "refpop_correlations_UMPy") if "refpop_correlations_UMPy" in df.keys() else np.nan
             AUC_refpop_DeepUnitMatch = AUC(df, match_indices, "refpop_correlations_DeepUnitMatch") # always here for ref
@@ -314,8 +319,9 @@ def all_results_1model(
                 "r2": r2,
                 "AUC_isi": AUC_isi,
                 "AUC_isi_KL": AUC_isi_KL,
-                "AUC_isi_Wassertstein": AUC_isi_Wassertstein,
+                "AUC_isi_Wasserstein": AUC_isi_Wasserstein,
                 "AUC_fr": AUC_fr,
+                "AUC_fr_norm": AUC_fr_norm,
                 "AUC_isi_cv": AUC_isi_cv,
                 "AUC_refpop_UMPy": AUC_refpop_UMPy,
                 "AUC_refpop_DeepUnitMatch": AUC_refpop_DeepUnitMatch,
@@ -571,23 +577,64 @@ def build_S_and_M(df, match_indices, metric="ISI_correlations"):
 
     return S, M
 
+def normalize_FR_diff(mt, mouse, probe, loc):
+    if np.all(np.isnan(mt['FR_diff'])):
+        mt['FR_diff_norm'] = mt['FR_diff']
+        return mt
+
+    dum_dir = os.path.join(PROJECT_ROOT, mouse, probe, loc, 'DeepUnitMatch')
+
+    with open(os.path.join(dum_dir, 'UMParam.pickle'), 'rb') as f:
+        dum_param = pickle.load(f)
+
+    # Get FR
+    FR = get_FR(dum_param)
+
+    fr_lookup = []
+
+    offset = 0
+    for session, n_units in enumerate(dum_param["n_units_per_session"], start=1):
+        session_ids = mt.loc[mt["RecSes1"] == session, "ID1"].drop_duplicates().tolist()
+        if len(session_ids) == 0:
+            offset += n_units
+            continue
+
+        session_fr = FR[:,offset:offset + n_units].mean(axis=0)
+
+        fr_lookup.append(
+            pd.DataFrame({
+                "RecSes1": np.full(len(session_ids), session, dtype=int),
+                "ID1": np.asarray(session_ids, dtype=int),
+                "FR": session_fr[:len(session_ids)]
+            })
+        )
+
+        offset += n_units
+
+    fr_lookup = pd.concat(fr_lookup, ignore_index=True)
+    mt = mt.merge(fr_lookup, on=["RecSes1", "ID1"], how="left", validate="many_to_one")
+    mt["FR_diff_norm"] = mt["FR_diff"] / mt["FR"]
+
+    return mt
+
 if __name__ == "__main__":
     start = time.time()
 
     models = [
               "DeepUnitMatch",
-              "UMPy", 
-              "EMD", 
-              "DANT", 
-              "DANT_no_functional",
+            #   "UMPy", 
+            #   "EMD", 
+            #   "DANT", 
+            #   "DANT_no_functional",
             #   "DUM_maxdist=20", "DUM_maxdist=50", "DUM_maxdist=100", "DUM_maxdist=inf", 
             #   "UMPy_maxdist=20", "UMPy_maxdist=50", "UMPy_maxdist=100", "UMPy_maxdist=inf",
-            #   "DUM_W_ij=1","DUM_W_ij=5","DUM_W_ij=10","DUM_W_ij=15","DUM_W_ij=20", 
-            #   "n_output=8_after_ae_and_finetune", "n_output=32_after_ae_and_finetune", "n_output=128_after_ae_and_finetune", "n_output=256_after_ae_and_finetune", 
-            #   "DUM_untrained", "DUM_unfinetuned", "DUM_finetuned_only",
+              "DUM_W_ij=1","DUM_W_ij=5","DUM_W_ij=10","DUM_W_ij=15","DUM_W_ij=20", 
+              "n_output=8_after_ae_and_finetune", "n_output=32_after_ae_and_finetune", "n_output=128_after_ae_and_finetune", "n_output=256_after_ae_and_finetune", 
+              "DUM_untrained", "DUM_unfinetuned", "DUM_finetuned_only",
             #   "exclude_mice_m1_1_after_ae_and_finetune", "exclude_mice_m1_2_after_ae_and_finetune", "exclude_mice_m1_3_after_ae_and_finetune",
             #   "exclude_mice_m6_1_after_ae_and_finetune", "exclude_mice_m6_2_after_ae_and_finetune", "exclude_mice_m6_3_after_ae_and_finetune",
             #   "exclude_mice_m12_1_after_ae_and_finetune", "exclude_mice_m12_2_after_ae_and_finetune", "exclude_mice_m12_3_after_ae_and_finetune",
+            #   "xval_m6_3",
               ]
 
     col_names = [f"UM Probabilities_{model}" for model in models]
