@@ -82,9 +82,14 @@ def load_trained_model(device="cpu", read_path=None, n_output=256):
             f"but n_output={n_output} was requested."
         )
 
+    # strict=False: checkpoints saved before the ChannelPositionalBias
+    # ("pos_bias.*") submodule was added (e.g. utils/model_PreJuly2026) are
+    # missing those keys; they're left at random init and, since such old
+    # preprocessed data has no ChannelValid field either (all-invalid mask),
+    # never actually get used -- see ChannelPositionalBias.forward.
     if "clip_loss" in checkpoint:
         # Fine-tuned (clip-loss) checkpoint: checkpoint["model"] is the encoder alone.
-        model.load_state_dict(checkpoint["model"])
+        model.load_state_dict(checkpoint["model"], strict=False)
         clip_loss = CustomClipLoss().to(device)
         clip_loss.load_state_dict(checkpoint["clip_loss"])
         clip_loss.eval()
@@ -92,7 +97,7 @@ def load_trained_model(device="cpu", read_path=None, n_output=256):
         # Autoencoder-only checkpoint: checkpoint["model"] holds encoder.*/decoder.*
         # keys for the full SpatioTemporalAutoEncoder_V2; checkpoint["encoder"] is
         # the encoder-only state dict we actually need here.
-        model.load_state_dict(checkpoint["encoder"])
+        model.load_state_dict(checkpoint["encoder"], strict=False)
     model.eval()
 
     # Load projector
@@ -167,6 +172,17 @@ def inference(model, data_dir, unit_label_paths=None):
 
 
 def get_threshold(prob_matrix: np.ndarray, session_id, MAP=False):
+
+    if np.all(prob_matrix == prob_matrix.flat[0]):
+        # All similarity values are identical (e.g. a spatial-only ablation,
+        # where prob_matrix is a constant placeholder with no DNN behind it).
+        # The on/off-diagonal KDE intersection below is undefined here and
+        # would otherwise land at the constant value itself, so every pair
+        # fails the caller's Prob > threshold check. Return 0 instead so every
+        # pair passes it, leaving get_matches' spatial filter as the only
+        # thing deciding candidate pairs -- this keeps drift correction working
+        # off spatial proximity alone rather than becoming a no-op.
+        return 0.0
 
     n = len(session_id)
     within_session = (session_id[:, None] == session_id).astype(int)

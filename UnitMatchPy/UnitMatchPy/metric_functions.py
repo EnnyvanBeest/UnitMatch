@@ -632,6 +632,8 @@ def get_threshold(total_score, within_session, euclid_dist, param, is_first_pass
     score_vector = param["score_vector"]
     Bins = param["bins"]
 
+    all_same_score = np.all(total_score == total_score.flat[0])
+
     tmp = total_score.copy()
     tmp[euclid_dist > param["neighbour_dist"]] = np.nan
 
@@ -664,7 +666,15 @@ def get_threshold(total_score, within_session, euclid_dist, param, is_first_pass
     mask = (hd_s[:min_len] > hnd_s[:min_len]) & (score_vector_use > 0.6)
     crossing_idx = np.flatnonzero(mask)
     if crossing_idx.size == 0:
-        thrs_opt = 0.6
+        # A genuinely undefined crossing (e.g. sparse/degenerate histograms)
+        # falls back to the default 0.6. But if total_score is literally
+        # constant everywhere (e.g. a spatial-only ablation's placeholder
+        # similarity score), there is no meaningful "match vs non-match" split
+        # to find at all -- 0.6 would be arbitrary here, so use 0 instead,
+        # which makes every candidate pair count towards n_expected_matches at
+        # the caller (see run_deep_unit_match_core's total_score_for_threshold
+        # docstring for why that matters).
+        thrs_opt = 0.0 if all_same_score else 0.6
     else:
         thrs_opt = float(score_vector_use[crossing_idx[0]])
     # if ThrsOpt.size == 0:

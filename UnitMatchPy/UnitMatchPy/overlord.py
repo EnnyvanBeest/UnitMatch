@@ -73,6 +73,7 @@ def extract_metric_scores(
     param,
     niter=2,
     to_use=None,
+    extra_scores=None,
 ):
     """
     This function runs all of the metric calculations and drift correction to calculate the probability
@@ -93,6 +94,14 @@ def extract_metric_scores(
             2 is one pass of drift correction, by default 2
     to_use : list, optional
         A list of scores to include in the total score calculation. If None (default), all scores are included.
+    extra_scores : dict, optional
+        Additional precomputed (n_units, n_units) score arrays to fold into
+        scores_to_include alongside the built-in metrics (e.g. an externally
+        computed DNN similarity score), by default None. Merged in before the
+        to_use filtering, so combine with to_use to make an extra score the
+        sole driver of total_score/candidate_pairs/drift-correction/the Bayes
+        predictors -- see run_umpy_core's model parameter in
+        run_deepunitmatch_batch_onMerged.py for an example.
 
     Returns
     -------
@@ -151,6 +160,8 @@ def extract_metric_scores(
             "waveform_score": waveform_score,
             "trajectory_score": trajectory_score,
         }
+        if extra_scores:
+            scores_to_include.update(extra_scores)
         if to_use is not None:
             to_exclude = [key for key in scores_to_include if key not in to_use]
             for key in to_exclude:

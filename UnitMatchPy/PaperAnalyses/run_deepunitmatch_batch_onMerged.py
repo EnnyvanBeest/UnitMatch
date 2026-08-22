@@ -406,7 +406,15 @@ def run_deep_unit_match(sess):
     run_deep_unit_match_core(sess, save_dir, model, label="DeepUnitMatch")
 
 
-def run_deep_unit_match_core(sess, save_dir, model, label="DeepUnitMatch"):
+def run_deep_unit_match_core(
+    sess,
+    save_dir,
+    model,
+    label="DeepUnitMatch",
+    spatial_only=False,
+    total_score_for_threshold=False,
+    use_umpy_totalscore=False,
+):
     """
     Run the full DeepUnitMatch pipeline for one pre-loaded session, given an
     already-loaded model and an explicit output directory.
@@ -414,6 +422,49 @@ def run_deep_unit_match_core(sess, save_dir, model, label="DeepUnitMatch"):
     Factored out of run_deep_unit_match() so alternative trained models (see
     run_deepunitmatch_batch_onMerged_extramodels.py) can reuse the exact same
     inference/matching/saving logic against a different checkpoint and save_dir.
+
+    spatial_only : bool, optional
+        When True, the DNN is never loaded/run (model may be None): sim_matrix
+        is instead a constant all-ones array, so every downstream step (the
+        drift-correction pre-pass, best-match selection, the final Bayes step)
+        runs completely unmodified with a uniformly uninformative 'similarity'
+        input, leaving centroid distance as the only real signal. With
+        sim_matrix constant, test.get_threshold (called inside the pre-pass'
+        test.get_matches to set the Prob > threshold cutoff) has no
+        well-defined on/off-diagonal KDE intersection, so it special-cases
+        constant input to return threshold=0 -- every pair then passes that
+        check, leaving get_matches' spatial (position-based) filter as the
+        only thing selecting drift-correction candidates. See
+        run_deepunitmatch_batch_onMerged_spatialonly.py.
+    total_score_for_threshold : bool, optional
+        When True, the per-pair adaptive-prior estimate (mf.get_threshold /
+        n_expected_matches) is computed from a combined total_score -- the
+        normalised sum of scores_to_incl, via mf.get_total_score, exactly the
+        way UMPy builds its own total_score -- instead of from sim_mat alone.
+        Needed whenever sim_mat carries no real information (spatial_only):
+        counting how many pairs exceed a threshold on a *constant* sim_mat is
+        ill-posed (every pair is either above or below it, there's no
+        meaningful split), which otherwise drives the Bayes prior to an
+        extreme (every pair forced to probability 0 or 1, regardless of
+        centroid distance). Folding centroid_dist into total_score fixes this
+        because the constant term drops out under total_score's min-max
+        normalisation, leaving a threshold estimate driven by centroid_dist
+        alone -- centroid_dist is real, so the split is meaningful again.
+        Default False leaves sim_mat driving the estimate, matching the
+        non-ablated pipeline's original behaviour exactly.
+    use_umpy_totalscore : bool, optional
+        When True, the DNN is never loaded/run (model may be None): sim_matrix
+        is instead UMPy's own TotalScore, computed by running
+        ov.extract_metric_scores on this same session's extracted waveform
+        properties (deep-copied, so it can't share mutable state with this
+        function's own extracted_wave_properties/param). Every downstream
+        step then runs exactly as normal with that real, non-constant score
+        in place of the DNN's -- no need for the spatial_only/
+        total_score_for_threshold special-casing, since UMPy's TotalScore
+        varies naturally across pairs. Used by
+        run_deepunitmatch_batch_onMerged_scoreswap.py to test whether
+        DUM/UMPy performance differences come from the underlying score or
+        from the two pipelines' other architectural differences.
     """
     merged_dir = sess["merged_dir"]
     print(f"\n--- {label}: {merged_dir}")
@@ -457,15 +508,7 @@ def run_deep_unit_match_core(sess, save_dir, model, label="DeepUnitMatch"):
             )
         )
 
-    # ── neural-net inference ─────────────────────────────────────────────────
-    print("Running DeepUnitMatch inference …")
     data_dir = os.path.join(tmp_path, "processed_waveforms")
-    try:
-        sim_matrix = test.inference(model, data_dir)
-    except Exception as e:
-        print(f"  ERROR in inference: {e}")
-        traceback.print_exc()
-        return
 
     # ── Naive Bayes matching ─────────────────────────────────────────────────
     print("Running Naive Bayes matching …")
@@ -480,15 +523,38 @@ def run_deep_unit_match_core(sess, save_dir, model, label="DeepUnitMatch"):
     )
     sessions = np.unique(session_id)
 
-    # ── pre-pass: collect DNN labels for all session pairs → shared drift correction ──
-    # Build a global labels matrix from neural-net matches across every pair, then
+    # ── similarity score ─────────────────────────────────────────────────────
+    if spatial_only:
+        # No DNN: a constant all-ones matrix carries no information, so every
+        # downstream step below runs exactly as it does normally.
+        sim_matrix = np.ones((len(waveform), len(waveform)))
+    elif use_umpy_totalscore:
+        print("Computing UMPy TotalScore (in place of DNN similarity) …")
+        sim_matrix, _, _, _ = ov.extract_metric_scores(
+            copy.deepcopy(extracted_wave_properties),
+            session_switch,
+            within_session,
+            copy.deepcopy(param),
+            niter=2,
+        )
+    else:
+        print("Running DeepUnitMatch inference …")
+        try:
+            sim_matrix = test.inference(model, data_dir)
+        except Exception as e:
+            print(f"  ERROR in inference: {e}")
+            traceback.print_exc()
+            return
+
+    # ── pre-pass: collect labels for all session pairs → shared drift correction ──
+    # Build a global labels matrix from pairwise matches across every pair, then
     # call mf.drift_n_sessions — the same function UMPy uses — so both pipelines
     # share a single, consistent drift-correction mechanism.
     n_total = waveform.shape[0]
     labels_full = np.eye(n_total)
     pair_matches_cache = {}
 
-    print("  Pre-pass: collecting neural-net labels for drift correction ...")
+    print("  Pre-pass: collecting labels for drift correction ...")
     for r1 in sessions:
         for r2 in sessions:
             if r1 >= r2:
@@ -556,7 +622,7 @@ def run_deep_unit_match_core(sess, save_dir, model, label="DeepUnitMatch"):
 
             matches = pair_matches_cache[(r1, r2)]
 
-            labels = np.eye(sim_mat.shape[0])
+            labels = np.eye(n)
             subsessionid = np.array(
                 [r1] * len(param["good_units"][r1])
                 + [r2] * len(param["good_units"][r2])
@@ -595,11 +661,15 @@ def run_deep_unit_match_core(sess, save_dir, model, label="DeepUnitMatch"):
             within_session_pair = within_session[np.ix_(mask, mask)]
             include_these_pairs_idx = raw_dist < param["max_dist"]
             param_pair = dict(param, n_units=n_units)
+            if total_score_for_threshold:
+                threshold_score, _ = mf.get_total_score(scores_to_incl, param_pair)
+            else:
+                threshold_score = sim_mat
             thrs_opt = mf.get_threshold(
-                sim_mat, within_session_pair, raw_dist, param_pair, is_first_pass=False
+                threshold_score, within_session_pair, raw_dist, param_pair, is_first_pass=False
             )
             n_expected_matches = int(
-                np.sum((sim_mat > thrs_opt) & include_these_pairs_idx)
+                np.sum((threshold_score > thrs_opt) & include_these_pairs_idx)
             )
             n_candidate_pairs = max(int(np.sum(include_these_pairs_idx)), 1)
             prior_match = 1 - (n_expected_matches / n_candidate_pairs)
@@ -697,8 +767,14 @@ def run_deep_unit_match_core(sess, save_dir, model, label="DeepUnitMatch"):
     # ── save diagnostic figures ───────────────────────────────────────────────
     fig, axes = plt.subplots(1, 3, figsize=(15, 5))
 
+    if spatial_only:
+        panel0_title = "Similarity matrix (constant, spatial-only)"
+    elif use_umpy_totalscore:
+        panel0_title = "Similarity matrix (UMPy TotalScore)"
+    else:
+        panel0_title = "Similarity matrix"
     im = axes[0].imshow(sim_matrix, cmap="viridis", aspect="auto")
-    axes[0].set_title("Similarity matrix")
+    axes[0].set_title(panel0_title)
     axes[0].set_xlabel("Unit")
     axes[0].set_ylabel("Unit")
     fig.colorbar(im, ax=axes[0])
@@ -762,7 +838,7 @@ def run_umpy(sess):
     run_umpy_core(sess, save_dir, label="UMPy")
 
 
-def run_umpy_core(sess, save_dir, label="UMPy"):
+def run_umpy_core(sess, save_dir, label="UMPy", to_use=None, model=None):
     """
     Run the full UMPy pipeline for one pre-loaded session, given an explicit
     output directory.
@@ -773,6 +849,24 @@ def run_umpy_core(sess, save_dir, label="UMPy"):
     different max_dist) and a different save_dir -- mirrors how
     run_deep_unit_match_core was factored out of run_deep_unit_match() for the
     extramodels script.
+
+    to_use : list, optional
+        Passed straight through to ov.extract_metric_scores -- restricts which
+        metric scores feed total_score/candidate_pairs/drift-correction/Bayes
+        (default None uses every metric). See
+        run_deepunitmatch_batch_onMerged_spatialonly.py, which passes
+        to_use=["centroid_dist"] for a spatial-only ablation.
+    model : optional
+        An already-loaded DeepUnitMatch model. When given, this function first
+        runs the exact same preprocessing as run_deep_unit_match_core
+        (get_snippets, kept_idx re-sync, test.inference) to compute a DNN
+        similarity score, which is folded into ov.extract_metric_scores as an
+        extra 'similarity' entry (combine with to_use=["similarity"] to make
+        it the sole driver of UMPy's own total_score/candidate_pairs/drift-
+        correction/Bayes predictors, in place of UMPy's own metrics). Used by
+        run_deepunitmatch_batch_onMerged_scoreswap.py to test UMPy's own
+        pipeline machinery driven by the DNN's score instead of its own
+        metrics.
     """
     merged_dir = sess["merged_dir"]
     print(f"\n--- {label}: {merged_dir}")
@@ -787,6 +881,45 @@ def run_umpy_core(sess, save_dir, label="UMPy"):
     session_switch = sess["session_switch"]
     within_session = sess["within_session"]
     channel_pos = sess["channel_pos"]
+    good_units = sess["good_units"]
+
+    extra_scores = None
+    if model is not None:
+        tmp_path = os.path.join(save_dir, "tmp_waveforms")
+        os.makedirs(tmp_path, exist_ok=True)
+        print("Preprocessing waveforms (get_snippets) …")
+        unit_ids = np.concatenate(param["good_units"]).squeeze()
+        try:
+            _, _, kept_idx = param_fun.get_snippets(
+                waveform,
+                channel_pos,
+                session_id,
+                save_path=tmp_path,
+                unit_ids=unit_ids,
+                param=param,
+            )
+        except Exception as e:
+            print(f"  ERROR in get_snippets: {e}")
+            traceback.print_exc()
+            return
+
+        # re-sync arrays if any units were rejected by get_snippets
+        if len(kept_idx) < len(waveform):
+            waveform, session_id, session_switch, within_session, good_units, param = (
+                util.filter_units_by_index(
+                    waveform, session_id, session_switch, good_units, kept_idx, param
+                )
+            )
+
+        print("Running DeepUnitMatch inference …")
+        data_dir = os.path.join(tmp_path, "processed_waveforms")
+        try:
+            sim_matrix = test.inference(model, data_dir)
+        except Exception as e:
+            print(f"  ERROR in inference: {e}")
+            traceback.print_exc()
+            return
+        extra_scores = {"similarity": sim_matrix}
 
     clus_info = {
         "good_units": param["good_units"],
@@ -811,6 +944,8 @@ def run_umpy_core(sess, save_dir, label="UMPy"):
                 within_session,
                 param,
                 niter=2,
+                to_use=to_use,
+                extra_scores=extra_scores,
             )
         )
     except Exception as e:
