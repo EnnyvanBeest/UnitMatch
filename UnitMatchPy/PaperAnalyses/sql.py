@@ -78,7 +78,7 @@ def merge_match_tables(df_1, df_2, sub1, sub2):
 
 def import_csv_to_sqlite(mt_paths, models, m, p, l):
 
-    db_file = os.path.join(PROJECT_ROOT, "matchtables_xval.db")
+    db_file = os.path.join(PROJECT_ROOT, "matchtables_nodrift.db")
 
     # Define the table name in SQLite
     table_name = f"{m}_{p}_{l}"  # Change this
@@ -100,7 +100,7 @@ def import_csv_to_sqlite(mt_paths, models, m, p, l):
 
     column_defs = []
 
-    print("Generating SQL column definitions from merged DataFrame...")
+    # print("Generating SQL column definitions from merged DataFrame...")
     for col_name in df_merged.columns:
         dtype = df_merged[col_name].dtype
         sql_type = pandas_to_sqlite_type(dtype)
@@ -162,16 +162,23 @@ if __name__ == "__main__":
     models = [
               "DeepUnitMatch",
             #   "DUM_NewModelAug2026",
-            #   "UMPy", 
+              "UMPy", 
             #   "EMD", "DANT", "DANT_no_functional",
+            #   "DUM_totalscore", "UMPy_simscore",
+              "DUM_nodrift", "UMPy_nodrift",
             #   "DUM_maxdist=20", "DUM_maxdist=50", "DUM_maxdist=100", "DUM_maxdist=inf", 
             #   "UMPy_maxdist=20", "UMPy_maxdist=50", "UMPy_maxdist=100", "UMPy_maxdist=inf",
+            #   "UMPy_spatialonly", "DUM_spatialonly",
             #   "DUM_W_ij=1","DUM_W_ij=5","DUM_W_ij=10","DUM_W_ij=15","DUM_W_ij=20", 
             #   "n_output=8_after_ae_and_finetune", "n_output=32_after_ae_and_finetune", "n_output=128_after_ae_and_finetune", "n_output=256_after_ae_and_finetune", 
             #   "DUM_untrained", "DUM_unfinetuned", "DUM_finetuned_only",
-              "exclude_mice_m1_1_after_ae_and_finetune", "exclude_mice_m1_2_after_ae_and_finetune", "exclude_mice_m1_3_after_ae_and_finetune",
-              "exclude_mice_m6_1_after_ae_and_finetune", "exclude_mice_m6_2_after_ae_and_finetune", "exclude_mice_m6_3_after_ae_and_finetune",
-              "exclude_mice_m12_1_after_ae_and_finetune", "exclude_mice_m12_2_after_ae_and_finetune", "exclude_mice_m12_3_after_ae_and_finetune",
+            #   "exclude_mice_m1_1_after_ae_and_finetune", "exclude_mice_m1_2_after_ae_and_finetune", "exclude_mice_m1_3_after_ae_and_finetune",
+            #   "exclude_mice_m6_1_after_ae_and_finetune", "exclude_mice_m6_2_after_ae_and_finetune", "exclude_mice_m6_3_after_ae_and_finetune",
+            #   "exclude_mice_m12_1_after_ae_and_finetune", "exclude_mice_m12_2_after_ae_and_finetune", "exclude_mice_m12_3_after_ae_and_finetune",
+            #   "xval_m3_1", "xval_m3_2", "xval_m3_3",
+            #   "xval_m6_1", "xval_m6_2", "xval_m6_3",
+            #   "xval_m12_1", "xval_m12_2", "xval_m12_3",
+            #   "xval_m18_1",
               ]
 
     for mouse in os.listdir(data_root):
