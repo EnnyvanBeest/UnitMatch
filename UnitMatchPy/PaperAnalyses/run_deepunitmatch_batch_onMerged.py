@@ -414,6 +414,7 @@ def run_deep_unit_match_core(
     spatial_only=False,
     total_score_for_threshold=False,
     use_umpy_totalscore=False,
+    apply_drift_correction=True,
 ):
     """
     Run the full DeepUnitMatch pipeline for one pre-loaded session, given an
@@ -465,6 +466,16 @@ def run_deep_unit_match_core(
         run_deepunitmatch_batch_onMerged_scoreswap.py to test whether
         DUM/UMPy performance differences come from the underlying score or
         from the two pipelines' other architectural differences.
+    apply_drift_correction : bool, optional
+        When False, mf.drift_n_sessions is never called: avg_centroid/
+        avg_waveform_per_tp stay exactly as extract_parameters produced them,
+        so centroid_dist and every downstream step use uncorrected waveforms.
+        The pre-pass itself still runs unconditionally -- it also builds
+        pair_matches_cache, which the final per-session-pair Bayes loop reuses
+        as its supervised match/non-match labels regardless of drift
+        correction, so skipping it isn't an option. Default True matches the
+        non-ablated pipeline's original behaviour exactly. See
+        run_deepunitmatch_batch_onMerged_nodrift.py.
     """
     merged_dir = sess["merged_dir"]
     print(f"\n--- {label}: {merged_dir}")
@@ -597,14 +608,15 @@ def run_deep_unit_match_core(
     # sim_matrix serves as total_score so get_good_matches can de-duplicate pairs.
     avg_centroid = extracted_wave_properties["avg_centroid"].copy()
     avg_waveform_per_tp = extracted_wave_properties["avg_waveform_per_tp"].copy()
-    _, avg_centroid, avg_waveform_per_tp = mf.drift_n_sessions(
-        labels_full.astype(bool),
-        session_switch,
-        avg_centroid,
-        avg_waveform_per_tp,
-        sim_matrix,
-        param,
-    )
+    if apply_drift_correction:
+        _, avg_centroid, avg_waveform_per_tp = mf.drift_n_sessions(
+            labels_full.astype(bool),
+            session_switch,
+            avg_centroid,
+            avg_waveform_per_tp,
+            sim_matrix,
+            param,
+        )
 
     # ── Bayes loop: use drift-corrected arrays ────────────────────────────────
     probs = np.zeros(sim_matrix.shape)
@@ -838,7 +850,7 @@ def run_umpy(sess):
     run_umpy_core(sess, save_dir, label="UMPy")
 
 
-def run_umpy_core(sess, save_dir, label="UMPy", to_use=None, model=None):
+def run_umpy_core(sess, save_dir, label="UMPy", to_use=None, model=None, niter=2):
     """
     Run the full UMPy pipeline for one pre-loaded session, given an explicit
     output directory.
@@ -867,6 +879,13 @@ def run_umpy_core(sess, save_dir, label="UMPy", to_use=None, model=None):
         run_deepunitmatch_batch_onMerged_scoreswap.py to test UMPy's own
         pipeline machinery driven by the DNN's score instead of its own
         metrics.
+    niter : int, optional
+        Passed straight through to ov.extract_metric_scores -- niter=1 means
+        no drift correction is applied at all (candidate_pairs/total_score/
+        scores_to_include are computed once from the raw, uncorrected
+        waveforms); niter=2 (default) does one pass of drift correction,
+        matching the non-ablated pipeline's original behaviour exactly. See
+        run_deepunitmatch_batch_onMerged_nodrift.py.
     """
     merged_dir = sess["merged_dir"]
     print(f"\n--- {label}: {merged_dir}")
@@ -943,7 +962,7 @@ def run_umpy_core(sess, save_dir, label="UMPy", to_use=None, model=None):
                 session_switch,
                 within_session,
                 param,
-                niter=2,
+                niter=niter,
                 to_use=to_use,
                 extra_scores=extra_scores,
             )

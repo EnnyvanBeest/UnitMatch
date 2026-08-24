@@ -4,13 +4,15 @@ Redo of Exclude_mice_experiment.py (which trained on {1, 6, 12}-mouse subsets
 and left inference to a separate discovery-based script,
 PaperAnalyses/run_deepunitmatch_batch_onMerged_ExcludeMiceModels.py), with
 three differences:
-  - 3-mouse replicates instead of 1-mouse, plus a new 18-mouse (all mice,
-    single replicate) control: 3x3 + 3x6 + 3x12 + 1x18 = 10 models total.
+  - 3 replicates per group size (including 1-mouse, matching
+    Exclude_mice_experiment.py's original single-mouse subsets), plus a new
+    18-mouse (all mice, single replicate) control:
+    3x1 + 3x3 + 3x6 + 3x12 + 1x18 = 13 models total.
   - Training and inference are bundled into a single resumable pipeline per
     model ("xval") instead of two separate scripts.
   - The whole thing is safe to launch as several concurrent python processes
     (same machine or several machines) pointed at the same shared drive: each
-    of the 10 xvals is claimed via batch_lock.try_lock() before a process
+    of the 13 xvals is claimed via batch_lock.try_lock() before a process
     starts it, so nobody duplicates another instance's run.
 
 Data
@@ -56,7 +58,7 @@ mid-training only works if the same machine picks its own xval back up.
 
 Example
 -------
-  python xval_end_to_end.py                  # process all 10 xvals, in order
+  python xval_end_to_end.py                  # process all 13 xvals, in order
   python xval_end_to_end.py --only m3_1 m6_2  # just these two
   python xval_end_to_end.py --status          # print progress, don't run anything
 """
@@ -116,8 +118,13 @@ CANONICAL_MICE = [
     "JF084",
 ]
 
-GROUP_SPEC = [(3, 3), (6, 3), (12, 3), (18, 1)]  # (mice per model, replicates)
+GROUP_SPEC = [(1, 3), (3, 3), (6, 3), (12, 3), (18, 1)]  # (mice per model, replicates)
 SPLIT_SEED = 0  # fixed so every process/machine derives the same manifest
+
+# Hand-picked mice for the 1-mouse xvals (every other group size is drawn at
+# random -- see generate_manifest) -- order gives m1_1/m1_2/m1_3 respectively.
+SINGLE_MOUSE_XVAL_MICE = ["AL032", "AV009", "FT039"]
+assert all(m in CANONICAL_MICE for m in SINGLE_MOUSE_XVAL_MICE)
 
 N_OUTPUT = 256
 
@@ -139,21 +146,26 @@ TRAINING_STALE_AFTER_SECONDS = 5 * 24 * 3600
 
 
 def generate_manifest() -> "dict[str, List[str]]":
-    """Deterministically assign mice to each of the 10 xval replicates.
+    """Deterministically assign mice to each of the 13 xval replicates.
 
-    For group sizes < 18, each replicate independently draws `group_size`
+    For group sizes 3/6/12, each replicate independently draws `group_size`
     mice at random (without replacement within a replicate; replicates may
     overlap each other, same as Exclude_mice_experiment.py's hand-picked
     splits did), seeded so every process/machine derives the identical
     manifest without needing to share it. The 18-mouse group has only one
-    possible draw: every mouse.
+    possible draw: every mouse. The 1-mouse group is the one exception --
+    it uses the hand-picked SINGLE_MOUSE_XVAL_MICE instead of a random draw,
+    and doesn't consume rng state, so it doesn't perturb the 3/6/12-mouse
+    draws.
     """
     rng = random.Random(SPLIT_SEED)
     manifest: "dict[str, List[str]]" = {}
     for group_size, n_replicates in GROUP_SPEC:
         for replicate in range(1, n_replicates + 1):
             name = f"m{group_size}_{replicate}"
-            if group_size >= len(CANONICAL_MICE):
+            if group_size == 1:
+                mice = [SINGLE_MOUSE_XVAL_MICE[replicate - 1]]
+            elif group_size >= len(CANONICAL_MICE):
                 mice = list(CANONICAL_MICE)
             else:
                 mice = rng.sample(CANONICAL_MICE, group_size)
@@ -553,8 +565,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--only", nargs="+", default=None,
-        help="Only run these xval names (default: all 10, in a fixed order). "
-        "Names are m3_1..m3_3, m6_1..m6_3, m12_1..m12_3, m18_1.",
+        help="Only run these xval names (default: all 13, in a fixed order). "
+        "Names are m1_1..m1_3, m3_1..m3_3, m6_1..m6_3, m12_1..m12_3, m18_1.",
     )
     parser.add_argument(
         "--status", action="store_true",
