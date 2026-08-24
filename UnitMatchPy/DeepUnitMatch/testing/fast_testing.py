@@ -26,7 +26,7 @@ from utils.helpers import (
 # PROJECT_ROOT (defined in utils.helpers) is the directory holding the shared
 # data/results and metadata_index.json alongside the sibling repos.
 RESULTS_DIR = os.path.join(PROJECT_ROOT, "results")
-DATABASE_PATH = os.path.join(PROJECT_ROOT, "matchtables_models.db")
+DATABASE_PATH = os.path.join(PROJECT_ROOT, "matchtables_nodrift.db")
 
 
 def test_models_optimized(col_names, fixed_n=True, save_names=None):
@@ -621,25 +621,28 @@ if __name__ == "__main__":
     start = time.time()
 
     models = [
-              "DeepUnitMatch",
+            #   "DeepUnitMatch",
             #   "UMPy", 
             #   "EMD", 
             #   "DANT", 
             #   "DANT_no_functional",
+            #   "DUM_totalscore", "UMPy_simscore",
+              "DUM_nodrift", "UMPy_nodrift",
+            #   "UMPy_spatialonly", "DUM_spatialonly",
             #   "DUM_maxdist=20", "DUM_maxdist=50", "DUM_maxdist=100", "DUM_maxdist=inf", 
             #   "UMPy_maxdist=20", "UMPy_maxdist=50", "UMPy_maxdist=100", "UMPy_maxdist=inf",
-              "DUM_W_ij=1","DUM_W_ij=5","DUM_W_ij=10","DUM_W_ij=15","DUM_W_ij=20", 
-              "n_output=8_after_ae_and_finetune", "n_output=32_after_ae_and_finetune", "n_output=128_after_ae_and_finetune", "n_output=256_after_ae_and_finetune", 
-              "DUM_untrained", "DUM_unfinetuned", "DUM_finetuned_only",
-            #   "exclude_mice_m1_1_after_ae_and_finetune", "exclude_mice_m1_2_after_ae_and_finetune", "exclude_mice_m1_3_after_ae_and_finetune",
-            #   "exclude_mice_m6_1_after_ae_and_finetune", "exclude_mice_m6_2_after_ae_and_finetune", "exclude_mice_m6_3_after_ae_and_finetune",
-            #   "exclude_mice_m12_1_after_ae_and_finetune", "exclude_mice_m12_2_after_ae_and_finetune", "exclude_mice_m12_3_after_ae_and_finetune",
-            #   "xval_m6_3",
+            #   "DUM_W_ij=1","DUM_W_ij=5","DUM_W_ij=10","DUM_W_ij=15","DUM_W_ij=20", 
+            #   "n_output=8_after_ae_and_finetune", "n_output=32_after_ae_and_finetune", "n_output=128_after_ae_and_finetune", "n_output=256_after_ae_and_finetune", 
+            #   "DUM_untrained", "DUM_unfinetuned", "DUM_finetuned_only",
+            #   "xval_m3_1", "xval_m3_2", "xval_m3_3",
+            #   "xval_m6_1", "xval_m6_2", "xval_m6_3",
+            #   "xval_m12_1", "xval_m12_2", "xval_m12_3",
+            #   "xval_m18_1",
               ]
 
     col_names = [f"UM Probabilities_{model}" for model in models]
 
-    test_models_optimized(col_names, fixed_n=False)
+    # test_models_optimized(col_names, fixed_n=False)
     test_models_optimized(col_names, fixed_n=True)
     end = time.time()
     print(f"Total time taken: {end - start} seconds")
