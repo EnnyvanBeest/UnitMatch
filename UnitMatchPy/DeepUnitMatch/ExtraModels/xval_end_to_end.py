@@ -123,7 +123,7 @@ SPLIT_SEED = 0  # fixed so every process/machine derives the same manifest
 
 # Hand-picked mice for the 1-mouse xvals (every other group size is drawn at
 # random -- see generate_manifest) -- order gives m1_1/m1_2/m1_3 respectively.
-SINGLE_MOUSE_XVAL_MICE = ["AL032", "AV009", "FT039"]
+SINGLE_MOUSE_XVAL_MICE = ["AL032", "AV049", "FT039"]
 assert all(m in CANONICAL_MICE for m in SINGLE_MOUSE_XVAL_MICE)
 
 N_OUTPUT = 256
