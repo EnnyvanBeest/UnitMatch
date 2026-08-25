@@ -720,13 +720,17 @@ def make_UnitMatch_folder_from_sorting_analyzers(analyzers, save_dir):
         bombcell_labels.to_csv(session_dir / "bombcell_labels.tsv", sep='\t')
 
         # CHANNEL POSITION
-        
+
+        # UnitMatchPy's shank-partitioning code (get_probe_geometry, metric_functions.py)
+        # expects column 1 to be the X (shank) axis, matching the convention
+        # utils.paths_from_KS() uses for classic Kilosort-loaded positions: a
+        # placeholder column of 1's is inserted at position 0, giving [1, X, Y].
+        # Padding with a trailing Z=0 instead (giving [X, Y, 0]) shifts X to column 0,
+        # which silently breaks per-shank drift correction on multi-shank probes.
         channel_locations = analyzer.get_channel_locations()
-        if channel_locations.shape[1] == 2:
-            channel_locations_3D = np.zeros((np.shape(channel_locations)[0], 3))
-            channel_locations_3D[:,0:2] = channel_locations
-        else:
-            channel_locations_3D = channel_locations
+        channel_locations_3D = np.insert(
+            channel_locations, 0, np.ones(channel_locations.shape[0]), axis=1
+        )
 
         np.save(session_dir / "channel_locations.npy", channel_locations_3D)
 
