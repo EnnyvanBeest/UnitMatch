@@ -189,7 +189,7 @@ def decay_and_average_waveform(
     spike_width = param["spike_width"]
     n_channels = param["n_channels"]
     new_peak_loc = param["peak_loc"]
-    waveidx = param["waveidx"]
+    waveidx = np.asarray(param["waveidx"])
     channel_radius = param["channel_radius"]
     maxfev = param.get("curve_fit_maxfev", 10000)
     session_id = clus_info["session_id"]

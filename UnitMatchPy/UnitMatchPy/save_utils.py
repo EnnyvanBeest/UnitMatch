@@ -686,7 +686,7 @@ def make_UnitMatch_folder_from_sorting_analyzers(analyzers, save_dir):
                 "Please compute them by running `sorting_analyzer.compute({missing_extensions})")
 
         session_dir = save_dir / f'Session{session_index}'
-        session_dir.mkdir()
+        session_dir.mkdir(exist_ok=True)
 
         # TEMPLATES / RAWSPIKES
 

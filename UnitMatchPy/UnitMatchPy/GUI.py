@@ -386,6 +386,11 @@ def run_GUI():
         ).squeeze()
         in_both = np.isin(tmp_idx_a, tmp_idx_b)
         option_a = matches_avg[tmp_idx_a[in_both], :].tolist()
+        if len(option_a) == 0:
+            # no cross-session matches above the threshold for this session pair -
+            # fall back to the first unit of each session so the GUI still opens
+            print(f"No matches found between session {session_a} and session {session_b} at the current threshold.")
+            option_a = [[session_switch[session_a - 1], session_switch[session_b - 1]]]
 
         entry_a = ttk.Combobox(entry_frame, values=option_a, width=10)
         entry_a.set(option_a[0][0])
@@ -417,6 +422,11 @@ def run_GUI():
         option_a = matches_GUI[CV_option][tmp_idx_a[in_both], :].tolist()
         if CV_option == 0:
             option_a = sorted(option_a)
+        if len(option_a) == 0:
+            # no cross-session matches above the threshold for this session pair -
+            # fall back to the first unit of each session so the GUI still opens
+            print(f"No matches found between session {session_a} and session {session_b} at the current threshold.")
+            option_a = [[session_switch[session_a - 1], session_switch[session_b - 1]]]
 
         entry_a = ttk.Combobox(entry_frame, values=option_a, width=10)
         entry_a.set(option_a[0][0])
@@ -1309,6 +1319,11 @@ def update_unit_entryA(event):
         ).squeeze()
         in_both = np.isin(tmp_idx_a, tmp_idx_b)
         option_a = matches_avg[tmp_idx_a[in_both], :].tolist()
+        if len(option_a) == 0:
+            # no cross-session matches above the threshold for this session pair -
+            # fall back to the first unit of each session so the GUI still opens
+            print(f"No matches found between session {session_a} and session {session_b} at the current threshold.")
+            option_a = [[session_switch[session_a - 1], session_switch[session_b - 1]]]
 
         entry_a = ttk.Combobox(entry_frame, values=option_a, width=10)
         entry_a.set(option_a[0][0])
@@ -1339,6 +1354,11 @@ def update_unit_entryA(event):
         option_a = matches_GUI[cv_option][tmp_idx_a[in_both], :].tolist()
         if cv_option == 0:
             option_a = sorted(option_a)
+        if len(option_a) == 0:
+            # no cross-session matches above the threshold for this session pair -
+            # fall back to the first unit of each session so the GUI still opens
+            print(f"No matches found between session {session_a} and session {session_b} at the current threshold.")
+            option_a = [[session_switch[session_a - 1], session_switch[session_b - 1]]]
 
         entry_a = ttk.Combobox(entry_frame, values=option_a, width=10)
         entry_a.set(option_a[0][0])
@@ -2113,7 +2133,7 @@ def order_good_sites(good_sites, channel_pos, n_sessions):
     reordered_good_sites = good_sites[reordered_idx]
 
     # re-arange x-axis so it goes (smaller x, bigger x)
-    for i in range(9):
+    for i in range(len(reordered_good_sites) // 2):
         a, b = channel_pos[n_sessions][reordered_good_sites[[2 * i, 2 * i + 1]], 1]
 
         if a > b:
