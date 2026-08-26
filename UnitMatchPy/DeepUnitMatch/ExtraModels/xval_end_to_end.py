@@ -61,6 +61,8 @@ Example
   python xval_end_to_end.py                  # process all 13 xvals, in order
   python xval_end_to_end.py --only m3_1 m6_2  # just these two
   python xval_end_to_end.py --status          # print progress, don't run anything
+  python xval_end_to_end.py --fromdate 2026-08-26  # wipe+redo xvals done before this date
+  python xval_end_to_end.py --fromdate now         # wipe+redo every xval currently marked done
 """
 
 from __future__ import annotations
@@ -70,6 +72,7 @@ import datetime
 import json
 import os
 import random
+import shutil
 import socket
 import sys
 import time
@@ -148,27 +151,41 @@ TRAINING_STALE_AFTER_SECONDS = 5 * 24 * 3600
 def generate_manifest() -> "dict[str, List[str]]":
     """Deterministically assign mice to each of the 13 xval replicates.
 
-    For group sizes 3/6/12, each replicate independently draws `group_size`
-    mice at random (without replacement within a replicate; replicates may
-    overlap each other, same as Exclude_mice_experiment.py's hand-picked
-    splits did), seeded so every process/machine derives the identical
-    manifest without needing to share it. The 18-mouse group has only one
-    possible draw: every mouse. The 1-mouse group is the one exception --
-    it uses the hand-picked SINGLE_MOUSE_XVAL_MICE instead of a random draw,
-    and doesn't consume rng state, so it doesn't perturb the 3/6/12-mouse
-    draws.
+    For group sizes 3/6/12, the roster is shuffled once (seeded) and then
+    each replicate takes a contiguous, wrapping slice of it, offset by
+    `replicate_index * group_size` -- e.g. replicate 1 gets mice[0:size],
+    replicate 2 gets mice[size:2*size], etc., wrapping back to the start of
+    the (shuffled) roster if it runs off the end. This keeps replicates of
+    the same group size disjoint whenever `n_replicates * group_size` fits
+    within the 18-mouse roster (true for 3x3=9 and 3x6=18), and otherwise
+    gives every pair of replicates the minimum possible, evenly-spread
+    overlap (e.g. 3x12=36 wraps around twice, so each pair of the 12-mouse
+    replicates overlaps by exactly 6 mice -- the mathematical minimum for
+    12-of-18 subsets -- rather than each replicate independently drawing
+    from the full pool, which could (and did) produce heavily overlapping
+    or even identical training sets). Seeded so every process/machine
+    derives the identical manifest without needing to share it. The
+    18-mouse group has only one possible draw: every mouse. The 1-mouse
+    group is the one exception to all of the above -- it uses the
+    hand-picked SINGLE_MOUSE_XVAL_MICE instead, and doesn't consume rng
+    state, so it doesn't perturb the 3/6/12-mouse draws.
     """
     rng = random.Random(SPLIT_SEED)
     manifest: "dict[str, List[str]]" = {}
+    n_mice = len(CANONICAL_MICE)
     for group_size, n_replicates in GROUP_SPEC:
+        if group_size < n_mice:
+            order = list(CANONICAL_MICE)
+            rng.shuffle(order)
         for replicate in range(1, n_replicates + 1):
             name = f"m{group_size}_{replicate}"
             if group_size == 1:
                 mice = [SINGLE_MOUSE_XVAL_MICE[replicate - 1]]
-            elif group_size >= len(CANONICAL_MICE):
+            elif group_size >= n_mice:
                 mice = list(CANONICAL_MICE)
             else:
-                mice = rng.sample(CANONICAL_MICE, group_size)
+                offset = (replicate - 1) * group_size % n_mice
+                mice = [order[(offset + k) % n_mice] for k in range(group_size)]
             manifest[name] = sorted(mice)
     return manifest
 
@@ -380,6 +397,14 @@ class MultiLocationFinetuneDatasetV1(npdataset.NeuropixelsDataset_cortexlab):
         )
 
 
+def ae_exp_dir(exp_name: str) -> str:
+    return str(DEEPUNITMATCH_DIR / "ModelExp" / "AE_experiments" / exp_name)
+
+
+def finetune_exp_dir(exp_name: str) -> str:
+    return str(DEEPUNITMATCH_DIR / "ModelExp" / "experiments" / exp_name)
+
+
 def finetune_ckpt_dir(exp_name: str) -> str:
     return str(DEEPUNITMATCH_DIR / "ModelExp" / "experiments" / exp_name / "ckpt")
 
@@ -437,6 +462,71 @@ def get_xval_save_dir(merged_dir: str, xval_name: str) -> str:
 def xval_group_done(merged_dir: str, xval_name: str) -> bool:
     sentinel = os.path.join(get_xval_save_dir(merged_dir, xval_name), "MatchingOverview.png")
     return batch_lock.sentinel_is_fresh(sentinel)
+
+
+# ── --fromdate: wipe + requeue xvals completed before a given date ──────────
+
+
+def parse_date(s: str) -> datetime.datetime:
+    if s.strip().lower() == "now":
+        return datetime.datetime.now()
+    return datetime.datetime.strptime(s, "%Y-%m-%d")
+
+
+def xval_done_before(name: str, fromdate: datetime.datetime) -> bool:
+    """True if `name` is marked done, with a completion timestamp older than
+    `fromdate` -- e.g. it finished training/inference before a fix (such as
+    the mouse-selection fix) landed, so its output no longer reflects current
+    code and should be redone. xvals that aren't done yet are left to the
+    normal preprocessing/training/inference flow instead -- --fromdate only
+    ever forces a *done* result back to square one, never touches an
+    in-progress or failed one.
+    """
+    st = read_status(name)
+    if st.get("state") != "done":
+        return False
+    updated = st.get("updated")
+    if not updated:
+        return False
+    try:
+        updated_dt = datetime.datetime.fromisoformat(updated)
+    except ValueError:
+        return False
+    return updated_dt < fromdate
+
+
+def reset_stale_xval(name: str, groups: Sequence[str]) -> None:
+    """Delete every trained checkpoint, inference output, and bit of
+    coordination state for `name`, so the next pass picks it up as if it had
+    never run. Checkpoints are resumable (cont=True), so merely marking the
+    xval "stale" wouldn't force a from-scratch retrain -- the AE/finetune
+    experiment directories have to actually be removed.
+    """
+    exp_name = f"xval_{name}"
+    shutil.rmtree(ae_exp_dir(exp_name), ignore_errors=True)
+    shutil.rmtree(finetune_exp_dir(exp_name), ignore_errors=True)
+    for merged_dir in groups:
+        shutil.rmtree(get_xval_save_dir(merged_dir, name), ignore_errors=True)
+    shutil.rmtree(xval_dir(name), ignore_errors=True)
+
+
+def reset_stale_xvals(names: Sequence[str], groups: Sequence[str], fromdate: datetime.datetime) -> None:
+    for name in names:
+        if not xval_done_before(name, fromdate):
+            continue
+        with batch_lock.try_lock(xval_lock_path(name), stale_after=TRAINING_STALE_AFTER_SECONDS) as acquired:
+            if not acquired:
+                print(
+                    f"[{name}] due for reset (done before {fromdate.date()}) but "
+                    "currently locked by another run; leaving it for a later pass."
+                )
+                continue
+            # re-check under the lock: another process may have already
+            # reset (or redone) it while we were waiting.
+            if not xval_done_before(name, fromdate):
+                continue
+            print(f"[{name}] done before {fromdate.date()} -- wiping checkpoints/inference and requeuing.")
+            reset_stale_xval(name, groups)
 
 
 def run_inference_stage(xval_name: str, checkpoint_path: str, eval_groups: Sequence[str]) -> None:
@@ -590,6 +680,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--write-matlab-compat", action="store_true",
         help="Also write a MATLAB-compatible UnitMatch.mat from the Python inference outputs.",
     )
+    parser.add_argument(
+        "--fromdate", type=parse_date, default=None,
+        help="YYYY-MM-DD, or 'now'. Any xval already marked done whose completion "
+        "predates this date has its trained checkpoints and inference outputs "
+        "deleted and is requeued from scratch (e.g. after a fix that changes "
+        "training or inference, like the mouse-selection fix). xvals done on/after "
+        "this date, or not yet done, are left alone. 'now' forces every currently "
+        "done xval to be wiped and rerun, since nothing can be done after 'now'.",
+    )
     return parser
 
 
@@ -626,6 +725,9 @@ def main() -> None:
     unknown = [n for n in names if n not in manifest]
     if unknown:
         raise ValueError(f"Unknown xval name(s): {unknown}. Valid names: {list(manifest.keys())}")
+
+    if args.fromdate:
+        reset_stale_xvals(names, groups, args.fromdate)
 
     for name in names:
         if xval_is_done(name):
