@@ -32,6 +32,7 @@
 import os
 import sys
 import json
+import pickle
 import warnings
 from itertools import combinations
 
@@ -47,8 +48,10 @@ from scipy.stats import ttest_rel
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
+sys.path.insert(0, os.path.join(_HERE, "DeepUnitMatch"))
 
 import run_deepunitmatch_batch_onMerged as base_batch
+from DeepUnitMatch.testing import test as dumtest
 
 # ── settings ─────────────────────────────────────────────────────────────────
 # Point this at whichever BASE_OUTPUT tree you want to summarise (defaults to
@@ -69,7 +72,7 @@ MODELS_TO_INCLUDE = {"DeepUnitMatch_AssignUniqueID", "UMPy_AssignUniqueID"}
 # Reference level for the "vs reference" summaries (every other model's
 # coefficient/mean-difference is "difference from this model"). Falls back to
 # whichever model sorts first for a given score if this one has no data there.
-REFERENCE_MODEL = "EMD"
+REFERENCE_MODEL = "UMPy_AssignUniqueID"
 
 # Counts are heavily right-skewed; fit stats on log1p(count) instead of the
 # raw value (plots still show raw counts).
@@ -84,6 +87,159 @@ ALPHA = 0.05
 # Also used by plot_auc_vs_delta_days.py (via get_passing_datasets()) to
 # apply the same dataset-level cutoff there.
 MIN_MATCHES_TO_INCLUDE = 20
+
+# ── FR_diff_norm: on-the-fly firing-rate normalization ──────────────────────
+#
+# fast_testing.py (the non-merged/SQL pipeline) now normalizes FR_diff by
+# each source unit's own mean firing rate (fast_testing.normalize_FR_diff)
+# instead of using the raw |firing-rate difference|. This section reproduces
+# that same normalization (divide FR_diff by FR, from
+# DeepUnitMatch.testing.test.get_FR) for the merged-tree/BASE_OUTPUT pipeline
+# these plotting scripts read from -- computed on the fly, from each model's
+# own UMparam.pickle, every time a script here runs, rather than persisted
+# into MatchTable.csv/AUC_summary.json by the batch pipeline itself (which
+# would require re-running matching for every dataset -- not done yet).
+#
+# Only DeepUnitMatch/UMPy model folders ever save a UMparam.pickle (written
+# unconditionally by UnitMatchPy.save_utils.save_to_output, called from both
+# branches of run_deepunitmatch_batch_onMerged.py) -- EMD/DANT/DANT_no_functional
+# never do, so FR_diff_norm is silently unavailable for those models until
+# the pipeline itself is changed to compute and persist it directly (at which
+# point this on-the-fly path becomes unnecessary and can be removed).
+FR_DIFF_SCORE = "FR_diff"
+FR_DIFF_NORM_SCORE = "FR_diff_norm"
+
+
+def load_unit_fr_lookup(model_dir):
+    """
+    Load model_dir/UMparam.pickle and return {(RecSes (1-based), unit ID):
+    mean firing rate}, built from DeepUnitMatch.testing.test.get_FR(param) --
+    the same cross-validated per-unit firing rate fast_testing.normalize_FR_diff()
+    divides FR_diff by.
+
+    Keyed off param["good_units"]'s own per-session cluster-ID lists (with a
+    running offset) rather than assuming MatchTable.csv row order matches
+    concatenation order: UnitMatchPy.save_utils.make_match_table() builds
+    ID1/RecSes 1 from exactly this same
+    "np.concatenate(param['good_units'])" + per-unit session index
+    construction (see clus_info["original_ids"]/["session_id"]), which is
+    also exactly get_FR's own internal per-unit indexing order -- so this
+    mapping is derived the same way the table itself was, not inferred from
+    table contents.
+
+    Returns None if UMparam.pickle is missing (e.g. EMD/DANT model folders --
+    see the module comment above) or fails to load/compute -- callers should
+    skip FR_diff_norm for that model/dataset in that case, not treat it as an
+    error.
+    """
+    pickle_path = os.path.join(model_dir, "UMparam.pickle")
+    if not os.path.isfile(pickle_path):
+        return None
+    try:
+        with open(pickle_path, "rb") as f:
+            param = pickle.load(f)
+        FR = dumtest.get_FR(param)  # (2, n_units), fold x unit
+    except Exception as e:
+        print(f"  WARNING: could not load/compute FR from {pickle_path}: {e}")
+        return None
+
+    fr_mean = FR.mean(axis=0)  # fold-averaged, same as fast_testing.normalize_FR_diff
+    lookup = {}
+    offset = 0
+    for session_idx, gu in enumerate(param["good_units"]):
+        ids = np.asarray(gu).flatten()
+        for pos, uid in enumerate(ids):
+            lookup[(session_idx + 1, int(uid))] = fr_mean[offset + pos]
+        offset += len(ids)
+    return lookup
+
+
+def add_fr_diff_norm_column(df, model_dir, diff_col=FR_DIFF_SCORE, recses_col="RecSes 1", id_col="ID1"):
+    """
+    Adds an "FR_diff_norm" column to df (a MatchTable.csv-shaped DataFrame
+    already containing diff_col), normalizing diff_col by the source unit's
+    own mean firing rate -- see load_unit_fr_lookup()/the module comment
+    above for why this is computed on the fly here rather than read from a
+    persisted column.
+
+    Returns True if the column was added, False if UMparam.pickle wasn't
+    available for model_dir -- callers should treat False as "skip
+    FR_diff_norm for this model", not an error.
+    """
+    if diff_col not in df.columns:
+        return False
+    fr_lookup = load_unit_fr_lookup(model_dir)
+    if fr_lookup is None:
+        return False
+
+    fr_df = pd.DataFrame(
+        [(recses, uid, fr) for (recses, uid), fr in fr_lookup.items()],
+        columns=[recses_col, id_col, "_fr_tmp"],
+    )
+    merged_fr = df[[recses_col, id_col]].merge(fr_df, on=[recses_col, id_col], how="left")["_fr_tmp"]
+    df[FR_DIFF_NORM_SCORE] = (df[diff_col].to_numpy() / merged_fr.to_numpy()).astype("float32")
+    return True
+
+
+def compute_fr_diff_norm_auc(model_dir):
+    """
+    On-the-fly counterpart to the scalar FR_diff AUC that AUC_summary.json
+    already stores: recomputes the same across-session-pairs AUC (same
+    recall/FPR/trapezoid logic as DeepUnitMatch.testing.test.AUC(), just over
+    flat MatchTable.csv rows instead of the square (n_units, n_units) matrix
+    -- duplicated here rather than imported from plot_auc_vs_delta_days.py's
+    own _auc_from_flat() to avoid a circular import, since that module
+    already imports this one), but on FR_diff normalized by each source
+    unit's own mean firing rate (see add_fr_diff_norm_column()) instead of
+    the raw difference.
+
+    Returns None if MatchTable.csv/UMparam.pickle aren't available, or if
+    there's nothing to rank (no across-session match or non-match) --
+    mirrors auc_summary_from_functional_scores()'s own try/except AUC()
+    handling: the caller should just omit the score, not treat this as an
+    error.
+    """
+    match_table_path = os.path.join(model_dir, "MatchTable.csv")
+    if not os.path.isfile(match_table_path):
+        return None
+
+    header = pd.read_csv(match_table_path, nrows=0).columns
+    if FR_DIFF_SCORE not in header:
+        return None
+
+    usecols = ["ID1", "RecSes 1", "RecSes 2", "Matches", FR_DIFF_SCORE]
+    dtype_map = {
+        "ID1": "int32", "RecSes 1": "int32", "RecSes 2": "int32",
+        "Matches": "int8", FR_DIFF_SCORE: "float32",
+    }
+    df = pd.read_csv(match_table_path, usecols=usecols, dtype=dtype_map)
+    df = df[df["RecSes 1"] != df["RecSes 2"]]
+
+    if not add_fr_diff_norm_column(df, model_dir, diff_col=FR_DIFF_SCORE):
+        return None
+
+    matches_bool = df["Matches"].to_numpy().astype(bool)
+    # FR_diff_norm is still "lower = more similar" like FR_diff itself (a
+    # ratio built from the same difference) -- negate for the higher-is-
+    # better AUC convention, same sign NEGATE_FOR_AUC applies to FR_diff.
+    metric = -df[FR_DIFF_NORM_SCORE].to_numpy()
+    valid = np.isfinite(metric)
+    matches_bool, metric = matches_bool[valid], metric[valid]
+
+    P = int(matches_bool.sum())
+    N = len(matches_bool) - P
+    if P < 1 or N < 1:
+        return None
+
+    order = np.argsort(metric)[::-1]
+    m_sorted = matches_bool[order]
+    tp = np.cumsum(m_sorted)
+    fp = np.cumsum(~m_sorted)
+    recall = tp / P
+    fpr = fp / N
+    if hasattr(np, "trapezoid"):
+        return float(np.trapezoid(recall, fpr))
+    return float(np.trapz(recall, fpr))
 
 
 def savefig_with_svg(fig, out_path, **kwargs):
@@ -155,6 +311,11 @@ def collect_auc_summaries(base_output=BASE_OUTPUT, models_to_include=MODELS_TO_I
         n_found += 1
         if n_found % 25 == 0:
             print(f"  ...found {n_found} AUC_summary.json files so far", flush=True)
+
+        if FR_DIFF_SCORE in summary and FR_DIFF_NORM_SCORE not in summary:
+            fr_norm_auc = compute_fr_diff_norm_auc(root)
+            if fr_norm_auc is not None:
+                summary = {**summary, FR_DIFF_NORM_SCORE: fr_norm_auc}
 
         for score, value in summary.items():
             rows.append(

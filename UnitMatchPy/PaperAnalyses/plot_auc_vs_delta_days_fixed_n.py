@@ -98,6 +98,15 @@ REFERENCE_MODEL = "UMPy_AssignUniqueID_Conservative"
 # same figures.
 RANDOM_SEED = 0
 
+# The two RANK_ELIGIBLE_MODELS compared by the compact key-scores AUC-diff
+# summary (dvd.plot_model_diff_summary(), restricted to
+# dvd.KEY_SCORES_FOR_DIFF_SUMMARY) -- the Conservative UID variants are left
+# out of this particular comparison since it's meant as a quick DUM-vs-UMPy
+# headline, not a full model sweep (see main()'s own len(models) == 2 guard
+# for the fuller all-scores version this module doesn't otherwise produce).
+DIFF_SUMMARY_MODEL_A = "DeepUnitMatch_AssignUniqueID"
+DIFF_SUMMARY_MODEL_B = "UMPy_AssignUniqueID"
+
 
 def _build_reference_n_lookup(session_date_lookup, base_output=BASE_OUTPUT, reference_model=REFERENCE_MODEL):
     """
@@ -349,11 +358,73 @@ def main():
     models = sorted(set(auc_df["model"]) | set(rate_df["model"]) | set(count_df["model"]))
     colour_for = dvd.build_family_colours(models)
 
+    # Model-pair statistics (overall mixed-effects test + per-bin paired
+    # t-test), restricted to DIFF_SUMMARY_MODEL_A/B -- see
+    # plot_auc_vs_delta_days.py main()'s own version of this same block.
+    # Computed once from dataset_bin_auc_rows/dataset_bin_rate_rows and
+    # reused by every plot below, pooled or mouse-averaged alike.
+    stats_available = DIFF_SUMMARY_MODEL_A in models and DIFF_SUMMARY_MODEL_B in models
+    if stats_available:
+        print(f"Computing model-comparison stats: {DIFF_SUMMARY_MODEL_A} vs {DIFF_SUMMARY_MODEL_B}")
+        rate_overall = dvd.test_overall_model_effect(dataset_bin_rate_rows, "rate", DIFF_SUMMARY_MODEL_A, DIFF_SUMMARY_MODEL_B)
+        rate_bin_pvals = dvd.test_per_bin_model_effect(dataset_bin_rate_rows, "rate", DIFF_SUMMARY_MODEL_A, DIFF_SUMMARY_MODEL_B)
+        all_scores_for_stats = sorted(auc_df["score"].unique())
+        score_overall = {
+            s: dvd.test_overall_model_effect(dataset_bin_auc_rows, "auc", DIFF_SUMMARY_MODEL_A, DIFF_SUMMARY_MODEL_B, score=s)
+            for s in all_scores_for_stats
+        }
+        score_bin_pvals = {
+            s: dvd.test_per_bin_model_effect(dataset_bin_auc_rows, "auc", DIFF_SUMMARY_MODEL_A, DIFF_SUMMARY_MODEL_B, score=s)
+            for s in all_scores_for_stats
+        }
+    else:
+        rate_overall, rate_bin_pvals = None, {}
+        score_overall, score_bin_pvals = {}, {}
+
     for score in sorted(auc_df["score"].unique()):
         out_path = os.path.join(OUTPUT_DIR, f"summary_{score}_fixed_n.png")
-        result = dvd.plot_score_summary(score, auc_df, rate_df, count_df, colour_for, out_path, title_suffix=" (fixed N)")
+        result = dvd.plot_score_summary(
+            score, auc_df, rate_df, count_df, colour_for, out_path, title_suffix=" (fixed N)",
+            stats_model_a=DIFF_SUMMARY_MODEL_A if stats_available else None,
+            stats_model_b=DIFF_SUMMARY_MODEL_B if stats_available else None,
+            rate_overall=rate_overall, rate_bin_pvals=rate_bin_pvals,
+            auc_overall=score_overall.get(score), auc_bin_pvals=score_bin_pvals.get(score, {}),
+        )
         if result:
             print(f"  Plotted {score} -> {result}")
+
+    # Compact key-scores AUC-diff summary (DIFF_SUMMARY_MODEL_A vs
+    # DIFF_SUMMARY_MODEL_B, dvd.KEY_SCORES_FOR_DIFF_SUMMARY only) -- the
+    # fixed-N counterpart to plot_auc_vs_delta_days.py main()'s own version
+    # of this same compact plot.
+    if stats_available:
+        key_scores_present = [s for s in dvd.KEY_SCORES_FOR_DIFF_SUMMARY if s in auc_df["score"].unique()]
+        if key_scores_present:
+            colour_for_score = dvd.build_qualitative_colours(auc_df["score"].unique())
+            key_diff_df = dvd.compute_auc_diff(DIFF_SUMMARY_MODEL_A, DIFF_SUMMARY_MODEL_B, auc_df, scores=key_scores_present)
+            key_diff_csv = os.path.join(
+                OUTPUT_DIR, f"auc_diff_vs_delta_days_fixed_n_key_scores_{DIFF_SUMMARY_MODEL_A}_vs_{DIFF_SUMMARY_MODEL_B}.csv"
+            )
+            key_diff_df.to_csv(key_diff_csv, index=False)
+            print(f"Wrote {key_diff_csv}")
+
+            key_diff_out_path = os.path.join(
+                OUTPUT_DIR, f"summary_diff_key_scores_fixed_n_{DIFF_SUMMARY_MODEL_A}_vs_{DIFF_SUMMARY_MODEL_B}.png"
+            )
+            result = dvd.plot_model_diff_summary(
+                DIFF_SUMMARY_MODEL_A, DIFF_SUMMARY_MODEL_B, auc_df, rate_df, count_df, colour_for, colour_for_score,
+                key_diff_out_path, scores=key_scores_present, title_suffix=" (key scores, fixed N)",
+                rate_overall=rate_overall, rate_bin_pvals=rate_bin_pvals,
+                score_overall={s: score_overall[s] for s in key_scores_present},
+                score_bin_pvals={s: score_bin_pvals[s] for s in key_scores_present},
+            )
+            if result:
+                print(f"  Plotted key-scores AUC-diff summary (fixed N) -> {result}")
+    else:
+        print(
+            f"Skipping key-scores AUC-diff summary (fixed N): need both {DIFF_SUMMARY_MODEL_A} and "
+            f"{DIFF_SUMMARY_MODEL_B} present in {sorted(models)}."
+        )
 
     auc_mouse_df = dvd.summarise_auc_mouse_averaged(dataset_bin_auc_rows)
     auc_mouse_csv = os.path.join(OUTPUT_DIR, "auc_vs_delta_days_fixed_n_mouse_averaged.csv")
@@ -370,6 +441,10 @@ def main():
         result = dvd.plot_score_summary(
             score, auc_mouse_df, rate_mouse_df, count_df, colour_for, out_path,
             min_count=MIN_MICE_PER_BIN, count_col="n_mice", title_suffix=" (fixed N, mouse-averaged)",
+            stats_model_a=DIFF_SUMMARY_MODEL_A if stats_available else None,
+            stats_model_b=DIFF_SUMMARY_MODEL_B if stats_available else None,
+            rate_overall=rate_overall, rate_bin_pvals=rate_bin_pvals,
+            auc_overall=score_overall.get(score), auc_bin_pvals=score_bin_pvals.get(score, {}),
         )
         if result:
             print(f"  Plotted {score} (mouse-averaged) -> {result}")

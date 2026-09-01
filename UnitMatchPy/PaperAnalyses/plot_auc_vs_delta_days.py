@@ -51,6 +51,8 @@ import matplotlib
 
 matplotlib.use("Agg")  # non-interactive backend
 import matplotlib.pyplot as plt
+import statsmodels.formula.api as smf
+from scipy.stats import ttest_rel
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
@@ -81,6 +83,14 @@ MODELS_TO_INCLUDE = auc_summary_mod.MODELS_TO_INCLUDE
 # across-session matches for it -- see plot_auc_summary.MIN_MATCHES_TO_INCLUDE.
 MIN_MATCHES_TO_INCLUDE = auc_summary_mod.MIN_MATCHES_TO_INCLUDE
 
+# Restricted score set for the compact companion to the full
+# summary_diff_{model_a}_vs_{model_b}.png (every score) -- just the four
+# scores considered most informative for a quick two-model comparison, all
+# plotted as AUC(model_a) - AUC(model_b) diffs like the full version. Reused
+# by plot_auc_vs_delta_days_fixed_n.py for its own fixed-N version of this
+# same compact plot.
+KEY_SCORES_FOR_DIFF_SUMMARY = ["FR_diff_norm", "ISI_correlations", "natim_correlations", "refpop_correlations"]
+
 # Bin edges in days between the two sessions of a pair (right-open: [lo, hi)),
 # spanning same-day recordings up to ~2 years apart on a roughly log scale --
 # tracking studies here span from same-day duplicate recordings out to
@@ -91,8 +101,12 @@ BIN_EDGES = np.array(
 
 # Same sign convention as test.auc_summary_from_functional_scores: metrics
 # where *lower* means a better match need negating before the higher-is-better
-# AUC calculation below.
-NEGATE_FOR_AUC = dumtest.NEGATE_FOR_AUC
+# AUC calculation below. FR_diff_norm (see auc_summary_mod.add_fr_diff_norm_column)
+# is a ratio built from the same |firing-rate difference| as FR_diff, so it's
+# "lower is better" too -- added locally here (rather than in
+# dumtest.NEGATE_FOR_AUC itself) since it's only ever computed on the fly by
+# this module, not a column the shared pipeline/test.py code knows about yet.
+NEGATE_FOR_AUC = dumtest.NEGATE_FOR_AUC | {auc_summary_mod.FR_DIFF_NORM_SCORE}
 
 
 # ── session date lookup (reconstructed, not persisted by the pipeline) ─────
@@ -783,6 +797,16 @@ def collect_binned_pairs(
             usecols += [uid_col_a, uid_col_b]
             dtype_map[uid_col_a] = dtype_map[uid_col_b] = "int32"
         df = pd.read_csv(match_table_path, usecols=usecols, dtype=dtype_map)
+
+        # On-the-fly firing-rate normalization (see
+        # auc_summary_mod.add_fr_diff_norm_column's module comment): adds
+        # "FR_diff_norm" as an extra score alongside FR_diff, computed from
+        # match_table_dir's own UMparam.pickle, when available (silently
+        # skipped for models -- EMD/DANT/DANT_no_functional -- that never
+        # save one).
+        if auc_summary_mod.FR_DIFF_SCORE in scores and auc_summary_mod.FR_DIFF_NORM_SCORE not in scores:
+            if auc_summary_mod.add_fr_diff_norm_column(df, match_table_dir):
+                scores = scores + [auc_summary_mod.FR_DIFF_NORM_SCORE]
 
         if variant is not None:
             # Same "final_matches = (uid_a == uid_b) & across_session" this
@@ -1535,9 +1559,155 @@ def plot_quality_vs_quantity_per_score(auc_df, rate_df, colour_for, out_path, mi
     return out_path
 
 
+# ── model-pair statistics: overall mixed-effects test + per-bin follow-up ──
+#
+# "Is P(track)/AUC larger for one model than the other overall, and if so at
+# which specific ΔDay bins" -- restricted to exactly one model pair (see
+# main()'s stats_model_a/stats_model_b and plot_auc_vs_delta_days_fixed_n.py's
+# DIFF_SUMMARY_MODEL_A/B), never a general N-model comparison. Mirrors
+# plot_auc_summary.py's own dataset-level stats (fit_mixed_model()/
+# pairwise_mixed_pvalues() for the mixed model, fit_paired_ttest_vs_reference()/
+# pairwise_paired_ttest_pvalues() for the paired t-test), just built on
+# per-(mouse, model, bin) ΔDay-binned data instead of one row per (mouse,
+# model) dataset-level value -- duplicated here rather than imported from
+# that module to avoid a circular import (it already imports this one for
+# FR_diff_norm support) and because the grouping column (bin, and optionally
+# score) differs from that module's own dataset-level shape.
+
+
+def _mouse_bin_values(rows, value_col, model_a, model_b, score=None):
+    """
+    rows: dataset_bin_auc_rows/dataset_bin_rate_rows from collect_binned_pairs()
+    -- one row per (dataset, model, [score,] bin). Averaged within mouse
+    first (so a mouse contributing several datasets to the same bin isn't
+    overweighted relative to a mouse with only one) -- same per-mouse
+    averaging summarise_auc_mouse_averaged()/summarise_match_rate_mouse_
+    averaged() use, just kept as one row per (mouse, model, bin) here instead
+    of further collapsing to a mean +/- SEM across mice, since the tests
+    below need the per-mouse values themselves.
+
+    Restricted to model_a/model_b (these tests are always exactly-two-model
+    comparisons) and, when rows carry a "score" column (AUC rows, not P(track)
+    rows), to that one score.
+    """
+    if not rows:
+        return pd.DataFrame(columns=["mouse", "model", "bin", value_col])
+    df = pd.DataFrame(rows)
+    if score is not None:
+        df = df[df["score"] == score]
+    df = df[df["model"].isin([model_a, model_b])]
+    if df.empty:
+        return pd.DataFrame(columns=["mouse", "model", "bin", value_col])
+    return df.groupby(["mouse", "model", "bin"], as_index=False)[value_col].mean()
+
+
+def test_overall_model_effect(rows, value_col, model_a, model_b, score=None):
+    """
+    Mixed-effects test of whether model_a's values are overall higher than
+    model_b's, pooling every ΔDay bin as a repeated observation nested within
+    mouse (value ~ C(model) + (1 | mouse)) -- same model formula as
+    plot_auc_summary.fit_mixed_model(), just fit on per-(mouse, model, bin)
+    ΔDay-binned data here instead of one row per (mouse, model) dataset-level
+    value.
+
+    Returns (p_value, direction): direction is +1 if model_a's fitted mean is
+    higher than model_b's, -1 if lower. Returns (None, None) when there's too
+    little data to fit (fewer than 2 mice, or one model missing entirely) or
+    the fit fails.
+    """
+    sub = _mouse_bin_values(rows, value_col, model_a, model_b, score=score).dropna(subset=[value_col])
+    if sub["mouse"].nunique() < 2 or sub["model"].nunique() < 2:
+        return None, None
+
+    sub = sub.copy()
+    sub["model"] = pd.Categorical(sub["model"], categories=[model_a, model_b])
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        try:
+            result = smf.mixedlm(f"{value_col} ~ C(model)", sub, groups=sub["mouse"]).fit()
+        except Exception as e:
+            label = f"{value_col}/{score}" if score else value_col
+            print(f"  WARNING: overall mixed model failed for {label}: {e}")
+            return None, None
+
+    coef_names = [c for c in result.pvalues.index if c not in ("Intercept", "Group Var")]
+    if not coef_names:
+        return None, None
+    coef_name = coef_names[0]
+    p = float(result.pvalues[coef_name])
+    # coef_name's coefficient is (mean(model_b) - mean(model_a)) since
+    # model_a is the reference (first) category -- negative means model_a is
+    # higher.
+    direction = 1 if result.params[coef_name] < 0 else -1
+    return p, direction
+
+
+def test_per_bin_model_effect(rows, value_col, model_a, model_b, score=None):
+    """
+    Per-ΔDay-bin paired t-test (paired by mouse) of model_a vs model_b, Holm-
+    Bonferroni corrected across every bin tested -- same per-mouse-value
+    paired approach as plot_auc_summary.pairwise_paired_ttest_pvalues(), just
+    run once per bin here instead of once overall across mice.
+
+    Returns {bin: p_adj} -- bins with fewer than 2 mice having both models'
+    values are silently absent (not included as NaN).
+    """
+    sub = _mouse_bin_values(rows, value_col, model_a, model_b, score=score).dropna(subset=[value_col])
+    if sub.empty:
+        return {}
+
+    raw_pvals = {}
+    for b, g in sub.groupby("bin"):
+        wide = g.pivot(index="mouse", columns="model", values=value_col)
+        if model_a not in wide.columns or model_b not in wide.columns:
+            continue
+        paired = wide[[model_a, model_b]].dropna()
+        if len(paired) < 2:
+            continue
+        _, p = ttest_rel(paired[model_a], paired[model_b])
+        raw_pvals[b] = p
+
+    return auc_summary_mod._holm_correct(raw_pvals)
+
+
+def _overall_result_str(model_a, model_b, overall):
+    """Human-readable summary of test_overall_model_effect()'s (p, direction) for a title/legend."""
+    p, direction = overall
+    if p is None:
+        return "overall test: insufficient data"
+    winner, loser = (model_a, model_b) if direction > 0 else (model_b, model_a)
+    stars = auc_summary_mod._p_to_stars(p)
+    sig = f" ({stars})" if stars else " (n.s.)"
+    return f"{winner} > {loser} overall, p={p:.3g}{sig}"
+
+
+def _annotate_bin_stars(ax, x_pos, bin_pvals, y_at_bin, color="black"):
+    """
+    Places a stars annotation ('*'/'**'/'***', via auc_summary_mod._p_to_stars)
+    just above (x_pos[bin], y_at_bin[bin]) for every bin in bin_pvals whose
+    already-Holm-corrected p-value clears ALPHA (auc_summary_mod.ALPHA).
+    Bins missing from x_pos/y_at_bin are skipped (shouldn't normally happen
+    -- bin_pvals only ever contains bins the caller already has a plotted
+    point for).
+    """
+    if not bin_pvals:
+        return
+    for b, p in bin_pvals.items():
+        stars = auc_summary_mod._p_to_stars(p)
+        if stars is None or b not in x_pos or b not in y_at_bin or not np.isfinite(y_at_bin[b]):
+            continue
+        ax.annotate(
+            stars, (x_pos[b], y_at_bin[b]), xytext=(0, 4), textcoords="offset points",
+            ha="center", va="bottom", fontsize=11, color=color, clip_on=False,
+        )
+
+
 def plot_score_summary(
     score, auc_df, rate_df, count_df, colour_for, out_path,
     min_count=20, count_col="n_pairs", title_suffix="",
+    stats_model_a=None, stats_model_b=None,
+    rate_overall=None, rate_bin_pvals=None,
+    auc_overall=None, auc_bin_pvals=None,
 ):
     """
     Recreate the paper-style 3-panel figure for one functional score:
@@ -1559,6 +1729,15 @@ def plot_score_summary(
     identically across every score's figure -- expected, since those two
     quantities really are properties of (model, ΔDay) alone; only the middle
     panel differs from one score's figure to the next.
+
+    stats_model_a/stats_model_b + rate_overall/rate_bin_pvals (for the top
+    P(track) panel) and auc_overall/auc_bin_pvals (for the middle AUC panel)
+    are all optional -- pass the (p, direction) tuple from
+    test_overall_model_effect() and the {bin: p_adj} dict from
+    test_per_bin_model_effect() to add the overall result to that panel's
+    title and star-annotate significant bins on it. Left None (default) to
+    skip stats annotation entirely, e.g. when more than 2 models are being
+    plotted and no single pairwise comparison applies.
     """
     rate_sub = rate_df[rate_df[count_col] >= min_count]
     auc_sub = auc_df[(auc_df["score"] == score) & (auc_df[count_col] >= min_count)].dropna(subset=["auc"])
@@ -1598,14 +1777,28 @@ def plot_score_summary(
         cs = cs.sort_values("x")
         ax_count.plot(cs["x"], cs["n_datasets"], marker="o", label=model, color=color, linewidth=1.2, markersize=4)
 
+    if stats_model_a is not None and stats_model_b is not None:
+        pair_rate = rate_sub[rate_sub["model"].isin([stats_model_a, stats_model_b])]
+        rate_y_at_bin = (pair_rate["match_rate"] + pair_rate["match_rate_se"].fillna(0)).groupby(pair_rate["bin"]).max().to_dict()
+        _annotate_bin_stars(ax_rate, x_pos, rate_bin_pvals, rate_y_at_bin)
+
+        pair_auc = auc_sub[auc_sub["model"].isin([stats_model_a, stats_model_b])]
+        auc_y_at_bin = (pair_auc["auc"] + pair_auc["auc_se"].fillna(0)).groupby(pair_auc["bin"]).max().to_dict()
+        _annotate_bin_stars(ax_auc, x_pos, auc_bin_pvals, auc_y_at_bin)
+
+    title = f"{score}: tracking quality vs ΔDay{title_suffix}"
+    if rate_overall is not None and stats_model_a is not None:
+        title += f"\nP(track): {_overall_result_str(stats_model_a, stats_model_b, rate_overall)}"
     ax_rate.set_ylabel("P(track)")
     ax_rate.grid(axis="y", linestyle="--", alpha=0.5)
-    ax_rate.set_title(f"{score}: tracking quality vs ΔDay{title_suffix}")
+    ax_rate.set_title(title)
     ax_rate.legend(fontsize=8)
 
     ax_auc.axhline(0.5, color="grey", linewidth=0.8, linestyle=":")
     ax_auc.set_ylabel(f"AUC ({score})")
     ax_auc.grid(axis="y", linestyle="--", alpha=0.5)
+    if auc_overall is not None and stats_model_a is not None:
+        ax_auc.set_title(f"AUC: {_overall_result_str(stats_model_a, stats_model_b, auc_overall)}", fontsize=10)
 
     ax_count.set_ylabel("Datasets")
     ax_count.grid(axis="y", linestyle="--", alpha=0.5)
@@ -1656,6 +1849,8 @@ def compute_auc_diff(model_a, model_b, auc_df, scores=None, min_count=20, count_
 def plot_model_diff_summary(
     model_a, model_b, auc_df, rate_df, count_df, colour_for_model, colour_for_score, out_path,
     scores=None, min_count=20, count_col="n_pairs", title_suffix="",
+    rate_overall=None, rate_bin_pvals=None,
+    score_overall=None, score_bin_pvals=None,
 ):
     """
     Companion to plot_score_summary(), for exactly two models: same P(track)
@@ -1672,6 +1867,16 @@ def plot_model_diff_summary(
     uses (top/bottom panels are still per-model); colour_for_score is a
     separate score -> colour mapping (e.g. build_qualitative_colours()) for
     the now score-keyed middle panel.
+
+    Stats (all optional, from test_overall_model_effect()/test_per_bin_model_effect(),
+    always for this same model_a/model_b pair): rate_overall/rate_bin_pvals
+    annotate the top P(track) panel (title + per-bin stars), same as
+    plot_score_summary(). score_overall/score_bin_pvals are {score: ...} dicts
+    -- since the middle panel here holds one diff line per score rather than
+    one line per model, each score's overall result is folded into that
+    score's own legend label (e.g. "FR_diff_norm (p=0.012)") instead of the
+    title, and each score's per-bin stars are drawn in that score's own
+    colour on its own diff line.
     """
     rate_sub = rate_df[(rate_df[count_col] >= min_count) & (rate_df["model"].isin([model_a, model_b]))]
     if rate_sub.empty:
@@ -1710,14 +1915,31 @@ def plot_model_diff_summary(
         s = diff_df[diff_df["score"] == score].copy()
         s["x"] = s["bin"].map(x_pos)
         s = s.sort_values("x")
+
+        label = score
+        if score_overall and score_overall.get(score, (None, None))[0] is not None:
+            label = f"{score} (p={score_overall[score][0]:.2g})"
+
         ax_diff.errorbar(
             s["x"], s["diff"], yerr=s["diff_se"],
-            marker="o", label=score, color=colour_for_score[score], linewidth=1.5, markersize=4, capsize=2,
+            marker="o", label=label, color=colour_for_score[score], linewidth=1.5, markersize=4, capsize=2,
         )
 
+        if score_bin_pvals and score in score_bin_pvals:
+            y_at_bin = (s["diff"] + s["diff_se"].fillna(0)).groupby(s["bin"]).max().to_dict()
+            _annotate_bin_stars(ax_diff, x_pos, score_bin_pvals[score], y_at_bin, color=colour_for_score[score])
+
+    if rate_overall is not None and rate_bin_pvals is not None:
+        pair_rate = rate_sub
+        rate_y_at_bin = (pair_rate["match_rate"] + pair_rate["match_rate_se"].fillna(0)).groupby(pair_rate["bin"]).max().to_dict()
+        _annotate_bin_stars(ax_rate, x_pos, rate_bin_pvals, rate_y_at_bin)
+
+    title = f"{model_a} vs {model_b}: AUC difference by score vs ΔDay{title_suffix}"
+    if rate_overall is not None:
+        title += f"\nP(track): {_overall_result_str(model_a, model_b, rate_overall)}"
     ax_rate.set_ylabel("P(track)")
     ax_rate.grid(axis="y", linestyle="--", alpha=0.5)
-    ax_rate.set_title(f"{model_a} vs {model_b}: AUC difference by score vs ΔDay{title_suffix}")
+    ax_rate.set_title(title)
     ax_rate.legend(fontsize=8)
 
     ax_diff.axhline(0.0, color="grey", linewidth=0.8, linestyle=":")
@@ -1768,16 +1990,49 @@ def main():
     models = sorted(set(auc_df["model"]) | set(rate_df["model"]) | set(count_df["model"]))
     colour_for = build_family_colours(models)
 
+    # Model-pair statistics (overall mixed-effects test + per-bin paired
+    # t-test, see test_overall_model_effect()/test_per_bin_model_effect()):
+    # only meaningful for exactly two models, same restriction as the
+    # AUC-diff summary below -- computed once here from dataset_bin_auc_rows/
+    # dataset_bin_rate_rows (per-dataset-per-bin rows, independent of
+    # pooled-vs-mouse-averaged curve style) and reused by every plot below,
+    # pooled or mouse-averaged alike, since the stats themselves are always
+    # mouse-based regardless of which curve is drawn.
+    stats_pair = tuple(models) if len(models) == 2 else None
+    if stats_pair:
+        stats_model_a, stats_model_b = stats_pair
+        print(f"Computing model-comparison stats: {stats_model_a} vs {stats_model_b}")
+        rate_overall = test_overall_model_effect(dataset_bin_rate_rows, "rate", stats_model_a, stats_model_b)
+        rate_bin_pvals = test_per_bin_model_effect(dataset_bin_rate_rows, "rate", stats_model_a, stats_model_b)
+        all_scores_for_stats = sorted(auc_df["score"].unique())
+        score_overall = {
+            s: test_overall_model_effect(dataset_bin_auc_rows, "auc", stats_model_a, stats_model_b, score=s)
+            for s in all_scores_for_stats
+        }
+        score_bin_pvals = {
+            s: test_per_bin_model_effect(dataset_bin_auc_rows, "auc", stats_model_a, stats_model_b, score=s)
+            for s in all_scores_for_stats
+        }
+    else:
+        stats_model_a = stats_model_b = None
+        rate_overall, rate_bin_pvals = None, {}
+        score_overall, score_bin_pvals = {}, {}
+
     for score in sorted(auc_df["score"].unique()):
         out_path = os.path.join(OUTPUT_DIR, f"summary_{score}.png")
-        result = plot_score_summary(score, auc_df, rate_df, count_df, colour_for, out_path)
+        result = plot_score_summary(
+            score, auc_df, rate_df, count_df, colour_for, out_path,
+            stats_model_a=stats_model_a, stats_model_b=stats_model_b,
+            rate_overall=rate_overall, rate_bin_pvals=rate_bin_pvals,
+            auc_overall=score_overall.get(score), auc_bin_pvals=score_bin_pvals.get(score, {}),
+        )
         if result:
             print(f"  Plotted {score} -> {result}")
 
     # AUC-difference-by-score summary (plot_model_diff_summary()): only
     # meaningful for exactly two models -- see that function's docstring.
-    if len(models) == 2:
-        model_a, model_b = models
+    if stats_pair:
+        model_a, model_b = stats_pair
         diff_df = compute_auc_diff(model_a, model_b, auc_df)
         diff_csv = os.path.join(OUTPUT_DIR, f"auc_diff_vs_delta_days_{model_a}_vs_{model_b}.csv")
         diff_df.to_csv(diff_csv, index=False)
@@ -1786,10 +2041,35 @@ def main():
         colour_for_score = build_qualitative_colours(auc_df["score"].unique())
         diff_out_path = os.path.join(OUTPUT_DIR, f"summary_diff_{model_a}_vs_{model_b}.png")
         result = plot_model_diff_summary(
-            model_a, model_b, auc_df, rate_df, count_df, colour_for, colour_for_score, diff_out_path
+            model_a, model_b, auc_df, rate_df, count_df, colour_for, colour_for_score, diff_out_path,
+            rate_overall=rate_overall, rate_bin_pvals=rate_bin_pvals,
+            score_overall=score_overall, score_bin_pvals=score_bin_pvals,
         )
         if result:
             print(f"  Plotted AUC-diff summary ({model_a} vs {model_b}) -> {result}")
+
+        # Compact companion: same plot, restricted to KEY_SCORES_FOR_DIFF_SUMMARY.
+        key_scores_present = [s for s in KEY_SCORES_FOR_DIFF_SUMMARY if s in auc_df["score"].unique()]
+        if key_scores_present:
+            key_diff_df = compute_auc_diff(model_a, model_b, auc_df, scores=key_scores_present)
+            key_diff_csv = os.path.join(
+                OUTPUT_DIR, f"auc_diff_vs_delta_days_key_scores_{model_a}_vs_{model_b}.csv"
+            )
+            key_diff_df.to_csv(key_diff_csv, index=False)
+            print(f"Wrote {key_diff_csv}")
+
+            key_diff_out_path = os.path.join(
+                OUTPUT_DIR, f"summary_diff_key_scores_{model_a}_vs_{model_b}.png"
+            )
+            result = plot_model_diff_summary(
+                model_a, model_b, auc_df, rate_df, count_df, colour_for, colour_for_score, key_diff_out_path,
+                scores=key_scores_present, title_suffix=" (key scores)",
+                rate_overall=rate_overall, rate_bin_pvals=rate_bin_pvals,
+                score_overall={s: score_overall[s] for s in key_scores_present},
+                score_bin_pvals={s: score_bin_pvals[s] for s in key_scores_present},
+            )
+            if result:
+                print(f"  Plotted key-scores AUC-diff summary ({model_a} vs {model_b}) -> {result}")
     else:
         print(
             f"Skipping AUC-diff summary: {len(models)} model(s) included ({sorted(models)}), "
@@ -1818,6 +2098,9 @@ def main():
         result = plot_score_summary(
             score, auc_mouse_df, rate_mouse_df, count_df, colour_for, out_path,
             min_count=MIN_MICE_PER_BIN, count_col="n_mice", title_suffix=" (mouse-averaged)",
+            stats_model_a=stats_model_a, stats_model_b=stats_model_b,
+            rate_overall=rate_overall, rate_bin_pvals=rate_bin_pvals,
+            auc_overall=score_overall.get(score), auc_bin_pvals=score_bin_pvals.get(score, {}),
         )
         if result:
             print(f"  Plotted {score} (mouse-averaged) -> {result}")
