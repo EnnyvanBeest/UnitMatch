@@ -91,7 +91,7 @@ RANK_ELIGIBLE_MODELS = {
 # itself one of MODELS_TO_INCLUDE here -- its UID-clustering variants are --
 # and the conservative variant is the closest analogue to a single, stable
 # "how many matches did UMPy actually commit to" count.
-REFERENCE_MODEL = "UMPy_AssignUniqueID_Conservative"
+REFERENCE_MODEL = "UMPy_AssignUniqueID"
 
 # Which unit pairs survive the top-N selection is tie-broken randomly per
 # (dataset, session pair); fixed so re-running this script reproduces the
@@ -101,7 +101,7 @@ RANDOM_SEED = 0
 # The two RANK_ELIGIBLE_MODELS compared by the compact key-scores AUC-diff
 # summary (dvd.plot_model_diff_summary(), restricted to
 # dvd.KEY_SCORES_FOR_DIFF_SUMMARY) -- the Conservative UID variants are left
-# out of this particular comparison since it's meant as a quick DUM-vs-UMPy
+# out of this particular comparison sinOce it's meant as a quick DUM-vs-UMPy
 # headline, not a full model sweep (see main()'s own len(models) == 2 guard
 # for the fuller all-scores version this module doesn't otherwise produce).
 DIFF_SUMMARY_MODEL_A = "DeepUnitMatch_AssignUniqueID"
@@ -393,33 +393,16 @@ def main():
         if result:
             print(f"  Plotted {score} -> {result}")
 
-    # Compact key-scores AUC-diff summary (DIFF_SUMMARY_MODEL_A vs
+    # Compact key-scores paper figure (DIFF_SUMMARY_MODEL_A vs
     # DIFF_SUMMARY_MODEL_B, dvd.KEY_SCORES_FOR_DIFF_SUMMARY only) -- the
     # fixed-N counterpart to plot_auc_vs_delta_days.py main()'s own version
-    # of this same compact plot.
+    # of this same figure (dvd.plot_key_scores_diff_figure()).
     if stats_available:
-        key_scores_present = [s for s in dvd.KEY_SCORES_FOR_DIFF_SUMMARY if s in auc_df["score"].unique()]
-        if key_scores_present:
-            colour_for_score = dvd.build_qualitative_colours(auc_df["score"].unique())
-            key_diff_df = dvd.compute_auc_diff(DIFF_SUMMARY_MODEL_A, DIFF_SUMMARY_MODEL_B, auc_df, scores=key_scores_present)
-            key_diff_csv = os.path.join(
-                OUTPUT_DIR, f"auc_diff_vs_delta_days_fixed_n_key_scores_{DIFF_SUMMARY_MODEL_A}_vs_{DIFF_SUMMARY_MODEL_B}.csv"
-            )
-            key_diff_df.to_csv(key_diff_csv, index=False)
-            print(f"Wrote {key_diff_csv}")
-
-            key_diff_out_path = os.path.join(
-                OUTPUT_DIR, f"summary_diff_key_scores_fixed_n_{DIFF_SUMMARY_MODEL_A}_vs_{DIFF_SUMMARY_MODEL_B}.png"
-            )
-            result = dvd.plot_model_diff_summary(
-                DIFF_SUMMARY_MODEL_A, DIFF_SUMMARY_MODEL_B, auc_df, rate_df, count_df, colour_for, colour_for_score,
-                key_diff_out_path, scores=key_scores_present, title_suffix=" (key scores, fixed N)",
-                rate_overall=rate_overall, rate_bin_pvals=rate_bin_pvals,
-                score_overall={s: score_overall[s] for s in key_scores_present},
-                score_bin_pvals={s: score_bin_pvals[s] for s in key_scores_present},
-            )
-            if result:
-                print(f"  Plotted key-scores AUC-diff summary (fixed N) -> {result}")
+        # Mouse-level and dataset-level versions.
+        dvd.make_key_scores_figures(
+            DIFF_SUMMARY_MODEL_A, DIFF_SUMMARY_MODEL_B, dataset_bin_auc_rows, dataset_bin_rate_rows, colour_for,
+            OUTPUT_DIR, file_tag="_fixed_n",
+        )
     else:
         print(
             f"Skipping key-scores AUC-diff summary (fixed N): need both {DIFF_SUMMARY_MODEL_A} and "
