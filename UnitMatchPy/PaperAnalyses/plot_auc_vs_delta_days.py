@@ -61,9 +61,14 @@ sys.path.insert(0, os.path.join(_HERE, "DeepUnitMatch"))
 
 import run_deepunitmatch_batch_onMerged as base_batch
 import plot_auc_summary as auc_summary_mod
+import paper_style
 import UnitMatchPy.utils as util
 from DeepUnitMatch.testing import test as dumtest
 from generate_merged_dataset import DUM_NONMERGED_DATAPATH
+
+# Editable text in the .svg output (real <text>, Arial) -- font sizes untouched
+# here; plot_key_scores_diff_figure() applies the full paper style locally.
+paper_style.apply(font_size=None)
 
 # ── settings ─────────────────────────────────────────────────────────────────
 BASE_INPUT = base_batch.BASE_INPUT
@@ -83,13 +88,26 @@ MODELS_TO_INCLUDE = auc_summary_mod.MODELS_TO_INCLUDE
 # across-session matches for it -- see plot_auc_summary.MIN_MATCHES_TO_INCLUDE.
 MIN_MATCHES_TO_INCLUDE = auc_summary_mod.MIN_MATCHES_TO_INCLUDE
 
-# Restricted score set for the compact companion to the full
-# summary_diff_{model_a}_vs_{model_b}.png (every score) -- just the four
-# scores considered most informative for a quick two-model comparison, all
-# plotted as AUC(model_a) - AUC(model_b) diffs like the full version. Reused
-# by plot_auc_vs_delta_days_fixed_n.py for its own fixed-N version of this
-# same compact plot.
-KEY_SCORES_FOR_DIFF_SUMMARY = ["FR_diff_norm", "ISI_correlations", "natim_correlations", "refpop_correlations"]
+# Restricted score set for the compact paper figure
+# summary_diff_key_scores_{model_a}_vs_{model_b} (plot_key_scores_diff_figure())
+# -- just the four scores considered most informative for a quick two-model
+# comparison, each in its own panel as AUC(model_a) - AUC(model_b), in this
+# left-to-right order. Reused by plot_auc_vs_delta_days_fixed_n.py for its own
+# fixed-N version of this same figure.
+KEY_SCORES_FOR_DIFF_SUMMARY = ["ISI_correlations", "refpop_correlations", "natim_correlations", "FR_diff_norm"]
+KEY_SCORE_TITLES = {
+    "ISI_correlations": "ISI",
+    "refpop_correlations": "RefPopCorr",
+    "natim_correlations": "NatImg",
+    "FR_diff_norm": "FRDiff_Norm",
+}
+# Shared y-limits for every AUC-diff panel of the key-scores figure.
+KEY_DIFF_YLIM = (-0.1, 0.2)
+
+# Per-(dataset, bin) median number of matches per session pair (see
+# dataset_bin_rate_rows in collect_binned_pairs()) -- the key-scores figure's
+# first panel.
+N_MATCHES_COL = "n_matches_per_sp"
 
 # Bin edges in days between the two sessions of a pair (right-open: [lo, hi)),
 # spanning same-day recordings up to ~2 years apart on a roughly log scale --
@@ -132,6 +150,19 @@ N_BOOTSTRAP = 50
 # than needed for a stable SE estimate, and re-sorting the full set N_BOOTSTRAP
 # times would be needlessly slow.
 BOOTSTRAP_MAX_N = 20000
+
+# Aggregation chain for every per-dataset/per-mouse number in this module:
+# one value per session pair -> median across session pairs within a dataset
+# (recording location) -> median across datasets within a mouse
+# (WITHIN_MOUSE_AGG) -> mean +/- SEM across mice. A session pair's AUCs only
+# enter that chain if at least one included model found this many matches
+# for it -- the same per-session-pair cut figure2.ipynb /
+# figure-model-comparison.ipynb apply (N >= 20, MIN_MATCHES there) -- so a pair
+# where every model found (next to) nothing doesn't contribute a punished
+# 0.5 for everyone (see PUNISH_MISSING_MATCHES). P(track) and the number of
+# matches are not filtered: a session pair with few matches is a real
+# quantity result, not an unestimable one.
+MIN_MATCHES_PER_SESSION_PAIR = 20
 
 # Minimum mice with a defined value in a (model, bin) before
 # summarise_auc_mouse_averaged()/summarise_match_rate_mouse_averaged() will
@@ -316,6 +347,71 @@ def _auc_from_flat(matches_bool, metric_values, punish_missing=PUNISH_MISSING_MA
     if hasattr(np, "trapezoid"):
         return float(np.trapezoid(recall, fpr))
     return float(np.trapz(recall, fpr))
+
+
+def _cap_negatives(idx, matches_bool, max_n, rng):
+    """
+    idx (positions into matches_bool), reduced to at most max_n entries by
+    subsampling non-matches only -- every match is kept. AUC is unchanged in
+    expectation by subsampling negatives, whereas a plain random subsample of
+    a single session pair (tens of thousands of candidates, a few dozen
+    matches) would throw most of its matches away.
+    """
+    if len(idx) <= max_n:
+        return idx
+    pos = idx[matches_bool[idx]]
+    neg = idx[~matches_bool[idx]]
+    n_neg = max(max_n - len(pos), 1)
+    if len(neg) > n_neg:
+        neg = rng.choice(neg, size=n_neg, replace=False)
+    return np.concatenate([pos, neg])
+
+
+def _session_pairs_to_dataset_rows(session_pair_auc_rows, session_pair_rate_rows, min_matches_per_session_pair):
+    """
+    First step of the aggregation chain (see MIN_MATCHES_PER_SESSION_PAIR):
+    per-session-pair values -> median across session pairs per dataset.
+
+    AUC rows are first restricted to session pairs where at least one model
+    found >= min_matches_per_session_pair matches; P(track)/number-of-matches
+    rows are kept as they are. Returns (dataset_level_rows,
+    dataset_level_auc_rows, dataset_bin_auc_rows, dataset_bin_rate_rows) in
+    the shapes collect_binned_pairs() documents.
+    """
+    sp_keys = ["dataset", "RecSes 1", "RecSes 2"]
+    sp_rate = pd.DataFrame(
+        session_pair_rate_rows, columns=["mouse", "dataset", "model", "RecSes 1", "RecSes 2", "bin", "rate", N_MATCHES_COL]
+    )
+    sp_auc = pd.DataFrame(
+        session_pair_auc_rows, columns=["mouse", "dataset", "model", "score", "RecSes 1", "RecSes 2", "bin", "auc"]
+    )
+
+    best_n = sp_rate.groupby(sp_keys)[N_MATCHES_COL].max().rename("best_n").reset_index()
+    sp_auc = sp_auc.merge(best_n, on=sp_keys, how="left")
+    n_before = sp_auc[sp_keys].drop_duplicates().shape[0]
+    sp_auc = sp_auc[sp_auc["best_n"] >= min_matches_per_session_pair]
+    n_after = sp_auc[sp_keys].drop_duplicates().shape[0]
+    print(
+        f"AUC per session pair: kept {n_after}/{n_before} session pair(s) where at least one model found "
+        f">= {min_matches_per_session_pair} matches."
+    )
+
+    dataset_bin_auc_rows = (
+        sp_auc.groupby(["mouse", "dataset", "model", "score", "bin"], as_index=False)["auc"].median().to_dict("records")
+    )
+    dataset_level_auc_rows = (
+        sp_auc.groupby(["mouse", "dataset", "model", "score"], as_index=False)["auc"].median()
+        .rename(columns={"auc": "value"}).to_dict("records")
+    )
+    dataset_bin_rate_rows = (
+        sp_rate.groupby(["mouse", "dataset", "model", "bin"], as_index=False)[["rate", N_MATCHES_COL]].median()
+        .to_dict("records")
+    )
+    dataset_level_rows = (
+        sp_rate.groupby(["mouse", "dataset", "model"], as_index=False)["rate"].median()
+        .rename(columns={"rate": "value"}).assign(score="P_track").to_dict("records")
+    )
+    return dataset_level_rows, dataset_level_auc_rows, dataset_bin_auc_rows, dataset_bin_rate_rows
 
 
 # ── collect: bin every across-session pair from every dataset/model ────────
@@ -560,6 +656,7 @@ def collect_binned_pairs(
     resolve_match_conflicts=True,
     punish_missing_matches=PUNISH_MISSING_MATCHES,
     restrict_to_max_dist=RESTRICT_TO_MAX_DIST,
+    min_matches_per_session_pair=MIN_MATCHES_PER_SESSION_PAIR,
 ):
     """
     Walk base_output for every AUC_summary.json (same discovery as
@@ -645,13 +742,16 @@ def collect_binned_pairs(
         >= 1 session pair in that bin, i.e. the "Datasets" panel (len() of this set),
         kept separate from n_pairs (unit-pairs) since the latter scales with
         n_units^2 per session pair rather than dataset coverage.
+      Every per-dataset value below is the median across that dataset's
+      session pairs (one value per session pair first -- see
+      MIN_MATCHES_PER_SESSION_PAIR / _session_pairs_to_dataset_rows()).
       dataset_level_rows: [{"mouse", "dataset", "model", "score": "P_track", "value"}, ...]
-        -- P(track) pooled across every ΔDay bin (unbinned), one row per
+        -- P(track) across every ΔDay bin (unbinned), one row per
         (dataset, model): the per-dataset quantity value
         mouse_balanced_quality_quantity() combines with dataset_level_auc_rows'
         per-dataset AUCs for a mouse-aware quality/quantity comparison.
       dataset_level_auc_rows: [{"mouse", "dataset", "model", "score", "value"}, ...]
-        -- per-score AUC pooled across every ΔDay bin (unbinned), one row per
+        -- per-score AUC across every ΔDay bin (unbinned), one row per
         (dataset, model, score), computed from the same (possibly
         matches_transform'd) Matches column as everything else this call
         produced. This is the quality-side counterpart to dataset_level_rows'
@@ -670,7 +770,7 @@ def collect_binned_pairs(
         of matches_transform -- see dataset_level_auc_rows above for the
         transformed equivalent.
       dataset_bin_auc_rows / dataset_bin_rate_rows: [{"mouse", "dataset",
-        "model", ["score",] "bin", "auc"/"rate"}, ...] -- like score_bins/
+        "model", ["score",] "bin", "auc"/("rate", N_MATCHES_COL)}, ...] -- like score_bins/
         rate_bins above, but per DATASET per bin rather than pooled across
         every dataset -- summarise_auc_mouse_averaged()/summarise_match_
         rate_mouse_averaged()'s input for a mouse-first companion to the
@@ -706,12 +806,12 @@ def collect_binned_pairs(
     score_bins = {}
     rate_bins = {}
     count_bins = {}
-    dataset_level_rows = []
-    dataset_level_auc_rows = []
-    dataset_bin_auc_rows = []
-    dataset_bin_rate_rows = []
-    # For subsampling an oversized single dataset/bin before computing its own
-    # AUC below -- see the dataset_auc comment in the main loop.
+    # Per-session-pair values, reduced to the per-dataset rows returned below
+    # once the walk is done -- see MIN_MATCHES_PER_SESSION_PAIR.
+    session_pair_auc_rows = []
+    session_pair_rate_rows = []
+    # For subsampling non-matches of an oversized session pair before
+    # computing its AUC -- see _cap_negatives().
     rng = np.random.default_rng(0)
     n_found = 0
     n_rows_dropped_dup = 0
@@ -844,6 +944,10 @@ def collect_binned_pairs(
             df = df.assign(Matches=resolved)
 
         matches_bool = df["Matches"].to_numpy().astype(bool)
+        mouse = auc_summary_mod.mouse_from_dataset(dataset)
+        # Row positions of every (ordered) session pair -- each lies in
+        # exactly one signed ΔDay bin, since both sessions have one date.
+        sp_index = df.groupby(["RecSes 1", "RecSes 2"], sort=False).indices
 
         for score in scores:
             signed_metric = -df[score].to_numpy() if score in NEGATE_FOR_AUC else df[score].to_numpy()
@@ -851,35 +955,8 @@ def collect_binned_pairs(
             if restrict_to_max_dist and dist_col is not None:
                 valid = valid & (df[dist_col].to_numpy() > 0)
 
-            # This dataset's own AUC for this score, pooled across every ΔDay
-            # bin (unbinned) -- the per-score analogue of dataset_level_rows'
-            # P_track below, and computed from the same (possibly
-            # matches_transform'd) Matches column used everywhere else in this
-            # function. Unlike auc_long_df (read straight from each model's
-            # own AUC_summary.json, produced once by the matching pipeline
-            # itself and never touched by matches_transform), this reflects
-            # whatever Matches definition this call actually used -- needed so
-            # callers with a matches_transform (e.g.
-            # plot_auc_vs_delta_days_fixed_n.py) can build a quality-vs-
-            # quantity comparison where both sides come from the same
-            # (transformed) match set, instead of silently mixing a
-            # transformed quantity with an untransformed quality (see that
-            # module's docstring for the bug this replaces).
-            idx_valid = np.flatnonzero(valid)
-            if len(idx_valid) > BOOTSTRAP_MAX_N:
-                idx_valid = rng.choice(idx_valid, size=BOOTSTRAP_MAX_N, replace=False)
-            dataset_score_auc = _auc_from_flat(matches_bool[idx_valid], signed_metric[idx_valid], punish_missing=punish_missing_matches)
-            if np.isfinite(dataset_score_auc):
-                dataset_level_auc_rows.append(
-                    {
-                        "mouse": auc_summary_mod.mouse_from_dataset(dataset),
-                        "dataset": dataset,
-                        "model": model,
-                        "score": score,
-                        "value": dataset_score_auc,
-                    }
-                )
-
+            # Pooled curves (summarise_auc()): every pair of every dataset in
+            # a bin ranked together.
             for b in np.unique(bin_idx[valid]):
                 mask = valid & (bin_idx == b)
                 if not mask.any():
@@ -889,38 +966,26 @@ def collect_binned_pairs(
                 entry["matches"].append(matches_bool[mask])
                 entry["metric"].append(signed_metric[mask])
 
-                # This dataset's own AUC for this (score, bin) alone -- for
-                # summarise_auc_mouse_averaged()'s mouse-first companion to
-                # the pooled curve above (mirrors summaryMatchingPlots.m's
-                # popAUC_Uni: one AUC per dataset per bin, *then* averaged
-                # across datasets/mice, rather than one AUC over every
-                # dataset's pairs pooled together). Skipped (not appended)
-                # when this one dataset doesn't have both a match and a
-                # non-match in this bin -- _auc_from_flat() returns NaN then
-                # (or, with punish_missing_matches=True, a punished 0.5 that
-                # gets appended like any other value -- see that constant),
-                # same as it would for the pooled version.
-                #
-                # A single dataset/bin can still hold millions of pairs (same
-                # n_units^2 scaling as everywhere else in this file), and
-                # this AUC gets averaged with dozens of others per mouse
-                # anyway, so exact precision here isn't needed -- subsample
-                # like _bootstrap_auc_se() does, rather than sorting/summing
-                # the full mask (which crashed with a MemoryError on a large
-                # merged group before this cap was added).
-                idx_in_bin = np.flatnonzero(mask)
-                if len(idx_in_bin) > BOOTSTRAP_MAX_N:
-                    idx_in_bin = rng.choice(idx_in_bin, size=BOOTSTRAP_MAX_N, replace=False)
-                dataset_auc = _auc_from_flat(matches_bool[idx_in_bin], signed_metric[idx_in_bin], punish_missing=punish_missing_matches)
-                if np.isfinite(dataset_auc):
-                    dataset_bin_auc_rows.append(
+            # One AUC per session pair -- the first step of the aggregation
+            # chain (see MIN_MATCHES_PER_SESSION_PAIR). Reduced to per-dataset
+            # medians after the walk, once every model's match count for each
+            # session pair is known. Computed from the same (possibly
+            # matches_transform'd) Matches column as everything else here, so
+            # plot_auc_vs_delta_days_fixed_n.py's quality and quantity come
+            # from the same match set. A session pair with no match (or no
+            # non-match) gets NaN, or a punished 0.5 with punish_missing_matches.
+            for (r1, r2), idx in sp_index.items():
+                idx_v = idx[valid[idx]]
+                if len(idx_v) == 0:
+                    continue
+                idx_v = _cap_negatives(idx_v, matches_bool, BOOTSTRAP_MAX_N, rng)
+                sp_auc = _auc_from_flat(matches_bool[idx_v], signed_metric[idx_v], punish_missing=punish_missing_matches)
+                if np.isfinite(sp_auc):
+                    session_pair_auc_rows.append(
                         {
-                            "mouse": auc_summary_mod.mouse_from_dataset(dataset),
-                            "dataset": dataset,
-                            "model": model,
-                            "score": score,
-                            "bin": _signed_bin_label(b),
-                            "auc": dataset_auc,
+                            "mouse": mouse, "dataset": dataset, "model": model, "score": score,
+                            "RecSes 1": int(r1), "RecSes 2": int(r2),
+                            "bin": _signed_bin_label(bin_idx[idx[0]]), "auc": sp_auc,
                         }
                     )
 
@@ -942,37 +1007,24 @@ def collect_binned_pairs(
         tracked = per_unit["Matches"].to_numpy().astype(bool)
         for b in np.unique(pu_bin_idx):
             mask = pu_bin_idx == b
-            label = _signed_bin_label(b)
-            key = (model, label)
+            key = (model, _signed_bin_label(b))
             entry = rate_bins.setdefault(key, {"matches": [], "total": []})
             entry["matches"].append(int(tracked[mask].sum()))
             entry["total"].append(int(mask.sum()))
 
-            # This dataset's own P(track) for this bin alone -- mouse-first
-            # companion to the pooled curve above, see dataset_bin_auc_rows.
-            dataset_bin_rate_rows.append(
+        # Per session pair: P(track) and number of tracked units -- first
+        # step of the aggregation chain (see MIN_MATCHES_PER_SESSION_PAIR);
+        # reduced to per-dataset medians after the walk.
+        sp_rate = per_unit.groupby(["RecSes 1", "RecSes 2"])["Matches"].agg(["mean", "sum"]).reset_index()
+        sp_bins = _signed_bin_ids(
+            (pd.to_datetime(sp_rate["RecSes 2"].map(date_map)) - pd.to_datetime(sp_rate["RecSes 1"].map(date_map))).dt.days.to_numpy()
+        )
+        for (r1, r2, rate, n_matches), b in zip(sp_rate[["RecSes 1", "RecSes 2", "mean", "sum"]].itertuples(index=False), sp_bins):
+            session_pair_rate_rows.append(
                 {
-                    "mouse": auc_summary_mod.mouse_from_dataset(dataset),
-                    "dataset": dataset,
-                    "model": model,
-                    "bin": label,
-                    "rate": float(tracked[mask].mean()),
-                }
-            )
-
-        # Same P(track), pooled across every ΔDay bin instead of split by
-        # one -- one row per (dataset, model), for mouse_balanced_quality_
-        # quantity()'s per-dataset "quantity" value (the AUC side of that
-        # comparison already exists per-dataset in auc_long_df above; this is
-        # the one new per-dataset quantity plot_auc_summary.py never computed).
-        if len(tracked):
-            dataset_level_rows.append(
-                {
-                    "mouse": auc_summary_mod.mouse_from_dataset(dataset),
-                    "dataset": dataset,
-                    "model": model,
-                    "score": "P_track",
-                    "value": float(tracked.mean()),
+                    "mouse": mouse, "dataset": dataset, "model": model,
+                    "RecSes 1": int(r1), "RecSes 2": int(r2), "bin": _signed_bin_label(b),
+                    "rate": float(rate), N_MATCHES_COL: float(n_matches),
                 }
             )
 
@@ -1012,6 +1064,10 @@ def collect_binned_pairs(
             f"highest-{MATCH_CONFLICT_RANK_COL} candidate per unit per target/source session; "
             "resolve_match_conflicts=True)."
         )
+
+    (
+        dataset_level_rows, dataset_level_auc_rows, dataset_bin_auc_rows, dataset_bin_rate_rows,
+    ) = _session_pairs_to_dataset_rows(session_pair_auc_rows, session_pair_rate_rows, min_matches_per_session_pair)
     return (
         score_bins, rate_bins, count_bins, dataset_level_rows, dataset_level_auc_rows,
         auc_long_df, dataset_bin_auc_rows, dataset_bin_rate_rows,
@@ -1094,11 +1150,52 @@ def summarise_match_rate(rate_bins):
     return pd.DataFrame(rows)
 
 
+def _mean_sem_across_mice(per_unit, group_cols, value_col, min_mice=MIN_MICE_PER_BIN, unit_col="mouse"):
+    """
+    per_unit has one row per (unit_col, *group_cols) -- unit_col "mouse"
+    (already collapsed within mouse, see WITHIN_MOUSE_AGG) or "dataset" (one
+    recording site each). Returns one row per group_cols combination with
+    value_col = mean across units, f"{value_col}_se" = SEM across units,
+    n_units, and n_mice; groups with fewer than min_mice units are dropped.
+    """
+    se_col = f"{value_col}_se"
+    rows = []
+    for key, g in per_unit.dropna(subset=[value_col]).groupby(group_cols):
+        n_units = g[unit_col].nunique()
+        if n_units < min_mice:
+            continue
+        row = dict(zip(group_cols, key if isinstance(key, tuple) else (key,)))
+        row[value_col] = g[value_col].mean()
+        row[se_col] = g[value_col].std(ddof=1) / np.sqrt(n_units) if n_units > 1 else np.nan
+        row["n_units"] = n_units
+        row["n_mice"] = g["mouse"].nunique()
+        rows.append(row)
+    return pd.DataFrame(rows, columns=list(group_cols) + [value_col, se_col, "n_units", "n_mice"])
+
+
+# Unit of replication for the key-scores figure/stats: "mouse" (each mouse's
+# datasets collapsed with WITHIN_MOUSE_AGG first, n = mice) or "dataset"
+# (every recording site its own point, n = datasets).
+LEVELS = ("mouse", "dataset")
+
+
+def _per_unit_values(df, group_cols, value_col, level="mouse"):
+    """One row per (mouse[, dataset], *group_cols): collapsed within mouse for level="mouse"."""
+    unit_cols = ["mouse"] if level == "mouse" else ["mouse", "dataset"]
+    return df.groupby(unit_cols + list(group_cols), as_index=False)[value_col].agg(WITHIN_MOUSE_AGG)
+
+
+# How a mouse's several datasets (recording sites/probes) in the same bin are
+# collapsed to one value per mouse before anything is compared across mice.
+# Median rather than mean so one odd recording site can't drag a mouse's value.
+WITHIN_MOUSE_AGG = "median"
+
+
 def summarise_auc_mouse_averaged(dataset_bin_auc_rows, min_mice=MIN_MICE_PER_BIN):
     """
     Mouse-first companion to summarise_auc(): dataset_bin_auc_rows already
     has one AUC per (dataset, model, score, bin) (that dataset's own pairs
-    only); average equally within each mouse first (so a mouse contributing
+    only); take the median within each mouse first (so a mouse contributing
     several datasets to the same bin isn't overweighted relative to a mouse
     with only one), then take the mean +/- SEM *across mice*. This is the
     same per-dataset-then-across-dataset approach the original MATLAB
@@ -1118,48 +1215,33 @@ def summarise_auc_mouse_averaged(dataset_bin_auc_rows, min_mice=MIN_MICE_PER_BIN
     if not dataset_bin_auc_rows:
         return pd.DataFrame(columns=["model", "score", "bin", "auc", "auc_se", "n_mice"])
     df = pd.DataFrame(dataset_bin_auc_rows)
-    per_mouse = df.groupby(["mouse", "model", "score", "bin"], as_index=False)["auc"].mean()
-
-    rows = []
-    for (model, score, label), g in per_mouse.groupby(["model", "score", "bin"]):
-        n_mice = g["mouse"].nunique()
-        if n_mice < min_mice:
-            continue
-        rows.append(
-            {
-                "model": model,
-                "score": score,
-                "bin": label,
-                "auc": g["auc"].mean(),
-                "auc_se": g["auc"].std(ddof=1) / np.sqrt(n_mice) if n_mice > 1 else np.nan,
-                "n_mice": n_mice,
-            }
-        )
-    return pd.DataFrame(rows)
+    per_mouse = df.groupby(["mouse", "model", "score", "bin"], as_index=False)["auc"].agg(WITHIN_MOUSE_AGG)
+    return _mean_sem_across_mice(per_mouse, ["model", "score", "bin"], "auc", min_mice=min_mice)
 
 
 def summarise_match_rate_mouse_averaged(dataset_bin_rate_rows, min_mice=MIN_MICE_PER_BIN):
     """Mouse-first companion to summarise_match_rate() -- see summarise_auc_mouse_averaged()."""
     if not dataset_bin_rate_rows:
         return pd.DataFrame(columns=["model", "bin", "match_rate", "match_rate_se", "n_mice"])
-    df = pd.DataFrame(dataset_bin_rate_rows)
-    per_mouse = df.groupby(["mouse", "model", "bin"], as_index=False)["rate"].mean()
+    df = pd.DataFrame(dataset_bin_rate_rows).rename(columns={"rate": "match_rate"})
+    per_mouse = df.groupby(["mouse", "model", "bin"], as_index=False)["match_rate"].agg(WITHIN_MOUSE_AGG)
+    return _mean_sem_across_mice(per_mouse, ["model", "bin"], "match_rate", min_mice=min_mice)
 
-    rows = []
-    for (model, label), g in per_mouse.groupby(["model", "bin"]):
-        n_mice = g["mouse"].nunique()
-        if n_mice < min_mice:
-            continue
-        rows.append(
-            {
-                "model": model,
-                "bin": label,
-                "match_rate": g["rate"].mean(),
-                "match_rate_se": g["rate"].std(ddof=1) / np.sqrt(n_mice) if n_mice > 1 else np.nan,
-                "n_mice": n_mice,
-            }
-        )
-    return pd.DataFrame(rows)
+
+def summarise_n_matches(dataset_bin_rate_rows, models=None, level="mouse", min_units=MIN_MICE_PER_BIN):
+    """
+    Number of matches per session pair (N_MATCHES_COL) per (model, bin):
+    mean +/- SEM across mice (median within mouse first) for level="mouse",
+    or across datasets for level="dataset" -- see LEVELS.
+    """
+    cols = ["model", "bin", N_MATCHES_COL, f"{N_MATCHES_COL}_se", "n_units", "n_mice"]
+    if not dataset_bin_rate_rows:
+        return pd.DataFrame(columns=cols)
+    df = pd.DataFrame(dataset_bin_rate_rows)
+    if models is not None:
+        df = df[df["model"].isin(models)]
+    per_unit = _per_unit_values(df, ["model", "bin"], N_MATCHES_COL, level=level)
+    return _mean_sem_across_mice(per_unit, ["model", "bin"], N_MATCHES_COL, min_mice=min_units, unit_col=level)
 
 
 def summarise_dataset_counts(count_bins):
@@ -1169,6 +1251,12 @@ def summarise_dataset_counts(count_bins):
 
 def _bin_order(labels):
     return sorted(labels, key=lambda l: SIGNED_BIN_LABELS.index(l))
+
+
+def savefig_with_svg(fig, out_path, dpi=150):
+    """Save out_path (a .png path) plus an Inkscape-editable .svg next to it via paper_style.save_svg()."""
+    fig.savefig(out_path, dpi=dpi)
+    paper_style.save_svg(fig, os.path.splitext(out_path)[0] + ".svg")
 
 
 # ── colours: group algorithm families by hue, not an arbitrary cycle ───────
@@ -1280,9 +1368,9 @@ def compute_quality_quantity_summary(auc_df, rate_df, exclude_circular=True, min
 def mouse_balanced_quality_quantity(combined_df_long):
     """
     Equal-weight-per-mouse companion to compute_quality_quantity_summary():
-    plot_auc_summary.average_over_mice() first collapses each mouse's
-    datasets to one point per (mouse, model, score) -- the same helper that
-    module's own mouse-averaged analysis uses -- then this averages across
+    first collapses each mouse's datasets to one point per (mouse, model,
+    score) (WITHIN_MOUSE_AGG, i.e. median -- plot_auc_summary.average_over_mice()
+    does the same with a mean), then this averages across
     mice with equal weight, so neither a mouse contributing many datasets
     nor a dataset with many units/pairs can dominate the comparison the way
     pair-count weighting can in the pooled version above.
@@ -1291,7 +1379,7 @@ def mouse_balanced_quality_quantity(combined_df_long):
     dataset, model, score, value) and a "P_track" score (see
     collect_binned_pairs()'s dataset_level_rows) for the same models/datasets.
     """
-    df_mouse = auc_summary_mod.average_over_mice(combined_df_long)
+    df_mouse = combined_df_long.groupby(["mouse", "model", "score"], as_index=False)["value"].agg(WITHIN_MOUSE_AGG)
     rows = []
     for model, g in df_mouse.groupby("model"):
         quantity = g.loc[g["score"] == "P_track", "value"]
@@ -1433,7 +1521,7 @@ def plot_quality_vs_quantity(summary_df, colour_for, out_path, title):
     ax.set_title(title)
     ax.grid(alpha=0.3)
     fig.tight_layout()
-    auc_summary_mod.savefig_with_svg(fig, out_path, dpi=150)
+    savefig_with_svg(fig, out_path, dpi=150)
     plt.close(fig)
     return out_path
 
@@ -1488,7 +1576,7 @@ def plot_quality_vs_quantity_trajectories(auc_df, rate_df, colour_for, out_path,
     ax.legend(fontsize=8)
     ax.grid(alpha=0.3)
     fig.tight_layout()
-    auc_summary_mod.savefig_with_svg(fig, out_path, dpi=150)
+    savefig_with_svg(fig, out_path, dpi=150)
     plt.close(fig)
     return out_path
 
@@ -1554,7 +1642,7 @@ def plot_quality_vs_quantity_per_score(auc_df, rate_df, colour_for, out_path, mi
 
     fig.suptitle("Quality vs quantity, per functional score (pooled across ΔDay)")
     fig.tight_layout()
-    auc_summary_mod.savefig_with_svg(fig, out_path, dpi=150)
+    savefig_with_svg(fig, out_path, dpi=150)
     plt.close(fig)
     return out_path
 
@@ -1575,13 +1663,13 @@ def plot_quality_vs_quantity_per_score(auc_df, rate_df, colour_for, out_path, mi
 # score) differs from that module's own dataset-level shape.
 
 
-def _mouse_bin_values(rows, value_col, model_a, model_b, score=None):
+def _mouse_bin_values(rows, value_col, model_a, model_b, score=None, level="mouse"):
     """
     rows: dataset_bin_auc_rows/dataset_bin_rate_rows from collect_binned_pairs()
-    -- one row per (dataset, model, [score,] bin). Averaged within mouse
-    first (so a mouse contributing several datasets to the same bin isn't
-    overweighted relative to a mouse with only one) -- same per-mouse
-    averaging summarise_auc_mouse_averaged()/summarise_match_rate_mouse_
+    -- one row per (dataset, model, [score,] bin). Collapsed within mouse
+    first (WITHIN_MOUSE_AGG, so a mouse contributing several datasets to the
+    same bin isn't overweighted relative to a mouse with only one) -- same
+    per-mouse step summarise_auc_mouse_averaged()/summarise_match_rate_mouse_
     averaged() use, just kept as one row per (mouse, model, bin) here instead
     of further collapsing to a mean +/- SEM across mice, since the tests
     below need the per-mouse values themselves.
@@ -1589,33 +1677,37 @@ def _mouse_bin_values(rows, value_col, model_a, model_b, score=None):
     Restricted to model_a/model_b (these tests are always exactly-two-model
     comparisons) and, when rows carry a "score" column (AUC rows, not P(track)
     rows), to that one score.
+
+    level="dataset" skips the within-mouse collapse: one row per (mouse,
+    dataset, model, bin) instead -- see LEVELS.
     """
     if not rows:
-        return pd.DataFrame(columns=["mouse", "model", "bin", value_col])
+        return pd.DataFrame(columns=["mouse", "dataset", "model", "bin", value_col])
     df = pd.DataFrame(rows)
     if score is not None:
         df = df[df["score"] == score]
     df = df[df["model"].isin([model_a, model_b])]
     if df.empty:
-        return pd.DataFrame(columns=["mouse", "model", "bin", value_col])
-    return df.groupby(["mouse", "model", "bin"], as_index=False)[value_col].mean()
+        return pd.DataFrame(columns=["mouse", "dataset", "model", "bin", value_col])
+    return _per_unit_values(df, ["model", "bin"], value_col, level=level)
 
 
-def test_overall_model_effect(rows, value_col, model_a, model_b, score=None):
+def test_overall_model_effect(rows, value_col, model_a, model_b, score=None, level="mouse"):
     """
     Mixed-effects test of whether model_a's values are overall higher than
     model_b's, pooling every ΔDay bin as a repeated observation nested within
     mouse (value ~ C(model) + (1 | mouse)) -- same model formula as
     plot_auc_summary.fit_mixed_model(), just fit on per-(mouse, model, bin)
     ΔDay-binned data here instead of one row per (mouse, model) dataset-level
-    value.
+    value. With level="dataset" every dataset contributes its own rows, still
+    with a random intercept per mouse (datasets nested in mouse).
 
     Returns (p_value, direction): direction is +1 if model_a's fitted mean is
     higher than model_b's, -1 if lower. Returns (None, None) when there's too
     little data to fit (fewer than 2 mice, or one model missing entirely) or
     the fit fails.
     """
-    sub = _mouse_bin_values(rows, value_col, model_a, model_b, score=score).dropna(subset=[value_col])
+    sub = _mouse_bin_values(rows, value_col, model_a, model_b, score=score, level=level).dropna(subset=[value_col])
     if sub["mouse"].nunique() < 2 or sub["model"].nunique() < 2:
         return None, None
 
@@ -1642,23 +1734,25 @@ def test_overall_model_effect(rows, value_col, model_a, model_b, score=None):
     return p, direction
 
 
-def test_per_bin_model_effect(rows, value_col, model_a, model_b, score=None):
+def test_per_bin_model_effect(rows, value_col, model_a, model_b, score=None, level="mouse"):
     """
     Per-ΔDay-bin paired t-test (paired by mouse) of model_a vs model_b, Holm-
     Bonferroni corrected across every bin tested -- same per-mouse-value
     paired approach as plot_auc_summary.pairwise_paired_ttest_pvalues(), just
-    run once per bin here instead of once overall across mice.
+    run once per bin here instead of once overall across mice. With
+    level="dataset", paired by dataset instead (datasets treated as
+    independent, so this ignores that several can come from one mouse).
 
-    Returns {bin: p_adj} -- bins with fewer than 2 mice having both models'
+    Returns {bin: p_adj} -- bins with fewer than 2 units having both models'
     values are silently absent (not included as NaN).
     """
-    sub = _mouse_bin_values(rows, value_col, model_a, model_b, score=score).dropna(subset=[value_col])
+    sub = _mouse_bin_values(rows, value_col, model_a, model_b, score=score, level=level).dropna(subset=[value_col])
     if sub.empty:
         return {}
 
     raw_pvals = {}
     for b, g in sub.groupby("bin"):
-        wide = g.pivot(index="mouse", columns="model", values=value_col)
+        wide = g.pivot(index=level, columns="model", values=value_col)
         if model_a not in wide.columns or model_b not in wide.columns:
             continue
         paired = wide[[model_a, model_b]].dropna()
@@ -1681,7 +1775,7 @@ def _overall_result_str(model_a, model_b, overall):
     return f"{winner} > {loser} overall, p={p:.3g}{sig}"
 
 
-def _annotate_bin_stars(ax, x_pos, bin_pvals, y_at_bin, color="black"):
+def _annotate_bin_stars(ax, x_pos, bin_pvals, y_at_bin, color="black", fontsize=11):
     """
     Places a stars annotation ('*'/'**'/'***', via auc_summary_mod._p_to_stars)
     just above (x_pos[bin], y_at_bin[bin]) for every bin in bin_pvals whose
@@ -1698,7 +1792,7 @@ def _annotate_bin_stars(ax, x_pos, bin_pvals, y_at_bin, color="black"):
             continue
         ax.annotate(
             stars, (x_pos[b], y_at_bin[b]), xytext=(0, 4), textcoords="offset points",
-            ha="center", va="bottom", fontsize=11, color=color, clip_on=False,
+            ha="center", va="bottom", fontsize=fontsize, color=color, clip_on=False,
         )
 
 
@@ -1808,7 +1902,7 @@ def plot_score_summary(
     ax_count.set_xlabel("ΔDay (RecSes 2 − RecSes 1)")
 
     fig.tight_layout()
-    auc_summary_mod.savefig_with_svg(fig, out_path, dpi=150)
+    savefig_with_svg(fig, out_path, dpi=150)
     plt.close(fig)
     return out_path
 
@@ -1955,9 +2049,188 @@ def plot_model_diff_summary(
     ax_count.set_xlabel("ΔDay (RecSes 2 − RecSes 1)")
 
     fig.tight_layout()
-    auc_summary_mod.savefig_with_svg(fig, out_path, dpi=150)
+    savefig_with_svg(fig, out_path, dpi=150)
     plt.close(fig)
     return out_path
+
+
+# ── key-scores paper figure: n matches + one AUC-diff panel per score ──────
+
+
+def compute_auc_diff_per_unit(model_a, model_b, dataset_bin_auc_rows, scores, level="mouse", min_units=MIN_MICE_PER_BIN):
+    """
+    Mouse- or dataset-level counterpart to compute_auc_diff(): per (unit,
+    score, bin), AUC(model_a) - AUC(model_b) -- for level="mouse" each
+    model's AUC is first collapsed within mouse (WITHIN_MOUSE_AGG), for
+    level="dataset" each recording site is its own unit -- then mean +/- SEM
+    of that paired difference across units. The same per-unit values
+    test_per_bin_model_effect(level=level)'s paired t-test runs on, so error
+    bars and stars describe the same data.
+
+    Returns columns score, bin, diff, diff_se, n_units, n_mice.
+    """
+    cols = ["score", "bin", "diff", "diff_se", "n_units", "n_mice"]
+    if not dataset_bin_auc_rows:
+        return pd.DataFrame(columns=cols)
+    df = pd.DataFrame(dataset_bin_auc_rows)
+    df = df[df["score"].isin(scores) & df["model"].isin([model_a, model_b])]
+    per_unit = _per_unit_values(df, ["model", "score", "bin"], "auc", level=level)
+    index_cols = ["mouse", "score", "bin"] if level == "mouse" else ["mouse", "dataset", "score", "bin"]
+    wide = per_unit.pivot_table(index=index_cols, columns="model", values="auc")
+    if model_a not in wide.columns or model_b not in wide.columns:
+        return pd.DataFrame(columns=cols)
+    diff = (wide[model_a] - wide[model_b]).dropna().rename("diff").reset_index()
+    return _mean_sem_across_mice(diff, ["score", "bin"], "diff", min_mice=min_units, unit_col=level)
+
+
+def _paper_model_style(model, colour_for_model):
+    """(label, colour) for a model in paper figures: DUM/UM with paper_style.COLOURS."""
+    family = _family_for_model(model)
+    if family in ("DeepUnitMatch", "DUM"):
+        return "DUM", paper_style.COLOURS["DUM"]
+    if family == "UMPy":
+        return "UM", paper_style.COLOURS["UM"]
+    return model, colour_for_model.get(model, "black")
+
+
+def plot_key_scores_diff_figure(
+    model_a, model_b, matches_df, diff_df, colour_for_model, out_path,
+    scores=KEY_SCORES_FOR_DIFF_SUMMARY, ylim=KEY_DIFF_YLIM,
+    matches_overall=None, matches_bin_pvals=None,
+    score_overall=None, score_bin_pvals=None,
+):
+    """
+    One-row paper figure: number of matches per session pair for model_a and
+    model_b (first panel, from summarise_n_matches()), then one panel per
+    score with AUC(model_a) - AUC(model_b) (from compute_auc_diff_per_unit()),
+    all vs signed ΔDay. Error bars are SEM across whichever unit (mice or
+    datasets) the inputs were computed over. Stars mark bins where the per-bin paired t-test (Holm
+    corrected) is significant; each diff panel's title carries that score's
+    overall mixed-model p-value.
+    """
+    matches_df = matches_df[matches_df["model"].isin([model_a, model_b])]
+    diff_df = diff_df[diff_df["score"].isin(scores)]
+    scores = [s for s in scores if s in set(diff_df["score"])]
+    if matches_df.empty and not scores:
+        return None
+
+    bins_present = _bin_order(set(matches_df["bin"]) | set(diff_df["bin"]))
+    x_pos = {b: i for i, b in enumerate(bins_present)}
+    se_col = f"{N_MATCHES_COL}_se"
+    label_a, _ = _paper_model_style(model_a, colour_for_model)
+    label_b, _ = _paper_model_style(model_b, colour_for_model)
+
+    panel_w_mm = max(35, 2.2 * len(bins_present))
+    line_kw = dict(marker="o", markersize=2, capsize=1, linewidth=0.8, elinewidth=0.6)
+
+    with matplotlib.rc_context():
+        paper_style.apply()
+        fig, axes = plt.subplots(
+            1, 1 + len(scores), sharex=True,
+            figsize=paper_style.mm_figsize(panel_w_mm * (1 + len(scores)), 50),
+        )
+        axes = np.atleast_1d(axes)
+
+        ax_n = axes[0]
+        for model in (model_a, model_b):
+            label, color = _paper_model_style(model, colour_for_model)
+            s = matches_df[matches_df["model"] == model].copy()
+            s["x"] = s["bin"].map(x_pos)
+            s = s.sort_values("x")
+            ax_n.errorbar(s["x"], s[N_MATCHES_COL], yerr=s[se_col], color=color, label=label, **line_kw)
+        n_y_at_bin = (matches_df[N_MATCHES_COL] + matches_df[se_col].fillna(0)).groupby(matches_df["bin"]).max().to_dict()
+        _annotate_bin_stars(ax_n, x_pos, matches_bin_pvals, n_y_at_bin, fontsize=paper_style.FONT_SIZE)
+        ax_n.margins(y=0.2)  # headroom for the stars above the top line
+        ax_n.set_ylabel("Matches per session pair")
+        n_title = "Number of matches"
+        if matches_overall is not None and matches_overall[0] is not None:
+            n_title += f"\np={matches_overall[0]:.2g}"
+        ax_n.set_title(n_title)
+        ax_n.legend(loc="best")
+
+        for i, (ax, score) in enumerate(zip(axes[1:], scores)):
+            s = diff_df[diff_df["score"] == score].copy()
+            s["x"] = s["bin"].map(x_pos)
+            s = s.sort_values("x")
+            ax.axhline(0.0, color="grey", linewidth=0.6, linestyle=":")
+            ax.errorbar(s["x"], s["diff"], yerr=s["diff_se"], color="black", **line_kw)
+            ax.set_ylim(ylim)
+            # Keep stars inside the plotting range when a point is clipped by ylim.
+            y_at_bin = {b: min(y, ylim[1]) for b, y in (s["diff"] + s["diff_se"].fillna(0)).groupby(s["bin"]).max().items()}
+            _annotate_bin_stars(ax, x_pos, (score_bin_pvals or {}).get(score), y_at_bin, fontsize=paper_style.FONT_SIZE)
+
+            title = KEY_SCORE_TITLES.get(score, score)
+            overall = (score_overall or {}).get(score)
+            if overall is not None and overall[0] is not None:
+                title += f"\np={overall[0]:.2g}"
+            ax.set_title(title)
+            if i == 0:
+                ax.set_ylabel(f"ΔAUC ({label_a} − {label_b})")
+
+        for ax in axes:
+            ax.set_xticks(range(len(bins_present)))
+            ax.set_xticklabels(bins_present, rotation=90, fontsize=paper_style.FONT_SIZE - 2)
+        fig.supxlabel("ΔDay (RecSes 2 − RecSes 1)", fontsize=paper_style.FONT_SIZE)
+
+        fig.tight_layout()
+        savefig_with_svg(fig, out_path, dpi=300)
+        plt.close(fig)
+    return out_path
+
+
+def make_key_scores_figures(
+    model_a, model_b, dataset_bin_auc_rows, dataset_bin_rate_rows, colour_for_model,
+    output_dir, file_tag="", levels=LEVELS,
+):
+    """
+    For each level in `levels` ("mouse": n = mice, median within mouse first;
+    "dataset": n = recording sites -- see LEVELS), computes and writes CSVs
+    for the inputs to plot_key_scores_diff_figure(), runs that level's own
+    stats (so stars/p-values always match the error bars shown), and plots
+    summary_diff_key_scores{file_tag}_{level}_level_{model_a}_vs_{model_b}.
+    Shared by this module's main() and plot_auc_vs_delta_days_fixed_n.py
+    (file_tag distinguishes their output names, e.g. "_fixed_n").
+    """
+    present = {r["score"] for r in dataset_bin_auc_rows}
+    key_scores = [s for s in KEY_SCORES_FOR_DIFF_SUMMARY if s in present]
+    if not key_scores:
+        return []
+    pair_tag = f"{model_a}_vs_{model_b}"
+
+    results = []
+    for level in levels:
+        tag = f"{file_tag}_{level}_level"
+        diff_df = compute_auc_diff_per_unit(model_a, model_b, dataset_bin_auc_rows, key_scores, level=level)
+        diff_csv = os.path.join(output_dir, f"auc_diff_vs_delta_days{tag}_key_scores_{pair_tag}.csv")
+        diff_df.to_csv(diff_csv, index=False)
+        print(f"Wrote {diff_csv}")
+
+        matches_df = summarise_n_matches(dataset_bin_rate_rows, models=[model_a, model_b], level=level)
+        matches_csv = os.path.join(output_dir, f"n_matches_vs_delta_days{tag}_{pair_tag}.csv")
+        matches_df.to_csv(matches_csv, index=False)
+        print(f"Wrote {matches_csv}")
+
+        matches_overall = test_overall_model_effect(dataset_bin_rate_rows, N_MATCHES_COL, model_a, model_b, level=level)
+        matches_bin_pvals = test_per_bin_model_effect(dataset_bin_rate_rows, N_MATCHES_COL, model_a, model_b, level=level)
+        score_overall = {
+            s: test_overall_model_effect(dataset_bin_auc_rows, "auc", model_a, model_b, score=s, level=level)
+            for s in key_scores
+        }
+        score_bin_pvals = {
+            s: test_per_bin_model_effect(dataset_bin_auc_rows, "auc", model_a, model_b, score=s, level=level)
+            for s in key_scores
+        }
+
+        out_path = os.path.join(output_dir, f"summary_diff_key_scores{tag}_{pair_tag}.png")
+        result = plot_key_scores_diff_figure(
+            model_a, model_b, matches_df, diff_df, colour_for_model, out_path, scores=key_scores,
+            matches_overall=matches_overall, matches_bin_pvals=matches_bin_pvals,
+            score_overall=score_overall, score_bin_pvals=score_bin_pvals,
+        )
+        if result:
+            print(f"  Plotted key-scores summary, {level} level ({model_a} vs {model_b}) -> {result}")
+            results.append(result)
+    return results
 
 
 def main():
@@ -1968,7 +2241,7 @@ def main():
     print(f"Have session dates for {n_datasets_with_dates}/{len(session_date_lookup)} dataset(s).\n")
 
     (
-        score_bins, rate_bins, count_bins, dataset_level_rows, _dataset_level_auc_rows,
+        score_bins, rate_bins, count_bins, dataset_level_rows, dataset_level_auc_rows,
         auc_long_df, dataset_bin_auc_rows, dataset_bin_rate_rows,
     ) = collect_binned_pairs(session_date_lookup)
 
@@ -2048,28 +2321,12 @@ def main():
         if result:
             print(f"  Plotted AUC-diff summary ({model_a} vs {model_b}) -> {result}")
 
-        # Compact companion: same plot, restricted to KEY_SCORES_FOR_DIFF_SUMMARY.
-        key_scores_present = [s for s in KEY_SCORES_FOR_DIFF_SUMMARY if s in auc_df["score"].unique()]
-        if key_scores_present:
-            key_diff_df = compute_auc_diff(model_a, model_b, auc_df, scores=key_scores_present)
-            key_diff_csv = os.path.join(
-                OUTPUT_DIR, f"auc_diff_vs_delta_days_key_scores_{model_a}_vs_{model_b}.csv"
-            )
-            key_diff_df.to_csv(key_diff_csv, index=False)
-            print(f"Wrote {key_diff_csv}")
-
-            key_diff_out_path = os.path.join(
-                OUTPUT_DIR, f"summary_diff_key_scores_{model_a}_vs_{model_b}.png"
-            )
-            result = plot_model_diff_summary(
-                model_a, model_b, auc_df, rate_df, count_df, colour_for, colour_for_score, key_diff_out_path,
-                scores=key_scores_present, title_suffix=" (key scores)",
-                rate_overall=rate_overall, rate_bin_pvals=rate_bin_pvals,
-                score_overall={s: score_overall[s] for s in key_scores_present},
-                score_bin_pvals={s: score_bin_pvals[s] for s in key_scores_present},
-            )
-            if result:
-                print(f"  Plotted key-scores AUC-diff summary ({model_a} vs {model_b}) -> {result}")
+        # Compact paper figure: n matches + one mouse-level AUC-diff panel per
+        # KEY_SCORES_FOR_DIFF_SUMMARY score -- see plot_key_scores_diff_figure().
+        # Mouse-level and dataset-level versions.
+        make_key_scores_figures(
+            model_a, model_b, dataset_bin_auc_rows, dataset_bin_rate_rows, colour_for, OUTPUT_DIR,
+        )
     else:
         print(
             f"Skipping AUC-diff summary: {len(models)} model(s) included ({sorted(models)}), "
@@ -2139,15 +2396,16 @@ def main():
     if result:
         print(f"  Plotted quality-vs-quantity per score -> {result}")
 
-    # Mouse-balanced version: combine per-dataset P_track (just collected) with
-    # the per-dataset AUCs collect_binned_pairs already pulled from AUC_summary.json,
-    # restricted to the same passing datasets/models used everywhere else above.
+    # Mouse-balanced version: combine per-dataset P_track with per-dataset
+    # AUCs, both medians across session pairs (dataset_level_auc_rows -- not
+    # AUC_summary.json's AUCs, which pool every session pair of a dataset
+    # together), restricted to the same passing datasets/models used everywhere else above.
     # (get_passing_datasets() is a pure groupby over the already-loaded auc_long_df,
     # not a filesystem walk, so recomputing it here is cheap.)
     passing_datasets = auc_summary_mod.get_passing_datasets(auc_long_df, min_matches=MIN_MATCHES_TO_INCLUDE)
     ptrack_df = pd.DataFrame(dataset_level_rows)
     combined_df_long = pd.concat(
-        [auc_long_df[auc_long_df["score"] != "n_matches_across_sessions"], ptrack_df],
+        [pd.DataFrame(dataset_level_auc_rows), ptrack_df],
         ignore_index=True,
     )
     combined_df_long = combined_df_long[

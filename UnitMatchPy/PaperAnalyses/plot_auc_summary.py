@@ -52,6 +52,10 @@ sys.path.insert(0, os.path.join(_HERE, "DeepUnitMatch"))
 
 import run_deepunitmatch_batch_onMerged as base_batch
 from DeepUnitMatch.testing import test as dumtest
+import paper_style
+
+# Editable text in the .svg output (real <text>, Arial) -- font sizes untouched.
+paper_style.apply(font_size=None)
 
 # ── settings ─────────────────────────────────────────────────────────────────
 # Point this at whichever BASE_OUTPUT tree you want to summarise (defaults to
@@ -245,7 +249,8 @@ def compute_fr_diff_norm_auc(model_dir):
 def savefig_with_svg(fig, out_path, **kwargs):
     """Save out_path (a .png path) plus an editable .svg copy alongside it (e.g. for Inkscape)."""
     fig.savefig(out_path, **kwargs)
-    fig.savefig(os.path.splitext(out_path)[0] + ".svg", **{k: v for k, v in kwargs.items() if k != "dpi"})
+    with matplotlib.rc_context({"svg.fonttype": "none"}):  # keep text as text, not paths
+        fig.savefig(os.path.splitext(out_path)[0] + ".svg", **{k: v for k, v in kwargs.items() if k != "dpi"})
 
 
 # ── collect ──────────────────────────────────────────────────────────────────
@@ -558,14 +563,15 @@ def plot_n_matches_vs_auc(summary_df, output_dir):
 def average_over_mice(df_long):
     """
     Collapse dataset-level rows to one value per (mouse, model, score) by
-    averaging across that mouse's datasets. This removes the pseudoreplication
+    taking the median across that mouse's datasets (recording locations), so
+    one odd recording site can't drag a mouse's value. This removes the pseudoreplication
     from unequal numbers of datasets per mouse, at the cost of losing
     within-mouse dataset-to-dataset variability -- the "simple" companion to
     the dataset-level mixed-effects analysis, where mouse no longer needs to
     be modelled as a random effect because each mouse now contributes exactly
     one point per model.
     """
-    return df_long.groupby(["mouse", "model", "score"], as_index=False)["value"].mean()
+    return df_long.groupby(["mouse", "model", "score"], as_index=False)["value"].median()
 
 
 # ── significance annotation ─────────────────────────────────────────────────
@@ -687,10 +693,11 @@ def plot_score(df_long, score, output_dir, pvals_adj=None):
 
 def plot_score_mouse_avg(df_mouse, score, output_dir, pvals_adj=None):
     """
-    Mouse-averaged companion to plot_score: one point per mouse (averaged
-    over that mouse's datasets), thin lines connecting each mouse's points
-    across models to make the paired comparisons visible, and significance
-    brackets for any pairwise comparison in pvals_adj below ALPHA.
+    Mouse-averaged companion to plot_score: one point per mouse (median over
+    that mouse's datasets, see average_over_mice()), thin lines connecting
+    each mouse's points across models to make the paired comparisons visible,
+    a black bar + error bar for the mean +/- s.e. across mice, and
+    significance brackets for any pairwise comparison in pvals_adj below ALPHA.
     """
     sub = df_mouse[df_mouse["score"] == score].dropna(subset=["value"])
     if sub.empty:
@@ -712,12 +719,14 @@ def plot_score_mouse_avg(df_mouse, score, output_dir, pvals_adj=None):
 
     for xi, model in enumerate(models):
         vals = sub[sub["model"] == model]["value"]
+        sem = vals.std(ddof=1) / np.sqrt(len(vals)) if len(vals) > 1 else np.nan
         ax.hlines(vals.mean(), xi - 0.25, xi + 0.25, colors="black", linewidth=2, zorder=4)
+        ax.errorbar(xi, vals.mean(), yerr=sem, color="black", linewidth=2, capsize=4, zorder=4)
 
     ax.set_xticks(range(len(models)))
     ax.set_xticklabels(models, rotation=30, ha="right")
     ax.set_ylabel(score)
-    ax.set_title(f"{score} (averaged per mouse)")
+    ax.set_title(f"{score} (median per mouse; mean ± s.e. across mice)")
     ax.grid(axis="y", alpha=0.3)
 
     handles = [
