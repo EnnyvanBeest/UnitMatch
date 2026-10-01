@@ -52,7 +52,7 @@ import matplotlib
 matplotlib.use("Agg")  # non-interactive backend
 import matplotlib.pyplot as plt
 import statsmodels.formula.api as smf
-from scipy.stats import ttest_rel
+from scipy.stats import t as t_dist, ttest_rel
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
@@ -1652,15 +1652,15 @@ def plot_quality_vs_quantity_per_score(auc_df, rate_df, colour_for, out_path, mi
 # "Is P(track)/AUC larger for one model than the other overall, and if so at
 # which specific ΔDay bins" -- restricted to exactly one model pair (see
 # main()'s stats_model_a/stats_model_b and plot_auc_vs_delta_days_fixed_n.py's
-# DIFF_SUMMARY_MODEL_A/B), never a general N-model comparison. Mirrors
-# plot_auc_summary.py's own dataset-level stats (fit_mixed_model()/
-# pairwise_mixed_pvalues() for the mixed model, fit_paired_ttest_vs_reference()/
-# pairwise_paired_ttest_pvalues() for the paired t-test), just built on
-# per-(mouse, model, bin) ΔDay-binned data instead of one row per (mouse,
-# model) dataset-level value -- duplicated here rather than imported from
-# that module to avoid a circular import (it already imports this one for
-# FR_diff_norm support) and because the grouping column (bin, and optionally
-# score) differs from that module's own dataset-level shape.
+# DIFF_SUMMARY_MODEL_A/B), never a general N-model comparison. The per-bin
+# paired t-test mirrors plot_auc_summary.py's fit_paired_ttest_vs_reference()/
+# pairwise_paired_ttest_pvalues(). The overall test is a mixed model on the
+# paired difference with nested random intercepts (mouse, and location within
+# mouse at dataset level) -- unlike plot_auc_summary.fit_mixed_model(), since
+# here every unit contributes many ΔDay bins. Kept in this module rather than
+# imported to avoid a circular import (plot_auc_summary already imports this
+# one for FR_diff_norm support) and because the grouping column (bin, and
+# optionally score) differs from that module's own dataset-level shape.
 
 
 def _mouse_bin_values(rows, value_col, model_a, model_b, score=None, level="mouse"):
@@ -1695,42 +1695,56 @@ def _mouse_bin_values(rows, value_col, model_a, model_b, score=None, level="mous
 def test_overall_model_effect(rows, value_col, model_a, model_b, score=None, level="mouse"):
     """
     Mixed-effects test of whether model_a's values are overall higher than
-    model_b's, pooling every ΔDay bin as a repeated observation nested within
-    mouse (value ~ C(model) + (1 | mouse)) -- same model formula as
-    plot_auc_summary.fit_mixed_model(), just fit on per-(mouse, model, bin)
-    ΔDay-binned data here instead of one row per (mouse, model) dataset-level
-    value. With level="dataset" every dataset contributes its own rows, still
-    with a random intercept per mouse (datasets nested in mouse).
+    model_b's, pooling every ΔDay bin. Fit on the paired difference
+    diff = model_a - model_b, one row per (unit, bin), where both models were
+    measured on the same session pairs:
 
-    Returns (p_value, direction): direction is +1 if model_a's fitted mean is
-    higher than model_b's, -1 if lower. Returns (None, None) when there's too
-    little data to fit (fewer than 2 mice, or one model missing entirely) or
-    the fit fails.
+      level="mouse":   diff ~ 1 + (1 | mouse)
+      level="dataset": diff ~ 1 + (1 | mouse) + (1 | mouse:dataset)
+
+    The random intercepts make repeated bins of the same mouse (and, at
+    dataset level, of the same recording location within that mouse) count
+    as correlated observations rather than independent ones. Both terms are
+    needed at dataset level: (1 | mouse:dataset) alone would treat the
+    locations of one mouse as unrelated clusters. The test is on the
+    intercept (the mean paired difference): its z statistic is referred to a
+    t distribution with (n_mice - 1) degrees of freedom rather than a normal,
+    because with ~17 mice the normal-based p is too optimistic (in
+    simulations with no true effect it gave p < 0.05 in 6-10% of runs; the
+    t-based p gave ~5%).
+
+    Returns (p_value, direction): direction is +1 if model_a is higher on
+    average, -1 if lower. Returns (None, None) when there's too little data
+    to fit (fewer than 2 mice with both models), when every paired difference
+    is zero (e.g. N forced equal by construction), or when the fit fails.
     """
     sub = _mouse_bin_values(rows, value_col, model_a, model_b, score=score, level=level).dropna(subset=[value_col])
-    if sub["mouse"].nunique() < 2 or sub["model"].nunique() < 2:
+    if sub.empty:
         return None, None
 
-    sub = sub.copy()
-    sub["model"] = pd.Categorical(sub["model"], categories=[model_a, model_b])
+    unit_cols = ["mouse"] if level == "mouse" else ["mouse", "dataset"]
+    wide = sub.pivot_table(index=unit_cols + ["bin"], columns="model", values=value_col)
+    if model_a not in wide.columns or model_b not in wide.columns:
+        return None, None
+    paired = (wide[model_a] - wide[model_b]).dropna().rename("diff").reset_index()
+    if paired["mouse"].nunique() < 2 or np.allclose(paired["diff"], 0):
+        return None, None
+
+    vc_formula = {"location": "0 + C(dataset)"} if level == "dataset" else None
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         try:
-            result = smf.mixedlm(f"{value_col} ~ C(model)", sub, groups=sub["mouse"]).fit()
+            result = smf.mixedlm(
+                "diff ~ 1", paired, groups=paired["mouse"], re_formula="1", vc_formula=vc_formula,
+            ).fit()
         except Exception as e:
             label = f"{value_col}/{score}" if score else value_col
             print(f"  WARNING: overall mixed model failed for {label}: {e}")
             return None, None
 
-    coef_names = [c for c in result.pvalues.index if c not in ("Intercept", "Group Var")]
-    if not coef_names:
-        return None, None
-    coef_name = coef_names[0]
-    p = float(result.pvalues[coef_name])
-    # coef_name's coefficient is (mean(model_b) - mean(model_a)) since
-    # model_a is the reference (first) category -- negative means model_a is
-    # higher.
-    direction = 1 if result.params[coef_name] < 0 else -1
+    z = result.params["Intercept"] / result.bse["Intercept"]
+    p = float(2 * t_dist.sf(abs(z), paired["mouse"].nunique() - 1))
+    direction = 1 if result.params["Intercept"] > 0 else -1
     return p, direction
 
 

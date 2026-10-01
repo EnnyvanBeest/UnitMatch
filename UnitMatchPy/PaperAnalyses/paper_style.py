@@ -24,7 +24,7 @@ FONT_SIZE = 7  # pt; Nature Methods asks for 5-7 pt
 COLOURS = {
     "half1": "#000000",        # first half / reference unit
     "half2": "#808080",        # second half of the same unit
-    "diff_within": "#EE6C21",  # different unit within session
+    "diff_unit": "#EE6C21",    # different unit across sessions (non-match)
     "match_across": "#209120", # match across sessions
     "DUM": "#E41A1C",
     "UM": "#1F5FBF",
