@@ -40,9 +40,13 @@ METADATA_INDEX_PATH = os.path.join(UNMERGED_OUTPUT, "metadata_index.json")
 MERGED_ROOT = os.path.join(SHARE_ROOT, f"{RUN_NAME}_merged")
 MERGED_DATA = os.path.join(MERGED_ROOT, "merged_data")
 
-# step 3: preprocessed training snippets and cross-validation bookkeeping.
+# step 3 (train_paper_models.py): preprocessed training snippets, per-job
+# bookkeeping (status, locks, mouse subsets), and the final checkpoint of every
+# trained model, copied here from the training machine's local ModelExp so
+# any machine can evaluate it.
 TRAINING_CACHE = os.path.join(MERGED_ROOT, "training_snippets")
-XVAL_STATE_ROOT = os.path.join(MERGED_ROOT, "xval_state")
+TRAINING_STATE_ROOT = os.path.join(MERGED_ROOT, "training_state")
+MODELS_ROOT = os.path.join(MERGED_ROOT, "models")
 
 # step 4 / 6: every matching output on the merged data, plus everything derived from it.
 ANALYSIS_OUTPUT = os.path.join(SHARE_ROOT, f"{RUN_NAME}_OnMergedData")
