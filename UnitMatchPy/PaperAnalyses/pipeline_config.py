@@ -57,6 +57,10 @@ REPORTS_DIR = os.path.join(ANALYSIS_OUTPUT, "pipeline_reports")
 # within the current run (see batch_lock.sentinel_is_fresh).
 REDO_FROM_DATE = None
 
+# Per-location done/failed/skipped events of every stage (pipeline_log.py),
+# one JSON-lines file per stage and machine; read by check_pipeline_completeness.py.
+LOG_DIR = os.path.join(SHARE_ROOT, f"{RUN_NAME}_pipeline_logs")
+
 # Every root the batch scripts may leave .processing*.lock files in
 # (used by clear_stale_locks.py).
 LOCK_ROOTS = [UNMERGED_OUTPUT, MERGED_ROOT, ANALYSIS_OUTPUT]

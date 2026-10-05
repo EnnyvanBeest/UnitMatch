@@ -14,8 +14,19 @@ sys.path.insert(0, os.getcwd())
 sys.path.insert(0, os.path.join(os.getcwd(), "testing"))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import traceback
+
 import batch_lock
 import pipeline_config as cfg
+import pipeline_log as plog
+
+LOG_STAGE = "merge"
+
+
+def group_key(source_dir):
+    """'mouse/probe/location' of a step-1 output folder (<X>/DeepUnitMatch)."""
+    return os.path.relpath(os.path.dirname(source_dir), DUM_NONMERGED_DATAPATH).replace(os.sep, "/")
+
 
 # Input: step-1 output on the non-merged data (one DeepUnitMatch/ folder per
 # recording location, holding UMparam.pickle + MatchTable.csv).
@@ -249,37 +260,18 @@ def get_group_lock_path(target_dir):
 def run_merging_process(UMparam_files, source_dirs, MAX_C_RATIO=1.0):
 
     for UMparam_file, source_dir in zip(UMparam_files, source_dirs):
-        with open(UMparam_file, "rb") as file:
-            data = pickle.load(file)
+        try:
+            with open(UMparam_file, "rb") as file:
+                data = pickle.load(file)
 
-        # Same <mouse>/<probe>/<location>/DeepUnitMatch layout under the merged root.
-        target_dir = os.path.join(
-            MERGED_DATAPATH, os.path.relpath(source_dir, DUM_NONMERGED_DATAPATH)
-        )
-
-        target_KSDirs = [
-            os.path.join(target_dir, str(idx)) for idx in range(len(data["KS_dirs"]))
-        ]
-        already_done = [
-            batch_lock.sentinel_is_fresh(
-                os.path.join(d, MERGE_COMPLETE_MARKER), REDO_FROM_DATE
+            # Same <mouse>/<probe>/<location>/DeepUnitMatch layout under the merged root.
+            target_dir = os.path.join(
+                MERGED_DATAPATH, os.path.relpath(source_dir, DUM_NONMERGED_DATAPATH)
             )
-            for d in target_KSDirs
-        ]
-        if all(already_done):
-            print(
-                f"Skipping UMparam_file: {UMparam_file} (all {len(target_KSDirs)} session(s) already processed)."
-            )
-            continue
 
-        lock_path = get_group_lock_path(target_dir)
-        with batch_lock.try_lock(lock_path) as acquired:
-            if not acquired:
-                print(f"  Skipping (already being processed by another run): {lock_path}")
-                continue
-
-            # re-check now that we hold the lock: another machine may have
-            # finished this group while we were scanning/waiting for the lock
+            target_KSDirs = [
+                os.path.join(target_dir, str(idx)) for idx in range(len(data["KS_dirs"]))
+            ]
             already_done = [
                 batch_lock.sentinel_is_fresh(
                     os.path.join(d, MERGE_COMPLETE_MARKER), REDO_FROM_DATE
@@ -287,240 +279,275 @@ def run_merging_process(UMparam_files, source_dirs, MAX_C_RATIO=1.0):
                 for d in target_KSDirs
             ]
             if all(already_done):
-                print(f"  Skipping UMparam_file: {UMparam_file} (completed by another run).")
-                continue
-
-            print(f"Processing UMparam_file: {UMparam_file}...")
-
-            # could load both UM and DUM matchtables here to get the merged units, but for now just use the UM matchtable to find which units to merge
-            mt = pd.read_csv(os.path.join(os.path.split(UMparam_file)[0], "MatchTable.csv"))
-            merged_units_idx = (
-                (mt["RecSes 1"] == mt["RecSes 2"])
-                & (mt["ID1"] != mt["ID2"])
-                & (mt["UID 1"] == mt["UID 2"])
-            )
-            # merged_units_idx = (mt['RecSes 1'] == mt['RecSes 2']) & (mt['ID1'] != mt['ID2']) & (mt['UM Probabilities'] > 0.5)
-
-            # source_dir is DUM_NONMERGED_DATAPATH/<X>/DeepUnitMatch; the matching
-            # original UnitMatch.mat lives at RAW_KS_BASE/<X>/UnitMatch/UnitMatch.mat.
-            x = os.path.dirname(os.path.relpath(source_dir, DUM_NONMERGED_DATAPATH))
-            mat_path = os.path.join(RAW_KS_BASE, x, "UnitMatch", "UnitMatch.mat")
-            try:
-                orig_clus_id, recsesAll, good_id = load_uid_conversion(mat_path)
-                idx_to_recses = original_index_to_recses(
-                    recsesAll, good_id, len(data["KS_dirs"])
+                print(
+                    f"Skipping UMparam_file: {UMparam_file} (all {len(target_KSDirs)} session(s) already processed)."
                 )
-            except Exception as e:
-                print(f"  WARNING: could not read {mat_path} ({e}); skipping {source_dir}.")
                 continue
 
-            for idx, KSDir in enumerate(data["KS_dirs"]):
-                target_KSDir = target_KSDirs[idx]
-                marker_path = os.path.join(target_KSDir, MERGE_COMPLETE_MARKER)
-
-                if already_done[idx]:
-                    print(
-                        f"Processing KSDir: {KSDir} (idx {idx})... already done, skipping."
-                    )
+            lock_path = get_group_lock_path(target_dir)
+            with batch_lock.try_lock(lock_path) as acquired:
+                if not acquired:
+                    print(f"  Skipping (already being processed by another run): {lock_path}")
                     continue
 
-                print(f"Processing KSDir: {KSDir} (idx {idx})...")
+                # re-check now that we hold the lock: another machine may have
+                # finished this group while we were scanning/waiting for the lock
+                already_done = [
+                    batch_lock.sentinel_is_fresh(
+                        os.path.join(d, MERGE_COMPLETE_MARKER), REDO_FROM_DATE
+                    )
+                    for d in target_KSDirs
+                ]
+                if all(already_done):
+                    print(f"  Skipping UMparam_file: {UMparam_file} (completed by another run).")
+                    continue
 
-                if not os.path.exists(target_KSDir):
-                    os.makedirs(target_KSDir)
+                print(f"Processing UMparam_file: {UMparam_file}...")
 
-                # Move KSDir files that are necessary but won't be modified to the new target directory
-                for file_name in [
-                    "spike_times.npy",
-                    "channel_positions.npy",
-                    "cluster_info.tsv",
-                ]:
-                    source_file = os.path.join(KSDir, file_name)
-                    target_file = os.path.join(target_KSDir, file_name)
-                    if os.path.exists(source_file):
-                        shutil.copy2(source_file, target_file)  # preserves metadata
+                # could load both UM and DUM matchtables here to get the merged units, but for now just use the UM matchtable to find which units to merge
+                mt = pd.read_csv(os.path.join(os.path.split(UMparam_file)[0], "MatchTable.csv"))
+                merged_units_idx = (
+                    (mt["RecSes 1"] == mt["RecSes 2"])
+                    & (mt["ID1"] != mt["ID2"])
+                    & (mt["UID 1"] == mt["UID 2"])
+                )
+                # merged_units_idx = (mt['RecSes 1'] == mt['RecSes 2']) & (mt['ID1'] != mt['ID2']) & (mt['UM Probabilities'] > 0.5)
 
-                # Move natural images info if exists
-                natural_images_folder = os.path.dirname(os.path.dirname(KSDir))
-                for file_name in ['trial.imageIDs.npy', 'trial.offsetTimes.npy', 'trial.onsetTimes.npy']:
-                        source_file = os.path.join(natural_images_folder, file_name)
+                # source_dir is DUM_NONMERGED_DATAPATH/<X>/DeepUnitMatch; the matching
+                # original UnitMatch.mat lives at RAW_KS_BASE/<X>/UnitMatch/UnitMatch.mat.
+                x = os.path.dirname(os.path.relpath(source_dir, DUM_NONMERGED_DATAPATH))
+                mat_path = os.path.join(RAW_KS_BASE, x, "UnitMatch", "UnitMatch.mat")
+                try:
+                    orig_clus_id, recsesAll, good_id = load_uid_conversion(mat_path)
+                    idx_to_recses = original_index_to_recses(
+                        recsesAll, good_id, len(data["KS_dirs"])
+                    )
+                except Exception as e:
+                    print(f"  WARNING: could not read {mat_path} ({e}); skipping {source_dir}.")
+                    plog.log_event(LOG_STAGE, group_key(source_dir), "merge", "failed",
+                                   f"could not read {mat_path}: {e}")
+                    continue
+
+                group_absorbed = 0
+                for idx, KSDir in enumerate(data["KS_dirs"]):
+                    target_KSDir = target_KSDirs[idx]
+                    marker_path = os.path.join(target_KSDir, MERGE_COMPLETE_MARKER)
+
+                    if already_done[idx]:
+                        print(
+                            f"Processing KSDir: {KSDir} (idx {idx})... already done, skipping."
+                        )
+                        continue
+
+                    print(f"Processing KSDir: {KSDir} (idx {idx})...")
+
+                    if not os.path.exists(target_KSDir):
+                        os.makedirs(target_KSDir)
+
+                    # Move KSDir files that are necessary but won't be modified to the new target directory
+                    for file_name in [
+                        "spike_times.npy",
+                        "channel_positions.npy",
+                        "cluster_info.tsv",
+                    ]:
+                        source_file = os.path.join(KSDir, file_name)
                         target_file = os.path.join(target_KSDir, file_name)
                         if os.path.exists(source_file):
                             shutil.copy2(source_file, target_file)  # preserves metadata
 
-                # cluster_bc_unitType.tsv is always *derived* from the original
-                # UnitMatch.mat's GoodID rather than copied from the KS session's own
-                # bombcell output. This matches run_deepunitmatch_batch.py, which never
-                # reads cluster_bc_unitType.tsv either -- it defines good units purely
-                # from UniqueIDConversion. It also avoids a real scoping mismatch: a raw
-                # KS session's bombcell labels are session-wide, but the same session
-                # can be a candidate for multiple probe/depth-group comparisons (see
-                # write_synthetic_bc_unit_type_tsv docstring) -- GoodID is the one
-                # source that's correctly scoped to *this* group's comparison.
-                write_synthetic_bc_unit_type_tsv(
-                    orig_clus_id,
-                    recsesAll,
-                    good_id,
-                    idx,
-                    os.path.join(target_KSDir, "cluster_bc_unitType.tsv"),
-                )
+                    # Move natural images info if exists
+                    natural_images_folder = os.path.dirname(os.path.dirname(KSDir))
+                    for file_name in ['trial.imageIDs.npy', 'trial.offsetTimes.npy', 'trial.onsetTimes.npy']:
+                            source_file = os.path.join(natural_images_folder, file_name)
+                            target_file = os.path.join(target_KSDir, file_name)
+                            if os.path.exists(source_file):
+                                shutil.copy2(source_file, target_file)  # preserves metadata
 
-                source_waveform_dir = next(
-                    (
-                        str(path)
-                        for path in Path(KSDir).rglob("RawWaveforms")
-                        if path.is_dir()
-                    ),
-                    None,
-                )
-                target_waveform_dir = os.path.join(target_KSDir, "qMetrics", "RawWaveforms")
-
-                spk_clusters = np.load(os.path.join(KSDir, "spike_clusters.npy"))
-                spk_times = np.load(os.path.join(KSDir, "spike_times.npy"))
-                spk_times = spk_times / 30000  # convert to seconds
-
-                # Copy the RawWaveforms directory to the new target directory.
-                # Start from a clean copy: a session being (re)processed must not
-                # keep merged waveforms or backups from an earlier, interrupted or
-                # outdated run (these only ever live in the *target* tree).
-                backup_waveform_dir = os.path.join(
-                    os.path.dirname(target_waveform_dir), BACKUP_WAVEFORM_DIRNAME
-                )
-                for stale_dir in (target_waveform_dir, backup_waveform_dir):
-                    if os.path.isdir(stale_dir):
-                        shutil.rmtree(stale_dir)
-                os.makedirs(target_waveform_dir)
-
-                for file in Path(source_waveform_dir).iterdir():
-                    if file.is_file():
-                        shutil.copy2(
-                            file, os.path.join(target_waveform_dir, file.name)
-                        )  # preserves metadata
-
-                # Find which units need to be merged based on the matching results.
-                # RecSes in MatchTable.csv is the *compacted* session count (sessions
-                # with zero good units dropped), so idx+1 is only correct when no
-                # earlier session had zero good units -- use the recovered mapping
-                # instead of assuming idx+1 == RecSes.
-                recses = idx_to_recses.get(idx)
-                if recses is None:
-                    # This session had zero good units in the original comparison,
-                    # so it can't have any self-merges to apply.
-                    sess_idx = pd.Series(False, index=mt.index)
-                else:
-                    sess_idx = (mt["RecSes 1"] == recses) & (mt["RecSes 2"] == recses)
-                uids = mt["UID 1"][merged_units_idx & sess_idx].unique()
-                absorbed_units = []
-                for uid in uids:
-                    # Get the indices of the units to be merged
-                    units_to_merge = mt[
-                        (mt["UID 1"] == uid) & (merged_units_idx & sess_idx)
-                    ]
-                    unit_indices = np.unique(
-                        np.concatenate(
-                            [units_to_merge["ID1"].values, units_to_merge["ID2"].values]
-                        )
+                    # cluster_bc_unitType.tsv is always *derived* from the original
+                    # UnitMatch.mat's GoodID rather than copied from the KS session's own
+                    # bombcell output. This matches run_deepunitmatch_batch.py, which never
+                    # reads cluster_bc_unitType.tsv either -- it defines good units purely
+                    # from UniqueIDConversion. It also avoids a real scoping mismatch: a raw
+                    # KS session's bombcell labels are session-wide, but the same session
+                    # can be a candidate for multiple probe/depth-group comparisons (see
+                    # write_synthetic_bc_unit_type_tsv docstring) -- GoodID is the one
+                    # source that's correctly scoped to *this* group's comparison.
+                    write_synthetic_bc_unit_type_tsv(
+                        orig_clus_id,
+                        recsesAll,
+                        good_id,
+                        idx,
+                        os.path.join(target_KSDir, "cluster_bc_unitType.tsv"),
                     )
 
-                    FLAG = True
-                    while (len(unit_indices) > 1) & FLAG:
-                        # Compute C ratio for all pairs of units to be merged
-                        ratios = []
-                        for unit_id1 in unit_indices:
-                            times1 = spk_times[np.where(spk_clusters == unit_id1)]
-                            for unit_id2 in unit_indices:
-                                if (
-                                    unit_id1 < unit_id2
-                                ):  # Avoid duplicate pairs and self-comparison
-                                    times2 = spk_times[np.where(spk_clusters == unit_id2)]
+                    source_waveform_dir = next(
+                        (
+                            str(path)
+                            for path in Path(KSDir).rglob("RawWaveforms")
+                            if path.is_dir()
+                        ),
+                        None,
+                    )
+                    target_waveform_dir = os.path.join(target_KSDir, "qMetrics", "RawWaveforms")
 
-                                    if len(times1) > len(times2):
-                                        non_merged = times1
-                                    else:
-                                        non_merged = times2
-                                    merged = np.concatenate([times1, times2])
-                                    merged = np.sort(merged)
+                    spk_clusters = np.load(os.path.join(KSDir, "spike_clusters.npy"))
+                    spk_times = np.load(os.path.join(KSDir, "spike_times.npy"))
+                    spk_times = spk_times / 30000  # convert to seconds
 
-                                    C = estimate_C(merged)
-                                    C_pm = estimate_C(non_merged)
-                                    ratios.append(
-                                        {
-                                            "unit_id1": unit_id1,
-                                            "unit_id2": unit_id2,
-                                            "C_ratio": C / C_pm,
-                                        }
-                                    )
-                        ratios = pd.DataFrame(ratios)
-                        # Pair whose merge increases contamination the least.
-                        # (Positional .iloc: after sort_values the index labels
-                        # keep their pre-sort order, so label-based [0] would
-                        # pick the first pair computed, not the lowest ratio.)
-                        best = ratios.sort_values("C_ratio").iloc[0]
+                    # Copy the RawWaveforms directory to the new target directory.
+                    # Start from a clean copy: a session being (re)processed must not
+                    # keep merged waveforms or backups from an earlier, interrupted or
+                    # outdated run (these only ever live in the *target* tree).
+                    backup_waveform_dir = os.path.join(
+                        os.path.dirname(target_waveform_dir), BACKUP_WAVEFORM_DIRNAME
+                    )
+                    for stale_dir in (target_waveform_dir, backup_waveform_dir):
+                        if os.path.isdir(stale_dir):
+                            shutil.rmtree(stale_dir)
+                    os.makedirs(target_waveform_dir)
 
-                        if best["C_ratio"] <= MAX_C_RATIO:
-                            # (the row mixes int and float columns, so pandas
-                            # returns the unit ids as floats -- cast back)
-                            id_a, id_b = int(best["unit_id1"]), int(best["unit_id2"])
-                            print(
-                                f"Merging units {id_a} and {id_b} with C ratio {best['C_ratio']:.4f}"
+                    for file in Path(source_waveform_dir).iterdir():
+                        if file.is_file():
+                            shutil.copy2(
+                                file, os.path.join(target_waveform_dir, file.name)
+                            )  # preserves metadata
+
+                    # Find which units need to be merged based on the matching results.
+                    # RecSes in MatchTable.csv is the *compacted* session count (sessions
+                    # with zero good units dropped), so idx+1 is only correct when no
+                    # earlier session had zero good units -- use the recovered mapping
+                    # instead of assuming idx+1 == RecSes.
+                    recses = idx_to_recses.get(idx)
+                    if recses is None:
+                        # This session had zero good units in the original comparison,
+                        # so it can't have any self-merges to apply.
+                        sess_idx = pd.Series(False, index=mt.index)
+                    else:
+                        sess_idx = (mt["RecSes 1"] == recses) & (mt["RecSes 2"] == recses)
+                    uids = mt["UID 1"][merged_units_idx & sess_idx].unique()
+                    absorbed_units = []
+                    for uid in uids:
+                        # Get the indices of the units to be merged
+                        units_to_merge = mt[
+                            (mt["UID 1"] == uid) & (merged_units_idx & sess_idx)
+                        ]
+                        unit_indices = np.unique(
+                            np.concatenate(
+                                [units_to_merge["ID1"].values, units_to_merge["ID2"].values]
                             )
-                            new_unit_id = min(id_a, id_b)
-                            unit_id_to_merge = max(id_a, id_b)
+                        )
 
-                            # Spike counts for the waveform weights -- taken
-                            # *before* relabelling, otherwise unit_id_to_merge
-                            # has no spikes left and gets weight 0.
-                            fr_1 = int(np.sum(spk_clusters == new_unit_id))
-                            fr_2 = int(np.sum(spk_clusters == unit_id_to_merge))
-                            weight_1 = fr_1 / (fr_1 + fr_2)
-                            weight_2 = fr_2 / (fr_1 + fr_2)
+                        FLAG = True
+                        while (len(unit_indices) > 1) & FLAG:
+                            # Compute C ratio for all pairs of units to be merged
+                            ratios = []
+                            for unit_id1 in unit_indices:
+                                times1 = spk_times[np.where(spk_clusters == unit_id1)]
+                                for unit_id2 in unit_indices:
+                                    if (
+                                        unit_id1 < unit_id2
+                                    ):  # Avoid duplicate pairs and self-comparison
+                                        times2 = spk_times[np.where(spk_clusters == unit_id2)]
 
-                            # Merge the spike_clusters
-                            spk_clusters[spk_clusters == unit_id_to_merge] = new_unit_id
+                                        if len(times1) > len(times2):
+                                            non_merged = times1
+                                        else:
+                                            non_merged = times2
+                                        merged = np.concatenate([times1, times2])
+                                        merged = np.sort(merged)
 
-                            # Merge the waveforms for the merged units
-                            merge_waveforms(
-                                new_unit_id,
-                                unit_id_to_merge,
-                                weight_1,
-                                weight_2,
-                                target_waveform_dir,
-                                plot_waveforms=False,
-                            )
+                                        C = estimate_C(merged)
+                                        C_pm = estimate_C(non_merged)
+                                        ratios.append(
+                                            {
+                                                "unit_id1": unit_id1,
+                                                "unit_id2": unit_id2,
+                                                "C_ratio": C / C_pm,
+                                            }
+                                        )
+                            ratios = pd.DataFrame(ratios)
+                            # Pair whose merge increases contamination the least.
+                            # (Positional .iloc: after sort_values the index labels
+                            # keep their pre-sort order, so label-based [0] would
+                            # pick the first pair computed, not the lowest ratio.)
+                            best = ratios.sort_values("C_ratio").iloc[0]
 
-                            unit_indices = unit_indices[unit_indices != unit_id_to_merge]
-                            absorbed_units.append(int(unit_id_to_merge))
+                            if best["C_ratio"] <= MAX_C_RATIO:
+                                # (the row mixes int and float columns, so pandas
+                                # returns the unit ids as floats -- cast back)
+                                id_a, id_b = int(best["unit_id1"]), int(best["unit_id2"])
+                                print(
+                                    f"Merging units {id_a} and {id_b} with C ratio {best['C_ratio']:.4f}"
+                                )
+                                new_unit_id = min(id_a, id_b)
+                                unit_id_to_merge = max(id_a, id_b)
 
-                        else:
-                            print(
-                                f"No more units to merge based on C ratio threshold (lowest C ratio = {best['C_ratio']:.4f})."
-                            )
-                            FLAG = False
+                                # Spike counts for the waveform weights -- taken
+                                # *before* relabelling, otherwise unit_id_to_merge
+                                # has no spikes left and gets weight 0.
+                                fr_1 = int(np.sum(spk_clusters == new_unit_id))
+                                fr_2 = int(np.sum(spk_clusters == unit_id_to_merge))
+                                weight_1 = fr_1 / (fr_1 + fr_2)
+                                weight_2 = fr_2 / (fr_1 + fr_2)
 
-                # Absorbed units no longer exist: relabel them in the synthetic
-                # label file so every downstream loader excludes them.
-                if absorbed_units:
-                    tsv_path = os.path.join(target_KSDir, "cluster_bc_unitType.tsv")
-                    labels = pd.read_csv(tsv_path, sep="\t")
-                    labels.loc[
-                        labels["cluster_id"].isin(absorbed_units), "bc_unitType"
-                    ] = MERGED_UNIT_LABEL
-                    labels.to_csv(tsv_path, sep="\t", index=False)
-                    print(f"  {len(absorbed_units)} unit(s) absorbed by merges in this session.")
+                                # Merge the spike_clusters
+                                spk_clusters[spk_clusters == unit_id_to_merge] = new_unit_id
 
-                # Save the updated spike_clusters array to the new target directory
-                target_spike_clusters_file = os.path.join(
-                    target_KSDir, "spike_clusters.npy"
+                                # Merge the waveforms for the merged units
+                                merge_waveforms(
+                                    new_unit_id,
+                                    unit_id_to_merge,
+                                    weight_1,
+                                    weight_2,
+                                    target_waveform_dir,
+                                    plot_waveforms=False,
+                                )
+
+                                unit_indices = unit_indices[unit_indices != unit_id_to_merge]
+                                absorbed_units.append(int(unit_id_to_merge))
+
+                            else:
+                                print(
+                                    f"No more units to merge based on C ratio threshold (lowest C ratio = {best['C_ratio']:.4f})."
+                                )
+                                FLAG = False
+
+                    # Absorbed units no longer exist: relabel them in the synthetic
+                    # label file so every downstream loader excludes them.
+                    if absorbed_units:
+                        tsv_path = os.path.join(target_KSDir, "cluster_bc_unitType.tsv")
+                        labels = pd.read_csv(tsv_path, sep="\t")
+                        labels.loc[
+                            labels["cluster_id"].isin(absorbed_units), "bc_unitType"
+                        ] = MERGED_UNIT_LABEL
+                        labels.to_csv(tsv_path, sep="\t", index=False)
+                        print(f"  {len(absorbed_units)} unit(s) absorbed by merges in this session.")
+                        group_absorbed += len(absorbed_units)
+
+                    # Save the updated spike_clusters array to the new target directory
+                    target_spike_clusters_file = os.path.join(
+                        target_KSDir, "spike_clusters.npy"
+                    )
+                    np.save(target_spike_clusters_file, spk_clusters)
+
+                    # Mark this session complete so a re-run can skip it. If anything
+                    # above raised, execution never reaches here, so the session stays
+                    # unmarked and gets fully reprocessed next time.
+                    with open(marker_path, "w") as f:
+                        f.write("ok")
+
+                plog.log_event(
+                    LOG_STAGE, group_key(source_dir), "merge", "done",
+                    f"{len(data['KS_dirs'])} session(s), {group_absorbed} unit(s) absorbed by merges",
                 )
-                np.save(target_spike_clusters_file, spk_clusters)
-
-                # Mark this session complete so a re-run can skip it. If anything
-                # above raised, execution never reaches here, so the session stays
-                # unmarked and gets fully reprocessed next time.
-                with open(marker_path, "w") as f:
-                    f.write("ok")
-
-        print(f"Processing UMparam_file: {UMparam_file} done.")
+            print(f"Processing UMparam_file: {UMparam_file} done.")
+        except Exception as e:
+            # one failing location must not stop the others: log it and move on
+            traceback.print_exc()
+            plog.log_event(
+                LOG_STAGE, group_key(source_dir), "merge", "failed",
+                f"{type(e).__name__}: {e}", traceback.format_exc(),
+            )
 
 
 def main():

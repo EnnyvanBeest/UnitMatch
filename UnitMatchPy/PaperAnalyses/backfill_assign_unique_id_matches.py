@@ -1,3 +1,9 @@
+# SUPERSEDED for new runs: every matching run in run_deepunitmatch_batch_onMerged.py
+# (run_umpy_core / run_dum_core / legacy core) now writes its own
+# "<run>_AssignUniqueID" and "<run>_AssignUniqueID_Conservative" folders
+# (save_uid_match_summaries), for every condition, not only DeepUnitMatch/UMPy.
+# This script is only needed for outputs produced before that change.
+#
 # Backfill script: for every completed DeepUnitMatch/UMPy output under
 # BASE_OUTPUT, writes sibling "<Model>_AssignUniqueID" (intermediate) and
 # "<Model>_AssignUniqueID_Conservative" (conservative) folders whose

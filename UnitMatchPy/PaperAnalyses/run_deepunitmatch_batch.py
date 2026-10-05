@@ -32,6 +32,7 @@ import argparse
 
 import batch_lock
 import pipeline_config as cfg
+import pipeline_log as plog
 import UnitMatchPy.default_params as default_params
 import UnitMatchPy.utils as util
 import UnitMatchPy.overlord as ov
@@ -317,7 +318,31 @@ def get_group_lock_path(mat_path):
 # ── shared session loader ─────────────────────────────────────────────────────
 
 
+LOG_STAGE = "step1"
+SENTINEL = "MatchingOverview.png"
+
+
+def group_key(mat_path):
+    """'mouse/probe/location' of a raw UnitMatch.mat (<loc>/UnitMatch/UnitMatch.mat)."""
+    return os.path.relpath(os.path.dirname(os.path.dirname(mat_path)), BASE_INPUT).replace(os.sep, "/")
+
+
+def _prep_failed(mat_path, message, status="failed", tb=None):
+    """Print + log why a group could not be prepared; returns None for the caller to return."""
+    print(f"  {'SKIPPING' if status == 'skipped' else 'ERROR'}: {message}")
+    plog.log_event(LOG_STAGE, group_key(mat_path), "prepare_session", status, message, tb)
+    return None
+
+
 def _prepare_session(mat_path):
+    """Load one raw location (see _prepare_session_impl); every failure is logged and gives None."""
+    try:
+        return _prepare_session_impl(mat_path)
+    except Exception as e:
+        return _prep_failed(mat_path, f"{type(e).__name__}: {e}", tb=traceback.format_exc())
+
+
+def _prepare_session_impl(mat_path):
     """
     Load and validate everything shared by both pipelines:
       mat → ks_dirs → params → probe check → waveforms.
@@ -330,9 +355,8 @@ def _prepare_session(mat_path):
     try:
         ks_dirs, orig_clus_id, recsesAll, good_id = load_unitmatchemat(mat_path)
     except Exception as e:
-        print(f"  ERROR loading mat: {e}")
         traceback.print_exc()
-        return None
+        return _prep_failed(mat_path, f"loading UnitMatch.mat: {type(e).__name__}: {e}", tb=traceback.format_exc())
 
     print(f"  {len(ks_dirs)} session(s):")
     for i, d in enumerate(ks_dirs):
@@ -342,9 +366,8 @@ def _prepare_session(mat_path):
     try:
         wave_paths, _, channel_pos = util.paths_from_KS(ks_dirs)
     except Exception as e:
-        print(f"  ERROR in paths_from_KS: {e}")
         traceback.print_exc()
-        return None
+        return _prep_failed(mat_path, f"paths_from_KS: {type(e).__name__}: {e}", tb=traceback.format_exc())
 
     param = {"KS_dirs": ks_dirs}
     param = default_params.get_default_param(param=param)
@@ -360,13 +383,14 @@ def _prepare_session(mat_path):
     x_gaps = np.diff(np.sort(unique_x))
     n_shanks = int(np.sum(x_gaps > 50)) + 1
     if actual_n_xchannelpos != param["n_xchannelpos"] * n_shanks:
-        print(
-            f"  SKIPPING: probe has {actual_n_xchannelpos} x-column position(s) across "
+        return _prep_failed(
+            mat_path,
+            f"probe has {actual_n_xchannelpos} x-column position(s) across "
             f"{n_shanks} shank(s), expected a multiple of {param['n_xchannelpos']} "
             f"({param['n_xchannelpos'] * n_shanks}). "
-            f"Set param['n_xchannelpos'] = {actual_n_xchannelpos // n_shanks} to process this probe type."
+            f"Set param['n_xchannelpos'] = {actual_n_xchannelpos // n_shanks} to process this probe type.",
+            status="skipped",
         )
-        return None
 
     good_units_per_session = build_good_units_per_session(
         ks_dirs, orig_clus_id, recsesAll, good_id
@@ -378,12 +402,14 @@ def _prepare_session(mat_path):
             load_waveforms_for_good_units(wave_paths, good_units_per_session, param)
         )
     except Exception as e:
-        print(f"  ERROR loading waveforms: {e}")
         traceback.print_exc()
-        return None
+        return _prep_failed(mat_path, f"loading waveforms: {type(e).__name__}: {e}", tb=traceback.format_exc())
 
     param["good_units"] = good_units
     print(f"  {waveform.shape[0]} units across {param['n_sessions']} session(s)")
+    if param["n_sessions"] < 2:
+        plog.log_event(LOG_STAGE, group_key(mat_path), "prepare_session", "done",
+                       f"single session ({waveform.shape[0]} units): no across-session pairs")
 
     return {
         "mat_path": mat_path,
@@ -400,6 +426,12 @@ def _prepare_session(mat_path):
 # ── DeepUnitMatch pipeline ────────────────────────────────────────────────────
 
 
+@plog.logged_run(
+    LOG_STAGE,
+    group_of=lambda args, kwargs: group_key(args[0]["mat_path"]),
+    condition_of=lambda args, kwargs: "DeepUnitMatch",
+    output_of=lambda args, kwargs: os.path.join(get_save_dir(args[0]["mat_path"]), SENTINEL),
+)
 def run_deep_unit_match(sess):
     """Run the full DeepUnitMatch pipeline for one pre-loaded session."""
     mat_path = sess["mat_path"]
@@ -742,6 +774,12 @@ def run_deep_unit_match(sess):
 # ── UMPy pipeline ─────────────────────────────────────────────────────────────
 
 
+@plog.logged_run(
+    LOG_STAGE,
+    group_of=lambda args, kwargs: group_key(args[0]["mat_path"]),
+    condition_of=lambda args, kwargs: "UMPy",
+    output_of=lambda args, kwargs: os.path.join(get_umpy_save_dir(args[0]["mat_path"]), SENTINEL),
+)
 def run_umpy(sess):
     """Run the full UMPy pipeline for one pre-loaded session.
 

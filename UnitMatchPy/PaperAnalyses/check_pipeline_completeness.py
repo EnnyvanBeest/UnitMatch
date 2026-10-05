@@ -48,6 +48,7 @@ sys.path.insert(0, os.path.dirname(_HERE))
 import run_deepunitmatch_batch as step1
 import run_deepunitmatch_batch_onMerged as onmerged
 import generate_merged_dataset as gm
+import pipeline_log as plog
 
 STAGES = ("raw", "step1", "merged", "onmerged")
 GOOD_LABELS = {"GOOD", "NON-SOMA GOOD"}
@@ -113,6 +114,7 @@ def check(stages, mice=None):
                 step1_groups.add(key)
             dirs[:] = []
     keys = sorted(set(raw_groups) | step1_groups)
+    logged = plog.latest_events()  # {(stage, group, condition): latest event}
 
     rows = []
     for i, key in enumerate(keys):
@@ -150,6 +152,14 @@ def check(stages, mice=None):
                 row[f"onmerged_{model}"] = done
                 if not done:
                     row["problems"].append(f"merged-data {model} output missing")
+
+        # why: latest logged failure/skip of this location in any stage (pipeline_log.py)
+        reasons = [
+            f"[{e['stage']}/{e['condition']} {e['status']} {e['time']} on {e['machine']}] {e['message']}"
+            for (stage, group, _), e in logged.items()
+            if group == key and e["status"] in ("failed", "skipped")
+        ]
+        row["logged_reason"] = " | ".join(reasons)
         rows.append(row)
     return pd.DataFrame(rows)
 
@@ -173,6 +183,10 @@ def summarise(df):
     lines.append(f"\n{len(problems)} location(s) with problems:")
     for _, r in problems.iterrows():
         lines.append(f"  {r['group']}: " + "; ".join(r["problems"]))
+        if r.get("logged_reason"):
+            lines.append(f"      logged: {r['logged_reason']}")
+        else:
+            lines.append("      logged: no failure logged (never attempted, or run before logging existed)")
     singles = df[df["single_session"]]["group"].tolist()
     if singles:
         lines.append(f"\nSingle-session locations (cannot be tracked, not an error): {', '.join(singles)}")

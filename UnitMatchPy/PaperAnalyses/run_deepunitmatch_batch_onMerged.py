@@ -52,6 +52,7 @@ import argparse
 
 import batch_lock
 import pipeline_config as cfg
+import pipeline_log as plog
 import UnitMatchPy.default_params as default_params
 import UnitMatchPy.utils as util
 import UnitMatchPy.overlord as ov
@@ -243,6 +244,68 @@ def get_umpy_save_dir(merged_dir):
     return os.path.join(BASE_OUTPUT, subfolder, "UMPy")
 
 
+# ── run logging + unique-ID match sets ───────────────────────────────────────
+
+LOG_STAGE = "onmerged"
+SENTINEL = "MatchingOverview.png"
+
+
+def group_key(merged_dir):
+    """'mouse/probe/location' of a merged-data group (the key used in logs and reports)."""
+    return os.path.relpath(os.path.dirname(merged_dir), BASE_INPUT).replace(os.sep, "/")
+
+
+def _logged_matching_run(default_label, label_index):
+    """Log every matching run (see pipeline_log.logged_run); success = SENTINEL written in save_dir.
+    label_index = position of the label among the arguments after (sess, save_dir)."""
+
+    def label_of(args, kwargs):
+        rest = args[2:]
+        return kwargs.get("label", rest[label_index] if len(rest) > label_index else default_label)
+
+    return plog.logged_run(
+        LOG_STAGE,
+        group_of=lambda args, kwargs: group_key(args[0]["merged_dir"]),
+        condition_of=label_of,
+        output_of=lambda args, kwargs: os.path.join(args[1], SENTINEL),
+    )
+
+
+# Unique-ID match sets written next to every run: matches defined by
+# UnitMatch's unique-ID assignment (assign_unique_id) instead of the
+# P > threshold matches. "<run>_AssignUniqueID" uses the intermediate IDs
+# ("UID 1"/"UID 2" in MatchTable.csv), "<run>_AssignUniqueID_Conservative"
+# the conservative ones. Each holds an AUC_summary.json (+ overview figure);
+# plot_auc_vs_delta_days.py reads the match table of the source run.
+UID_VARIANTS = {"AssignUniqueID": 1, "AssignUniqueID_Conservative": 2}  # suffix -> index in UIDs
+
+
+def save_uid_match_summaries(save_dir, label, UIDs, session_id, functional_scores):
+    """Write the <save_dir>_<variant> folders for one finished run."""
+    session_id = np.asarray(session_id)
+    across_session = session_id[:, None] != session_id[None, :]
+    for suffix, uid_index in UID_VARIANTS.items():
+        uid = np.asarray(UIDs[uid_index]).ravel()
+        final_matches = (uid[:, None] == uid[None, :]) & across_session
+        n_matches = int(np.sum(final_matches)) // 2
+        out_dir = f"{save_dir}_{suffix}"
+        os.makedirs(out_dir, exist_ok=True)
+        su.save_auc_summary(
+            out_dir,
+            test.auc_summary_from_functional_scores(functional_scores, final_matches, session_id),
+        )
+        fig, ax = plt.subplots(figsize=(5, 5))
+        im = ax.imshow(final_matches, cmap="viridis", aspect="auto")
+        ax.set_title(f"{label} + {suffix} matches (n={n_matches})")
+        ax.set_xlabel("Unit")
+        ax.set_ylabel("Unit")
+        fig.colorbar(im, ax=ax)
+        fig.tight_layout()
+        fig.savefig(os.path.join(out_dir, SENTINEL), dpi=150)
+        plt.close(fig)
+        print(f"  {label}_{suffix}: {n_matches} matches -> {out_dir}")
+
+
 def results_exist(merged_dir):
     """Return True when the DeepUnitMatch sentinel output file is present and fresh (see REDO_FROM_DATE)."""
     sentinel = os.path.join(get_save_dir(merged_dir), "MatchingOverview.png")
@@ -303,7 +366,28 @@ def get_group_lock_path(merged_dir):
 # ── shared session loader ─────────────────────────────────────────────────────
 
 
+def _prep_failed(merged_dir, message, status="failed", tb=None):
+    """Print + log why a group could not be prepared; returns None for the caller to return."""
+    print(f"  {'SKIPPING' if status == 'skipped' else 'ERROR'}: {message}")
+    plog.log_event(LOG_STAGE, group_key(merged_dir), "prepare_session", status, message, tb)
+    return None
+
+
 def _prepare_session(merged_dir):
+    """Load a merged-data group (see _prepare_session_impl); every failure is logged and gives None."""
+    try:
+        sess = _prepare_session_impl(merged_dir)
+    except Exception as e:
+        return _prep_failed(merged_dir, f"{type(e).__name__}: {e}", tb=traceback.format_exc())
+    if sess is not None and sess.get("n_units_dropped_by_snippets"):
+        plog.log_event(
+            LOG_STAGE, group_key(merged_dir), "prepare_session", "done",
+            f"{sess['n_units_dropped_by_snippets']} unit(s) rejected by get_snippets, removed for every method",
+        )
+    return sess
+
+
+def _prepare_session_impl(merged_dir):
     """
     Load and validate everything shared by both pipelines:
       merged KS dirs → params → probe check → merged waveforms.
@@ -329,8 +413,7 @@ def _prepare_session(merged_dir):
         key=int,
     )
     if not session_names:
-        print(f"  ERROR: no numbered session folders found under {merged_dir}")
-        return None
+        return _prep_failed(merged_dir, f"no numbered session folders found under {merged_dir}")
 
     ks_dirs = [os.path.join(merged_dir, d) for d in session_names]
     print(f"  {len(ks_dirs)} session(s): {session_names}")
@@ -338,9 +421,8 @@ def _prepare_session(merged_dir):
     try:
         wave_paths, unit_label_paths, channel_pos = util.paths_from_KS(ks_dirs)
     except Exception as e:
-        print(f"  ERROR in paths_from_KS: {e}")
         traceback.print_exc()
-        return None
+        return _prep_failed(merged_dir, f"paths_from_KS: {type(e).__name__}: {e}", tb=traceback.format_exc())
 
     good_units_per_session = build_good_units_from_labels(unit_label_paths)
     for i, d in enumerate(ks_dirs):
@@ -360,13 +442,14 @@ def _prepare_session(merged_dir):
     x_gaps = np.diff(np.sort(unique_x))
     n_shanks = int(np.sum(x_gaps > 50)) + 1
     if actual_n_xchannelpos != param["n_xchannelpos"] * n_shanks:
-        print(
-            f"  SKIPPING: probe has {actual_n_xchannelpos} x-column position(s) across "
+        return _prep_failed(
+            merged_dir,
+            f"probe has {actual_n_xchannelpos} x-column position(s) across "
             f"{n_shanks} shank(s), expected a multiple of {param['n_xchannelpos']} "
             f"({param['n_xchannelpos'] * n_shanks}). "
-            f"Set param['n_xchannelpos'] = {actual_n_xchannelpos // n_shanks} to process this probe type."
+            f"Set param['n_xchannelpos'] = {actual_n_xchannelpos // n_shanks} to process this probe type.",
+            status="skipped",
         )
-        return None
 
     print("Loading merged waveforms …")
     try:
@@ -374,14 +457,18 @@ def _prepare_session(merged_dir):
             load_waveforms_for_good_units(wave_paths, good_units_per_session, param)
         )
     except Exception as e:
-        print(f"  ERROR loading waveforms: {e}")
         traceback.print_exc()
-        return None
+        return _prep_failed(merged_dir, f"loading waveforms: {type(e).__name__}: {e}", tb=traceback.format_exc())
 
     param["good_units"] = good_units
     print(
         f"  {waveform.shape[0]} units across {param['n_sessions']} session(s) after merging"
     )
+
+    if param["n_sessions"] < 2:
+        # still processed as before, but recorded: no across-session pairs to track
+        plog.log_event(LOG_STAGE, group_key(merged_dir), "prepare_session", "done",
+                       f"single session ({waveform.shape[0]} units): no across-session pairs")
 
     sess = {
         "merged_dir": merged_dir,
@@ -518,6 +605,7 @@ def run_deep_unit_match_legacy(sess, model=None):
     )
 
 
+@_logged_matching_run(default_label="DeepUnitMatch", label_index=1)
 def run_deep_unit_match_core(
     sess,
     save_dir,
@@ -887,6 +975,8 @@ def run_deep_unit_match_core(
     su.save_auc_summary(
         save_dir, test.auc_summary_from_functional_scores(functional_scores, final_matches, session_id)
     )
+    # before MatchingOverview.png (the completion sentinel), so a crash here re-runs the group
+    save_uid_match_summaries(save_dir, label, UIDs, session_id, functional_scores)
 
     # ── save diagnostic figures ───────────────────────────────────────────────
     fig, axes = plt.subplots(1, 3, figsize=(15, 5))
@@ -962,6 +1052,7 @@ def run_umpy(sess):
     run_umpy_core(sess, save_dir, label="UMPy")
 
 
+@_logged_matching_run(default_label="UMPy", label_index=0)
 def run_umpy_core(sess, save_dir, label="UMPy", to_use=None, model=None, niter=2, score_weights=None):
     """
     Run the full UMPy pipeline for one pre-loaded session, given an explicit
@@ -1189,6 +1280,8 @@ def run_umpy_core(sess, save_dir, label="UMPy", to_use=None, model=None, niter=2
         save_dir,
         test.auc_summary_from_functional_scores(functional_scores, final_matches_bool, session_id),
     )
+    # before MatchingOverview.png (the completion sentinel), so a crash here re-runs the group
+    save_uid_match_summaries(save_dir, label, UIDs, session_id, functional_scores)
 
     # ── save diagnostic figures ───────────────────────────────────────────────
     fig, axes = plt.subplots(1, 3, figsize=(15, 5))
