@@ -836,7 +836,10 @@ while flag<2
                 tmpacross = tmp(SessionSwitch(did1):SessionSwitch(did1+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1);
 
                 ha = histcounts(tmpacross(:),Bins)./sum(~isnan(tmpacross(:)));
-                [mua, sa] = normfit(tmp(~isnan(tmp)));
+                % Fit this session pair's own across-session block,
+                % restricted to scores below ThrsOpt like muw, so both means
+                % describe the non-match distribution.
+                [mua, sa] = normfit(tmpacross(~isnan(tmpacross) & tmpacross<ThrsOpt));
 
                 if mua<muw & ~isnan(mua)% Increase totalscore by this much
                     TotalScore(SessionSwitch(did1):SessionSwitch(did1+1)-1,SessionSwitch(did2):SessionSwitch(did2+1)-1) = ...
