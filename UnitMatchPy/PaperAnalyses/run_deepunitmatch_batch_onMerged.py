@@ -34,6 +34,7 @@ import os
 import sys
 import copy
 import datetime
+import tempfile
 import traceback
 import numpy as np
 import matplotlib
@@ -382,7 +383,7 @@ def _prepare_session(merged_dir):
         f"  {waveform.shape[0]} units across {param['n_sessions']} session(s) after merging"
     )
 
-    return {
+    sess = {
         "merged_dir": merged_dir,
         "channel_pos": channel_pos,
         "waveform": waveform,
@@ -392,20 +393,129 @@ def _prepare_session(merged_dir):
         "good_units": good_units,
         "param": param,
     }
+    return restrict_to_snippet_units(sess)
+
+
+def restrict_to_snippet_units(sess):
+    """
+    Keep only units the DNN preprocessing (param_fun.get_snippets) accepts, for
+    every method, so DeepUnitMatch and UMPy are always run and evaluated on
+    exactly the same units. get_snippets skips a unit if both halves of its
+    waveform contain NaN/Inf, or if its channel neighbourhood can't be laid out
+    as the expected columns per shank (units near the probe's top/bottom edge
+    are padded, not skipped). In the previous run no unit was skipped.
+
+    The snippets are written to a local temporary folder and discarded.
+    """
+    param = copy.deepcopy(sess["param"])
+    unit_ids = np.concatenate(param["good_units"]).squeeze()
+    with tempfile.TemporaryDirectory() as tmp:
+        _, _, kept_idx = param_fun.get_snippets(
+            sess["waveform"], sess["channel_pos"], sess["session_id"],
+            save_path=tmp, unit_ids=unit_ids, param=param,
+        )
+    n_dropped = len(sess["waveform"]) - len(kept_idx)
+    sess["n_units_dropped_by_snippets"] = int(n_dropped)
+    if n_dropped == 0:
+        return sess
+
+    dropped_ids = np.setdiff1d(np.arange(len(unit_ids)), kept_idx)
+    print(
+        f"  WARNING: {n_dropped} unit(s) rejected by get_snippets, removed for every method: "
+        f"{unit_ids[dropped_ids].tolist()}"
+    )
+    waveform, session_id, session_switch, within_session, good_units, param = (
+        util.filter_units_by_index(
+            sess["waveform"], sess["session_id"], sess["session_switch"],
+            sess["good_units"], kept_idx, sess["param"],
+        )
+    )
+    param["good_units"] = good_units
+    # filter_units_by_index doesn't update this; downstream code reads it
+    # (e.g. fast_testing.normalize_FR_diff)
+    param["n_units_per_session"] = [len(g) for g in good_units]
+    sess.update(
+        waveform=waveform, session_id=session_id, session_switch=session_switch,
+        within_session=within_session, good_units=good_units, param=param,
+    )
+    return sess
 
 
 # ── DeepUnitMatch pipeline ────────────────────────────────────────────────────
 
 
-def run_deep_unit_match(sess):
-    """Run the full DeepUnitMatch pipeline (default trained model) for one pre-loaded session."""
+# DeepUnitMatch runs through exactly the same matching pipeline as UMPy
+# (run_umpy_core: per-session-pair score alignment before drift correction,
+# drift correction, one Naive Bayes fitted over the whole dataset with its
+# prior, match threshold, unique-ID assignment); only the scores differ.
+# UMPy uses its six engineered metrics; DeepUnitMatch uses the DNN similarity
+# plus UMPy's centroid distance. In the total score (thresholds, candidate
+# pairs, drift correction) the similarity is weighted 5:1 against the
+# distance, i.e. the same ratio as UMPy's five waveform metrics to its one
+# centroid distance; the Naive Bayes uses the two scores as its predictors.
+DUM_SCORES = ["similarity", "centroid_dist"]
+DUM_SCORE_WEIGHTS = {"similarity": 5, "centroid_dist": 1}
+# Output folder of the previous, DeepUnitMatch-specific pipeline
+# (run_deep_unit_match_core: per-session-pair thresholds and Naive Bayes),
+# kept as one extra condition to check what unifying the pipelines changes.
+LEGACY_SUBFOLDER = "DUM_legacy"
+
+
+def dnn_similarity_score(sim_matrix):
+    """
+    DNN cosine similarity [-1, 1] -> [0, 1] score, (sim + 1) / 2.
+
+    Every UMPy score lives in [0, 1]: the Naive Bayes kernels are histograms
+    over [0, 1] (bayes_functions.get_parameter_kernels) and predictions snap
+    each value to the nearest bin. Raw negative similarities would be left out
+    of the kernels but scored as 0. The mapping is monotonic, so no
+    information is lost.
+    """
+    return (np.asarray(sim_matrix, dtype=float) + 1) / 2
+
+
+def run_dum_core(sess, save_dir, model, label="DeepUnitMatch", niter=2):
+    """DeepUnitMatch through the shared UMPy pipeline (see DUM_SCORES above)."""
+    return run_umpy_core(
+        sess,
+        save_dir,
+        label=label,
+        to_use=DUM_SCORES,
+        model=model,
+        niter=niter,
+        score_weights=DUM_SCORE_WEIGHTS,
+    )
+
+
+def run_deep_unit_match(sess, model=None):
+    """Run DeepUnitMatch (default trained model) for one pre-loaded session."""
     merged_dir = sess["merged_dir"]
     save_dir = get_save_dir(merged_dir)
 
-    print("Loading DeepUnitMatch model …")
-    model = test.load_trained_model(device=DEVICE)
+    if model is None:
+        print("Loading DeepUnitMatch model …")
+        model = test.load_trained_model(device=DEVICE)
 
-    run_deep_unit_match_core(sess, save_dir, model, label="DeepUnitMatch")
+    run_dum_core(sess, save_dir, model, label="DeepUnitMatch")
+
+
+def get_legacy_save_dir(merged_dir):
+    return os.path.join(os.path.dirname(get_save_dir(merged_dir)), LEGACY_SUBFOLDER)
+
+
+def legacy_results_exist(merged_dir):
+    sentinel = os.path.join(get_legacy_save_dir(merged_dir), "MatchingOverview.png")
+    return batch_lock.sentinel_is_fresh(sentinel, REDO_FROM_DATE)
+
+
+def run_deep_unit_match_legacy(sess, model=None):
+    """Previous DeepUnitMatch-specific pipeline (run_deep_unit_match_core), saved to DUM_legacy/."""
+    if model is None:
+        print("Loading DeepUnitMatch model …")
+        model = test.load_trained_model(device=DEVICE)
+    run_deep_unit_match_core(
+        sess, get_legacy_save_dir(sess["merged_dir"]), model, label=LEGACY_SUBFOLDER
+    )
 
 
 def run_deep_unit_match_core(
@@ -852,7 +962,7 @@ def run_umpy(sess):
     run_umpy_core(sess, save_dir, label="UMPy")
 
 
-def run_umpy_core(sess, save_dir, label="UMPy", to_use=None, model=None, niter=2):
+def run_umpy_core(sess, save_dir, label="UMPy", to_use=None, model=None, niter=2, score_weights=None):
     """
     Run the full UMPy pipeline for one pre-loaded session, given an explicit
     output directory.
@@ -888,6 +998,10 @@ def run_umpy_core(sess, save_dir, label="UMPy", to_use=None, model=None, niter=2
         waveforms); niter=2 (default) does one pass of drift correction,
         matching the non-ablated pipeline's original behaviour exactly. See
         run_deepunitmatch_batch_onMerged_nodrift.py.
+    score_weights : dict, optional
+        {score name: weight} for the total score (thresholds, candidate pairs,
+        drift correction); default None = every score weighted 1, as in UMPy.
+        The Naive Bayes predictors are not weighted. See run_dum_core.
     """
     merged_dir = sess["merged_dir"]
     print(f"\n--- {label}: {merged_dir}")
@@ -940,7 +1054,10 @@ def run_umpy_core(sess, save_dir, label="UMPy", to_use=None, model=None, niter=2
             print(f"  ERROR in inference: {e}")
             traceback.print_exc()
             return
-        extra_scores = {"similarity": sim_matrix}
+        extra_scores = {"similarity": dnn_similarity_score(sim_matrix)}
+
+    if score_weights is not None:
+        param["score_weights"] = dict(score_weights)
 
     clus_info = {
         "good_units": param["good_units"],
@@ -1138,6 +1255,11 @@ def parse_args():
         action="store_true",
         help="Also write a MATLAB-compatible UnitMatch.mat from the Python outputs.",
     )
+    parser.add_argument(
+        "--with-legacy",
+        action="store_true",
+        help=f"Also run the previous DeepUnitMatch-specific pipeline into {LEGACY_SUBFOLDER}/.",
+    )
     return parser.parse_args()
 
 
@@ -1156,14 +1278,20 @@ def main():
 
     print(f"Found {len(groups)} group(s).\n")
 
+    print("Loading DeepUnitMatch model …")
+    model = test.load_trained_model(device=DEVICE)
+
     for i, merged_dir in enumerate(groups):
         print(f"\n[{i + 1}/{len(groups)}] {merged_dir}")
 
-        run_deep = not results_exist(merged_dir)
-        run_ump = not umpy_results_exist(merged_dir)
+        def todo():
+            run_deep = not results_exist(merged_dir)
+            run_ump = not umpy_results_exist(merged_dir)
+            run_legacy = args.with_legacy and not legacy_results_exist(merged_dir)
+            return run_deep, run_ump, run_legacy
 
-        if not run_deep and not run_ump:
-            print("  Skipping both pipelines (results exist and are fresh).")
+        if not any(todo()):
+            print("  Skipping (all requested results exist and are fresh).")
             continue
 
         lock_path = get_group_lock_path(merged_dir)
@@ -1174,10 +1302,9 @@ def main():
 
             # re-check now that we hold the lock: another machine may have
             # finished this group while we were scanning/waiting for the lock
-            run_deep = not results_exist(merged_dir)
-            run_ump = not umpy_results_exist(merged_dir)
-            if not run_deep and not run_ump:
-                print("  Skipping both pipelines (completed by another run).")
+            run_deep, run_ump, run_legacy = todo()
+            if not (run_deep or run_ump or run_legacy):
+                print("  Skipping (completed by another run).")
                 continue
 
             sess = _prepare_session(merged_dir)
@@ -1186,7 +1313,7 @@ def main():
 
             if run_deep:
                 try:
-                    run_deep_unit_match(sess)
+                    run_deep_unit_match(sess, model=model)
                 except Exception as e:
                     print(f"  DeepUnitMatch FAILED: {e}")
                     traceback.print_exc()
@@ -1194,6 +1321,13 @@ def main():
                 print(
                     f"  Skipping DeepUnitMatch (results exist and are fresh): {get_save_dir(merged_dir)}"
                 )
+
+            if run_legacy:
+                try:
+                    run_deep_unit_match_legacy(sess, model=model)
+                except Exception as e:
+                    print(f"  {LEGACY_SUBFOLDER} FAILED: {e}")
+                    traceback.print_exc()
 
             if run_ump:
                 try:

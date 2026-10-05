@@ -1333,7 +1333,9 @@ def get_total_score(scores_to_include, param):
     scores_to_include : dict
         The dictionary of scores used
     param : dict
-        The param dictionary
+        The param dictionary. Optional param["score_weights"] ({score name:
+        weight}) weights each score in the total score (default 1 for every
+        score, i.e. the plain sum). Weights do not affect the predictors.
 
     Returns
     -------
@@ -1342,11 +1344,12 @@ def get_total_score(scores_to_include, param):
     """
     total_score = np.zeros((param["n_units"], param["n_units"]))
     predictors = np.zeros((param["n_units"], param["n_units"], 0))
+    weights = param.get("score_weights") or {}
 
     for sid in scores_to_include:
         tmp = scores_to_include[f"{sid}"]
         predictors = np.concatenate((predictors, np.expand_dims(tmp, axis=2)), axis=2)
-        total_score += tmp
+        total_score += weights.get(sid, 1) * tmp
 
     total_score = (total_score - np.min(total_score)) / (
         np.max(total_score) - np.min(total_score)
