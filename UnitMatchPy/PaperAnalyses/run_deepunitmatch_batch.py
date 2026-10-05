@@ -33,6 +33,7 @@ import argparse
 import batch_lock
 import pipeline_config as cfg
 import pipeline_log as plog
+import run_deepunitmatch_batch_onMerged as onm  # shared matching pipeline
 import UnitMatchPy.default_params as default_params
 import UnitMatchPy.utils as util
 import UnitMatchPy.overlord as ov
@@ -335,9 +336,21 @@ def _prep_failed(mat_path, message, status="failed", tb=None):
 
 
 def _prepare_session(mat_path):
-    """Load one raw location (see _prepare_session_impl); every failure is logged and gives None."""
+    """
+    Load one raw location (see _prepare_session_impl); every failure is
+    logged and gives None. Units the DNN preprocessing rejects are removed for
+    both methods (onm.restrict_to_snippet_units), as on the merged data.
+    """
     try:
-        return _prepare_session_impl(mat_path)
+        sess = _prepare_session_impl(mat_path)
+        if sess is None:
+            return None
+        sess.update(
+            group=group_key(mat_path),  # for the shared run functions' logging
+            log_stage=LOG_STAGE,
+            merged_architecture=False,  # natural-image trial files: non-merged layout
+        )
+        return onm.restrict_to_snippet_units(sess)
     except Exception as e:
         return _prep_failed(mat_path, f"{type(e).__name__}: {e}", tb=traceback.format_exc())
 
@@ -426,565 +439,22 @@ def _prepare_session_impl(mat_path):
 # ── DeepUnitMatch pipeline ────────────────────────────────────────────────────
 
 
-@plog.logged_run(
-    LOG_STAGE,
-    group_of=lambda args, kwargs: group_key(args[0]["mat_path"]),
-    condition_of=lambda args, kwargs: "DeepUnitMatch",
-    output_of=lambda args, kwargs: os.path.join(get_save_dir(args[0]["mat_path"]), SENTINEL),
-)
-def run_deep_unit_match(sess):
-    """Run the full DeepUnitMatch pipeline for one pre-loaded session."""
-    mat_path = sess["mat_path"]
-    print(f"\n--- DeepUnitMatch: {mat_path}")
-
-    save_dir = get_save_dir(mat_path)
-    tmp_path = os.path.join(save_dir, "tmp_waveforms")
-    print(f"Save dir : {save_dir}")
-    os.makedirs(save_dir, exist_ok=True)
-    os.makedirs(tmp_path, exist_ok=True)
-
-    # work on independent copies so UMPy (running after) sees clean state
-    param = copy.deepcopy(sess["param"])
-    waveform = sess["waveform"]
-    session_id = sess["session_id"]
-    session_switch = sess["session_switch"]
-    good_units = sess["good_units"]
-    channel_pos = sess["channel_pos"]
-    within_session = sess["within_session"]
-
-    # ── load model ───────────────────────────────────────────────────────────
-    print("Loading DeepUnitMatch model …")
-    model = test.load_trained_model(device=DEVICE)
-
-    # ── preprocess with DeepUnitMatch (get_snippets → HDF5) ─────────────────
-    print("Preprocessing waveforms (get_snippets) …")
-    unit_ids = np.concatenate(param["good_units"]).squeeze()
-    try:
-        _, _, kept_idx = param_fun.get_snippets(
-            waveform,
-            channel_pos,
-            session_id,
-            save_path=tmp_path,
-            unit_ids=unit_ids,
-            param=param,
-        )
-    except Exception as e:
-        print(f"  ERROR in get_snippets: {e}")
-        traceback.print_exc()
-        return
-
-    # re-sync arrays if any units were rejected by get_snippets
-    if len(kept_idx) < len(waveform):
-        waveform, session_id, session_switch, within_session, good_units, param = (
-            util.filter_units_by_index(
-                waveform, session_id, session_switch, good_units, kept_idx, param
-            )
-        )
-
-    # ── neural-net inference ─────────────────────────────────────────────────
-    print("Running DeepUnitMatch inference …")
-    data_dir = os.path.join(tmp_path, "processed_waveforms")
-    try:
-        sim_matrix = test.inference(model, data_dir)
-    except Exception as e:
-        print(f"  ERROR in inference: {e}")
-        traceback.print_exc()
-        return
-
-    # ── Naive Bayes matching ─────────────────────────────────────────────────
-    print("Running Naive Bayes matching …")
-    clus_info = {
-        "good_units": param["good_units"],
-        "session_switch": session_switch,
-        "session_id": session_id,
-        "original_ids": np.concatenate(param["good_units"]),
-    }
-    extracted_wave_properties = ov.extract_parameters(
-        waveform, channel_pos, clus_info, param
-    )
-    sessions = np.unique(session_id)
-
-    # ── pre-pass: collect DNN labels for all session pairs → shared drift correction ──
-    # Build a global labels matrix from neural-net matches across every pair, then
-    # call mf.drift_n_sessions — the same function UMPy uses — so both pipelines
-    # share a single, consistent drift-correction mechanism.
-    n_total = waveform.shape[0]
-    labels_full = np.eye(n_total)
-    pair_matches_cache = {}
-
-    print("  Pre-pass: collecting neural-net labels for drift correction ...")
-    for r1 in sessions:
-        for r2 in sessions:
-            if r1 >= r2:
-                continue
-            mask = np.isin(session_id, [r1, r2])
-            sim_mat = sim_matrix[mask][:, mask]
-            indices = np.where(mask)[0]
-            n = int(np.sum(mask))
-
-            df = helpers.create_dataframe(
-                [param["good_units"][r1], param["good_units"][r2]],
-                sim_mat,
-                session_list=[r1, r2],
-            )
-            matches = test.get_matches(
-                df, sim_mat, session_id[indices], data_dir, dist_thresh=param["max_dist"]
-            )
-            pair_matches_cache[(r1, r2)] = matches
-
-            subsessionid = np.array(
-                [r1] * len(param["good_units"][r1])
-                + [r2] * len(param["good_units"][r2])
-            )
-            labels_pair = np.eye(n)
-            for (recses1, recses2), group in matches.groupby(by=["RecSes1", "RecSes2"]):
-                asmatrix = (
-                    group["match"]
-                    .values.reshape(
-                        len(param["good_units"][recses1]),
-                        len(param["good_units"][recses2]),
-                    )
-                    .astype(int)
-                )
-                labels_pair[
-                    np.ix_(subsessionid == recses1, subsessionid == recses2)
-                ] = asmatrix
-            labels_full[np.ix_(indices, indices)] = labels_pair
-
-    # Apply drift correction on full arrays — identical mechanism to UMPy.
-    # sim_matrix serves as total_score so get_good_matches can de-duplicate pairs.
-    avg_centroid = extracted_wave_properties["avg_centroid"].copy()
-    avg_waveform_per_tp = extracted_wave_properties["avg_waveform_per_tp"].copy()
-    _, avg_centroid, avg_waveform_per_tp = mf.drift_n_sessions(
-        labels_full.astype(bool),
-        session_switch,
-        avg_centroid,
-        avg_waveform_per_tp,
-        sim_matrix,
-        param,
-    )
-
-    # ── Bayes loop: use drift-corrected arrays ────────────────────────────────
-    probs = np.zeros(sim_matrix.shape)
-    distance_matrix = np.zeros(sim_matrix.shape)
-
-    for r1 in sessions:
-        for r2 in sessions:
-            if r1 >= r2:
-                continue
-
-            mask = np.isin(session_id, [r1, r2])
-            sim_mat = sim_matrix[mask][:, mask]
-            n = int(np.sum(mask))
-            indices = np.where(mask)[0]
-
-            matches = pair_matches_cache[(r1, r2)]
-
-            labels = np.eye(sim_mat.shape[0])
-            subsessionid = np.array(
-                [r1] * len(param["good_units"][r1])
-                + [r2] * len(param["good_units"][r2])
-            )
-            for (recses1, recses2), group in matches.groupby(by=["RecSes1", "RecSes2"]):
-                asmatrix = (
-                    group["match"]
-                    .values.reshape(
-                        len(param["good_units"][recses1]),
-                        len(param["good_units"][recses2]),
-                    )
-                    .astype(int)
-                )
-                labels[np.ix_(subsessionid == recses1, subsessionid == recses2)] = (
-                    asmatrix
-                )
-
-            # use drift-corrected waveform (masked to this session pair)
-            avg_waveform_per_tp_pair = avg_waveform_per_tp[:, mask, :, :]
-            avg_waveform_per_tp_flip = mf.flip_dim(avg_waveform_per_tp_pair, param, n)
-            euclid_dist = mf.get_Euclidean_dist(avg_waveform_per_tp_flip, param, n)
-            centroid_dist, _ = mf.centroid_metrics(euclid_dist, param)
-
-            scores_to_incl = {"similarity": sim_mat, "distance": centroid_dist}
-            n_units = int(np.sqrt(len(matches)))
-
-            # Adaptive match-count prior, mirroring UMPy's post-drift-correction
-            # n_expected_matches estimate (overlord.extract_metric_scores,
-            # is_first_pass=False) instead of a fixed "2 expected matches per
-            # unit" heuristic. raw_dist is the same peak-timepoint,
-            # min-over-flips physical distance (um) that centroid_metrics()
-            # above rescales into centroid_dist -- reused here unscaled.
-            waveidx_arr = np.asarray(param["waveidx"])
-            peak_idx = int(np.flatnonzero(waveidx_arr == param["peak_loc"])[0])
-            raw_dist = np.nanmin(euclid_dist[:, peak_idx, :, :], axis=1)
-            within_session_pair = within_session[np.ix_(mask, mask)]
-            include_these_pairs_idx = raw_dist < param["max_dist"]
-            param_pair = dict(param, n_units=n_units)
-            thrs_opt = mf.get_threshold(
-                sim_mat, within_session_pair, raw_dist, param_pair, is_first_pass=False
-            )
-            n_expected_matches = int(
-                np.sum((sim_mat > thrs_opt) & include_these_pairs_idx)
-            )
-            n_candidate_pairs = max(int(np.sum(include_these_pairs_idx)), 1)
-            prior_match = 1 - (n_expected_matches / n_candidate_pairs)
-            priors = np.array([prior_match, 1 - prior_match])
-
-            parameter_kernels = bf.get_parameter_kernels(
-                scores_to_incl, labels, np.unique(labels), param
-            )
-            predictors = np.stack(list(scores_to_incl.values()), axis=2)
-            probability = bf.apply_naive_bayes(
-                parameter_kernels, priors, predictors, param, np.unique(labels)
-            )
-            prob_matrix = probability[:, 1].reshape(n_units, n_units)
-
-            probs[np.ix_(mask, mask)] = prob_matrix
-            distance_matrix[np.ix_(mask, mask)] = centroid_dist
-
-    # ── final matches ────────────────────────────────────────────────────────
-    match_threshold = param.get("match_threshold", THRESH)
-    final_matches = test.directional_filter_matrix(probs, session_id, match_threshold)
-    n_matches = int(np.sum(final_matches)) // 2
-    print(f"  {n_matches} matches found (threshold={match_threshold})")
-
-    # ── assign unique IDs ────────────────────────────────────────────────────
-    UIDs = aid.assign_unique_id(probs, param, clus_info)
-
-    # ── performance metrics (AUC against functional scores) ──────────────────
-    functional_scores = {}
-    try:
-        isicorr = test.ISI_correlations(param)
-        auc_isi = test.AUC(final_matches, isicorr, session_id)
-        print(f"AUC (ISI correlations):            {auc_isi:.3f}")
-        functional_scores["ISI_correlations"] = isicorr
-
-        isikl = test.ISI_KL_divergence(param)
-        auc_isikl = test.AUC(final_matches, -isikl, session_id)
-        print(f"AUC (ISI KL divergence):           {auc_isikl:.3f}")
-        functional_scores["ISI_KL_divergence"] = isikl
-
-        isiwass = test.ISI_wasserstein_distance(param)
-        auc_isiwass = test.AUC(final_matches, -isiwass, session_id)
-        print(f"AUC (ISI Wasserstein distance):    {auc_isiwass:.3f}")
-        functional_scores["ISI_wasserstein_distance"] = isiwass
-
-        refpopcorr = test.refpop_correlations(param, matches=final_matches)
-        auc_refpop = test.AUC(final_matches, refpopcorr, session_id)
-        print(f"AUC (ref. pop. correlation):       {auc_refpop:.3f}")
-        functional_scores["refpop_correlations"] = refpopcorr
-
-        frdiff = test.FR_diff(param)
-        auc_fr = test.AUC(final_matches, -frdiff, session_id)
-        print(f"AUC (firing rate difference):      {auc_fr:.3f}")
-        functional_scores["FR_diff"] = frdiff
-
-        cvdiff = test.ISI_CV_diff(param)
-        auc_cv = test.AUC(final_matches, -cvdiff, session_id)
-        print(f"AUC (ISI CV difference):           {auc_cv:.3f}")
-        functional_scores["ISI_CV_diff"] = cvdiff
-
-        try:
-            natimcorr = test.natim_correlations(param)
-            auc_natim = test.AUC(final_matches, natimcorr, session_id)
-            print(f"AUC (nat. image correlations):     {auc_natim:.3f}")
-            functional_scores["natim_correlations"] = natimcorr
-        except Exception:
-            pass  # natim data may not be available for every session
-    except Exception as e:
-        print(f"  WARNING: functional score computation failed: {e}")
-        functional_scores = {}
-
-    # ── save ─────────────────────────────────────────────────────────────────
-    su.save_to_output(
-        save_dir,
-        {"distance": distance_matrix, "DNNSim": sim_matrix},
-        np.argwhere(final_matches),
-        probs,
-        extracted_wave_properties["avg_centroid"],
-        extracted_wave_properties["avg_waveform"],
-        extracted_wave_properties["avg_waveform_per_tp"],
-        extracted_wave_properties["max_site"],
-        distance_matrix,
-        final_matches,
-        clus_info,
-        param,
-        UIDs=UIDs,
-        matches_curated=None,
-        save_match_table=True,
-        functional_scores=functional_scores if functional_scores else None,
-    )
-    ensure_matlab_compatible_output(save_dir)
-    su.save_auc_summary(
-        save_dir, test.auc_summary_from_functional_scores(functional_scores, final_matches, session_id)
-    )
-
-    # ── save diagnostic figures ───────────────────────────────────────────────
-    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-
-    im = axes[0].imshow(sim_matrix, cmap="viridis", aspect="auto")
-    axes[0].set_title("Similarity matrix")
-    axes[0].set_xlabel("Unit")
-    axes[0].set_ylabel("Unit")
-    fig.colorbar(im, ax=axes[0])
-
-    im = axes[1].imshow(probs, cmap="viridis", aspect="auto")
-    axes[1].set_title("Match probability")
-    axes[1].set_xlabel("Unit")
-    axes[1].set_ylabel("Unit")
-    fig.colorbar(im, ax=axes[1])
-
-    im = axes[2].imshow(final_matches, cmap="viridis", aspect="auto")
-    axes[2].set_title(f"Final matches (n={n_matches})")
-    axes[2].set_xlabel("Unit")
-    axes[2].set_ylabel("Unit")
-    fig.colorbar(im, ax=axes[2])
-
-    fig.tight_layout()
-    fig.savefig(os.path.join(save_dir, "MatchingOverview.png"), dpi=150)
-    plt.close(fig)
-
-    if functional_scores:
-        score_meta = {
-            "ISI_correlations": ("ISI correlations", "viridis", None),
-            "ISI_KL_divergence": ("ISI KL divergence", "magma", None),
-            "ISI_wasserstein_distance": ("ISI Wasserstein distance", "magma", None),
-            "refpop_correlations": ("Ref. pop. correlations", "viridis", None),
-            "FR_diff": ("Firing rate difference", "magma", None),
-            "ISI_CV_diff": ("ISI CV difference", "magma", None),
-            "natim_correlations": ("Nat. image correlations", "viridis", None),
-        }
-        keys = [k for k in score_meta if k in functional_scores]
-        fig, axes = plt.subplots(1, len(keys), figsize=(5 * len(keys), 5))
-        if len(keys) == 1:
-            axes = [axes]
-        for ax, key in zip(axes, keys):
-            title, cmap, _ = score_meta[key]
-            im = ax.imshow(functional_scores[key], cmap=cmap, aspect="auto")
-            ax.set_title(title)
-            ax.set_xlabel("Unit")
-            ax.set_ylabel("Unit")
-            fig.colorbar(im, ax=ax)
-        fig.tight_layout()
-        fig.savefig(os.path.join(save_dir, "FunctionalScores.png"), dpi=150)
-        plt.close(fig)
-
-    print(f"  Results saved to: {save_dir}")
+# ── matching: the pipeline shared with the merged-data runs ──────────────────
+# DeepUnitMatch and UMPy run exactly as on the merged data (run_dum_core /
+# run_umpy_core in run_deepunitmatch_batch_onMerged.py: one matching
+# pipeline for both methods, unique-ID match sets, logging). The session
+# dict says where the natural-image trial files are (non-merged layout) and
+# how to log (stage "step1", group "mouse/probe/location").
 
 
-# ── UMPy pipeline ─────────────────────────────────────────────────────────────
+def run_deep_unit_match(sess, model):
+    """DeepUnitMatch on one non-merged location (its unique IDs define the merges in step 2)."""
+    onm.run_dum_core(sess, get_save_dir(sess["mat_path"]), model, label="DeepUnitMatch")
 
 
-@plog.logged_run(
-    LOG_STAGE,
-    group_of=lambda args, kwargs: group_key(args[0]["mat_path"]),
-    condition_of=lambda args, kwargs: "UMPy",
-    output_of=lambda args, kwargs: os.path.join(get_umpy_save_dir(args[0]["mat_path"]), SENTINEL),
-)
 def run_umpy(sess):
-    """Run the full UMPy pipeline for one pre-loaded session.
-
-    Unlike DeepUnitMatch, the Naive Bayes here uses the extracted waveform
-    metric scores (amplitude, spatial decay, waveform similarity, etc.) rather
-    than a neural-net similarity score.
-    """
-    mat_path = sess["mat_path"]
-    print(f"\n--- UMPy: {mat_path}")
-
-    save_dir = get_umpy_save_dir(mat_path)
-    print(f"Save dir : {save_dir}")
-    os.makedirs(save_dir, exist_ok=True)
-
-    # work on independent copies so param mutations don't bleed between pipelines
-    param = copy.deepcopy(sess["param"])
-    waveform = sess["waveform"]
-    session_id = sess["session_id"]
-    session_switch = sess["session_switch"]
-    within_session = sess["within_session"]
-    channel_pos = sess["channel_pos"]
-
-    clus_info = {
-        "good_units": param["good_units"],
-        "session_switch": session_switch,
-        "session_id": session_id,
-        "original_ids": np.concatenate(param["good_units"]),
-    }
-
-    # ── extract waveform properties ──────────────────────────────────────────
-    print("Extracting waveform properties …")
-    extracted_wave_properties = ov.extract_parameters(
-        waveform, channel_pos, clus_info, param
-    )
-
-    # ── extract metric scores (these go directly into Naive Bayes) ───────────
-    print("Extracting metric scores …")
-    try:
-        total_score, candidate_pairs, scores_to_include, predictors = (
-            ov.extract_metric_scores(
-                extracted_wave_properties,
-                session_switch,
-                within_session,
-                param,
-                niter=2,
-            )
-        )
-    except Exception as e:
-        print(f"  ERROR in extract_metric_scores: {e}")
-        traceback.print_exc()
-        return
-
-    # ── Naive Bayes matching ─────────────────────────────────────────────────
-    print("Running Naive Bayes matching …")
-    prior_match = 1 - (param["n_expected_matches"] / param["n_units"] ** 2)
-    priors = np.array([prior_match, 1 - prior_match])
-    labels = candidate_pairs.astype(int)
-    cond = np.unique(labels)
-    parameter_kernels = bf.get_parameter_kernels(
-        scores_to_include, labels, cond, param, add_one=1
-    )
-    probability = bf.apply_naive_bayes(
-        parameter_kernels, priors, predictors, param, cond
-    )
-    output_prob_matrix = probability[:, 1].reshape(param["n_units"], param["n_units"])
-
-    match_threshold = param.get("match_threshold", THRESH)
-    output_threshold = np.zeros_like(output_prob_matrix)
-    output_threshold[output_prob_matrix > match_threshold] = 1
-    matches = np.argwhere(output_threshold == 1)
-    n_matches = len(matches) // 2
-    print(f"  {n_matches} matches found (threshold={match_threshold})")
-
-    # ── assign unique IDs ────────────────────────────────────────────────────
-    UIDs = aid.assign_unique_id(output_prob_matrix, param, clus_info)
-
-    # ── performance metrics (AUC against functional scores) ──────────────────
-    functional_scores = {}
-    final_matches_bool = output_threshold.astype(bool)
-    try:
-        isicorr = test.ISI_correlations(param)
-        auc_isi = test.AUC(final_matches_bool, isicorr, session_id)
-        print(f"AUC (ISI correlations):            {auc_isi:.3f}")
-        functional_scores["ISI_correlations"] = isicorr
-
-        isikl = test.ISI_KL_divergence(param)
-        auc_isikl = test.AUC(final_matches_bool, -isikl, session_id)
-        print(f"AUC (ISI KL divergence):           {auc_isikl:.3f}")
-        functional_scores["ISI_KL_divergence"] = isikl
-
-        isiwass = test.ISI_wasserstein_distance(param)
-        auc_isiwass = test.AUC(final_matches_bool, -isiwass, session_id)
-        print(f"AUC (ISI Wasserstein distance):    {auc_isiwass:.3f}")
-        functional_scores["ISI_wasserstein_distance"] = isiwass
-
-        refpopcorr = test.refpop_correlations(param, matches=final_matches_bool)
-        auc_refpop = test.AUC(final_matches_bool, refpopcorr, session_id)
-        print(f"AUC (ref. pop. correlation):       {auc_refpop:.3f}")
-        functional_scores["refpop_correlations"] = refpopcorr
-
-        frdiff = test.FR_diff(param)
-        auc_fr = test.AUC(final_matches_bool, -frdiff, session_id)
-        print(f"AUC (firing rate difference):      {auc_fr:.3f}")
-        functional_scores["FR_diff"] = frdiff
-
-        cvdiff = test.ISI_CV_diff(param)
-        auc_cv = test.AUC(final_matches_bool, -cvdiff, session_id)
-        print(f"AUC (ISI CV difference):           {auc_cv:.3f}")
-        functional_scores["ISI_CV_diff"] = cvdiff
-
-        try:
-            natimcorr = test.natim_correlations(param)
-            auc_natim = test.AUC(final_matches_bool, natimcorr, session_id)
-            print(f"AUC (nat. image correlations):     {auc_natim:.3f}")
-            functional_scores["natim_correlations"] = natimcorr
-        except Exception:
-            pass
-    except Exception as e:
-        print(f"  WARNING: functional score computation failed: {e}")
-        functional_scores = {}
-
-    # ── save ─────────────────────────────────────────────────────────────────
-    avg_centroid = extracted_wave_properties["avg_centroid"]
-    avg_waveform = extracted_wave_properties["avg_waveform"]
-    avg_waveform_per_tp = extracted_wave_properties["avg_waveform_per_tp"]
-    max_site = extracted_wave_properties["max_site"]
-
-    su.save_to_output(
-        save_dir,
-        scores_to_include,
-        matches,
-        output_prob_matrix,
-        avg_centroid,
-        avg_waveform,
-        avg_waveform_per_tp,
-        max_site,
-        total_score,
-        output_threshold,
-        clus_info,
-        param,
-        UIDs=UIDs,
-        matches_curated=None,
-        save_match_table=True,
-        functional_scores=functional_scores if functional_scores else None,
-    )
-    ensure_matlab_compatible_output(save_dir)
-    su.save_auc_summary(
-        save_dir,
-        test.auc_summary_from_functional_scores(functional_scores, final_matches_bool, session_id),
-    )
-
-    # ── save diagnostic figures ───────────────────────────────────────────────
-    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-
-    im = axes[0].imshow(total_score, cmap="viridis", aspect="auto")
-    axes[0].set_title("Total score")
-    axes[0].set_xlabel("Unit")
-    axes[0].set_ylabel("Unit")
-    fig.colorbar(im, ax=axes[0])
-
-    im = axes[1].imshow(output_prob_matrix, cmap="viridis", aspect="auto")
-    axes[1].set_title("Match probability")
-    axes[1].set_xlabel("Unit")
-    axes[1].set_ylabel("Unit")
-    fig.colorbar(im, ax=axes[1])
-
-    im = axes[2].imshow(output_threshold, cmap="viridis", aspect="auto")
-    axes[2].set_title(f"Final matches (n={n_matches})")
-    axes[2].set_xlabel("Unit")
-    axes[2].set_ylabel("Unit")
-    fig.colorbar(im, ax=axes[2])
-
-    fig.tight_layout()
-    fig.savefig(os.path.join(save_dir, "MatchingOverview.png"), dpi=150)
-    plt.close(fig)
-
-    if functional_scores:
-        score_meta = {
-            "ISI_correlations": ("ISI correlations", "viridis", None),
-            "ISI_KL_divergence": ("ISI KL divergence", "magma", None),
-            "ISI_wasserstein_distance": ("ISI Wasserstein distance", "magma", None),
-            "refpop_correlations": ("Ref. pop. correlations", "viridis", None),
-            "FR_diff": ("Firing rate difference", "magma", None),
-            "ISI_CV_diff": ("ISI CV difference", "magma", None),
-            "natim_correlations": ("Nat. image correlations", "viridis", None),
-        }
-        keys = [k for k in score_meta if k in functional_scores]
-        fig, axes = plt.subplots(1, len(keys), figsize=(5 * len(keys), 5))
-        if len(keys) == 1:
-            axes = [axes]
-        for ax, key in zip(axes, keys):
-            title, cmap, _ = score_meta[key]
-            im = ax.imshow(functional_scores[key], cmap=cmap, aspect="auto")
-            ax.set_title(title)
-            ax.set_xlabel("Unit")
-            ax.set_ylabel("Unit")
-            fig.colorbar(im, ax=ax)
-        fig.tight_layout()
-        fig.savefig(os.path.join(save_dir, "FunctionalScores.png"), dpi=150)
-        plt.close(fig)
-
-    print(f"  Results saved to: {save_dir}")
-
-
-# ── entry point ───────────────────────────────────────────────────────────────
+    """UMPy on one non-merged location."""
+    onm.run_umpy_core(sess, get_umpy_save_dir(sess["mat_path"]), label="UMPy")
 
 
 def parse_args():
@@ -1003,6 +473,9 @@ def main():
     args = parse_args()
     global WRITE_MATLAB_COMPAT
     WRITE_MATLAB_COMPAT = args.write_matlab_compat
+    onm.WRITE_MATLAB_COMPAT = args.write_matlab_compat
+    print("Loading DeepUnitMatch model …")
+    model = test.load_trained_model(device=DEVICE)
 
     print(f"Scanning for UnitMatch.mat files under:\n  {BASE_INPUT}\n")
 
@@ -1047,7 +520,7 @@ def main():
 
             if run_deep:
                 try:
-                    run_deep_unit_match(sess)
+                    run_deep_unit_match(sess, model)
                 except Exception as e:
                     print(f"  DeepUnitMatch FAILED: {e}")
                     traceback.print_exc()

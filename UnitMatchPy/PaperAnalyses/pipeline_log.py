@@ -57,7 +57,8 @@ def logged_run(stage, group_of, condition_of, output_of):
     returned without it (several runs print an error and return early).
 
     group_of / condition_of / output_of map the call's (args, kwargs) to the
-    logged group, condition, and the output file that marks success.
+    logged group, condition, and the output file that marks success. stage
+    is a string, or a function of (args, kwargs) for code shared by stages.
     """
 
     def decorate(fn):
@@ -65,7 +66,10 @@ def logged_run(stage, group_of, condition_of, output_of):
         def wrapper(*args, **kwargs):
             group = condition = "?"
             output = None
+            stage_name = stage if isinstance(stage, str) else "?"
             try:
+                if not isinstance(stage, str):
+                    stage_name = stage(args, kwargs)
                 group = group_of(args, kwargs)
                 condition = condition_of(args, kwargs)
                 output = output_of(args, kwargs)
@@ -74,12 +78,12 @@ def logged_run(stage, group_of, condition_of, output_of):
             try:
                 result = fn(*args, **kwargs)
             except Exception as e:
-                log_event(stage, group, condition, "failed", f"{type(e).__name__}: {e}", traceback.format_exc())
+                log_event(stage_name, group, condition, "failed", f"{type(e).__name__}: {e}", traceback.format_exc())
                 raise
             if output is None or os.path.isfile(output):
-                log_event(stage, group, condition, "done")
+                log_event(stage_name, group, condition, "done")
             else:
-                log_event(stage, group, condition, "failed",
+                log_event(stage_name, group, condition, "failed",
                           f"returned without writing {os.path.basename(output)} (see console output)")
             return result
 

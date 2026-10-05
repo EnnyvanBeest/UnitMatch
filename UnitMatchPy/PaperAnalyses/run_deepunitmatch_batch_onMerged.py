@@ -263,9 +263,11 @@ def _logged_matching_run(default_label, label_index):
         rest = args[2:]
         return kwargs.get("label", rest[label_index] if len(rest) > label_index else default_label)
 
+    # Step 1 (run_deepunitmatch_batch.py) reuses these run functions on the
+    # non-merged data and sets sess["log_stage"] / sess["group"] itself.
     return plog.logged_run(
-        LOG_STAGE,
-        group_of=lambda args, kwargs: group_key(args[0]["merged_dir"]),
+        lambda args, kwargs: args[0].get("log_stage", LOG_STAGE),
+        group_of=lambda args, kwargs: args[0].get("group") or group_key(args[0]["merged_dir"]),
         condition_of=label_of,
         output_of=lambda args, kwargs: os.path.join(args[1], SENTINEL),
     )
@@ -1093,8 +1095,12 @@ def run_umpy_core(sess, save_dir, label="UMPy", to_use=None, model=None, niter=2
         {score name: weight} for the total score (thresholds, candidate pairs,
         drift correction); default None = every score weighted 1, as in UMPy.
         The Naive Bayes predictors are not weighted. See run_dum_core.
+
+    Also used for the non-merged data (run_deepunitmatch_batch.py): such
+    sessions carry "mat_path" instead of "merged_dir" and
+    merged_architecture=False (where the natural-image trial files are).
     """
-    merged_dir = sess["merged_dir"]
+    merged_dir = sess.get("merged_dir") or sess.get("mat_path")
     print(f"\n--- {label}: {merged_dir}")
 
     print(f"Save dir : {save_dir}")
@@ -1241,7 +1247,9 @@ def run_umpy_core(sess, save_dir, label="UMPy", to_use=None, model=None, niter=2
         functional_scores["ISI_CV_diff"] = cvdiff
 
         try:
-            natimcorr = test.natim_correlations(param, merged_architecture=True)
+            natimcorr = test.natim_correlations(
+                param, merged_architecture=sess.get("merged_architecture", True)
+            )
             auc_natim = test.AUC(final_matches_bool, natimcorr, session_id)
             print(f"AUC (nat. image correlations):     {auc_natim:.3f}")
             functional_scores["natim_correlations"] = natimcorr
