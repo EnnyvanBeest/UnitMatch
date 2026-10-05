@@ -610,6 +610,12 @@ def get_threshold(total_score, within_session, euclid_dist, param, is_first_pass
     Total score for the matches to be smaller than expected, therefore we calculate the difference in mean
     for within and and between session to lower the threshold
 
+    Note: is_first_pass=True applies ONE global lowering for all session pairs.
+    UnitMatchPy's own pipeline (overlord.extract_metric_scores) instead calls this
+    with is_first_pass=False and corrects each session pair separately with
+    align_session_pairs(), as the MATLAB version does. The global first-pass
+    branch is kept unchanged for external callers.
+
     Parameters
     ----------
     total_score : ndaray
@@ -717,6 +723,74 @@ def get_threshold(total_score, within_session, euclid_dist, param, is_first_pass
                 thrs_opt = thrs_opt - np.abs(muw - mua)
 
     return thrs_opt
+
+
+def align_session_pairs(total_score, session_switch, euclid_dist, thrs_opt, param):
+    """
+    First-pass, per-session-pair correction of the total score, as in the MATLAB
+    version (ExtractSimilarityMetrics.m, "Correct for total scores being lower
+    for further away session in initial phase").
+
+    Before drift correction, even true matches across sessions get lower scores
+    than within a session, and by how much differs per pair of sessions. For
+    every ordered pair of sessions, the mean of that pair's non-match scores
+    (across-session pairs within neighbour_dist and below thrs_opt) is compared
+    with the same mean for within-session pairs (muw); if lower, that pair's
+    block of the total score is shifted up by the difference.
+
+    Parameters
+    ----------
+    total_score : ndarray
+        (n_units, n_units) total score
+    session_switch : ndarray
+        Start index of every session, plus n_units at the end ([0, n1, n1+n2, ...])
+    euclid_dist : ndarray
+        (n_units, n_units) centroid distance between units
+    thrs_opt : float
+        Match threshold from get_threshold(..., is_first_pass=False)
+    param : dict
+        The param dictionary (uses neighbour_dist)
+
+    Returns
+    -------
+    aligned_score : ndarray
+        Copy of total_score with every across-session block shifted
+    shifts : ndarray
+        (n_sessions, n_sessions) shift applied to each block (0 if none)
+    """
+    session_switch = np.asarray(session_switch, dtype=int)
+    n_sessions = len(session_switch) - 1
+    aligned_score = total_score.copy()
+    shifts = np.zeros((n_sessions, n_sessions))
+    if n_sessions < 2:
+        return aligned_score, shifts
+
+    tmp = total_score.copy()
+    tmp[euclid_dist > param["neighbour_dist"]] = np.nan
+
+    within = np.zeros(tmp.shape, dtype=bool)
+    for s in range(n_sessions):
+        within[session_switch[s] : session_switch[s + 1], session_switch[s] : session_switch[s + 1]] = True
+    fit_w = tmp[within & ~np.isnan(tmp) & (tmp < thrs_opt)]
+    if fit_w.size == 0:
+        return aligned_score, shifts
+    muw = np.mean(fit_w)
+
+    for s1 in range(n_sessions):
+        rows = slice(session_switch[s1], session_switch[s1 + 1])
+        for s2 in range(n_sessions):
+            if s1 == s2:
+                continue
+            cols = slice(session_switch[s2], session_switch[s2 + 1])
+            block = tmp[rows, cols]
+            fit_a = block[~np.isnan(block) & (block < thrs_opt)]
+            if fit_a.size == 0:
+                continue
+            mua = np.mean(fit_a)
+            if mua < muw:
+                shifts[s1, s2] = muw - mua
+                aligned_score[rows, cols] += muw - mua
+    return aligned_score, shifts
 
 
 def get_good_matches(pairs, total_score):

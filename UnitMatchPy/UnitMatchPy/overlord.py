@@ -171,23 +171,32 @@ def extract_metric_scores(
 
         # Initial thresholding
         if i < niter - 1:
-            # get the thershold for a match
+            # get the threshold for a match (same/different-unit crossing within sessions)
             thrs_opt = mf.get_threshold(
-                total_score, within_session, euclid_dist, param, is_first_pass=True
+                total_score, within_session, euclid_dist, param, is_first_pass=False
+            )
+            # Before drift correction across-session scores are lower, by an
+            # amount that differs per pair of sessions: shift each session
+            # pair's block of the total score up separately (MATLAB
+            # ExtractSimilarityMetrics.m). Only used to pick the candidate
+            # pairs that drive drift correction; the final pass below uses the
+            # unshifted total score of the drift-corrected waveforms.
+            aligned_score, _ = mf.align_session_pairs(
+                total_score, session_switch, euclid_dist, thrs_opt, param
             )
 
             param["n_expected_matches"] = int(
-                np.sum((total_score > thrs_opt) & include_these_pairs_idx.astype(bool))
+                np.sum((aligned_score > thrs_opt) & include_these_pairs_idx.astype(bool))
             )
             prior_match = 1 - (param["n_expected_matches"] / len(include_these_pairs))
-            candidate_pairs = total_score > thrs_opt
+            candidate_pairs = aligned_score > thrs_opt
 
             drifts, avg_centroid, avg_waveform_per_tp = mf.drift_n_sessions(
                 candidate_pairs,
                 session_switch,
                 avg_centroid,
                 avg_waveform_per_tp,
-                total_score,
+                aligned_score,
                 param,
             )
 
