@@ -16,7 +16,7 @@
 #
 # Each such folder sits alongside the DeepUnitMatch/ and UMPy/ subfolders that
 # run_deepunitmatch_batch_onMerged.py writes for the same dataset, using the
-# exact same inference/matching/saving pipeline (run_deep_unit_match_core),
+# exact same inference/matching/saving pipeline (run_dum_core: the matching pipeline shared with UMPy),
 # just against a different checkpoint.
 
 import os
@@ -214,7 +214,7 @@ def main():
                 save_dir = get_exclude_mice_save_dir(merged_dir, model_info)
                 try:
                     model = get_model_for_checkpoint(model_cache, model_info)
-                    base_batch.run_deep_unit_match_core(
+                    base_batch.run_dum_core(
                         sess, save_dir, model, label=model_info["subfolder_name"]
                     )
                 except Exception as e:

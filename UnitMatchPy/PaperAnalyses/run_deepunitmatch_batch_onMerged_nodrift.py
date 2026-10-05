@@ -8,18 +8,14 @@
 # independent of the score-source questions the spatialonly/scoreswap batch
 # scripts explore.
 #
-# DUM_nodrift/: run_deep_unit_match_core(..., apply_drift_correction=False).
-# mf.drift_n_sessions is never called, so avg_centroid/avg_waveform_per_tp
-# stay exactly as extract_parameters produced them -- centroid_dist and every
-# downstream step use uncorrected waveforms. The drift-correction pre-pass
-# itself still runs (it also builds the supervised match/non-match labels the
-# final Bayes step needs, regardless of drift correction), only the actual
-# correction step is skipped.
-#
-# UMPy_nodrift/: run_umpy_core(..., niter=1). ov.extract_metric_scores' own
-# niter loop is what applies drift correction (niter=2 does one pass); niter=1
-# runs the loop once and skips it entirely, computing total_score/
-# candidate_pairs/scores_to_include from the raw, uncorrected waveforms.
+# DUM and UMPy share one matching pipeline, so drift correction is switched
+# off the same way for both:
+# DUM_nodrift/:  run_dum_core(..., niter=1)
+# UMPy_nodrift/: run_umpy_core(..., niter=1)
+# ov.extract_metric_scores' niter loop is what applies drift correction
+# (niter=2 does one pass); niter=1 runs the loop once and skips it entirely,
+# computing total_score/candidate_pairs/scores_to_include from the raw,
+# uncorrected waveforms.
 #
 # Each such folder sits alongside the DeepUnitMatch/ and UMPy/ subfolders that
 # run_deepunitmatch_batch_onMerged.py writes for the same dataset.
@@ -151,12 +147,8 @@ def main():
                 save_dir = get_nodrift_save_dir(merged_dir, condition)
                 try:
                     if condition == "DUM_nodrift":
-                        base_batch.run_deep_unit_match_core(
-                            sess,
-                            save_dir,
-                            model=model,
-                            label=condition,
-                            apply_drift_correction=False,
+                        base_batch.run_dum_core(
+                            sess, save_dir, model, label=condition, niter=1
                         )
                     else:
                         base_batch.run_umpy_core(

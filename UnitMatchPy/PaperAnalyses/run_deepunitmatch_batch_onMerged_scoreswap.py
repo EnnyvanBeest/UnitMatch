@@ -1,3 +1,10 @@
+# SUPERSEDED: DeepUnitMatch and UMPy now share one matching pipeline
+# (run_dum_core / run_umpy_core in run_deepunitmatch_batch_onMerged.py), so the
+# main DeepUnitMatch-vs-UMPy comparison already differs only in the score.
+# This script still drives the DeepUnitMatch-specific legacy pipeline
+# (run_deep_unit_match_core) and is no longer part of the paper pipeline;
+# kept for reference.
+#
 # Batch wrapper: runs a "score swap" test of DeepUnitMatch and UMPy on the
 # *merged* dataset (see run_deepunitmatch_batch_onMerged.py for how that tree
 # is built and how sessions/good units are derived) -- i.e. feed each

@@ -8,8 +8,7 @@
 # / overlord.py), both relevant here:
 #   1. Candidate-pair gate: pairs farther apart than max_dist are never
 #      considered at all (overlord.extract_metric_scores' include_these_pairs,
-#      and -- since the DUM adaptive-prior fix -- DUM's own per-pair
-#      include_these_pairs_idx in run_deep_unit_match_core).
+#      used by both DUM and UMPy since they share one matching pipeline).
 #   2. Normalisation scale for the centroid-distance score itself
 #      (metric_functions.centroid_metrics / get_euclidean_metrics_chunked:
 #      centroid_dist = 1 - (dist - min) / (max_dist - min)). Both of those
@@ -35,7 +34,7 @@
 #
 # Each such folder sits alongside the DeepUnitMatch/ and UMPy/ subfolders that
 # run_deepunitmatch_batch_onMerged.py writes for the same dataset, using the
-# exact same extraction/matching/saving pipeline (run_deep_unit_match_core /
+# exact same extraction/matching/saving pipeline (run_dum_core /
 # run_umpy_core), just against a modified param dict.
 
 import os
@@ -91,7 +90,7 @@ def format_dist(value):
 def sess_with_max_dist(sess, max_dist):
     """
     Shallow-copy sess with param["max_dist"]/param["neighbour_dist"] overridden.
-    run_deep_unit_match_core/run_umpy_core each do their own
+    run_dum_core/run_umpy_core each do their own
     copy.deepcopy(sess["param"]) internally, so this shallow override is
     isolated per sweep point without needing to touch the original sess.
     """
@@ -217,7 +216,7 @@ def main():
                 sess_mod = sess_with_max_dist(sess, max_dist)
                 try:
                     if method == "DUM":
-                        base_batch.run_deep_unit_match_core(
+                        base_batch.run_dum_core(
                             sess_mod, save_dir, model, label=label
                         )
                     else:

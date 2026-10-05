@@ -8,7 +8,7 @@
 # of the original production checkpoint at DeepUnitMatch/utils/model.
 #
 # Mirrors run_deepunitmatch_batch_onMerged_extramodels.py's pattern (reuse
-# find_merged_groups/_prepare_session/run_deep_unit_match_core from the base
+# find_merged_groups/_prepare_session/run_dum_core from the base
 # script, save into a distinctly-named subfolder alongside the DeepUnitMatch/
 # and UMPy/ output the base script already writes for the same dataset) but
 # simplified to a single model instead of a discovery loop over many, since
@@ -155,7 +155,7 @@ def main():
 
             save_dir = get_save_dir(merged_dir)
             try:
-                base_batch.run_deep_unit_match_core(
+                base_batch.run_dum_core(
                     sess, save_dir, model, label=SUBFOLDER_NAME
                 )
             except Exception as e:

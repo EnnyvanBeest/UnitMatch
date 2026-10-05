@@ -542,7 +542,7 @@ def run_inference_stage(xval_name: str, checkpoint_path: str, eval_groups: Seque
             sess = base_batch._prepare_session(merged_dir)
             if sess is None:
                 continue
-            base_batch.run_deep_unit_match_core(
+            base_batch.run_dum_core(
                 sess, save_dir, model, label=f"xval_{xval_name}"
             )
         except Exception as e:
