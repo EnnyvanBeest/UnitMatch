@@ -90,7 +90,7 @@ def discover_exclude_mice_models():
                     continue
                 models.append(
                     {
-                        "checkpoint": str(ckpts[0]),
+                        "checkpoint": str(max(ckpts, key=lambda p: int(p.name.split("_")[-1]))),  # highest epoch, not first by name
                         "n_output": 256,
                         "subfolder_name": f"exclude_mice_{model_name}_{stage}",
                     }

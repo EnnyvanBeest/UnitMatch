@@ -80,6 +80,32 @@ def _unit_id_to_filepath(session_dir: str, unit_id: int):
     return None
 
 
+def roll_one_row(data, choice=None):
+    """
+    Training augmentation of one waveform snippet (shape [T, C]): shift it by
+    one electrode row up or down, or leave it unchanged (each with p = 1/3).
+
+    The snippet's channels interleave the probe's two columns (slot 2k and
+    2k+1 are the two sites of row k, ordered by depth), so moving every
+    channel by 2 slots moves the whole footprint one row along the probe;
+    the row at the edge that has no neighbour keeps its own values. It is
+    applied independently to the two halves of a neuron, so the two copies
+    of a neuron can end up as much as two rows apart. This mimics the peak
+    channel (on which the snippet is centred) being picked one row off.
+
+    Fixed: the "up" shift used to skip the last channel of the second column
+    (slot C-2 never received slot C's values), so that column's top row was
+    not shifted.
+    """
+    if choice is None:
+        choice = random.choice(["roll_up", "roll_down", "none"])
+    if choice == "roll_up":
+        data[:, :-2] = data[:, 2:].copy()  # slot i <- slot i+2; last row keeps its values
+    elif choice == "roll_down":
+        data[:, 2:] = data[:, :-2].copy()  # slot i <- slot i-2; first row keeps its values
+    return data
+
+
 class NeuropixelsDataset(Dataset):
     def __init__(self, save_path: str, batch_size=32, mode="val"):
         """
@@ -137,37 +163,7 @@ class NeuropixelsDataset(Dataset):
         return waveform_fh, waveform_sh, MaxSitepos, experiment_path, neuron_file
 
     def _augment_original(self, data):
-        # Apply random augmentations to data, shape [T,C]
-        roll_choice = random.choice(["roll_up", "roll_down", "none"])
-
-        if roll_choice == "roll_up":
-            # implement roll_up augmentation
-            C = data.shape[1]  # Number of channels
-            # Indices for odd channels, excluding the last one if C is odd
-            odd_indices = np.arange(0, C - 1, 2)
-            # Indices for even channels, excluding the last one
-            even_indices = np.arange(1, C - 1, 2)
-            # Shift odd channels up, excluding the last odd channel
-            if (
-                len(odd_indices) > 1
-            ):  # Check if there are at least 2 odd channels to roll
-                data[:, odd_indices[:-1]] = data[:, odd_indices[1:]]
-            # Shift even channels up, excluding the last even channel
-            if (
-                len(even_indices) > 1
-            ):  # Check if there are at least 2 even channels to roll
-                data[:, even_indices[:-1]] = data[:, even_indices[1:]]
-        elif roll_choice == "roll_down":
-            # implement roll_down augmentation
-            C = data.shape[1]  # Number of channels
-            odd_indices = np.arange(2, C, 2)
-            even_indices = np.arange(3, C, 2)
-            if len(odd_indices) > 0:  # Check if there are odd channels to roll
-                data[:, odd_indices] = data[:, odd_indices - 2]
-            if len(even_indices) > 0:  # Check if there are even channels to roll
-                data[:, even_indices] = data[:, even_indices - 2]
-
-        return data
+        return roll_one_row(data)
 
 
 class NeuropixelsDataset_cortexlab(Dataset):
@@ -265,37 +261,7 @@ class NeuropixelsDataset_cortexlab(Dataset):
         return waveform_fh, waveform_sh, MaxSitepos, experiment_path, neuron_file
 
     def _augment_original(self, data):
-        # Apply random augmentations to data, shape [T,C]
-        roll_choice = random.choice(["roll_up", "roll_down", "none"])
-
-        if roll_choice == "roll_up":
-            # implement roll_up augmentation
-            C = data.shape[1]  # Number of channels
-            # Indices for odd channels, excluding the last one if C is odd
-            odd_indices = np.arange(0, C - 1, 2)
-            # Indices for even channels, excluding the last one
-            even_indices = np.arange(1, C - 1, 2)
-            # Shift odd channels up, excluding the last odd channel
-            if (
-                len(odd_indices) > 1
-            ):  # Check if there are at least 2 odd channels to roll
-                data[:, odd_indices[:-1]] = data[:, odd_indices[1:]]
-            # Shift even channels up, excluding the last even channel
-            if (
-                len(even_indices) > 1
-            ):  # Check if there are at least 2 even channels to roll
-                data[:, even_indices[:-1]] = data[:, even_indices[1:]]
-        elif roll_choice == "roll_down":
-            # implement roll_down augmentation
-            C = data.shape[1]  # Number of channels
-            odd_indices = np.arange(2, C, 2)
-            even_indices = np.arange(3, C, 2)
-            if len(odd_indices) > 0:  # Check if there are odd channels to roll
-                data[:, odd_indices] = data[:, odd_indices - 2]
-            if len(even_indices) > 0:  # Check if there are even channels to roll
-                data[:, even_indices] = data[:, even_indices - 2]
-
-        return data
+        return roll_one_row(data)
 
     def select_good_units_files(self, directory, load_pre_merge: bool = True):
         """
@@ -350,85 +316,104 @@ class NeuropixelsDataset_cortexlab(Dataset):
         return good_units_files
 
 
+def _session_indices(data_source, experiments=None):
+    """{session: [dataset indices of its units]} (all sessions, or only `experiments`)."""
+    wanted = None if experiments is None else set(experiments)
+    file_to_idx = {
+        (exp, file): idx for idx, (exp, file) in enumerate(data_source.all_files)
+    }
+    return {
+        experiment: [file_to_idx[(experiment, file)] for file in unit_paths]
+        for experiment, unit_paths in data_source.experiment_unit_map.items()
+        if wanted is None or experiment in wanted
+    }
+
+
 class TrainExperimentBatchSampler(Sampler):
-    def __init__(self, data_source, batch_size, shuffle=False):
+    """
+    Training batches for the contrastive loss: every batch holds units of one
+    recording session only (the loss contrasts neurons recorded together).
+
+    Each session is split into the smallest number of batches of at most
+    batch_size units, all of (nearly) equal size, e.g. 52 units -> 26 + 26,
+    25 units -> one batch of 25. Every unit is used exactly once per epoch and
+    never appears twice in a batch. (Previously the last batch of a session
+    was padded to batch_size by drawing units of the same session with
+    replacement, so a neuron could be its own negative.) Sessions with fewer
+    than 2 units are skipped: they have no negatives.
+
+    experiments: optional subset of sessions (e.g. the training split).
+    """
+
+    def __init__(self, data_source, batch_size, shuffle=False, experiments=None):
         self.data_source = data_source
         self.batch_size = batch_size
         self.shuffle = shuffle
-        self.experiment_batches = self._create_batches()
+        self.experiment_batches = [
+            idx for idx in _session_indices(data_source, experiments).values() if len(idx) >= 2
+        ]
 
-    def _create_batches(self):
-        batches = []
-        for experiment, unit_paths in self.data_source.experiment_unit_map.items():
-            file_to_idx = {
-                file: idx
-                for idx, (exp, file) in enumerate(self.data_source.all_files)
-                if exp == experiment
-            }
-            experiment_indices = [file_to_idx[file] for file in unit_paths]
-            batches.append(experiment_indices)
-        return batches
+    def _n_batches(self, n_units):
+        return -(-n_units // self.batch_size)  # ceil
 
     def __iter__(self):
         iter_batches = []
         for experiment_indices in self.experiment_batches:
+            indices = list(experiment_indices)
             if self.shuffle:
-                random.shuffle(experiment_indices)
-            for i in range(0, len(experiment_indices), self.batch_size):
-                batch = experiment_indices[i : i + self.batch_size]
-                # Check if the last batch is smaller than batch_size
-                if len(batch) < self.batch_size:
-                    # Resample additional items from the experiment_indices to fill the batch
-                    shortfall = self.batch_size - len(batch)
-                    additional_samples = random.choices(experiment_indices, k=shortfall)
-                    batch.extend(additional_samples)
-                iter_batches.append(batch)
+                random.shuffle(indices)
+            for chunk in np.array_split(np.array(indices), self._n_batches(len(indices))):
+                iter_batches.append(chunk.tolist())
         if self.shuffle:
             random.shuffle(iter_batches)
         return iter(iter_batches)
 
     def __len__(self):
-        total_batches = sum(
-            (len(exp_indices) + self.batch_size - 1) // self.batch_size
-            for exp_indices in self.experiment_batches
-        )
-        return total_batches
+        return sum(self._n_batches(len(idx)) for idx in self.experiment_batches)
 
 
 class ValidationExperimentBatchSampler(Sampler):
     """
     Creates one batch per experiment with all data points for validation.
     Optionally shuffles data within each experiment batch in each iteration.
+
+    experiments: optional subset of sessions (e.g. the held-out validation split).
     """
 
-    def __init__(self, data_source, shuffle=False):
+    def __init__(self, data_source, shuffle=False, experiments=None):
         self.data_source = data_source
         self.shuffle = shuffle
-        self.experiment_batches = self._create_batches()
+        self.experiment_batches = list(_session_indices(data_source, experiments).values())
         print(f"No. of experiment batches: {len(self.experiment_batches)}")
-
-    def _create_batches(self):
-        batches = []
-        for experiment, unit_paths in self.data_source.experiment_unit_map.items():
-            # Create a mapping from file paths to indices
-            file_to_idx = {
-                file: idx
-                for idx, (exp, file) in enumerate(self.data_source.all_files)
-                if exp == experiment
-            }
-            experiment_indices = [file_to_idx[file] for file in unit_paths]
-            # Each experiment is a single batch with all its units
-            batches.append(experiment_indices)
-        return batches
 
     def __iter__(self):
         iter_batches = []
         for experiment_indices in self.experiment_batches:
+            indices = list(experiment_indices)
             # Shuffle the indices within each experiment if required
             if self.shuffle:
-                random.shuffle(experiment_indices)
-            iter_batches.append(experiment_indices)
+                random.shuffle(indices)
+            iter_batches.append(indices)
         return iter(iter_batches)
 
     def __len__(self):
         return len(self.experiment_batches)
+
+
+def split_sessions(data_source, val_fraction=0.05, seed=0, min_sessions=20):
+    """
+    Hold out whole recording sessions for validating the contrastive
+    fine-tuning (batches are built per session, so units of one session must
+    not be split between training and validation).
+
+    Returns (train_sessions, val_sessions) as lists of experiment keys.
+    A fixed seed makes the split reproducible. With fewer than min_sessions
+    sessions nothing is held out (val_sessions empty).
+    """
+    sessions = sorted(data_source.experiment_unit_map)
+    if len(sessions) < min_sessions or val_fraction <= 0:
+        return sessions, []
+    n_val = max(1, int(round(val_fraction * len(sessions))))
+    val = sorted(random.Random(seed).sample(sessions, n_val))
+    val_set = set(val)
+    return [s for s in sessions if s not in val_set], val

@@ -79,7 +79,7 @@ def discover_extra_models():
             continue
         models.append(
             {
-                "checkpoint": str(ckpts[0]),
+                "checkpoint": str(max(ckpts, key=lambda p: int(p.name.split("_")[-1]))),  # highest epoch, not first by name
                 "n_output": 256,
                 "subfolder_name": f"DUM_W_ij={x}",
             }
@@ -111,7 +111,7 @@ def discover_extra_models():
                 continue
             models.append(
                 {
-                    "checkpoint": str(ckpts[0]),
+                    "checkpoint": str(max(ckpts, key=lambda p: int(p.name.split("_")[-1]))),  # highest epoch, not first by name
                     "n_output": n_output,
                     "subfolder_name": f"n_output={x}_{stage}",
                 }

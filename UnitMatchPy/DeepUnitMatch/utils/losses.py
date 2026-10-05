@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
@@ -37,7 +38,18 @@ class AELoss(nn.Module):
 
 
 class CustomClipLoss(torch.nn.Module):
-    """Modified CLIP contrastive loss with weights for positive and negative samples."""
+    """
+    Modified CLIP contrastive loss with weights for positive and negative samples.
+
+    For a batch of B neurons with cosine similarities c_ij between the
+    projection of half 1 of neuron i and half 2 of neuron j:
+        s_ij  = exp(c_ij / tau) / sum_k exp(c_ik / tau)     (row-wise softmax)
+        s'_ij = s_ij * W_ij,  W_ii = 1, W_ij = negative_weight (i != j)
+        L     = 1/B sum_i -log( s'_ii / sum_j s'_ij )
+    which equals cross-entropy on the logits c_ij / tau + log(W_ij).
+    tau is a learned temperature (parameterised as log(tau), so it stays
+    positive), initialised at temp_tau.
+    """
 
     def __init__(
         self, linear=None, twin=True, center=False, temp_tau=1.0, negative_weight=10.0
@@ -52,7 +64,18 @@ class CustomClipLoss(torch.nn.Module):
                 self.linear_gt = self.linear_est
             else:
                 self.linear_gt = torch.nn.LazyLinear(linear)
-        self.temp_tau = nn.Parameter(torch.tensor(temp_tau))
+        self.log_temp_tau = nn.Parameter(torch.log(torch.tensor(float(temp_tau))))
+
+    @property
+    def temp_tau(self):
+        return self.log_temp_tau.exp()
+
+    def _load_from_state_dict(self, state_dict, prefix, *args, **kwargs):
+        # checkpoints from before the log parameterisation store "temp_tau" itself
+        old_key = prefix + "temp_tau"
+        if old_key in state_dict and prefix + "log_temp_tau" not in state_dict:
+            state_dict[prefix + "log_temp_tau"] = torch.log(state_dict.pop(old_key))
+        super()._load_from_state_dict(state_dict, prefix, *args, **kwargs)
 
     def get_scores(self, estimates: torch.Tensor, candidates: torch.Tensor):
         """Given estimates that is [B, N] and candidates which is [B', N],
@@ -81,23 +104,25 @@ class CustomClipLoss(torch.nn.Module):
         return F.softmax(scores, dim=1)
 
     def forward(self, estimate, candidate):
-        """Forward method for ClipLoss."""
+        """
+        Weighted contrastive loss (see class docstring).
+
+        Previously the weights multiplied the softmax *probabilities*, which
+        were then passed to F.cross_entropy -- that applies a second softmax,
+        so the loss was not the one described (-log s'_ii / sum_j s'_ij).
+        Adding log(W) to the logits before a single softmax gives exactly that.
+        """
         assert estimate.size(0) <= candidate.size(0), (
             "need at least as many targets as estimates"
         )
-        scores = self.get_probabilities(estimate, candidate)
-        # Initialize the weight tensor with ones for all elements
-        weight_tensor = torch.ones_like(scores)
-        mask = ~torch.eye(
-            scores.size(0), scores.size(1), dtype=torch.bool, device=scores.device
+        logits = self.get_scores(estimate, candidate) / self.temp_tau
+        off_diagonal = ~torch.eye(
+            logits.size(0), logits.size(1), dtype=torch.bool, device=logits.device
         )
-        # Set the off-diagonal elements (negative pairs) to the desired higher weight
-        weight_tensor[mask] = (
-            self.negative_weight
-        )  # Increase the weight for negative pairs
-        weighted_scores = scores * weight_tensor
-        target = torch.arange(len(scores), device=estimate.device)
-        return F.cross_entropy(weighted_scores, target)
+        log_weights = torch.zeros_like(logits)
+        log_weights[off_diagonal] = float(np.log(self.negative_weight))
+        target = torch.arange(logits.size(0), device=estimate.device)
+        return F.cross_entropy(logits + log_weights, target)
 
 
 def clip_prob(estimates, candidates, temp_tau=1.0):

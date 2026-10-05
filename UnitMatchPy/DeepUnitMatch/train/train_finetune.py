@@ -16,7 +16,47 @@ from utils.npdataset import (
     NeuropixelsDataset_cortexlab,
     TrainExperimentBatchSampler,
     ValidationExperimentBatchSampler,
+    split_sessions,
 )
+import json
+
+# Fraction of recording sessions held out (never trained on) to validate the
+# contrastive fine-tuning; fixed seed so every run uses the same split.
+VAL_FRACTION = 0.05
+SPLIT_SEED = 0
+
+
+def make_session_loaders(dataset, batchsize, ckpt_folder):
+    """
+    Train/validation loaders over disjoint sets of whole sessions (see
+    npdataset.split_sessions); the split is saved as session_split.json in
+    ckpt_folder. Returns (train_loader, val_loader); val_loader is None if
+    there are too few sessions to hold any out.
+    """
+    train_sessions, val_sessions = split_sessions(dataset, VAL_FRACTION, SPLIT_SEED)
+    with open(os.path.join(ckpt_folder, "session_split.json"), "w") as f:
+        json.dump(
+            {
+                "val_fraction": VAL_FRACTION,
+                "seed": SPLIT_SEED,
+                "train_sessions": [str(s) for s in train_sessions],
+                "val_sessions": [str(s) for s in val_sessions],
+            },
+            f,
+            indent=1,
+        )
+    print(f"Sessions: {len(train_sessions)} for training, {len(val_sessions)} held out for validation")
+    train_loader = DataLoader(
+        dataset,
+        batch_sampler=TrainExperimentBatchSampler(dataset, batchsize, shuffle=True, experiments=train_sessions),
+    )
+    val_loader = None
+    if val_sessions:
+        val_loader = DataLoader(
+            dataset,
+            batch_sampler=ValidationExperimentBatchSampler(dataset, shuffle=True, experiments=val_sessions),
+        )
+    return train_loader, val_loader
 from utils.mymodel import *
 
 logger = logging.getLogger(__name__)
@@ -24,7 +64,21 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def validation(epoch, model, projector, val_loader, clip_loss, writer):
+    if val_loader is None:
+        return
+    # held-out sessions are evaluated without augmentation
+    dataset = val_loader.dataset
+    previous_mode = getattr(dataset, "mode", None)
+    dataset.mode = "val"
+    try:
+        _validation(epoch, model, projector, val_loader, clip_loss, writer)
+    finally:
+        dataset.mode = previous_mode
+
+
+def _validation(epoch, model, projector, val_loader, clip_loss, writer):
     model.eval()
+    projector.eval()
     clip_loss.eval()
     losses = metric.AverageMeter()
     experiment_accuracies = []
@@ -80,6 +134,7 @@ def validation(epoch, model, projector, val_loader, clip_loss, writer):
 
 def train(epoch, model, projector, optimizer, train_loader, clip_loss, writer):
     model.train()
+    projector.train()  # dropout on (validation switches it off)
     clip_loss.train()
     losses = metric.AverageMeter()
     iteration = len(train_loader) * epoch
@@ -126,15 +181,7 @@ def run(args):
     np_dataset = NeuropixelsDataset_cortexlab(
         data_dir=train_data_root, batch_size=args.batchsize, mode="train"
     )
-    train_sampler = TrainExperimentBatchSampler(
-        np_dataset, args.batchsize, shuffle=True
-    )
-    train_loader = DataLoader(np_dataset, batch_sampler=train_sampler)
-    val_np_dataset = NeuropixelsDataset_cortexlab(
-        data_dir=train_data_root, batch_size=args.batchsize, mode="train"
-    )
-    val_sampler = ValidationExperimentBatchSampler(val_np_dataset, shuffle=True)
-    val_loader = DataLoader(val_np_dataset, batch_sampler=val_sampler)
+    train_loader, val_loader = make_session_loaders(np_dataset, args.batchsize, ckpt_folder)
 
     print("train dataset length: %d" % (len(np_dataset)))
 
@@ -205,6 +252,10 @@ def run(args):
             model.load_state_dict(checkpoint["model"])
             optimizer.load_state_dict(checkpoint["optimizer"])
             clip_loss.load_state_dict(checkpoint["clip_loss"])
+            if "projector" in checkpoint:
+                projector.load_state_dict(checkpoint["projector"])
+            else:
+                print("WARNING: checkpoint has no projector state (saved before it was stored); projector restarts")
             start_epoch = checkpoint["epoch"] + 1
         else:
             print(f"--cont given but no checkpoint found in {ckpt_folder}; starting from epoch 0")
@@ -215,6 +266,7 @@ def run(args):
             "model": model.state_dict(),
             "optimizer": optimizer.state_dict(),
             "clip_loss": clip_loss.state_dict(),
+            "projector": projector.state_dict(),
             "epoch": 0,
         }
         save_file = os.path.join(ckpt_folder, "ckpt_epoch_0")
@@ -227,6 +279,7 @@ def run(args):
                 "model": model.state_dict(),
                 "optimizer": optimizer.state_dict(),
                 "clip_loss": clip_loss.state_dict(),
+                "projector": projector.state_dict(),
                 "epoch": epoch,
             }
             save_file = os.path.join(ckpt_folder, "ckpt_epoch_%s" % (str(epoch)))
@@ -284,13 +337,7 @@ def run_finetune(
     writer = SummaryWriter(log_dir=log_folder)
 
     np_dataset = dataset
-    train_sampler = TrainExperimentBatchSampler(
-        np_dataset, args.batchsize, shuffle=True
-    )
-    train_loader = DataLoader(np_dataset, batch_sampler=train_sampler)
-
-    val_sampler = ValidationExperimentBatchSampler(dataset, shuffle=True)
-    val_loader = DataLoader(dataset, batch_sampler=val_sampler)
+    train_loader, val_loader = make_session_loaders(np_dataset, args.batchsize, ckpt_folder)
 
     print("train dataset length: %d" % (len(np_dataset)))
 
@@ -372,6 +419,10 @@ def run_finetune(
             model.load_state_dict(checkpoint["model"])
             optimizer.load_state_dict(checkpoint["optimizer"])
             clip_loss.load_state_dict(checkpoint["clip_loss"])
+            if "projector" in checkpoint:
+                projector.load_state_dict(checkpoint["projector"])
+            else:
+                print("WARNING: checkpoint has no projector state (saved before it was stored); projector restarts")
             start_epoch = checkpoint["epoch"] + 1
         else:
             print(f"--cont given but no checkpoint found in {ckpt_folder}; starting from epoch 0")
@@ -382,6 +433,7 @@ def run_finetune(
             "model": model.state_dict(),
             "optimizer": optimizer.state_dict(),
             "clip_loss": clip_loss.state_dict(),
+            "projector": projector.state_dict(),
             "epoch": 0,
         }
         save_file = os.path.join(ckpt_folder, "ckpt_epoch_0")
@@ -394,6 +446,7 @@ def run_finetune(
                 "model": model.state_dict(),
                 "optimizer": optimizer.state_dict(),
                 "clip_loss": clip_loss.state_dict(),
+                "projector": projector.state_dict(),
                 "epoch": epoch,
             }
             save_file = os.path.join(ckpt_folder, "ckpt_epoch_%s" % (str(epoch)))

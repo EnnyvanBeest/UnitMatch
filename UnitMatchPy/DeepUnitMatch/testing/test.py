@@ -82,32 +82,46 @@ def load_trained_model(device="cpu", read_path=None, n_output=256):
             f"but n_output={n_output} was requested."
         )
 
-    # strict=False: checkpoints saved before the ChannelPositionalBias
-    # ("pos_bias.*") submodule was added (e.g. utils/model_PreJuly2026) are
-    # missing those keys; they're left at random init and, since such old
-    # preprocessed data has no ChannelValid field either (all-invalid mask),
-    # never actually get used -- see ChannelPositionalBias.forward.
     if "clip_loss" in checkpoint:
         # Fine-tuned (clip-loss) checkpoint: checkpoint["model"] is the encoder alone.
-        model.load_state_dict(checkpoint["model"], strict=False)
-        clip_loss = CustomClipLoss().to(device)
-        clip_loss.load_state_dict(checkpoint["clip_loss"])
-        clip_loss.eval()
+        state = checkpoint["model"]
     else:
         # Autoencoder-only checkpoint: checkpoint["model"] holds encoder.*/decoder.*
         # keys for the full SpatioTemporalAutoEncoder_V2; checkpoint["encoder"] is
         # the encoder-only state dict we actually need here.
-        model.load_state_dict(checkpoint["encoder"], strict=False)
+        state = checkpoint["encoder"]
+    load_encoder_state(model, state, source=read_path)
     model.eval()
-
-    # Load projector
-    projector = Projector(
-        input_dim=256, output_dim=128, hidden_dim=128, n_hidden_layers=1, dropout=0.1
-    ).to(device)
-    projector = projector.double()
-
-    # Can also return projector if needed
+    # (Only the encoder is used for inference: similarity = cosine of its
+    # outputs. The projection head and the loss' temperature are training-only.)
     return model
+
+
+def load_encoder_state(model, state, source=""):
+    """
+    Load an encoder state dict, failing loudly on any mismatch -- except the
+    ChannelPositionalBias ("pos_bias.*") parameters, which checkpoints saved
+    before that submodule existed don't have. They stay at their initial
+    values and are never used unless channel positions are passed to the
+    model (inference doesn't). Previously strict=False was used for this,
+    which would also have silently left *any* mis-named layer at random init.
+    """
+    missing, unexpected = model.load_state_dict(state, strict=False)
+    missing = [k for k in missing if not k.startswith("pos_bias.")]
+    if missing or unexpected:
+        raise RuntimeError(
+            f"Checkpoint {source} does not match the encoder: "
+            f"missing {missing}, unexpected {unexpected}"
+        )
+
+
+def latest_checkpoint(ckpt_dir):
+    """Path of the highest-epoch ckpt_epoch_<N> file in ckpt_dir (by epoch number, not name)."""
+    ckpts = [f for f in os.listdir(ckpt_dir) if f.startswith("ckpt_epoch_")]
+    if not ckpts:
+        raise FileNotFoundError(f"No ckpt_epoch_* files found in {ckpt_dir}")
+    ckpts.sort(key=lambda x: int(x.split("_")[-1]))
+    return os.path.join(ckpt_dir, ckpts[-1])
 
 
 def reorder_by_depth(matrix: np.ndarray, pos1: np.ndarray, pos2) -> np.ndarray:
