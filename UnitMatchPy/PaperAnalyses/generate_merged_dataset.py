@@ -24,7 +24,19 @@ DUM_NONMERGED_DATAPATH = (
 # position in the full KS_dirs list to its RecSes number in MatchTable.csv --
 # see original_index_to_recses() below.
 RAW_KS_BASE = r"\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\FullAnimal_KSChanMap"
+# A candidate pair is merged when merging does not increase contamination:
+# C(merged spike train) / C(larger unit alone) <= MAX_C_RATIO. "<=" rather than
+# "<" because estimate_C clamps zero contamination to 0.01, so two units with
+# no refractory violations at all (merged or not) give a ratio of exactly 1 and
+# should still be merged.
 MAX_C_RATIO = 1.0
+# Merged-away units keep a backup of their original waveform here (a sibling
+# of RawWaveforms, so downstream loaders that read RawWaveforms never see it).
+BACKUP_WAVEFORM_DIRNAME = "RawWaveforms_premerge_backup"
+# Label written into the synthetic cluster_bc_unitType.tsv for units that were
+# absorbed by a merge, so downstream code excludes them via the label file
+# instead of relying on their waveform file being missing.
+MERGED_UNIT_LABEL = "MERGED"
 
 # Written into a session's target folder once it has been fully copied/merged.
 # Lets re-runs skip sessions that are already done instead of re-copying
@@ -162,9 +174,14 @@ def merge_waveforms(
     wave1 = os.path.join(target_waveform_dir, f"Unit{str(int(id1))}_RawSpikes.npy")
     wave2 = os.path.join(target_waveform_dir, f"Unit{str(int(id2))}_RawSpikes.npy")
 
-    # Back up the waveform files
-    shutil.copy(wave1, wave1.replace("_RawSpikes.npy", "_RawSpikes_backup.npy"))
-    shutil.copy(wave2, wave2.replace("_RawSpikes.npy", "_RawSpikes_backup.npy"))
+    # Back up the waveform files (outside RawWaveforms). A unit that absorbs
+    # several others keeps the backup of its *original* waveform.
+    backup_dir = os.path.join(os.path.dirname(target_waveform_dir), BACKUP_WAVEFORM_DIRNAME)
+    os.makedirs(backup_dir, exist_ok=True)
+    for wave in (wave1, wave2):
+        backup = os.path.join(backup_dir, os.path.basename(wave))
+        if not os.path.exists(backup):
+            shutil.copy(wave, backup)
 
     waveform1 = np.load(wave1)
     waveform2 = np.load(wave2)
@@ -196,17 +213,17 @@ def merge_waveforms(
 
 
 def revert_waveform_merges(target_waveform_dir):
-    # Find all backup waveform files in the target directory
-    backup_files = [
-        f
-        for f in os.listdir(target_waveform_dir)
-        if f.endswith("_RawSpikes_backup.npy")
-    ]
+    # Find all backup waveform files (kept next to RawWaveforms, see merge_waveforms)
+    backup_dir = os.path.join(os.path.dirname(target_waveform_dir), BACKUP_WAVEFORM_DIRNAME)
+    if not os.path.isdir(backup_dir):
+        print("No backups found, nothing to revert.")
+        return
+    backup_files = [f for f in os.listdir(backup_dir) if f.endswith("_RawSpikes.npy")]
 
     for backup_file in backup_files:
-        original_file = backup_file.replace("_RawSpikes_backup.npy", "_RawSpikes.npy")
-        backup_path = os.path.join(target_waveform_dir, backup_file)
-        original_path = os.path.join(target_waveform_dir, original_file)
+        backup_path = os.path.join(backup_dir, backup_file)
+        original_path = os.path.join(target_waveform_dir, backup_file)
+        original_file = backup_file
 
         # Restore the original waveform file from the backup
         shutil.copy(backup_path, original_path)
@@ -358,9 +375,17 @@ def run_merging_process(UMparam_files, source_dirs, MAX_C_RATIO=1.0):
                 spk_times = np.load(os.path.join(KSDir, "spike_times.npy"))
                 spk_times = spk_times / 30000  # convert to seconds
 
-                # Copy the RawWaveforms directory to the new target directory
-                if not os.path.exists(target_waveform_dir):
-                    os.makedirs(target_waveform_dir)
+                # Copy the RawWaveforms directory to the new target directory.
+                # Start from a clean copy: a session being (re)processed must not
+                # keep merged waveforms or backups from an earlier, interrupted or
+                # outdated run (these only ever live in the *target* tree).
+                backup_waveform_dir = os.path.join(
+                    os.path.dirname(target_waveform_dir), BACKUP_WAVEFORM_DIRNAME
+                )
+                for stale_dir in (target_waveform_dir, backup_waveform_dir):
+                    if os.path.isdir(stale_dir):
+                        shutil.rmtree(stale_dir)
+                os.makedirs(target_waveform_dir)
 
                 for file in Path(source_waveform_dir).iterdir():
                     if file.is_file():
@@ -381,6 +406,7 @@ def run_merging_process(UMparam_files, source_dirs, MAX_C_RATIO=1.0):
                 else:
                     sess_idx = (mt["RecSes 1"] == recses) & (mt["RecSes 2"] == recses)
                 uids = mt["UID 1"][merged_units_idx & sess_idx].unique()
+                absorbed_units = []
                 for uid in uids:
                     # Get the indices of the units to be merged
                     units_to_merge = mt[
@@ -421,23 +447,34 @@ def run_merging_process(UMparam_files, source_dirs, MAX_C_RATIO=1.0):
                                         }
                                     )
                         ratios = pd.DataFrame(ratios)
-                        ratios = ratios.sort_values("C_ratio")
+                        # Pair whose merge increases contamination the least.
+                        # (Positional .iloc: after sort_values the index labels
+                        # keep their pre-sort order, so label-based [0] would
+                        # pick the first pair computed, not the lowest ratio.)
+                        best = ratios.sort_values("C_ratio").iloc[0]
 
-                        if ratios.C_ratio[0] > MAX_C_RATIO:
+                        if best["C_ratio"] <= MAX_C_RATIO:
+                            # (the row mixes int and float columns, so pandas
+                            # returns the unit ids as floats -- cast back)
+                            id_a, id_b = int(best["unit_id1"]), int(best["unit_id2"])
                             print(
-                                f"Merging units {ratios.unit_id1[0]} and {ratios.unit_id2[0]} with C ratio {ratios.C_ratio[0]:.4f}"
+                                f"Merging units {id_a} and {id_b} with C ratio {best['C_ratio']:.4f}"
                             )
-                            new_unit_id = min(ratios.unit_id1[0], ratios.unit_id2[0])
-                            unit_id_to_merge = max(ratios.unit_id1[0], ratios.unit_id2[0])
+                            new_unit_id = min(id_a, id_b)
+                            unit_id_to_merge = max(id_a, id_b)
+
+                            # Spike counts for the waveform weights -- taken
+                            # *before* relabelling, otherwise unit_id_to_merge
+                            # has no spikes left and gets weight 0.
+                            fr_1 = int(np.sum(spk_clusters == new_unit_id))
+                            fr_2 = int(np.sum(spk_clusters == unit_id_to_merge))
+                            weight_1 = fr_1 / (fr_1 + fr_2)
+                            weight_2 = fr_2 / (fr_1 + fr_2)
 
                             # Merge the spike_clusters
                             spk_clusters[spk_clusters == unit_id_to_merge] = new_unit_id
 
                             # Merge the waveforms for the merged units
-                            fr_1 = len(spk_times[spk_clusters == new_unit_id])
-                            fr_2 = len(spk_times[spk_clusters == unit_id_to_merge])
-                            weight_1 = fr_1 / (fr_1 + fr_2)
-                            weight_2 = fr_2 / (fr_1 + fr_2)
                             merge_waveforms(
                                 new_unit_id,
                                 unit_id_to_merge,
@@ -448,12 +485,24 @@ def run_merging_process(UMparam_files, source_dirs, MAX_C_RATIO=1.0):
                             )
 
                             unit_indices = unit_indices[unit_indices != unit_id_to_merge]
+                            absorbed_units.append(int(unit_id_to_merge))
 
                         else:
                             print(
-                                f"No more units to merge based on C ratio threshold (C ratio = {ratios.C_ratio[0]:.4f})."
+                                f"No more units to merge based on C ratio threshold (lowest C ratio = {best['C_ratio']:.4f})."
                             )
                             FLAG = False
+
+                # Absorbed units no longer exist: relabel them in the synthetic
+                # label file so every downstream loader excludes them.
+                if absorbed_units:
+                    tsv_path = os.path.join(target_KSDir, "cluster_bc_unitType.tsv")
+                    labels = pd.read_csv(tsv_path, sep="\t")
+                    labels.loc[
+                        labels["cluster_id"].isin(absorbed_units), "bc_unitType"
+                    ] = MERGED_UNIT_LABEL
+                    labels.to_csv(tsv_path, sep="\t", index=False)
+                    print(f"  {len(absorbed_units)} unit(s) absorbed by merges in this session.")
 
                 # Save the updated spike_clusters array to the new target directory
                 target_spike_clusters_file = os.path.join(
