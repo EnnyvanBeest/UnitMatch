@@ -29,7 +29,7 @@ RAW_KS_BASE = os.path.join(SHARE_ROOT, "FullAnimal_KSChanMap")
 # Previous run (summer 2026): DeepUM_NatMeth2026V2 (unmerged),
 # DeepUM_NatMeth2026V2_merged/merged_data_v2 (merged data),
 # DeepUM_NatMeth2026_V3_OnMergedData (analysis output).
-RUN_NAME = "DeepUM_NatMeth2026_Rev"
+RUN_NAME = "DeepUM_Oct2026"
 
 # step 1: DeepUnitMatch/UMPy on the non-merged data (also the input of step 2).
 UNMERGED_OUTPUT = os.path.join(SHARE_ROOT, f"{RUN_NAME}_unmerged")
