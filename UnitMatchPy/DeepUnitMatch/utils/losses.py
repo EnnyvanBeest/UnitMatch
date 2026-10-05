@@ -49,15 +49,20 @@ class CustomClipLoss(torch.nn.Module):
     which equals cross-entropy on the logits c_ij / tau + log(W_ij).
     tau is a learned temperature (parameterised as log(tau), so it stays
     positive), initialised at temp_tau.
+
+    symmetric=True (optional, v2) averages this loss with the same loss in the
+    other direction (half 2 -> half 1, i.e. over columns), as in CLIP.
     """
 
     def __init__(
-        self, linear=None, twin=True, center=False, temp_tau=1.0, negative_weight=10.0
+        self, linear=None, twin=True, center=False, temp_tau=1.0, negative_weight=10.0,
+        symmetric=False,
     ):
         super().__init__()
         self.linear = None
         self.center = center
         self.negative_weight = negative_weight
+        self.symmetric = symmetric
         if linear is not None:
             self.linear_est = torch.nn.LazyLinear(linear)
             if twin:
@@ -121,8 +126,13 @@ class CustomClipLoss(torch.nn.Module):
         )
         log_weights = torch.zeros_like(logits)
         log_weights[off_diagonal] = float(np.log(self.negative_weight))
-        target = torch.arange(logits.size(0), device=estimate.device)
-        return F.cross_entropy(logits + log_weights, target)
+        weighted_logits = logits + log_weights
+        n = logits.size(0)
+        target = torch.arange(n, device=estimate.device)
+        loss = F.cross_entropy(weighted_logits, target)
+        if self.symmetric:
+            loss = 0.5 * (loss + F.cross_entropy(weighted_logits[:, :n].t(), target))
+        return loss
 
 
 def clip_prob(estimates, candidates, temp_tau=1.0):

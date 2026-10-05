@@ -106,6 +106,16 @@ def roll_one_row(data, choice=None):
     return data
 
 
+def amp_noise_jitter(data):
+    """
+    Optional (v2) training augmentation of one snippet [T, C]: random gain
+    (x U(0.85, 1.15)) plus Gaussian noise with SD 5% of the snippet's SD,
+    mimicking day-to-day differences in amplitude and noise floor.
+    """
+    data = data * np.random.uniform(0.85, 1.15)
+    return data + np.random.normal(0, 0.05 * (np.std(data) + 1e-8), size=data.shape)
+
+
 class NeuropixelsDataset(Dataset):
     def __init__(self, save_path: str, batch_size=32, mode="val"):
         """
@@ -242,26 +252,66 @@ class NeuropixelsDataset_cortexlab(Dataset):
     def __len__(self):
         return len(self.all_files)
 
+    # Optional (v2) features, both off by default (plain v1 behaviour). Set as
+    # attributes so subclasses that don't call __init__ (e.g. multi-location
+    # training datasets) get the defaults too.
+    #   with_geometry: also return each channel slot's position relative to
+    #     the peak channel and a validity mask (ChannelPos/ChannelValid in the
+    #     snippet files, written by param_fun.get_snippets), for the encoder's
+    #     ChannelPositionalBias. Items are then 9-tuples instead of 5-tuples.
+    #   amp_noise_jitter: training-time amplitude/noise jitter (see amp_noise_jitter()).
+    with_geometry = False
+    amp_noise_jitter = False
+
     def __getitem__(self, i):
         experiment_path, neuron_file = self.all_files[i]
         with h5py.File(neuron_file, "r") as f:
             waveform = f["waveform"][()]  # waveform [T,C,2]
             MaxSitepos = f["MaxSitepos"][()]
+            if self.with_geometry:
+                # snippets written before these fields existed: "no geometry"
+                # (all-invalid mask), which the model treats as contributing nothing
+                channel_pos = f["ChannelPos"][()] if "ChannelPos" in f else np.zeros((waveform.shape[1], 2))
+                channel_valid = (
+                    f["ChannelValid"][()] if "ChannelValid" in f else np.zeros(waveform.shape[1], dtype=bool)
+                )
         if waveform.shape != (60, 30, 2):
             waveform = np.zeros((60, 30, 2))
+            if self.with_geometry:
+                channel_pos, channel_valid = np.zeros((30, 2)), np.zeros(30, dtype=bool)
             # assert False, f"Waveform shape is not (60,30,2) but {waveform.shape}"
-        ## do data augmentation
-        if self.mode == "train":
-            waveform_fh = self._augment_original(waveform[..., 0])
-            waveform_sh = self._augment_original(waveform[..., 1])
-        else:
-            waveform_fh = waveform[..., 0]
-            waveform_sh = waveform[..., 1]
 
-        return waveform_fh, waveform_sh, MaxSitepos, experiment_path, neuron_file
+        if not self.with_geometry:
+            if self.mode == "train":
+                waveform_fh = self._augment_original(waveform[..., 0])
+                waveform_sh = self._augment_original(waveform[..., 1])
+            else:
+                waveform_fh = waveform[..., 0]
+                waveform_sh = waveform[..., 1]
+            return waveform_fh, waveform_sh, MaxSitepos, experiment_path, neuron_file
+
+        halves = []
+        for half in (0, 1):
+            data, pos, valid = waveform[..., half].copy(), channel_pos.copy(), channel_valid.copy()
+            if self.mode == "train":
+                data, pos, valid = self._augment_with_geometry(data, pos, valid)
+            halves.append((data, pos, valid))
+        (wf_fh, pos_fh, valid_fh), (wf_sh, pos_sh, valid_sh) = halves
+        return wf_fh, wf_sh, MaxSitepos, pos_fh, valid_fh, pos_sh, valid_sh, experiment_path, neuron_file
 
     def _augment_original(self, data):
-        return roll_one_row(data)
+        data = roll_one_row(data)
+        return amp_noise_jitter(data) if self.amp_noise_jitter else data
+
+    def _augment_with_geometry(self, data, channel_pos, channel_valid):
+        """Same augmentation, with each slot's geometry moved along with its channel."""
+        choice = random.choice(["roll_up", "roll_down", "none"])
+        data = roll_one_row(data, choice)
+        channel_pos = roll_one_row(channel_pos.T, choice).T  # slots along the last axis, like data
+        channel_valid = roll_one_row(channel_valid[None, :], choice)[0]
+        if self.amp_noise_jitter:
+            data = amp_noise_jitter(data)
+        return data, channel_pos, channel_valid
 
     def select_good_units_files(self, directory, load_pre_merge: bool = True):
         """

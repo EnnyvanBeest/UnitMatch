@@ -65,22 +65,34 @@ def _parse_unitmatch_good_units(unit_label_paths):
 
 
 def load_trained_model(device="cpu", read_path=None, n_output=256):
+    """
+    Load an encoder checkpoint (fine-tuned or AE-only) for inference.
 
-    model = SpatioTemporalCNN_V2(n_channel=30, n_time=60, n_output=n_output).to(device)
-    model = model.double()
+    Checkpoints from train_finetune.run_finetune carry a "config"; its
+    n_output is used (overriding the argument), and models trained with
+    channel geometry get model.uses_channel_pos = True so inference() feeds
+    them each channel's position. Older checkpoints have no config: n_output
+    as given, no geometry.
+    """
     if read_path is None:
         current_dir = Path(__file__).parent.parent
         read_path = current_dir / "utils" / "model"
 
     print(f"Loading model from {read_path}...")
 
-    checkpoint = torch.load(read_path, map_location=device)
+    checkpoint = torch.load(read_path, map_location=device, weights_only=False)
+    config = checkpoint.get("config") or {}
+    n_output = config.get("n_output", n_output)
 
     if "n_output" in checkpoint and checkpoint["n_output"] != n_output:
         raise ValueError(
             f"Checkpoint {read_path} was trained with n_output={checkpoint['n_output']}, "
             f"but n_output={n_output} was requested."
         )
+
+    model = SpatioTemporalCNN_V2(n_channel=30, n_time=60, n_output=n_output).to(device)
+    model = model.double()
+    model.uses_channel_pos = bool(config.get("with_geometry", False))
 
     if "clip_loss" in checkpoint:
         # Fine-tuned (clip-loss) checkpoint: checkpoint["model"] is the encoder alone.
@@ -155,34 +167,31 @@ def inference(model, data_dir, unit_label_paths=None):
     good_units = _parse_unitmatch_good_units(unit_label_paths)
     unit_order = good_units if good_units is not None else "unitmatch"
     test_dataset = NeuropixelsDataset_cortexlab(data_dir, unit_order=unit_order)
+    # models trained with channel geometry get each channel's position too
+    use_geometry = getattr(model, "uses_channel_pos", False)
+    test_dataset.with_geometry = use_geometry
     test_sampler = ValidationExperimentBatchSampler(test_dataset, shuffle=False)
     test_loader = DataLoader(test_dataset, batch_sampler=test_sampler)
 
-    submatrices = []
-    n_batches = len(test_loader)
     device = next(model.parameters()).device
 
-    for estimates_i, _, positions_i, exp_ids_i, filepaths_i in tqdm(test_loader):
-        # Forward pass
-        enc_estimates_i = model(estimates_i.to(device))  # shape [bsz, 256]
+    # Encode each session once: first halves as rows, second halves as columns
+    # (one batch = one session). Previously every session's second halves were
+    # re-encoded for every session's first halves (n_sessions^2 passes).
+    enc_first, enc_second = [], []
+    with torch.no_grad():
+        for batch in tqdm(test_loader):
+            if use_geometry:
+                first, second, _, pos_1, valid_1, pos_2, valid_2, _, _ = batch
+                enc_first.append(model(first.to(device), pos_1.to(device), valid_1.to(device)))
+                enc_second.append(model(second.to(device), pos_2.to(device), valid_2.to(device)))
+            else:
+                first, second = batch[0], batch[1]
+                enc_first.append(model(first.to(device)))
+                enc_second.append(model(second.to(device)))
 
-        for _, candidates_j, positions_j, exp_ids_j, filepaths_j in tqdm(test_loader):
-            enc_candidates_j = model(candidates_j.to(device))
-            s = clip_sim(enc_estimates_i, enc_candidates_j)
-            submatrices.append(s.detach().cpu().numpy())
-
-    result_rows = []
-    for i in range(n_batches):
-        row_matrices = []
-        for j in range(n_batches):
-            matrix_idx = i * n_batches + j
-            row_matrices.append(submatrices[matrix_idx])
-        row = np.hstack(row_matrices)
-        result_rows.append(row)
-
-    result = np.vstack(result_rows)
-
-    return result
+    result = clip_sim(torch.cat(enc_first), torch.cat(enc_second))
+    return result.detach().cpu().numpy()
 
 
 def get_threshold(prob_matrix: np.ndarray, session_id, MAP=False):

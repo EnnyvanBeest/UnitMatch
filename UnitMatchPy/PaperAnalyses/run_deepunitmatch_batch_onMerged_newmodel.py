@@ -122,6 +122,11 @@ def main():
     model = test.load_trained_model(
         device=base_batch.DEVICE, read_path=checkpoint, n_output=N_OUTPUT
     )
+    # This model was trained with channel positions (ChannelPositionalBias),
+    # but its checkpoint predates the saved training config, so tell the
+    # shared inference (base_batch -> test.inference) to pass them. Without
+    # this, the positional bias was never applied when evaluating it.
+    model.uses_channel_pos = True
 
     print(f"\nScanning for merged-data groups under:\n  {base_batch.BASE_INPUT}\n")
     groups = base_batch.find_merged_groups()
