@@ -37,6 +37,7 @@ sys.path.insert(0, os.path.dirname(_HERE))
 sys.path.insert(0, os.path.join(_HERE, "DeepUnitMatch"))
 
 import batch_lock
+import pipeline_config as cfg
 import run_deepunitmatch_batch_onMerged as base_batch
 from DeepUnitMatch.testing import test
 
@@ -51,7 +52,7 @@ EXCLUDE_MICE_ROOT = os.path.join(
 # plain "skip if present" (appropriate here since these models are new and no
 # prior run needs to be superseded); a far-future date would reproduce old
 # REDO=True behaviour.
-REDO_FROM_DATE = None
+REDO_FROM_DATE = cfg.REDO_FROM_DATE  # see pipeline_config.py
 RUN_UNFINETUNED_MODELS = False  # if False, skip the after_ae (not fine-tuned) checkpoints
 
 

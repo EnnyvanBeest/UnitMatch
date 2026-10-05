@@ -21,12 +21,10 @@ import os
 import time
 
 import batch_lock
+import pipeline_config as cfg
 
-DEFAULT_ROOTS = [
-    r"\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026V2",
-    r"\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026V2_merged",
-    r"\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026_V3_OnMergedData",
-]
+# Every output root of the current pipeline run (see pipeline_config.py).
+DEFAULT_ROOTS = cfg.LOCK_ROOTS
 
 LOCK_GLOB = ".processing*.lock"
 

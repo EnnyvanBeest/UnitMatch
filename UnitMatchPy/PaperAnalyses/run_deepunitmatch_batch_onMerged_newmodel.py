@@ -34,6 +34,7 @@ sys.path.insert(0, os.path.dirname(_HERE))
 sys.path.insert(0, os.path.join(_HERE, "DeepUnitMatch"))
 
 import batch_lock
+import pipeline_config as cfg
 import run_deepunitmatch_batch_onMerged as base_batch
 from DeepUnitMatch.testing import test_v2 as test
 
@@ -51,7 +52,7 @@ SUBFOLDER_NAME = f"DUM_{EXP_NAME}"
 # group once its sentinel exists" -- this model's output is new, so there's
 # no stale pre-fix run to redo yet. Set to a specific date if you retrain
 # this same EXP_NAME again later and want old output redone.
-REDO_FROM_DATE = None
+REDO_FROM_DATE = cfg.REDO_FROM_DATE  # see pipeline_config.py
 
 
 def latest_checkpoint(ckpt_dir):

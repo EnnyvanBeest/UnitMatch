@@ -94,6 +94,10 @@ def build_metadata_index(data_dir: str, output_name: str = 'metadata_index.json'
 
 if __name__ == '__main__':
     import sys
-    data_dir = sys.argv[1] if len(sys.argv) > 1 else r'\\znas\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026V2'
+    import pipeline_config as cfg
+
+    # Default: the step-1 (non-merged) output, so the index lands at
+    # cfg.METADATA_INDEX_PATH where every downstream script reads it.
+    data_dir = sys.argv[1] if len(sys.argv) > 1 else cfg.UNMERGED_OUTPUT
     output_path = build_metadata_index(data_dir)
     print(output_path)

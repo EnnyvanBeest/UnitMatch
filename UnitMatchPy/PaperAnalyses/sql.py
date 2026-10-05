@@ -3,10 +3,12 @@ import pandas as pd
 import os
 import numpy as np
 
-# Paths relative to the repo root. PROJECT_ROOT is the repo's parent directory,
-# which holds the data/results folders alongside this repo.
-# PROJECT_ROOT = r'\\znas\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026V2'
-PROJECT_ROOT = r'\\znas\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026_V3_OnMergedData'
+import pipeline_config as cfg
+
+# Paths from pipeline_config.py: match tables are read from the merged-data
+# analysis output and written into the shared SQLite database.
+PROJECT_ROOT = cfg.ANALYSIS_OUTPUT
+DATABASE_PATH = cfg.DATABASE_PATH
 
 
 def pandas_to_sqlite_type(dtype):
@@ -78,7 +80,7 @@ def merge_match_tables(df_1, df_2, sub1, sub2):
 
 def import_csv_to_sqlite(mt_paths, models, m, p, l):
 
-    db_file = os.path.join(PROJECT_ROOT, "matchtables_nodrift.db")
+    db_file = DATABASE_PATH
 
     # Define the table name in SQLite
     table_name = f"{m}_{p}_{l}"  # Change this

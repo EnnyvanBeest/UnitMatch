@@ -15,15 +15,18 @@ sys.path.insert(0, os.path.join(os.getcwd(), "testing"))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import batch_lock
+import pipeline_config as cfg
 
-DUM_NONMERGED_DATAPATH = (
-    r"\\znas\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026V2"
-)
+# Input: step-1 output on the non-merged data (one DeepUnitMatch/ folder per
+# recording location, holding UMparam.pickle + MatchTable.csv).
+DUM_NONMERGED_DATAPATH = cfg.UNMERGED_OUTPUT
+# Output: the merged KS-style tree, mirroring DUM_NONMERGED_DATAPATH's layout.
+MERGED_DATAPATH = cfg.MERGED_DATA
 # Raw KS root the original UnitMatch.mat files were generated from (same as
 # run_deepunitmatch_batch.py's BASE_INPUT). Needed to correctly map a session's
 # position in the full KS_dirs list to its RecSes number in MatchTable.csv --
 # see original_index_to_recses() below.
-RAW_KS_BASE = r"\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\FullAnimal_KSChanMap"
+RAW_KS_BASE = cfg.RAW_KS_BASE
 # A candidate pair is merged when merging does not increase contamination:
 # C(merged spike train) / C(larger unit alone) <= MAX_C_RATIO. "<=" rather than
 # "<" because estimate_C clamps zero contamination to 0.01, so two units with
@@ -54,7 +57,7 @@ MERGE_COMPLETE_MARKER = "merge_complete.flag"
 # DUM's matching (e.g. its adaptive prior/threshold) changes that MatchTable,
 # so previously-merged sessions must be treated as stale even though their own
 # merge_complete.flag file didn't change.
-REDO_FROM_DATE = datetime.datetime(2026, 7, 22, 19, 0, 0)
+REDO_FROM_DATE = cfg.REDO_FROM_DATE
 
 
 def _decode_hdf5_str(f, ref_or_ds):
@@ -249,8 +252,9 @@ def run_merging_process(UMparam_files, source_dirs, MAX_C_RATIO=1.0):
         with open(UMparam_file, "rb") as file:
             data = pickle.load(file)
 
-        target_dir = source_dir.replace(
-            r"DeepUM_NatMeth2026V2", r"DeepUM_NatMeth2026V2_merged\merged_data_v2"
+        # Same <mouse>/<probe>/<location>/DeepUnitMatch layout under the merged root.
+        target_dir = os.path.join(
+            MERGED_DATAPATH, os.path.relpath(source_dir, DUM_NONMERGED_DATAPATH)
         )
 
         target_KSDirs = [

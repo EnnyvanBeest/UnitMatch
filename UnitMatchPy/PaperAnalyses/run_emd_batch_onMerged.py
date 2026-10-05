@@ -60,6 +60,7 @@ sys.path.insert(0, _HERE)
 sys.path.insert(0, os.path.dirname(_HERE))
 
 import batch_lock
+import pipeline_config as cfg
 import UnitMatchPy.utils as util
 import UnitMatchPy.overlord as ov
 import UnitMatchPy.save_utils as su
@@ -86,8 +87,8 @@ from run_deepunitmatch_batch_onMerged import (
 #     itself, independently of whether the underlying EMD matches changed --
 #     e.g. the FR_diff/ISI_CV_diff NaN-vs-0 fallback fix.
 # None falls back to plain "skip if present"; a far-future date forces redo.
-STAGE_REDO_FROM_DATE = datetime.datetime(2026, 7, 22, 19, 0, 0)
-AGGREGATE_REDO_FROM_DATE = datetime.datetime(2026, 7, 22, 19, 0, 0)
+STAGE_REDO_FROM_DATE = cfg.REDO_FROM_DATE  # see pipeline_config.py
+AGGREGATE_REDO_FROM_DATE = cfg.REDO_FROM_DATE  # see pipeline_config.py
 
 
 # ── path helpers ─────────────────────────────────────────────────────────────

@@ -26,8 +26,7 @@
 # A unit whose TSV row still says GOOD but whose RawSpikes file is gone (it lost
 # a within-session merge) is simply skipped when loading waveforms.
 #
-# Results are mirrored to:
-#    \\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026_V3_OnMergedData
+# Results are mirrored to BASE_OUTPUT (pipeline_config.ANALYSIS_OUTPUT)
 # with the same subfolder structure, split into DeepUnitMatch/ and UMPy/ subfolders.
 # Waveforms are loaded once per group and shared between both pipelines.
 
@@ -51,6 +50,7 @@ sys.path.insert(0, os.path.join(_HERE, "DeepUnitMatch"))
 import argparse
 
 import batch_lock
+import pipeline_config as cfg
 import UnitMatchPy.default_params as default_params
 import UnitMatchPy.utils as util
 import UnitMatchPy.overlord as ov
@@ -68,9 +68,11 @@ except Exception:
     convert_python_output_to_matlab = None
 
 # ── user settings ────────────────────────────────────────────────────────────
-BASE_INPUT = r"\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026V2_merged\merged_data_v2"
-BASE_OUTPUT = r"\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026_V3_OnMergedData"
-
+# Paths come from pipeline_config.py (step 4: merged data -> analysis output).
+# Every other merged-data runner (extramodels, baselines, maxdist sweep,
+# nodrift, spatialonly, scoreswap, EMD, DANT, xval) takes its roots from here.
+BASE_INPUT = cfg.MERGED_DATA
+BASE_OUTPUT = cfg.ANALYSIS_OUTPUT
 
 DEVICE = "cuda" if test.torch.cuda.is_available() else "cpu"
 print(f"Device: {DEVICE}")
@@ -83,7 +85,7 @@ THRESH = 0.5
 # correctly recognised as up to date instead of being reprocessed forever.
 # Set to None to fall back to plain "skip if present". Set to a far-future
 # date for the old unconditional REDO=True behaviour.
-REDO_FROM_DATE = datetime.datetime(2026, 7, 22, 19, 0, 0)
+REDO_FROM_DATE = cfg.REDO_FROM_DATE
 WRITE_MATLAB_COMPAT = False
 
 

@@ -66,6 +66,7 @@ sys.path.insert(0, os.path.dirname(_HERE))
 sys.path.insert(0, os.path.join(_HERE, "DeepUnitMatch"))
 
 import batch_lock
+import pipeline_config as cfg
 import UnitMatchPy.save_utils as su
 from DeepUnitMatch.testing import test
 
@@ -90,7 +91,7 @@ UID_VARIANTS = {
 
 # A group/source/variant is skipped once its output exists and is at least
 # this new (see batch_lock.sentinel_is_fresh). None = plain "skip if present".
-REDO_FROM_DATE = None
+REDO_FROM_DATE = cfg.REDO_FROM_DATE  # see pipeline_config.py
 
 
 def get_uid_dir(merged_dir, source_model, variant_suffix):

@@ -119,6 +119,7 @@ sys.path.insert(0, os.path.dirname(_HERE))
 sys.path.insert(0, os.path.join(_HERE, "DeepUnitMatch"))
 
 import batch_lock
+import pipeline_config as cfg
 import UnitMatchPy.overlord as ov
 import UnitMatchPy.save_utils as su
 from DeepUnitMatch.testing import test
@@ -143,7 +144,7 @@ N_JOBS = -1
 
 # See batch_lock.sentinel_is_fresh() / run_deepunitmatch_batch_onMerged.py's
 # REDO_FROM_DATE for what this does.
-REDO_FROM_DATE = datetime.datetime(2026, 7, 30, 16, 0, 0)
+REDO_FROM_DATE = cfg.REDO_FROM_DATE  # see pipeline_config.py
 
 # Two variants swept per group -- see module docstring for the "with vs
 # without functional data" rationale. Both are otherwise identical (same

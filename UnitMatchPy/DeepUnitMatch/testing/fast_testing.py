@@ -1,5 +1,6 @@
 import os, sys
-sys.path.insert(0, r"C:\Users\celia\OneDrive - University College London\Documents\GitHub\UnitMatch\UnitMatchPy\DeepUnitMatch")
+# DeepUnitMatch/ (parent of testing/) on the path, so `testing.*` / `utils.*` import on any machine.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import os
 import pandas as pd
@@ -23,10 +24,12 @@ from utils.helpers import (
 )
 
 
-# PROJECT_ROOT (defined in utils.helpers) is the directory holding the shared
-# data/results and metadata_index.json alongside the sibling repos.
-RESULTS_DIR = os.path.join(PROJECT_ROOT, "results")
-DATABASE_PATH = os.path.join(PROJECT_ROOT, "matchtables_nodrift.db")
+# Paths from PaperAnalyses/pipeline_config.py (imported via utils.helpers):
+# per-model AUC CSVs go to RESULTS_DIR, match tables are read from DATABASE_PATH.
+from utils.helpers import _cfg
+
+RESULTS_DIR = _cfg.RESULTS_DIR
+DATABASE_PATH = _cfg.DATABASE_PATH
 
 
 def test_models_optimized(col_names, fixed_n=True, save_names=None):

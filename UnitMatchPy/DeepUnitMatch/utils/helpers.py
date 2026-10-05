@@ -5,16 +5,20 @@ import h5py
 import json
 import sqlite3
 import datetime
+import sys
 
 
-# PROJECT_ROOT is the directory that holds both sibling repos (DeepMatch + DeepUnitMatch)
-# alongside the shared data/results and the committed metadata_index.json.
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# PROJECT_ROOT = os.path.normpath(
-#     os.path.join(REPO_ROOT, os.pardir, os.pardir, os.pardir)
-# )
-PROJECT_ROOT = r"\\znas\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026_V3_OnMergedData"
-METADATA_INDEX_PATH = os.path.join(PROJECT_ROOT, "metadata_index.json")
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # .../UnitMatchPy/DeepUnitMatch
+
+# Paper-analysis paths come from PaperAnalyses/pipeline_config.py (single source
+# of truth for the whole pipeline). PROJECT_ROOT is the merged-data analysis
+# output root (matchtables DB, results, per-location model outputs);
+# METADATA_INDEX_PATH holds the recording date of every session.
+sys.path.insert(0, os.path.join(os.path.dirname(REPO_ROOT), "PaperAnalyses"))
+import pipeline_config as _cfg  # noqa: E402
+
+PROJECT_ROOT = _cfg.ANALYSIS_OUTPUT
+METADATA_INDEX_PATH = _cfg.METADATA_INDEX_PATH
 
 _metadata_index_cache = None
 

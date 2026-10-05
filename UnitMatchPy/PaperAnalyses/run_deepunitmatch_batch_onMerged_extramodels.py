@@ -39,6 +39,7 @@ sys.path.insert(0, os.path.dirname(_HERE))
 sys.path.insert(0, os.path.join(_HERE, "DeepUnitMatch"))
 
 import batch_lock
+import pipeline_config as cfg
 import run_deepunitmatch_batch_onMerged as base_batch
 from DeepUnitMatch.testing import test
 
@@ -52,7 +53,7 @@ EXCLUDED_N_OUTPUT_DIRS = {"256-chinesecharacters"}
 # REDO_FROM_DATE for what this does: a dataset/model combo is skipped once its
 # MatchingOverview.png exists and is at least this new. None falls back to
 # plain "skip if present"; a far-future date reproduces old REDO=True.
-REDO_FROM_DATE = datetime.datetime(2026, 7, 22, 19, 0, 0)
+REDO_FROM_DATE = cfg.REDO_FROM_DATE  # see pipeline_config.py
 RUN_UNFINETUNED_N_OUTPUT_MODELS = False  # if False, skip the after_ae (not fine-tuned) n_output checkpoints
 
 

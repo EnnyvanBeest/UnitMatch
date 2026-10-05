@@ -31,6 +31,7 @@ sys.path.insert(0, os.path.join(_HERE, "DeepUnitMatch"))
 import argparse
 
 import batch_lock
+import pipeline_config as cfg
 import UnitMatchPy.default_params as default_params
 import UnitMatchPy.utils as util
 import UnitMatchPy.overlord as ov
@@ -48,8 +49,9 @@ except Exception:
     convert_python_output_to_matlab = None
 
 # ── user settings ────────────────────────────────────────────────────────────
-BASE_INPUT = r"\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\FullAnimal_KSChanMap"
-BASE_OUTPUT = r"\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026V2"
+# Paths come from pipeline_config.py (step 1: raw data -> non-merged output).
+BASE_INPUT = cfg.RAW_KS_BASE
+BASE_OUTPUT = cfg.UNMERGED_OUTPUT
 
 DEVICE = "cuda" if test.torch.cuda.is_available() else "cpu"
 print(f"Device: {DEVICE}")
@@ -58,7 +60,7 @@ THRESH = 0.5
 # REDO_FROM_DATE for what this does: a group is skipped once its
 # MatchingOverview.png exists and is at least this new. None falls back to
 # plain "skip if present"; a far-future date reproduces old REDO=True.
-REDO_FROM_DATE = datetime.datetime(2026, 7, 22, 19, 0, 0)
+REDO_FROM_DATE = cfg.REDO_FROM_DATE
 WRITE_MATLAB_COMPAT = False
 
 
