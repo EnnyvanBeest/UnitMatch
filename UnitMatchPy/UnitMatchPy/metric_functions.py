@@ -643,16 +643,23 @@ def get_threshold(total_score, within_session, euclid_dist, param, is_first_pass
     n_units = int(param["n_units"])
     hd = hd / max(n_units, 1)
 
-    off_diag = tmp - tmp * np.eye(n_units)
+    # Off-diagonal (different units) histogram, normalised by the *number* of
+    # pairs as in the MATLAB version (ExtractSimilarityMetrics.m:
+    # histcounts(...)./sum(~isnan(...))). This previously divided by the *sum
+    # of the score values* (np.nansum), which inflated the different-unit curve
+    # and pushed the same/different crossing (thrs_opt) up. The diagonal is
+    # excluded (NaN) rather than set to 0, so it isn't counted as a score of 0.
+    off_diag = tmp.copy()
+    np.fill_diagonal(off_diag, np.nan)
     hnd, __ = np.histogram(off_diag, Bins)
-    hnd_denom = np.nansum(off_diag)
-    if (not np.isfinite(hnd_denom)) or hnd_denom == 0:
+    hnd_denom = np.sum(~np.isnan(off_diag))
+    if hnd_denom == 0:
         hnd = np.zeros_like(hnd, dtype=float)
     else:
         hnd = hnd / hnd_denom
     hp, __ = np.histogram(tmp, Bins)
-    hp_denom = np.nansum(tmp)
-    if (not np.isfinite(hp_denom)) or hp_denom == 0:
+    hp_denom = np.sum(~np.isnan(tmp))
+    if hp_denom == 0:
         hp = np.zeros_like(hp, dtype=float)
     else:
         hp = hp / hp_denom
@@ -694,8 +701,8 @@ def get_threshold(total_score, within_session, euclid_dist, param, is_first_pass
             tmp[within_session == 0] = np.nan
 
             ha, __ = np.histogram(tmp, Bins)
-            ha_denom = np.nansum(tmp)
-            if (not np.isfinite(ha_denom)) or ha_denom == 0:
+            ha_denom = np.sum(~np.isnan(tmp))  # number of pairs, as above
+            if ha_denom == 0:
                 ha = np.zeros_like(ha, dtype=float)
             else:
                 ha = ha / ha_denom
