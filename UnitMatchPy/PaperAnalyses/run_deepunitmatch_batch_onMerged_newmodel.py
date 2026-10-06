@@ -36,7 +36,9 @@ sys.path.insert(0, os.path.join(_HERE, "DeepUnitMatch"))
 import batch_lock
 import pipeline_config as cfg
 import run_deepunitmatch_batch_onMerged as base_batch
-from DeepUnitMatch.testing import test_v2 as test
+# test.py (not test_v2): same model loading, geometry-aware inference via
+# model.uses_channel_pos, and the corrected functional scores
+from DeepUnitMatch.testing import test
 
 # The exp_name train_deepunitmatch_from_merged.py was run with -- finetune
 # checkpoints live under DeepUnitMatch/ModelExp/experiments/<EXP_NAME>/ckpt/.

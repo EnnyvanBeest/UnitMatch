@@ -492,22 +492,19 @@ def get_ISI_histograms(param, ISIbins):
         times = np.load(os.path.join(KSdirs[session], "spike_times.npy")) / fs
         clusters = np.load(os.path.join(KSdirs[session], "spike_clusters.npy"))
 
-        for clusid in tqdm(good_units[session].squeeze()):
-            idx1 = np.where(clusters == clusid)[0]
-
-            for cv in range(2):
-                if idx1.size > 0:
-                    if idx1.size < 50 and cv == 0:
-                        print(
-                            f"Warning: Fewer than 50 spikes for neuron {clusid}, please check your inclusion criteria"
-                        )
-                    # Split idx1 into two halves
-                    if cv == 0:
-                        idx1 = idx1[: len(idx1) // 2]
-                    else:
-                        idx1 = idx1[len(idx1) // 2 :]
+        for clusid in tqdm(np.atleast_1d(good_units[session].squeeze())):
+            idx = np.where(clusters == clusid)[0]
+            if idx.size < 50:
+                print(
+                    f"Warning: Fewer than 50 spikes for neuron {clusid}, please check your inclusion criteria"
+                )
+            # cross-validation folds: first and second half of the unit's spikes
+            # (before, the second fold was taken from the first half, i.e. the
+            # second quarter of the spikes, a subset of the first fold)
+            for cv, idx_cv in enumerate([idx[: idx.size // 2], idx[idx.size // 2 :]]):
+                if idx_cv.size > 0:
                     ISIMat[:, cv, index], _ = np.histogram(
-                        np.diff(times[idx1].astype(float)), bins=ISIbins
+                        np.diff(times[idx_cv].astype(float)), bins=ISIbins
                     )
 
             index += 1
@@ -1149,6 +1146,9 @@ def get_stimulus_triggered_psth(
     for stim_idx, stim_id in enumerate(unique_stimulus_ids):
         # Get all trials with this stimulus ID
         stim_trials = np.where(trials_IDs == stim_id)[0]
+        # repeats this stimulus doesn't have are missing (NaN, skipped by the
+        # nanmeans in get_natim_responses), not trials without spikes (0)
+        psth[:, stim_idx, :, len(stim_trials):] = np.nan
 
         for repeat_idx, trial_idx in enumerate(stim_trials):
             trial_onset = trials_onsetTimes[trial_idx]
@@ -1224,9 +1224,10 @@ def natim_correlations(param, merged_architecture=False):
         all_stimulus_responses[0, :, :].T, all_stimulus_responses[1, :, :].T
     )
 
-    # Fisher z-transform
-    z_timecourse = 0.5 * np.arctanh(timecourse_corr)
-    z_stimulus = 0.5 * np.arctanh(stimulus_corr)
+    # Fisher z-transform (arctanh; the former extra factor 0.5 shrank the
+    # combined correlation without changing its ranking, so AUCs are unaffected)
+    z_timecourse = np.arctanh(timecourse_corr)
+    z_stimulus = np.arctanh(stimulus_corr)
 
     # Average z-scores
     z_fingerprint = (z_timecourse + z_stimulus) / 2.0
@@ -1255,6 +1256,12 @@ def AUC(matches: np.ndarray, func_metric: np.ndarray, session_id):
     within_session = (session_id[:, None] == session_id).astype(bool)
     func_across = func_metric[~within_session]
     matches_across = matches[~within_session]
+    # Single undefined pairs (e.g. a unit with only one undefined fold: NaN
+    # column, finite row) are left out too; argsort would otherwise rank NaN
+    # as the highest value.
+    defined = np.isfinite(func_across)
+    func_across = func_across[defined]
+    matches_across = matches_across[defined]
 
     P = np.sum(matches_across)
     if P < 1:

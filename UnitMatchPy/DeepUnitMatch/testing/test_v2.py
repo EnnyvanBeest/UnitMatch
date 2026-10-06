@@ -1,3 +1,7 @@
+# SUPERSEDED by test.py (October 2026), which handles models trained with
+# channel geometry (model.uses_channel_pos) and has the corrected functional
+# scores (ISI cross-validation folds, natural-image repeats, NaN handling in
+# AUC). Kept only for reference; nothing in the pipeline imports it.
 import os
 import sys
 from pathlib import Path
