@@ -120,6 +120,7 @@ sys.path.insert(0, os.path.join(_HERE, "DeepUnitMatch"))
 
 import batch_lock
 import pipeline_config as cfg
+import pipeline_log as plog
 import UnitMatchPy.overlord as ov
 import UnitMatchPy.save_utils as su
 from DeepUnitMatch.testing import test
@@ -129,7 +130,10 @@ from run_deepunitmatch_batch_onMerged import (
     BASE_OUTPUT,
     find_merged_groups,
     _prepare_session,
+    group_key,
 )
+
+LOG_STAGE = "dant"  # pipeline_log stage (one event per location and variant)
 
 from pyDANT import runDANT
 
@@ -497,6 +501,10 @@ def score_and_save_variant(merged_dir, variant, sess, n_units):
         fig.savefig(os.path.join(dant_dir, "FunctionalScores.png"), dpi=150)
         plt.close(fig)
 
+    plog.log_event(
+        LOG_STAGE, group_key(merged_dir), variant, "done",
+        f"pyDANT failed, recorded as zero matches: {failure_reason}" if failure_reason else "",
+    )
     print(f"  [{variant}] Results saved to: {dant_dir}")
 
 
@@ -509,16 +517,26 @@ def run_group(merged_dir, pending_variants):
     sess = _prepare_session(merged_dir)
     if sess is None:
         print("  ERROR: _prepare_session failed, skipping.")
+        for variant in pending_variants:
+            plog.log_event(LOG_STAGE, group_key(merged_dir), variant, "failed",
+                           "_prepare_session failed (see onmerged log)")
         return
 
     input_dir = get_dant_shared_input_dir(merged_dir)
     # Shared input is identical for every variant -- build once per group,
-    # reused whichever variant(s) are actually pending.
-    if not os.path.isfile(os.path.join(input_dir, "waveform_all.npy")):
+    # reused whichever variant(s) are actually pending. Rebuilt unless it is
+    # complete for exactly these units (a run interrupted while writing it
+    # would otherwise leave a partial input that later runs reuse).
+    n_units = sess["waveform"].shape[0]
+    wf_path = os.path.join(input_dir, "waveform_all.npy")
+    complete = (
+        os.path.isfile(wf_path)
+        and np.load(wf_path, mmap_mode="r").shape[0] == n_units
+        and all(os.path.isfile(os.path.join(input_dir, "spike_times", f"Unit{k}.npy")) for k in range(n_units))
+    )
+    if not complete:
         print("  Building shared pyDANT input arrays ...")
         n_units = build_dant_input(sess, input_dir)
-    else:
-        n_units = sess["waveform"].shape[0]
     print(f"  {n_units} units across {sess['param']['n_sessions']} session(s)")
 
     for variant in pending_variants:
@@ -527,6 +545,8 @@ def run_group(merged_dir, pending_variants):
         except Exception as e:
             print(f"  [{variant}] FAILED: {e}")
             traceback.print_exc()
+            plog.log_event(LOG_STAGE, group_key(merged_dir), variant, "failed",
+                           f"{type(e).__name__}: {e}", traceback.format_exc())
 
 
 def main():

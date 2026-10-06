@@ -61,6 +61,7 @@ sys.path.insert(0, os.path.dirname(_HERE))
 
 import batch_lock
 import pipeline_config as cfg
+import pipeline_log as plog
 import UnitMatchPy.utils as util
 import UnitMatchPy.overlord as ov
 import UnitMatchPy.save_utils as su
@@ -72,7 +73,10 @@ from run_deepunitmatch_batch_onMerged import (
     find_merged_groups,
     build_good_units_from_labels,
     _prepare_session,
+    group_key,
 )
+
+LOG_STAGE = "emd"  # pipeline_log stage of --aggregate (one event per location)
 
 # See batch_lock.sentinel_is_fresh() / run_deepunitmatch_batch_onMerged.py's
 # REDO_FROM_DATE for what these do. Split into two separate cutoffs because
@@ -227,8 +231,8 @@ def run_stage():
                 traceback.print_exc()
 
     print(
-        "\nStaging done. Now run the MATLAB driver, e.g.:\n"
-        '  matlab -batch "run_EMD_batch_onMerged"\n'
+        "\nStaging done. Now run the MATLAB driver on these roots:\n"
+        f"  matlab -batch \"run_EMD_batch_onMerged('{BASE_INPUT}', '{BASE_OUTPUT}')\"\n"
         "(see MATLAB/Paper_Figures/EMD_integration/run_EMD_batch_onMerged.m),\n"
         "then re-run this script with --aggregate."
     )
@@ -241,7 +245,10 @@ def aggregate_group(merged_dir):
     emd_dir = get_emd_dir(merged_dir)
     manifest_path = os.path.join(get_stage_dir(merged_dir), "manifest.json")
     if not os.path.isfile(manifest_path):
+        # --stage writes no manifest for locations with < 2 usable sessions
         print(f"  No manifest found (run --stage first): {manifest_path}")
+        plog.log_event(LOG_STAGE, group_key(merged_dir), "EMD", "skipped",
+                       "no manifest (not staged, or fewer than 2 usable sessions)")
         return
     with open(manifest_path) as f:
         manifest = json.load(f)
@@ -250,6 +257,7 @@ def aggregate_group(merged_dir):
     sess = _prepare_session(merged_dir)
     if sess is None:
         print(f"  _prepare_session failed for {merged_dir}")
+        plog.log_event(LOG_STAGE, group_key(merged_dir), "EMD", "failed", "_prepare_session failed (see onmerged log)")
         return
 
     param = sess["param"]
@@ -279,6 +287,7 @@ def aggregate_group(merged_dir):
     n_pairs_total = n_loaded * (n_loaded - 1) // 2
     n_pairs_loaded = 0
     n_rows_skipped = 0
+    failed_pairs, missing_pairs = [], []
 
     for r1 in range(len(manifest_sessions)):
         for r2 in range(r1 + 1, len(manifest_sessions)):
@@ -291,7 +300,10 @@ def aggregate_group(merged_dir):
                 emd_dir, f"result_{folder1}_{folder2}", "Output.mat"
             )
             if not os.path.isfile(out_path):
-                print(f"    Missing EMD result (run the MATLAB step): {out_path}")
+                if os.path.isfile(os.path.join(os.path.dirname(out_path), "EMD_FAILED.txt")):
+                    failed_pairs.append(f"{folder1}-{folder2}")  # ran and failed: zero matches
+                else:
+                    missing_pairs.append(f"{folder1}-{folder2}")
                 continue
 
             mat = sio.loadmat(out_path, squeeze_me=True, struct_as_record=False)
@@ -317,11 +329,24 @@ def aggregate_group(merged_dir):
                 final_matches[g1, g2] = True
                 final_matches[g2, g1] = True
 
+    if missing_pairs:
+        # not finalised (no sentinel), so the next --aggregate retries it
+        message = (f"{len(missing_pairs)} of {n_pairs_total} session pair(s) have no EMD result yet "
+                   f"(MATLAB step not run/finished): {missing_pairs[:10]}")
+        print(f"  NOT AGGREGATED: {message}")
+        plog.log_event(LOG_STAGE, group_key(merged_dir), "EMD", "failed", message)
+        return
+
     if n_rows_skipped:
         print(f"    ({n_rows_skipped} matched row(s) could not be mapped back to good_units)")
 
     n_matches = int(np.sum(final_matches)) // 2
     print(f"  {n_matches} EMD match(es) assembled ({n_pairs_loaded}/{n_pairs_total} pairs loaded)")
+    notes = []
+    if failed_pairs:
+        notes.append(f"EMD failed on {len(failed_pairs)} of {n_pairs_total} session pair(s), counted as zero matches: {failed_pairs[:10]}")
+    if not_loaded:
+        notes.append(f"staged session folder(s) {not_loaded} not loaded (no usable units)")
 
     functional_scores = {}
     try:
@@ -432,6 +457,7 @@ def aggregate_group(merged_dir):
         fig.savefig(os.path.join(emd_dir, "FunctionalScores.png"), dpi=150)
         plt.close(fig)
 
+    plog.log_event(LOG_STAGE, group_key(merged_dir), "EMD", "done", "; ".join(notes))
     print(f"  Results saved to: {emd_dir}")
 
 
@@ -475,6 +501,8 @@ def run_aggregate():
             except Exception as e:
                 print(f"  Aggregation FAILED: {e}")
                 traceback.print_exc()
+                plog.log_event(LOG_STAGE, group_key(merged_dir), "EMD", "failed",
+                               f"{type(e).__name__}: {e}", traceback.format_exc())
 
     print("\nAll done.")
 

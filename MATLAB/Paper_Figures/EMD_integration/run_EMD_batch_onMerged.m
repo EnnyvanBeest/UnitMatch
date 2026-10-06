@@ -1,4 +1,4 @@
-function run_EMD_batch_onMerged()
+function run_EMD_batch_onMerged(BASE_INPUT, BASE_OUTPUT)
 % Runs Yuan et al.'s own, unmodified EMD pipeline (NT_main / EMD_unit_match,
 % from github.com/janelia-TDHarrisLab/Yuan-Neuron_Tracking) on every session
 % pair of every merged-dataset group that run_deepunitmatch_batch_onMerged.py
@@ -20,10 +20,16 @@ function run_EMD_batch_onMerged()
 % only lists units _prepare_session() would keep, that file's unitType is
 % trivially all ones (no additional unit is excluded here).
 %
-% EDIT these two paths if the merged-data layout ever moves; they must match
-% BASE_INPUT / BASE_OUTPUT in run_deepunitmatch_batch_onMerged.py exactly.
-BASE_INPUT  = '\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026V2_merged\merged_data_v2';
-BASE_OUTPUT = '\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE\DeepUM_NatMeth2026_V3_OnMergedData';
+% BASE_INPUT / BASE_OUTPUT must be MERGED_DATA / ANALYSIS_OUTPUT of
+% UnitMatchPy/PaperAnalyses/pipeline_config.py (python run_emd_batch_onMerged.py
+% --stage prints the full call). Defaults: the October 2026 run.
+SHARE = '\\znas.cortexlab.net\Lab\Share\UNITMATCHTABLES_ENNY_CELIAN_JULIE';
+if nargin < 1 || isempty(BASE_INPUT)
+    BASE_INPUT = fullfile(SHARE, 'DeepUM_Oct2026_merged', 'merged_data');
+end
+if nargin < 2 || isempty(BASE_OUTPUT)
+    BASE_OUTPUT = fullfile(SHARE, 'DeepUM_Oct2026_OnMergedData');
+end
 
 % EDIT these to match your local clones if different.
 NEURON_TRACKING_REPO = 'C:\Users\EnnyB\Documents\GitHub\Neuron_Tracking';
@@ -39,7 +45,7 @@ addpath(genpath(NPY_MATLAB_REPO));
 % the length(f1)/size(f1,1) bug fix in EMD_unit_match.m, landed after that
 % point). Set REDO_FROM_DATE to NaT to disable the date-based check (freshness
 % vs manifest.json still applies); a far-future date forces redo of everything.
-REDO_FROM_DATE = datetime(2026, 7, 22, 19, 0, 0);
+REDO_FROM_DATE = NaT;  % fresh output roots per run (pipeline_config.RUN_NAME)
 
 [groups, parents] = find_merged_groups(BASE_INPUT);
 fprintf('Found %d group(s) under %s\n', numel(groups), BASE_INPUT);
@@ -108,8 +114,12 @@ for s = 1:nSessions
     nUnit = numel(ids);
 
     mw = [];
+    finite = true(nUnit, 1);
     for u = 1:nUnit
         raw = readNPY(fullfile(wf_dir, sprintf('Unit%d_RawSpikes.npy', ids(u))));
+        % same rule as the Python loader (restrict_to_snippet_units): units
+        % with any non-finite waveform value are left out for every method
+        finite(u) = all(isfinite(raw(:)));
         % raw: (spike_width, nChan, cv) -> mean over cv -> (spike_width, nChan) -> (nChan, spike_width)
         raw2d = squeeze(mean(raw, 3))';
         if isempty(mw)
@@ -117,8 +127,12 @@ for s = 1:nSessions
         end
         mw(u, :, :) = raw2d;
     end
-    mwf{s} = mw;
-    clusterIds{s} = ids;
+    if any(~finite)
+        fprintf('  Session %s: %d unit(s) with non-finite waveform values left out\n', folder, sum(~finite));
+    end
+    mwf{s} = mw(finite, :, :);
+    clusterIds{s} = ids(finite);
+    nUnit = sum(finite);
 
     % trivial Bombcellgood.mat stub: every listed unit is already good.
     sess_stage_dir = fullfile(stage_root, folder);
@@ -142,7 +156,12 @@ if isempty(xStep) || xStep == 0, xStep = 32; end
 if isempty(zStep) || zStep == 0, zStep = 15; end
 fprintf('  Probe geometry: xStep=%.1f, zStep=%.1f (derived from channel_positions.npy)\n', xStep, zStep);
 
-ts = size(mwf{1}, 3);
+usable = find(cellfun(@(m) size(m, 1), mwf) > 0);  % sessions with units left
+if numel(usable) < 2
+    fprintf('  Fewer than 2 sessions with usable units, skipping.\n');
+    return
+end
+ts = size(mwf{usable(1)}, 3);
 
 % ---- every session pair, mirroring the exhaustive r1<r2 loop the Python ----
 % ---- batch script uses for UMPy/DeepUnitMatch                          ----
@@ -156,7 +175,7 @@ ts = size(mwf{1}, 3);
 % many cores but see little speedup, check that linprog isn't already
 % internally multithreading each worker into oversubscription (e.g. via
 % maxNumCompThreads or by capping the pool size below the core count).
-pairIdx = nchoosek(1:nSessions, 2); % each row = [i, j], i<j
+pairIdx = nchoosek(usable(:)', 2); % each row = [i, j], i<j
 nPairs = size(pairIdx, 1);
 
 parfor p = 1:nPairs
@@ -229,6 +248,12 @@ parfor p = 1:nPairs
     catch ME
         fprintf('  FAILED %s vs %s: %s\n', folder1, folder2, ME.message);
         disp(getReport(ME));
+        % marker for the Python aggregator: this pair ran and failed (counted
+        % as zero matches), as opposed to not having run yet
+        if ~isfolder(result_dir), mkdir(result_dir); end
+        fid = fopen(fullfile(result_dir, 'EMD_FAILED.txt'), 'w');
+        fprintf(fid, '%s\n', ME.message);
+        fclose(fid);
     end
 end
 end
