@@ -144,6 +144,14 @@ def load_waveforms_for_good_units(wave_paths, good_units_per_session, param):
     surviving unit) are silently skipped rather than assumed present — the
     surviving unit keeps its original ID with the merged waveform.
 
+    Sessions without any loadable unit are dropped, so session numbers
+    (session_id, RecSes) count loaded sessions only. param["KS_dirs"] is
+    reduced to the loaded sessions in that same order, so KS_dirs[session] is
+    always the folder of that session (the functional scores, unique-ID
+    assignment and DANT index it that way); the full list is kept as
+    param["KS_dirs_all"], and param["session_index"][session] is the
+    session's position in it (= its folder number in the merged tree).
+
     Returns the same tuple as util.load_good_waveforms.
     """
     n_sessions = len(wave_paths)
@@ -200,6 +208,11 @@ def load_waveforms_for_good_units(wave_paths, good_units_per_session, param):
         print(
             f"  Warning: skipped {len(failed)} session(s) with no loadable waveforms: {failed}"
         )
+
+    ks_dirs_all = list(param["KS_dirs"])
+    param["KS_dirs_all"] = ks_dirs_all
+    param["session_index"] = list(successful_sessions)
+    param["KS_dirs"] = [ks_dirs_all[i] for i in successful_sessions]
 
     waveform = np.concatenate(waveforms, axis=0)
     n_units_per_session = np.array([w.shape[0] for w in waveforms], dtype=int)
@@ -378,15 +391,9 @@ def _prep_failed(merged_dir, message, status="failed", tb=None):
 def _prepare_session(merged_dir):
     """Load a merged-data group (see _prepare_session_impl); every failure is logged and gives None."""
     try:
-        sess = _prepare_session_impl(merged_dir)
+        return _prepare_session_impl(merged_dir)
     except Exception as e:
         return _prep_failed(merged_dir, f"{type(e).__name__}: {e}", tb=traceback.format_exc())
-    if sess is not None and sess.get("n_units_dropped_by_snippets"):
-        plog.log_event(
-            LOG_STAGE, group_key(merged_dir), "prepare_session", "done",
-            f"{sess['n_units_dropped_by_snippets']} unit(s) rejected by get_snippets, removed for every method",
-        )
-    return sess
 
 
 def _prepare_session_impl(merged_dir):
@@ -462,15 +469,12 @@ def _prepare_session_impl(merged_dir):
         traceback.print_exc()
         return _prep_failed(merged_dir, f"loading waveforms: {type(e).__name__}: {e}", tb=traceback.format_exc())
 
+    # one entry per loaded session, like KS_dirs (UMPy indexes channel_pos[session_id])
+    channel_pos = [channel_pos[i] for i in param["session_index"]]
     param["good_units"] = good_units
     print(
         f"  {waveform.shape[0]} units across {param['n_sessions']} session(s) after merging"
     )
-
-    if param["n_sessions"] < 2:
-        # still processed as before, but recorded: no across-session pairs to track
-        plog.log_event(LOG_STAGE, group_key(merged_dir), "prepare_session", "done",
-                       f"single session ({waveform.shape[0]} units): no across-session pairs")
 
     sess = {
         "merged_dir": merged_dir,
@@ -487,45 +491,109 @@ def _prepare_session_impl(merged_dir):
 
 def restrict_to_snippet_units(sess):
     """
-    Keep only units the DNN preprocessing (param_fun.get_snippets) accepts, for
-    every method, so DeepUnitMatch and UMPy are always run and evaluated on
-    exactly the same units. get_snippets skips a unit if both halves of its
-    waveform contain NaN/Inf, or if its channel neighbourhood can't be laid out
-    as the expected columns per shank (units near the probe's top/bottom edge
-    are padded, not skipped). In the previous run no unit was skipped.
+    Keep only units both methods can use, so DeepUnitMatch and UMPy are always
+    run and evaluated on exactly the same units:
 
-    The snippets are written to a local temporary folder and discarded.
+    1. units whose waveform contains any NaN/Inf are removed. In the October
+       2026 step-1 run these were whole sessions whose second-half waveform was
+       entirely NaN (e.g. CB018 location 1, one session of 25 units); UMPy's
+       parameter extraction fails on them, and get_snippets would silently
+       replace the missing half with a copy of the first half.
+    2. units the DNN preprocessing (param_fun.get_snippets) rejects are
+       removed: units whose channel neighbourhood can't be laid out as the
+       expected columns per shank (units near the probe's top/bottom edge are
+       padded, not skipped). In the previous run no unit was skipped.
+
+    Sessions left without units are dropped (see keep_units). Counts are
+    printed and logged per location. The snippets are written to a local
+    temporary folder and discarded.
     """
-    param = copy.deepcopy(sess["param"])
-    unit_ids = np.concatenate(param["good_units"]).squeeze()
-    with tempfile.TemporaryDirectory() as tmp:
-        _, _, kept_idx = param_fun.get_snippets(
-            sess["waveform"], sess["channel_pos"], sess["session_id"],
-            save_path=tmp, unit_ids=unit_ids, param=param,
-        )
-    n_dropped = len(sess["waveform"]) - len(kept_idx)
-    sess["n_units_dropped_by_snippets"] = int(n_dropped)
-    if n_dropped == 0:
-        return sess
+    waveform = sess["waveform"]
+    unit_ids = np.concatenate(sess["good_units"]).ravel()
+    session_id = np.asarray(sess["session_id"])
 
-    dropped_ids = np.setdiff1d(np.arange(len(unit_ids)), kept_idx)
-    print(
-        f"  WARNING: {n_dropped} unit(s) rejected by get_snippets, removed for every method: "
-        f"{unit_ids[dropped_ids].tolist()}"
-    )
-    waveform, session_id, session_switch, within_session, good_units, param = (
-        util.filter_units_by_index(
-            sess["waveform"], sess["session_id"], sess["session_switch"],
-            sess["good_units"], kept_idx, sess["param"],
+    finite = np.isfinite(waveform).all(axis=tuple(range(1, waveform.ndim)))
+    finite_idx = np.flatnonzero(finite)
+    notes = []
+    if not finite.all():
+        per_session = {
+            int(sess["param"]["session_index"][s]): int(n)
+            for s, n in zip(*np.unique(session_id[~finite], return_counts=True))
+        }
+        notes.append(f"{int((~finite).sum())} unit(s) with non-finite waveform values removed "
+                     f"(session folder: n units) {per_session}")
+    if len(finite_idx) == 0:
+        raise RuntimeError("every unit has non-finite waveform values")
+
+    param = copy.deepcopy(sess["param"])
+    with tempfile.TemporaryDirectory() as tmp:
+        _, _, kept = param_fun.get_snippets(
+            waveform[finite_idx], sess["channel_pos"], session_id[finite_idx], save_path=tmp, unit_ids=unit_ids[finite_idx], param=param,
         )
+    kept_idx = finite_idx[np.asarray(kept, dtype=int)]
+    n_rejected = len(finite_idx) - len(kept_idx)
+    sess["n_units_dropped_by_snippets"] = int(n_rejected)
+    if n_rejected:
+        notes.append(f"{n_rejected} unit(s) rejected by get_snippets removed: "
+                     f"{np.setdiff1d(unit_ids[finite_idx], unit_ids[kept_idx]).tolist()}")
+
+    if len(kept_idx) < len(waveform):
+        n_sessions_before = sess["param"]["n_sessions"]
+        keep_units(sess, kept_idx)
+        if sess["param"]["n_sessions"] < n_sessions_before:
+            notes.append(f"{n_sessions_before - sess['param']['n_sessions']} session(s) left without units, dropped")
+    if sess["param"]["n_sessions"] < 2:
+        notes.append(f"single session ({len(sess['waveform'])} units): no across-session pairs")
+
+    if notes:
+        message = "; ".join(notes)
+        print(f"  WARNING: {message} (for every method)")
+        plog.log_event(
+            sess.get("log_stage", LOG_STAGE),
+            sess.get("group") or group_key(sess["merged_dir"]),
+            "prepare_session", "done", message,
+        )
+    return sess
+
+
+def keep_units(sess, kept_idx):
+    """
+    Restrict a loaded session dict to the units kept_idx (indices into the
+    current unit order), in place. Sessions left without units are removed
+    altogether -- from session_id/session_switch numbering, good_units,
+    channel_pos, param["KS_dirs"] and param["session_index"] -- exactly as the
+    loader drops sessions without loadable units, so every per-session list
+    stays aligned with session_id.
+    """
+    kept_idx = np.sort(np.asarray(kept_idx, dtype=int))
+    param = sess["param"]
+    old_session_id = np.asarray(sess["session_id"])
+    old_switch = np.asarray(sess["session_switch"])
+    kept_sessions = np.unique(old_session_id[kept_idx])
+
+    good_units = []
+    for s in kept_sessions:
+        start, end = int(old_switch[s]), int(old_switch[s + 1])
+        in_session = kept_idx[(kept_idx >= start) & (kept_idx < end)] - start
+        good_units.append(sess["good_units"][s][in_session])
+
+    n_units_per_session = np.array([len(g) for g in good_units], dtype=int)
+    param["n_units"], session_id, session_switch, param["n_sessions"] = (
+        util.get_session_data(n_units_per_session)
     )
+    within_session = util.get_within_session(session_id, param)
     param["good_units"] = good_units
-    # filter_units_by_index doesn't update this; downstream code reads it
-    # (e.g. fast_testing.normalize_FR_diff)
-    param["n_units_per_session"] = [len(g) for g in good_units]
+    param["n_units_per_session"] = n_units_per_session.tolist()
+    param["KS_dirs"] = [param["KS_dirs"][s] for s in kept_sessions]
+    param["session_index"] = [param["session_index"][s] for s in kept_sessions]
     sess.update(
-        waveform=waveform, session_id=session_id, session_switch=session_switch,
-        within_session=within_session, good_units=good_units, param=param,
+        waveform=sess["waveform"][kept_idx],
+        session_id=session_id,
+        session_switch=session_switch,
+        within_session=within_session,
+        good_units=good_units,
+        channel_pos=[sess["channel_pos"][s] for s in kept_sessions],
+        param=param,
     )
     return sess
 

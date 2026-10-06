@@ -149,95 +149,10 @@ def build_good_units_per_session(ks_dirs, orig_clus_id, recsesAll, good_id):
     return good_units
 
 
-def load_waveforms_for_good_units(wave_paths, good_units_per_session, param):
-    """
-    Directly loads RawSpikes waveforms for the specified good units, bypassing
-    the TSV-based unit-label files used by util.load_good_waveforms.
-
-    Returns the same tuple as util.load_good_waveforms.
-    """
-    n_sessions = len(wave_paths)
-    waveforms = []
-    actual_good_units = []
-    successful_sessions = []
-
-    for sess_idx in range(n_sessions):
-        wave_path = wave_paths[sess_idx]
-        g_units = good_units_per_session[sess_idx].flatten()
-
-        if len(g_units) == 0:
-            print(f"  Session {sess_idx}: no good units, skipping.")
-            continue
-
-        try:
-            first_id = int(g_units[0])
-            p_first = os.path.join(wave_path, f"Unit{first_id}_RawSpikes.npy")
-            ref = np.load(p_first)  # (T, C, spikes) or similar
-            buf = np.zeros((len(g_units), *ref.shape), dtype=ref.dtype)
-
-            kept_ids = []
-            kept_idx = []
-            for j, uid in enumerate(g_units):
-                p = os.path.join(wave_path, f"Unit{int(uid)}_RawSpikes.npy")
-                if os.path.exists(p):
-                    buf[j] = np.load(p)
-                    kept_ids.append(uid)
-                    kept_idx.append(j)
-                else:
-                    print(f"  Warning: missing {p}")
-
-            if not kept_ids:
-                print(f"  Session {sess_idx}: no waveform files found, skipping.")
-                continue
-
-            buf = buf[kept_idx]
-            waveforms.append(buf)
-            actual_good_units.append(np.array(kept_ids, dtype=float).reshape(-1, 1))
-            successful_sessions.append(sess_idx)
-
-        except Exception as e:
-            print(f"  Error loading session {sess_idx}: {e}")
-        finally:
-            try:
-                del buf
-            except NameError:
-                pass
-
-    if not waveforms:
-        raise RuntimeError("No sessions loaded successfully.")
-
-    if len(successful_sessions) < n_sessions:
-        failed = [i for i in range(n_sessions) if i not in successful_sessions]
-        print(
-            f"  Warning: skipped {len(failed)} session(s) with no loadable waveforms: {failed}"
-        )
-
-    waveform = np.concatenate(waveforms, axis=0)
-    n_units_per_session = np.array([w.shape[0] for w in waveforms], dtype=int)
-
-    param["n_units"], session_id, session_switch, param["n_sessions"] = (
-        util.get_session_data(n_units_per_session)
-    )
-    within_session = util.get_within_session(session_id, param)
-
-    param["n_channels"] = waveform.shape[2]
-    param["n_units_per_session"] = [len(g) for g in actual_good_units]
-
-    actual_width = waveform.shape[1]
-    param["spike_width"] = actual_width
-    param["peak_loc"] = int(np.floor(actual_width / 2))
-    param["waveidx"] = np.arange(
-        param["peak_loc"] - 8, param["peak_loc"] + 15, dtype=int
-    )
-
-    return (
-        waveform,
-        session_id,
-        session_switch,
-        within_session,
-        actual_good_units,
-        param,
-    )
+# Waveform loading is shared with the merged-data runner
+# (onm.load_waveforms_for_good_units): sessions without loadable units are
+# dropped and param["KS_dirs"] / param["session_index"] list the loaded
+# sessions in session order (full list in param["KS_dirs_all"]).
 
 
 # ── path helpers ─────────────────────────────────────────────────────────────
@@ -412,17 +327,16 @@ def _prepare_session_impl(mat_path):
     print("Loading waveforms …")
     try:
         waveform, session_id, session_switch, within_session, good_units, param = (
-            load_waveforms_for_good_units(wave_paths, good_units_per_session, param)
+            onm.load_waveforms_for_good_units(wave_paths, good_units_per_session, param)
         )
     except Exception as e:
         traceback.print_exc()
         return _prep_failed(mat_path, f"loading waveforms: {type(e).__name__}: {e}", tb=traceback.format_exc())
 
+    # one entry per loaded session, like KS_dirs (UMPy indexes channel_pos[session_id])
+    channel_pos = [channel_pos[i] for i in param["session_index"]]
     param["good_units"] = good_units
     print(f"  {waveform.shape[0]} units across {param['n_sessions']} session(s)")
-    if param["n_sessions"] < 2:
-        plog.log_event(LOG_STAGE, group_key(mat_path), "prepare_session", "done",
-                       f"single session ({waveform.shape[0]} units): no across-session pairs")
 
     return {
         "mat_path": mat_path,

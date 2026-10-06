@@ -127,6 +127,23 @@ def original_index_to_recses(recsesAll, good_id, n_ks_dirs):
     }
 
 
+def step1_sessions(data, recsesAll, good_id):
+    """
+    (full KS_dirs list, {0-based position in it -> RecSes}) of one step-1 run.
+
+    Step-1 runs save the mapping themselves: param["KS_dirs_all"] is the full
+    list and param["session_index"][k] the position of RecSes k+1 in it. This
+    also covers sessions the run dropped for other reasons than having no good
+    units (e.g. all units with non-finite waveforms). Older outputs without
+    it fall back to the GoodID reconstruction (original_index_to_recses).
+    """
+    if "session_index" in data:
+        return data["KS_dirs_all"], {
+            int(orig_idx): recses for recses, orig_idx in enumerate(data["session_index"], start=1)
+        }
+    return data["KS_dirs"], original_index_to_recses(recsesAll, good_id, len(data["KS_dirs"]))
+
+
 def write_synthetic_bc_unit_type_tsv(
     orig_clus_id, recsesAll, good_id, original_session_idx, out_path
 ):
@@ -254,7 +271,7 @@ def session_merge_candidates(mt, recses):
     units in session `recses` (RecSes number in MatchTable.csv) that were
     assigned the same unique ID ("UID 1" == "UID 2", intermediate IDs).
     """
-    if recses is None:  # session without good units in the comparison
+    if recses is None:  # session step 1 didn't match (no usable good units): nothing to merge
         return []
     rows = mt[
         (mt["RecSes 1"] == recses)
@@ -348,8 +365,10 @@ def run_merging_process(UMparam_files, source_dirs, MAX_C_RATIO=1.0):
                 MERGED_DATAPATH, os.path.relpath(source_dir, DUM_NONMERGED_DATAPATH)
             )
 
+            # every session folder of the location, also those step 1 dropped
+            ks_dirs_all = data.get("KS_dirs_all", data["KS_dirs"])
             target_KSDirs = [
-                os.path.join(target_dir, str(idx)) for idx in range(len(data["KS_dirs"]))
+                os.path.join(target_dir, str(idx)) for idx in range(len(ks_dirs_all))
             ]
             already_done = [
                 batch_lock.sentinel_is_fresh(
@@ -392,9 +411,7 @@ def run_merging_process(UMparam_files, source_dirs, MAX_C_RATIO=1.0):
                 mat_path = os.path.join(RAW_KS_BASE, x, "UnitMatch", "UnitMatch.mat")
                 try:
                     orig_clus_id, recsesAll, good_id = load_uid_conversion(mat_path)
-                    idx_to_recses = original_index_to_recses(
-                        recsesAll, good_id, len(data["KS_dirs"])
-                    )
+                    ks_dirs_all, idx_to_recses = step1_sessions(data, recsesAll, good_id)
                 except Exception as e:
                     print(f"  WARNING: could not read {mat_path} ({e}); skipping {source_dir}.")
                     plog.log_event(LOG_STAGE, group_key(source_dir), "merge", "failed",
@@ -402,7 +419,7 @@ def run_merging_process(UMparam_files, source_dirs, MAX_C_RATIO=1.0):
                     continue
 
                 group_absorbed = 0
-                for idx, KSDir in enumerate(data["KS_dirs"]):
+                for idx, KSDir in enumerate(ks_dirs_all):
                     target_KSDir = target_KSDirs[idx]
                     marker_path = os.path.join(target_KSDir, MERGE_COMPLETE_MARKER)
 
@@ -533,7 +550,7 @@ def run_merging_process(UMparam_files, source_dirs, MAX_C_RATIO=1.0):
 
                 plog.log_event(
                     LOG_STAGE, group_key(source_dir), "merge", "done",
-                    f"{len(data['KS_dirs'])} session(s), {group_absorbed} unit(s) absorbed by merges",
+                    f"{len(ks_dirs_all)} session(s), {group_absorbed} unit(s) absorbed by merges",
                 )
             print(f"Processing UMparam_file: {UMparam_file} done.")
         except Exception as e:
@@ -590,10 +607,10 @@ def compare_candidates(out_csv):
             }
             x = os.path.dirname(os.path.relpath(source_dir, DUM_NONMERGED_DATAPATH))
             orig_clus_id, recsesAll, good_id = load_uid_conversion(os.path.join(RAW_KS_BASE, x, "UnitMatch", "UnitMatch.mat"))
-            idx_to_recses = original_index_to_recses(recsesAll, good_id, len(data["KS_dirs"]))
+            ks_dirs_all, idx_to_recses = step1_sessions(data, recsesAll, good_id)
             counts = {k: 0 for k in ["cand_DUM", "cand_UM", "cand_both", "merged_DUM", "merged_UM", "merged_both",
                                      "absorbed_DUM", "absorbed_UM"]}
-            for idx, ks_dir in enumerate(data["KS_dirs"]):
+            for idx, ks_dir in enumerate(ks_dirs_all):
                 recses = idx_to_recses.get(idx)
                 groups = {k: session_merge_candidates(mt[k], recses) for k in mt}
                 if not any(groups.values()):

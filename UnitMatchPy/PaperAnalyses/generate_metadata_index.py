@@ -57,7 +57,9 @@ def build_metadata_index(data_dir: str, output_name: str = 'metadata_index.json'
         subject_name, probe_name, loc_name = parsed
         key = (subject_name, probe_name, loc_name)
 
-        ks_dirs = umparam.get('KS_dirs', {})
+        # full session list (KS_dirs only lists the sessions the run kept);
+        # exp_key = position in it + 1 = merged-tree folder number + 1
+        ks_dirs = umparam.get('KS_dirs_all', umparam.get('KS_dirs', {}))
 
         dates = OrderedDict()
         exp_paths = OrderedDict()

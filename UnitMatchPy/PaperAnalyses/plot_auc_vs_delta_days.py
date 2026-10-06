@@ -26,8 +26,11 @@
 # run_deepunitmatch_batch_onMerged.py's _prepare_session() builds session_id,
 # renumbering RecSes to skip the gaps.
 #
-# Rather than persisting that mapping from a pipeline run (which would need
-# re-running the batch scripts), this script reconstructs it from files that
+# Runs from October 2026 on save that mapping themselves (UMparam.pickle
+# "session_index": merged-tree folder of every RecSes, which also covers
+# sessions dropped because all their units had non-finite waveforms), and
+# build_session_date_lookup() uses it when present. For older outputs it
+# reconstructs the mapping from files that
 # already sit statically in the merged tree: build_session_date_lookup()
 # redoes exactly the good-unit/RawSpikes-exists bookkeeping _prepare_session()
 # does (the same logic run_emd_batch_onMerged.py's --stage phase already uses
@@ -42,6 +45,7 @@
 import os
 import sys
 import json
+import pickle
 import datetime
 import warnings
 
@@ -229,6 +233,18 @@ SIGNED_BIN_ORDER = list(range(-(N_MAG_BINS - 1), N_MAG_BINS))
 SIGNED_BIN_LABELS = [_signed_bin_label(s) for s in SIGNED_BIN_ORDER]
 
 
+def saved_session_index(dataset_key):
+    """Merged-tree folder number of every RecSes, as saved by the run (None for older outputs)."""
+    for method in ("UMPy", "DeepUnitMatch"):  # same sessions for every method
+        path = os.path.join(BASE_OUTPUT, *dataset_key.split("/"), method, "UMparam.pickle")
+        if os.path.isfile(path):
+            with open(path, "rb") as f:
+                index = pickle.load(f).get("session_index")
+            if index is not None:
+                return [int(i) for i in index]
+    return None
+
+
 def build_session_date_lookup(base_input=BASE_INPUT, metadata_index_path=METADATA_INDEX_PATH):
     """
     For every merged-data group, reconstruct {RecSes number -> date}.
@@ -282,6 +298,14 @@ def build_session_date_lookup(base_input=BASE_INPUT, metadata_index_path=METADAT
         good_units_per_session = base_batch.build_good_units_from_labels(unit_label_paths)
 
         dates = meta.get("dates", {})
+        saved = saved_session_index(dataset_key)
+        if saved is not None:
+            lookup[dataset_key] = {
+                recses: dates[str(folder + 1)]
+                for recses, folder in enumerate(saved, start=1)
+                if dates.get(str(folder + 1))
+            }
+            continue
         recses = 0
         mapping = {}
         for folder, wave_path, g_units in zip(session_names, wave_paths, good_units_per_session):
