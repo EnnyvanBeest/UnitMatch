@@ -6,12 +6,14 @@ import os
 import pandas as pd
 import numpy as np
 import random  
+import zlib
+import argparse
 import sqlite3
 import pickle 
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import time
 from sklearn.neighbors import KernelDensity
-from testing.test import remove_conflicts2, directional_filter, get_FR
+from testing.test import directional_filter, get_FR
 from utils.helpers import (
     PROJECT_ROOT,
     index_dates_from_loc,
@@ -32,7 +34,8 @@ RESULTS_DIR = _cfg.RESULTS_DIR
 DATABASE_PATH = _cfg.DATABASE_PATH
 
 
-def test_models_optimized(col_names, fixed_n=True, save_names=None):
+def test_models_optimized(col_names, fixed_n=True, save_names=None,
+                          db_path=None, results_dir=None, ref_model="DeepUnitMatch"):
     """
     Optimized version of test_models with major performance improvements:
     1. Parallel processing using multiprocessing
@@ -41,16 +44,16 @@ def test_models_optimized(col_names, fixed_n=True, save_names=None):
     4. Cache expensive computations
     5. Early filtering and validation
     """
-    results_dir = RESULTS_DIR
+    db_path = db_path or DATABASE_PATH
+    results_dir = results_dir or RESULTS_DIR
 
     if fixed_n:
-        # ref_model = 'UMPy'
-        ref_model = 'DeepUnitMatch'
-        # ref_model = 'DANT_no_functional'
-        # ref_model = 'DANT'
-
-        # Load UM_results once and create a lookup dictionary for fast access
-        UM_results = pd.read_csv(os.path.join(results_dir, f"UM Probabilities_{ref_model}_results.csv"))
+        # N per session pair = number of matches of ref_model with free N, so
+        # the free-N results of ref_model must exist (see __main__)
+        ref_path = os.path.join(results_dir, f"UM Probabilities_{ref_model}_results.csv")
+        if not os.path.isfile(ref_path):
+            raise FileNotFoundError(f"{ref_path} not found: run free N for {ref_model} first.")
+        UM_results = pd.read_csv(ref_path)
         um_lookup = create_um_lookup(UM_results)
 
         # Save the new results in a subdirectory to avoid overwriting the original results
@@ -61,7 +64,7 @@ def test_models_optimized(col_names, fixed_n=True, save_names=None):
 
     # Get all valid locations first to avoid repeated file system checks
     valid_locations = get_locations_from_sqlite(
-        db_path=DATABASE_PATH
+        db_path=db_path
     )
     print(f"Found {len(valid_locations)} valid locations to process")
 
@@ -83,6 +86,7 @@ def test_models_optimized(col_names, fixed_n=True, save_names=None):
                 col_names,
                 um_lookup,
                 fixed_n=fixed_n,
+                db_path=db_path,
             ): location
             for location in valid_locations
         }
@@ -145,11 +149,25 @@ def get_threshold_df(mt: pd.DataFrame, metric: str = "DNNSim"):
     return x[thresh].item()
 
 
-def get_matches_1model(mt, metric, fixed_n: int = None):
+def session_pair_seed(mouse, probe, loc, r1, r2):
+    """Seed of the random tie-breaking for one session pair: reproducible, and the same for every model."""
+    return zlib.crc32(f"{mouse}/{probe}/{loc}/{r1}/{r2}".encode())
+
+
+def get_matches_1model(mt, metric, fixed_n: int = None, seed=None):
     """
     Get the matches for one model, given a merged match table (for one session pair).
     If a fixed number of matches is set, we don't do similarity thresholding.
     Always do conflict resolution.
+
+    Matches are ranked: mutual-best pairs first (the pair is the best of both
+    its units, see remove_conflicts2), then all other pairs, each group by the
+    model's own (direction-averaged) value, highest first; equal values are put
+    in random order, seeded by `seed` (session_pair_seed). With a fixed N, the
+    best N are kept, so when there are fewer than N mutual-best pairs the
+    remaining ones are the next most likely pairs (which can share a unit with a
+    chosen pair). Before, non-mutual-best pairs were set to 0 and so filled in
+    at random. Pairs without a value (NaN) are never matches.
 
     Spatial filtering is not applied here: the model column already encodes spatial
     information (e.g. the _40Spat / _80Spat / _NoSpat variants).
@@ -178,37 +196,42 @@ def get_matches_1model(mt, metric, fixed_n: int = None):
             across[metric] >= thresh, ["RecSes1", "RecSes2", "ID1", "ID2", metric]
         ]
     else:
-        # For fixed_n, sort once and reuse
-        if metric == "centroid_distance":
-            matches = across.sort_values(by=metric, ascending=True)
-        else:
-            matches = across.sort_values(by=metric, ascending=False)
-
+        # fixed N: every across-session pair is a candidate, ranked below
+        matches = across
 
     # Only allow a match if it is above threshold when comparing in both directions
     matches = directional_filter(matches)
 
     # Average in both directions to simplify the rest
     matches = avg_across_directions(matches, columns=[metric])
-    
-    if len(matches) != 0:
-        # Resolve conflict matches by only keeping the match with highest similarity
-        matches, _ = remove_conflicts2(matches, metric)
 
     # Ensure consistent ordering (keep a single direction per session pair)
     # shouldn't be necessary when averaging across directions since return forward dataframe only
     matches = matches.loc[matches["RecSes1"] < matches["RecSes2"]]
+    matches = matches.loc[matches[metric].notna()]
+    if matches.empty:
+        return [], matches
 
-    # Add a random timebreaker column to randomize order of ties 
-    if not matches.empty:
-        matches["random_tiebreaker"] = [random.random() for _ in range(len(matches))]  
-        matches = matches.sort_values(by=[metric, "random_tiebreaker"], ascending=[False, True])
-        matches = matches.drop(columns=["random_tiebreaker"])
-    
+    # Conflict resolution: a pair is mutual-best when it has the highest value
+    # of all pairs of both its units (the rule of test.remove_conflicts2, which
+    # instead sets all other pairs to 0 and so loses their ranking)
+    mutual_best = (
+        (matches[metric] == matches.groupby(["RecSes1", "ID1"])[metric].transform("max"))
+        & (matches[metric] == matches.groupby(["RecSes2", "ID2"])[metric].transform("max"))
+    )
+
+    rank = pd.DataFrame({
+        "mutual_best": mutual_best,
+        "value": matches[metric],
+        "tiebreak": np.random.default_rng(seed).random(len(matches)),
+    }, index=matches.index)
+    order = rank.sort_values(["mutual_best", "value", "tiebreak"], ascending=[False, False, True]).index
+    matches = matches.loc[order]
+
     if fixed_n is not None:
-        matches = matches.head(fixed_n) # keep best N matches
+        matches = matches.head(fixed_n)  # keep best N matches
     else:
-        matches = matches.loc[matches[metric] >= thresh]
+        matches = matches.loc[mutual_best.loc[order] & (matches[metric] >= thresh)]
 
     return matches.index.to_list(), matches
 
@@ -250,13 +273,14 @@ def all_results_1model(
         df = pick(mt, r1, r2, False).copy()
 
         # Get matches
+        seed = session_pair_seed(mouse, probe, loc, r1, r2)
         if fixed_n is not None:
             n_value = fixed_n.loc[
                 (fixed_n["r1"] == r1) & (fixed_n["r2"] == r2), "N"
             ].values[0]
-            match_indices, _ = get_matches_1model(df, metric=model_name, fixed_n=n_value)
+            match_indices, _ = get_matches_1model(df, metric=model_name, fixed_n=n_value, seed=seed)
         else:
-            match_indices, _ = get_matches_1model(df, metric=model_name, fixed_n=None)
+            match_indices, _ = get_matches_1model(df, metric=model_name, fixed_n=None, seed=seed)
 
         # Average over directions, and select only the way forward to simplify
         df = avg_across_directions(df, columns=metrics)  
@@ -355,13 +379,13 @@ def all_results_1model(
     return results
 
 
-def process_single_location(location_data, col_names, um_lookup, fixed_n=True):
+def process_single_location(location_data, col_names, um_lookup, fixed_n=True, db_path=None):
     """Process a single location - designed to be called in parallel"""
     mouse, probe, loc = location_data
 
     try:
         # Connect to database (each process needs its own connection)
-        conn = sqlite3.connect(DATABASE_PATH)
+        conn = sqlite3.connect(db_path or DATABASE_PATH)
         cursor = conn.cursor()
 
         # Check if table exists and get columns
@@ -620,32 +644,34 @@ def normalize_FR_diff(mt, mouse, probe, loc):
 
     return mt
 
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Per-session-pair AUCs and N of every model in the match-table database: "
+        "first with each model's own matches (free N), then with N per session pair set by "
+        "--ref-model (results in <results-dir>/N_set_by_<ref-model>)."
+    )
+    parser.add_argument("--models", nargs="+", default=_cfg.COMPARISON_MODELS,
+                        help="model folder names (default: pipeline_config.COMPARISON_MODELS)")
+    parser.add_argument("--ref-model", default="DeepUnitMatch",
+                        help="model whose free-N match count sets N for the fixed-N run")
+    parser.add_argument("--mode", choices=["both", "free", "fixed"], default="both")
+    parser.add_argument("--db", default=DATABASE_PATH, help="match-table database (sql.py)")
+    parser.add_argument("--results-dir", default=RESULTS_DIR)
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
     start = time.time()
+    args = parse_args()
+    col_names = [f"UM Probabilities_{model}" for model in args.models]
+    ref_col = f"UM Probabilities_{args.ref_model}"
+    kwargs = dict(db_path=args.db, results_dir=args.results_dir, ref_model=args.ref_model)
 
-    models = [
-            #   "DeepUnitMatch",
-            #   "UMPy", 
-            #   "EMD", 
-            #   "DANT", 
-            #   "DANT_no_functional",
-            #   "DUM_totalscore", "UMPy_simscore",
-            #   "DUM_nodrift", "UMPy_nodrift",
-            #   "UMPy_spatialonly", "DUM_spatialonly",
-            #   "DUM_maxdist=20", "DUM_maxdist=50", "DUM_maxdist=100", "DUM_maxdist=inf", 
-            #   "UMPy_maxdist=20", "UMPy_maxdist=50", "UMPy_maxdist=100", "UMPy_maxdist=inf",
-            #   "DUM_W_ij=1","DUM_W_ij=5","DUM_W_ij=10","DUM_W_ij=15","DUM_W_ij=20", 
-            #   "n_output=8_after_ae_and_finetune", "n_output=32_after_ae_and_finetune", "n_output=128_after_ae_and_finetune", "n_output=256_after_ae_and_finetune", 
-            #   "DUM_untrained", "DUM_unfinetuned", "DUM_finetuned_only",
-            #   "xval_m3_1", "xval_m3_2", "xval_m3_3",
-            #   "xval_m6_1", "xval_m6_2", "xval_m6_3",
-              "xval_m12_1", "xval_m12_2", "xval_m12_3",
-              "xval_m18_1",
-              ]
-
-    col_names = [f"UM Probabilities_{model}" for model in models]
-
-    test_models_optimized(col_names, fixed_n=False)
-    test_models_optimized(col_names, fixed_n=True)
+    if args.mode in ("both", "free"):
+        # free N first: the fixed-N run reads the reference model's free-N results
+        free_cols = col_names if ref_col in col_names or args.mode == "free" else [ref_col] + col_names
+        test_models_optimized(free_cols, fixed_n=False, **kwargs)
+    if args.mode in ("both", "fixed"):
+        test_models_optimized(col_names, fixed_n=True, **kwargs)
     end = time.time()
     print(f"Total time taken: {end - start} seconds")

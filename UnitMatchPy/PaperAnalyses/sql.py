@@ -78,9 +78,8 @@ def merge_match_tables(df_1, df_2, sub1, sub2):
     return pd.concat([df_1, df_2], axis=1)
 
 
-def import_csv_to_sqlite(mt_paths, models, m, p, l):
+def import_csv_to_sqlite(mt_paths, models, m, p, l, db_file=DATABASE_PATH):
 
-    db_file = DATABASE_PATH
 
     # Define the table name in SQLite
     table_name = f"{m}_{p}_{l}"  # Change this
@@ -159,29 +158,18 @@ def import_csv_to_sqlite(mt_paths, models, m, p, l):
 
 
 if __name__ == "__main__":
-    data_root = PROJECT_ROOT
+    import argparse
 
-    models = [
-              "DeepUnitMatch",
-            #   "DUM_NewModelAug2026",
-            #   "UMPy", 
-            #   "EMD", "DANT", "DANT_no_functional",
-            #   "DUM_totalscore", "UMPy_simscore",
-            #   "DUM_nodrift", "UMPy_nodrift",
-            #   "DUM_maxdist=20", "DUM_maxdist=50", "DUM_maxdist=100", "DUM_maxdist=inf", 
-            #   "UMPy_maxdist=20", "UMPy_maxdist=50", "UMPy_maxdist=100", "UMPy_maxdist=inf",
-            #   "UMPy_spatialonly", "DUM_spatialonly",
-            #   "DUM_W_ij=1","DUM_W_ij=5","DUM_W_ij=10","DUM_W_ij=15","DUM_W_ij=20", 
-            #   "n_output=8_after_ae_and_finetune", "n_output=32_after_ae_and_finetune", "n_output=128_after_ae_and_finetune", "n_output=256_after_ae_and_finetune", 
-            #   "DUM_untrained", "DUM_unfinetuned", "DUM_finetuned_only",
-            #   "exclude_mice_m1_1_after_ae_and_finetune", "exclude_mice_m1_2_after_ae_and_finetune", "exclude_mice_m1_3_after_ae_and_finetune",
-            #   "exclude_mice_m6_1_after_ae_and_finetune", "exclude_mice_m6_2_after_ae_and_finetune", "exclude_mice_m6_3_after_ae_and_finetune",
-            #   "exclude_mice_m12_1_after_ae_and_finetune", "exclude_mice_m12_2_after_ae_and_finetune", "exclude_mice_m12_3_after_ae_and_finetune",
-            #   "xval_m3_1", "xval_m3_2", "xval_m3_3",
-            #   "xval_m6_1", "xval_m6_2", "xval_m6_3",
-              "xval_m12_1", "xval_m12_2", "xval_m12_3",
-              "xval_m18_1",
-              ]
+    parser = argparse.ArgumentParser(
+        description="Put the MatchTable.csv of every model and location into one SQLite table per location."
+    )
+    parser.add_argument("--models", nargs="+", default=cfg.COMPARISON_MODELS,
+                        help="model folder names (default: pipeline_config.COMPARISON_MODELS)")
+    parser.add_argument("--db", default=DATABASE_PATH, help="SQLite database to write")
+    parser.add_argument("--data-root", default=PROJECT_ROOT, help="analysis output root holding the model folders")
+    args = parser.parse_args()
+    data_root = args.data_root
+    models = args.models
 
     for mouse in os.listdir(data_root):
         if os.path.isdir(os.path.join(data_root, mouse)):
@@ -208,6 +196,6 @@ if __name__ == "__main__":
                             models_found.append(model)
 
                     if len(mt_paths) > 0:
-                        import_csv_to_sqlite(mt_paths, models_found, mouse, probe, loc)
+                        import_csv_to_sqlite(mt_paths, models_found, mouse, probe, loc, db_file=args.db)
                     else:
                         print('No valid MatchTable.csv found.')

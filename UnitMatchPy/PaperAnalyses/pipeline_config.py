@@ -54,6 +54,9 @@ DATABASE_PATH = os.path.join(ANALYSIS_OUTPUT, "matchtables.db")
 RESULTS_DIR = os.path.join(ANALYSIS_OUTPUT, "results")
 FIGURES_DIR = os.path.join(ANALYSIS_OUTPUT, "figures")
 REPORTS_DIR = os.path.join(ANALYSIS_OUTPUT, "pipeline_reports")
+# step 6: default models (output folder names) that sql.py puts into the
+# database and fast_testing.py evaluates; both take --models to override.
+COMPARISON_MODELS = ["DeepUnitMatch", "UMPy", "DUM_legacy", "EMD", "DANT", "DANT_no_functional"]
 
 # Batch scripts skip work whose output sentinel already exists. With fresh
 # output roots per run this stays None ("skip if present"); set a
