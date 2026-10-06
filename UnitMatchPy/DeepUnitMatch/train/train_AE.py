@@ -203,6 +203,7 @@ def run_training(
     cont=False,
     batchsize=32,
     launch_tensorboard=True,
+    n_output=256,
 ):
     """
     Convenience function for running training from notebooks.
@@ -220,6 +221,8 @@ def run_training(
             behaviour). Set False for unattended/batch/parallel callers --
             killing another process's tensorboard.exe and fighting over port
             6006 is not appropriate outside interactive notebook use.
+        n_output: encoder output size (default 256); a fine-tuning started
+            from this AE must use the same n_output.
     """
     from argparse import Namespace
 
@@ -284,7 +287,7 @@ def run_training(
         test_dataset, batch_size=args.batchsize, shuffle=True, num_workers=4
     )
 
-    model = SpatioTemporalAutoEncoder_V2(n_channel=30, n_time=60, n_output=256).to(
+    model = SpatioTemporalAutoEncoder_V2(n_channel=30, n_time=60, n_output=n_output).to(
         device
     )
     model = model.double()

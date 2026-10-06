@@ -15,6 +15,9 @@
 #               and evaluated on the held-out mice. The three variants of a
 #               subset share one autoencoder. Summarise with
 #               compare_training_variants.py.
+#   paper       every model in the paper (main model, W_ij and n_output
+#               sweeps, baselines, mouse-count cross-validation), all with
+#               the winning variant -- set PAPER_VARIANT first (see paper_jobs).
 #
 # Stages (run in this order; each can run on several machines at once --
 # every unit of work is claimed with a lock on the share):
@@ -95,13 +98,21 @@ VARIANTS = {
 # ── jobs ─────────────────────────────────────────────────────────────────────
 
 
-def make_job(name, ae, train_mice, variant, evaluate="heldout", ft_options=None):
+def make_job(name, ae, train_mice, variant, evaluate="heldout", ft_options=None,
+             kind="finetune", ae_n_output=256, same_as=None):
     """
     name        model name (= output folder name for its evaluation)
-    ae          autoencoder experiment name (shared between jobs that use it)
+    ae          autoencoder experiment name (shared between jobs that use it);
+                None for a fine-tuning on a random backbone
     train_mice  mice whose locations are used for training (AE and fine-tuning)
     variant     key of VARIANTS
-    evaluate    "heldout" (all mice not trained on) or a list of mice
+    evaluate    "heldout" (all mice not trained on), "all", or a list of mice
+    ft_options  extra run_finetune arguments (n_output, negative_weight, random_backbone)
+    kind        "finetune" (AE + fine-tuning), "ae_only" (the AE itself is the
+                model) or "untrained" (randomly initialised encoder)
+    ae_n_output encoder size of the AE (jobs sharing an AE must agree)
+    same_as     name of a job trained identically: its model is reused
+                (copied) instead of training again
     """
     return {
         "name": name,
@@ -110,6 +121,9 @@ def make_job(name, ae, train_mice, variant, evaluate="heldout", ft_options=None)
         "variant": variant,
         "evaluate": evaluate,
         "ft_options": ft_options or {},
+        "kind": kind,
+        "ae_n_output": ae_n_output,
+        "same_as": same_as,
     }
 
 
@@ -123,7 +137,57 @@ def comparison_jobs(manifest):
     return jobs
 
 
-JOB_LISTS = {"comparison": comparison_jobs}
+# Training variant of every paper model: set to the winner of the comparison
+# (compare_training_variants.py) before training any paper job.
+PAPER_VARIANT = None
+
+
+def paper_jobs(manifest):
+    """
+    Every model in the paper, all trained with PAPER_VARIANT:
+      DUM_paper            main model: all mice (W_ij = 10, n_output = 256),
+                           evaluated on all mice
+      DUM_W_ij=<w>         W_ij 1/5/15/20; same AE as DUM_paper
+      DUM_n_output=<n>     encoder size 8/32/128, each with its own AE
+      DUM_untrained        randomly initialised encoder (no training)
+      DUM_AE_only          the autoencoder of DUM_paper, not fine-tuned
+      DUM_finetuned_only   fine-tuning without AE pretraining (random backbone)
+      xval_m<k>_<r>        trained on k = 1/3/6/12 mice (3 subsets each, from
+                           xval_end_to_end.generate_manifest). The 3-mouse
+                           models are the comparison models of PAPER_VARIANT
+                           (same mice, same training), reused rather than
+                           retrained; the 18-mouse point is DUM_paper.
+    Every paper model is evaluated (inference) on all mice; which mice a
+    model was trained on is in MODELS_ROOT/<name>/model.json and
+    TRAINING_STATE_ROOT/manifest.json, so figures can mark training vs.
+    held-out points.
+    """
+    if PAPER_VARIANT is None:
+        raise SystemExit("Set PAPER_VARIANT (top of train_paper_models.py) to the training variant "
+                         "chosen with compare_training_variants.py first.")
+    v = PAPER_VARIANT
+    everyone = manifest["m18_1"]
+    jobs = [make_job("DUM_paper", "paper_ae", everyone, v, evaluate="all")]
+    for w in (1, 5, 15, 20):
+        jobs.append(make_job(f"DUM_W_ij={w}", "paper_ae", everyone, v, evaluate="all",
+                             ft_options={"negative_weight": float(w)}))
+    for n in (8, 32, 128):
+        jobs.append(make_job(f"DUM_n_output={n}", f"paper_ae_n{n}", everyone, v, evaluate="all",
+                             ft_options={"n_output": n}, ae_n_output=n))
+    jobs.append(make_job("DUM_untrained", "paper_ae_untrained", everyone, v, evaluate="all", kind="untrained"))
+    jobs.append(make_job("DUM_AE_only", "paper_ae", everyone, v, evaluate="all", kind="ae_only"))
+    jobs.append(make_job("DUM_finetuned_only", None, everyone, v, evaluate="all",
+                         ft_options={"random_backbone": True}))
+    for k in (1, 3, 6, 12):
+        for rep in (1, 2, 3):
+            key = f"m{k}_{rep}"
+            same_as = f"cmp_m3_{rep}_{v}" if k == 3 else None
+            jobs.append(make_job(f"xval_{key}", f"xval_{key}_ae", manifest[key], v, evaluate="all",
+                                 same_as=same_as))
+    return jobs
+
+
+JOB_LISTS = {"comparison": comparison_jobs, "paper": paper_jobs}
 
 
 # ── locations / paths ────────────────────────────────────────────────────────
@@ -268,7 +332,8 @@ def ensure_local_ae(ae):
     shutil.copy2(shared, os.path.join(local_ckpt_dir, f"ckpt_epoch_{epoch}"))
 
 
-def train_autoencoder(ae, mice, groups):
+def train_autoencoder(ae, mice, groups, n_output=256, epochs=AE_EPOCHS):
+    """Train (or, with epochs=0, just initialise) an autoencoder; True once it is available."""
     if read_status(ae).get("trained"):
         return True
     with batch_lock.try_lock(lock_path("train", ae), stale_after=TRAINING_STALE_AFTER_SECONDS) as acquired:
@@ -277,34 +342,67 @@ def train_autoencoder(ae, mice, groups):
             return False
         if read_status(ae).get("trained"):
             return True
-        print(f"=== training autoencoder {ae} on {mice}")
+        print(f"=== training autoencoder {ae} on {mice} (n_output {n_output}, {epochs} epochs)")
+        if epochs == 0:
+            torch.manual_seed(0)  # reproducible random initialisation (untrained baseline)
         dataset = ConcatDataset([AE_NeuropixelsDataset(d, batch_size=AE_BATCHSIZE)
                                  for d in training_locations(mice, groups)])
-        train_ae_mod.run_training(exp_name=ae, dataset=dataset, lr=AE_LR, total_epoch=AE_EPOCHS,
-                                  cont=True, batchsize=AE_BATCHSIZE, launch_tensorboard=False)
+        train_ae_mod.run_training(exp_name=ae, dataset=dataset, lr=AE_LR, total_epoch=epochs,
+                                  cont=True, batchsize=AE_BATCHSIZE, launch_tensorboard=False,
+                                  n_output=n_output)
         ckpt = test.latest_checkpoint(os.path.join(MODELEXP, "AE_experiments", ae, "ckpt"))
-        publish(ae, ckpt, {"kind": "autoencoder", "train_mice": sorted(mice)})
+        publish(ae, ckpt, {"kind": "autoencoder", "train_mice": sorted(mice), "n_output": n_output,
+                           "epochs": epochs})
         write_status(ae, trained=datetime.datetime.now().isoformat(timespec="seconds"),
-                     machine=socket.gethostname(), epochs=AE_EPOCHS, train_mice=sorted(mice))
+                     machine=socket.gethostname(), epochs=max(epochs, 1), train_mice=sorted(mice),
+                     n_output=n_output)
         plog.log_event(LOG_STAGE, ae, "autoencoder", "done")
         return True
+
+
+def _mark_trained(name, job, ckpt_path, kind):
+    publish(name, ckpt_path, {"kind": kind, "job": job})
+    write_status(name, trained=datetime.datetime.now().isoformat(timespec="seconds"),
+                 machine=socket.gethostname(), job=job)
+    plog.log_event(LOG_STAGE, name, "train", "done", kind if kind != "finetuned" else "")
 
 
 def train_job(job, groups):
     name = job["name"]
     if read_status(name).get("trained"):
         return
-    if not train_autoencoder(job["ae"], job["train_mice"], groups):
+    kind = job.get("kind", "finetune")
+
+    if job.get("same_as"):
+        # trained identically before (e.g. a comparison model): reuse it
+        source = job["same_as"]
+        if not read_status(source).get("trained"):
+            print(f"  {name}: waiting for {source} to be trained")
+            return
+        _mark_trained(name, job, os.path.join(published_dir(source), "model.pt"), f"same as {source}")
+        return
+
+    if kind in ("ae_only", "untrained"):
+        epochs = 0 if kind == "untrained" else AE_EPOCHS
+        if train_autoencoder(job["ae"], job["train_mice"], groups, job["ae_n_output"], epochs):
+            _mark_trained(name, job, os.path.join(published_dir(job["ae"]), "model.pt"), kind)
+        return
+
+    if job["ae"] is not None and not train_autoencoder(job["ae"], job["train_mice"], groups, job["ae_n_output"]):
         return  # AE still training elsewhere: try this job later
     with batch_lock.try_lock(lock_path("train", name), stale_after=TRAINING_STALE_AFTER_SECONDS) as acquired:
         if not acquired or read_status(name).get("trained"):
             return
         print(f"=== fine-tuning {name} ({job['variant']})")
         try:
-            ensure_local_ae(job["ae"])
+            if job["ae"] is not None:
+                ensure_local_ae(job["ae"])
             spec = dict(VARIANTS[job["variant"]])
             code = spec.pop("code")
             locations = training_locations(job["train_mice"], groups)
+            if code == "legacy" and (job["ft_options"] or job["ae"] is None):
+                raise RuntimeError("the original training code has no options (n_output, W_ij, random "
+                                   "backbone): sweeps and baselines need a variant with the fixed code")
             if code == "legacy":
                 # the original code reads the AE from an experiment of the same
                 # name, so its fine-tuning experiment is named after the AE
@@ -322,10 +420,7 @@ def train_job(job, groups):
                     launch_tensorboard=False, **spec,
                 )
             ckpt = test.latest_checkpoint(os.path.join(MODELEXP, "experiments", exp, "ckpt"))
-            publish(name, ckpt, {"kind": "finetuned", "job": job})
-            write_status(name, trained=datetime.datetime.now().isoformat(timespec="seconds"),
-                         machine=socket.gethostname(), job=job)
-            plog.log_event(LOG_STAGE, name, "train", "done")
+            _mark_trained(name, job, ckpt, "finetuned")
         except Exception as e:
             traceback.print_exc()
             plog.log_event(LOG_STAGE, name, "train", "failed", f"{type(e).__name__}: {e}", traceback.format_exc())
@@ -335,7 +430,13 @@ def train_job(job, groups):
 
 
 def evaluation_groups(job, groups):
-    mice = set(mouse_of(g) for g in groups) - set(job["train_mice"]) if job["evaluate"] == "heldout" else set(job["evaluate"])
+    all_mice = set(mouse_of(g) for g in groups)
+    if job["evaluate"] == "heldout":
+        mice = all_mice - set(job["train_mice"])
+    elif job["evaluate"] == "all":
+        mice = all_mice
+    else:
+        mice = set(job["evaluate"])
     return sorted(g for g in groups if mouse_of(g) in mice)
 
 
@@ -389,7 +490,8 @@ def print_status(jobs, groups):
         st = read_status(job["name"])
         eval_groups = evaluation_groups(job, groups)
         n_done = sum(eval_done(g, job["name"]) for g in eval_groups)
-        print(f"{job['name']:28s} {job['variant']:11s} {'yes' if read_status(job['ae']).get('trained') else 'no':4s} "
+        ae = "-" if job["ae"] is None else ("yes" if read_status(job["ae"]).get("trained") else "no")
+        print(f"{job['name']:28s} {job['variant']:11s} {ae:4s} "
               f"{st.get('trained', '-'):20s} {n_done}/{len(eval_groups)}")
 
 
