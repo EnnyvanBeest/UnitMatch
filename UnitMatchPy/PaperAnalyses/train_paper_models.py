@@ -260,21 +260,36 @@ def preprocess(groups):
             if not acquired or os.path.isfile(sentinel):
                 continue
             print(f"[{i + 1}/{len(groups)}] preprocessing {group}")
+            out = cache_dir(group)
+            # Written into a folder of this machine's own and moved into place
+            # only when complete, and only if no finished copy exists. Never
+            # delete `out`: right after another machine finishes, the share can
+            # still hide its .done for a moment (seen 2026-10-06: a second
+            # machine took a just-finished location for an unfinished attempt
+            # and started deleting it).
+            partial = f"{out}.partial_{socket.gethostname()}"
             try:
                 sess = base_batch._prepare_session(merged_dir)
                 if sess is None:
                     raise RuntimeError("session preparation failed (see pipeline log)")
-                out = cache_dir(group)
-                if os.path.isdir(out):
-                    shutil.rmtree(out)  # unfinished earlier attempt
-                os.makedirs(out)
+                if os.path.isdir(partial):
+                    shutil.rmtree(partial)  # this machine's own unfinished attempt
+                os.makedirs(partial)
                 param_fun.get_snippets(
-                    sess["waveform"], sess["channel_pos"], sess["session_id"], save_path=out,
+                    sess["waveform"], sess["channel_pos"], sess["session_id"], save_path=partial,
                     unit_ids=np.concatenate(sess["param"]["good_units"]).squeeze(),
                     param=sess["param"],
                 )
-                with open(sentinel, "w") as f:
-                    f.write("ok")
+                with open(os.path.join(partial, ".done"), "w") as f:
+                    f.write(socket.gethostname())
+                try:
+                    os.rename(partial, out)
+                except OSError:
+                    if not os.path.isfile(sentinel):
+                        raise
+                    shutil.rmtree(partial)  # another machine finished it first
+                    print(f"  {group} was finished by another machine; discarded this copy")
+                    continue
                 plog.log_event(LOG_STAGE, group, "preprocess", "done")
             except Exception as e:
                 traceback.print_exc()
