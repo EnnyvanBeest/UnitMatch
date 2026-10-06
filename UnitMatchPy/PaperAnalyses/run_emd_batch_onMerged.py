@@ -260,12 +260,14 @@ def aggregate_group(merged_dir):
     waveform = sess["waveform"]
     n_total = waveform.shape[0]
 
-    if len(manifest_sessions) != len(good_units):
-        print(
-            f"  WARNING: manifest has {len(manifest_sessions)} session(s) but "
-            f"_prepare_session loaded {len(good_units)}; re-run --stage. Skipping."
-        )
-        return
+    # Manifest sessions -> loaded sessions by folder, not by position: the
+    # loader can drop sessions the stage kept (it also removes units with
+    # non-finite waveforms, which --stage can't see without loading them), so
+    # EMD results are restricted to the units/sessions DUM and UMPy use.
+    pos_of_folder = {os.path.basename(os.path.normpath(d)): k for k, d in enumerate(param["KS_dirs"])}
+    not_loaded = [s["folder"] for s in manifest_sessions if s["folder"] not in pos_of_folder]
+    if not_loaded:
+        print(f"  Session folder(s) {not_loaded} staged but not loaded (no usable units): their EMD results are ignored.")
 
     # cluster_id -> local index within this session's good_units, per session
     id_to_pos = [
@@ -273,7 +275,8 @@ def aggregate_group(merged_dir):
     ]
 
     final_matches = np.zeros((n_total, n_total), dtype=bool)
-    n_pairs_total = len(manifest_sessions) * (len(manifest_sessions) - 1) // 2
+    n_loaded = len(manifest_sessions) - len(not_loaded)
+    n_pairs_total = n_loaded * (n_loaded - 1) // 2
     n_pairs_loaded = 0
     n_rows_skipped = 0
 
@@ -281,6 +284,9 @@ def aggregate_group(merged_dir):
         for r2 in range(r1 + 1, len(manifest_sessions)):
             folder1 = manifest_sessions[r1]["folder"]
             folder2 = manifest_sessions[r2]["folder"]
+            if folder1 not in pos_of_folder or folder2 not in pos_of_folder:
+                continue
+            k1, k2 = pos_of_folder[folder1], pos_of_folder[folder2]
             out_path = os.path.join(
                 emd_dir, f"result_{folder1}_{folder2}", "Output.mat"
             )
@@ -303,11 +309,11 @@ def aggregate_group(merged_dir):
                 pos1_in_all = int(row[2]) - 1  # col3: f1 label (1-based position in mwf1)
                 cid1 = int(cluster_ids_1[pos1_in_all])
                 cid2 = int(cluster_ids_2[pos2_in_all])
-                if cid1 not in id_to_pos[r1] or cid2 not in id_to_pos[r2]:
+                if cid1 not in id_to_pos[k1] or cid2 not in id_to_pos[k2]:
                     n_rows_skipped += 1
                     continue
-                g1 = session_switch[r1] + id_to_pos[r1][cid1]
-                g2 = session_switch[r2] + id_to_pos[r2][cid2]
+                g1 = session_switch[k1] + id_to_pos[k1][cid1]
+                g2 = session_switch[k2] + id_to_pos[k2][cid2]
                 final_matches[g1, g2] = True
                 final_matches[g2, g1] = True
 
