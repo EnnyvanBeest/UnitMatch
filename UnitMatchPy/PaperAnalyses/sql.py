@@ -164,10 +164,10 @@ if __name__ == "__main__":
     models = [
               "DeepUnitMatch",
             #   "DUM_NewModelAug2026",
-              "UMPy", 
+            #   "UMPy", 
             #   "EMD", "DANT", "DANT_no_functional",
             #   "DUM_totalscore", "UMPy_simscore",
-              "DUM_nodrift", "UMPy_nodrift",
+            #   "DUM_nodrift", "UMPy_nodrift",
             #   "DUM_maxdist=20", "DUM_maxdist=50", "DUM_maxdist=100", "DUM_maxdist=inf", 
             #   "UMPy_maxdist=20", "UMPy_maxdist=50", "UMPy_maxdist=100", "UMPy_maxdist=inf",
             #   "UMPy_spatialonly", "DUM_spatialonly",
@@ -179,8 +179,8 @@ if __name__ == "__main__":
             #   "exclude_mice_m12_1_after_ae_and_finetune", "exclude_mice_m12_2_after_ae_and_finetune", "exclude_mice_m12_3_after_ae_and_finetune",
             #   "xval_m3_1", "xval_m3_2", "xval_m3_3",
             #   "xval_m6_1", "xval_m6_2", "xval_m6_3",
-            #   "xval_m12_1", "xval_m12_2", "xval_m12_3",
-            #   "xval_m18_1",
+              "xval_m12_1", "xval_m12_2", "xval_m12_3",
+              "xval_m18_1",
               ]
 
     for mouse in os.listdir(data_root):

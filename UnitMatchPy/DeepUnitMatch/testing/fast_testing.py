@@ -630,7 +630,7 @@ if __name__ == "__main__":
             #   "DANT", 
             #   "DANT_no_functional",
             #   "DUM_totalscore", "UMPy_simscore",
-              "DUM_nodrift", "UMPy_nodrift",
+            #   "DUM_nodrift", "UMPy_nodrift",
             #   "UMPy_spatialonly", "DUM_spatialonly",
             #   "DUM_maxdist=20", "DUM_maxdist=50", "DUM_maxdist=100", "DUM_maxdist=inf", 
             #   "UMPy_maxdist=20", "UMPy_maxdist=50", "UMPy_maxdist=100", "UMPy_maxdist=inf",
@@ -639,13 +639,13 @@ if __name__ == "__main__":
             #   "DUM_untrained", "DUM_unfinetuned", "DUM_finetuned_only",
             #   "xval_m3_1", "xval_m3_2", "xval_m3_3",
             #   "xval_m6_1", "xval_m6_2", "xval_m6_3",
-            #   "xval_m12_1", "xval_m12_2", "xval_m12_3",
-            #   "xval_m18_1",
+              "xval_m12_1", "xval_m12_2", "xval_m12_3",
+              "xval_m18_1",
               ]
 
     col_names = [f"UM Probabilities_{model}" for model in models]
 
-    # test_models_optimized(col_names, fixed_n=False)
+    test_models_optimized(col_names, fixed_n=False)
     test_models_optimized(col_names, fixed_n=True)
     end = time.time()
     print(f"Total time taken: {end - start} seconds")
