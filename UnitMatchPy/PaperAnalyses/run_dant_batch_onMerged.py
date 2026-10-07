@@ -82,6 +82,7 @@
 
 import os
 import sys
+import shutil
 import datetime
 import traceback
 
@@ -179,6 +180,81 @@ DANT_VARIANTS = {
         "clustering_features": ["Waveform"],
     },
 }
+
+# "_fixed" variants: the same two configurations with one robustness fix
+# (see _compute_motion_with_fallback). pyDANT crashes when a clustering round
+# yields no cross-session unit pairs to estimate drift from (an empty index
+# array in computeMotion); the fixed variants then keep the current drift
+# estimate -- no drift at the start, pyDANT's own initial motion -- and
+# continue, as pyDANT itself does when a drift correction doesn't help.
+# Where the base variant ran without error the fixed one is a copy of it, so
+# the two differ only where the fallback applies (pyDANT is not
+# deterministic: a rerun would differ slightly everywhere).
+FIXED_SUFFIX = "_fixed"
+for _base in list(DANT_VARIANTS):
+    DANT_VARIANTS[_base + FIXED_SUFFIX] = dict(DANT_VARIANTS[_base], drift_fallback=True, base=_base)
+
+import pyDANT.MotionEstimation as _dant_motion
+from pyDANT.utils import Motion as _DantMotion
+
+_original_compute_motion = _dant_motion.computeMotion
+_fallback_events = []  # filled during a fixed-variant run, reported in its log entry
+
+
+def _n_drift_pairs(user_settings):
+    """Number of cross-session pairs pyDANT's computeMotion would fit drift to (same selection)."""
+    data, out = user_settings["path_to_data"], user_settings["output_folder"]
+    sessions = np.load(os.path.join(data, "session_index.npy"))
+    similarity = np.load(os.path.join(out, "SimilarityMatrix.npy"))
+    clusters = np.load(os.path.join(out, "ClusterMatrix.npy"))
+    threshold = np.load(os.path.join(out, "SimilarityThreshold.npy"))
+    pairs = np.load(os.path.join(out, "SimilarityPairs.npy"))
+    good = np.logical_and(similarity > threshold, clusters > 0).ravel()
+    idx = pairs[:, 0] * similarity.shape[0] + pairs[:, 1]
+    return int(np.sum(good[idx] & (sessions[pairs[:, 0]] != sessions[pairs[:, 1]])))
+
+
+def _compute_motion_with_fallback(user_settings):
+    if _n_drift_pairs(user_settings) > 0:
+        return _original_compute_motion(user_settings)
+    out = user_settings["output_folder"]
+    if os.path.isfile(os.path.join(out, "motion_constant.npy")):
+        motion = _DantMotion.load(out)  # estimate of the previous round
+    else:
+        n_session = int(np.max(np.load(os.path.join(user_settings["path_to_data"], "session_index.npy"))))
+        motion = _DantMotion(num_sessions=n_session)  # no drift (pyDANT's initial motion)
+    print("  [drift fallback] no cross-session pairs to estimate drift from: keeping the current drift estimate")
+    _fallback_events.append("drift")
+    motion.save(out)
+    return motion
+
+
+def _auto_curation_allowing_empty():
+    """
+    pyDANT's autoCuration with one check relaxed: after curation it asserts
+    that the cluster labels are 1..n plus -1 (unmatched), which fails when
+    curation removes every cluster (all units -1) -- e.g. sparse locations
+    where every cluster is split into single units. That case is a valid
+    result (no matches); everything else is pyDANT's own code, unchanged.
+    """
+    import inspect
+    import pyDANT.AutoCuration as dant_curation
+
+    check = "    assert len(np.unique(idx_cluster_hdbscan)) == np.max(idx_cluster_hdbscan)+1"
+    src = inspect.getsource(dant_curation.autoCuration)
+    if src.count(check) != 1:
+        raise RuntimeError("pyDANT's autoCuration changed: review the empty-result patch")
+    src = src.replace(check, "    assert np.all(idx_cluster_hdbscan == -1) or "
+                             "len(np.unique(idx_cluster_hdbscan)) == np.max(idx_cluster_hdbscan)+1")
+    namespace = dict(dant_curation.__dict__)
+    exec(compile(src, dant_curation.__file__, "exec"), namespace)
+    return namespace["autoCuration"]
+
+
+import pyDANT.Runner as _dant_runner
+
+_original_auto_curation = _dant_runner.autoCuration
+_auto_curation_empty_ok = _auto_curation_allowing_empty()
 
 
 # ── path helpers ─────────────────────────────────────────────────────────────
@@ -343,6 +419,22 @@ def score_and_save_variant(merged_dir, variant, sess, n_units):
     output_dir = get_dant_raw_output_dir(merged_dir, variant)
     os.makedirs(dant_dir, exist_ok=True)
 
+    spec = DANT_VARIANTS[variant]
+    if spec.get("drift_fallback"):
+        base_dir = get_dant_dir(merged_dir, spec["base"])
+        if not dant_results_exist(merged_dir, spec["base"]):
+            raise RuntimeError(f"{spec['base']} has no results yet: run it before {variant}")
+        if not os.path.isfile(os.path.join(base_dir, "DANT_FAILURE.txt")):
+            # the base variant ran without error: the fallback can't change it
+            shutil.copytree(base_dir, dant_dir, dirs_exist_ok=True)
+            with open(os.path.join(dant_dir, "SAME_AS_BASE.txt"), "w") as f:
+                f.write(f"copy of {spec['base']}: it ran without error, so the drift fallback does not apply\n")
+            plog.log_event(LOG_STAGE, group_key(merged_dir), variant, "done", f"same as {spec['base']}")
+            print(f"  [{variant}] {spec['base']} ran without error: copied")
+            return
+        if os.path.isdir(output_dir):
+            shutil.rmtree(output_dir)  # no stale motion files from an earlier attempt
+
     input_dir = get_dant_shared_input_dir(merged_dir)
     dant_settings = make_dant_settings(input_dir, output_dir, variant)
     print(f"  [{variant}] Running pyDANT (features: clustering={dant_settings['clustering']['features']}) ...")
@@ -358,8 +450,16 @@ def score_and_save_variant(merged_dir, variant, sess, n_units):
     # the same way on every future run), record it as zero matches -- the
     # same fair-comparison treatment any model finding zero matches gets.
     failure_reason = None
+    _fallback_events.clear()
+    if spec.get("drift_fallback"):
+        _dant_motion.computeMotion = _compute_motion_with_fallback
+        _dant_runner.autoCuration = _auto_curation_empty_ok
     try:
-        runDANT(dant_settings)
+        try:
+            runDANT(dant_settings)
+        finally:
+            _dant_motion.computeMotion = _original_compute_motion
+            _dant_runner.autoCuration = _original_auto_curation
 
         cluster_matrix_path = os.path.join(output_dir, "ClusterMatrix.npy")
         if not os.path.isfile(cluster_matrix_path):
@@ -369,6 +469,10 @@ def score_and_save_variant(merged_dir, variant, sess, n_units):
             raise RuntimeError(
                 f"ClusterMatrix.npy shape {final_matches.shape} != expected ({n_units}, {n_units})"
             )
+    except MemoryError:
+        # the machine ran out of memory: not a result of the method, so no
+        # output (and no sentinel) -- the location is retried on the next run
+        raise
     except Exception as e:
         print(f"  [{variant}] pyDANT failed ({e}); recording as zero matches for a fair comparison.")
         traceback.print_exc()
@@ -501,10 +605,16 @@ def score_and_save_variant(merged_dir, variant, sess, n_units):
         fig.savefig(os.path.join(dant_dir, "FunctionalScores.png"), dpi=150)
         plt.close(fig)
 
-    plog.log_event(
-        LOG_STAGE, group_key(merged_dir), variant, "done",
-        f"pyDANT failed, recorded as zero matches: {failure_reason}" if failure_reason else "",
-    )
+    notes = []
+    n_drift = _fallback_events.count("drift")
+    if n_drift:
+        notes.append(f"drift fallback used in {n_drift} round(s)")
+    if notes:
+        with open(os.path.join(dant_dir, "DRIFT_FALLBACK.txt"), "w") as f:
+            f.write("; ".join(notes) + "\n")
+    if failure_reason:
+        notes.append(f"pyDANT failed, recorded as zero matches: {failure_reason}")
+    plog.log_event(LOG_STAGE, group_key(merged_dir), variant, "done", "; ".join(notes))
     print(f"  [{variant}] Results saved to: {dant_dir}")
 
 
