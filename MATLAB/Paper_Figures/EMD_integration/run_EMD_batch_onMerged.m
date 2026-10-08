@@ -249,11 +249,14 @@ parfor p = 1:nPairs
         fprintf('  FAILED %s vs %s: %s\n', folder1, folder2, ME.message);
         disp(getReport(ME));
         % marker for the Python aggregator: this pair ran and failed (counted
-        % as zero matches), as opposed to not having run yet
-        if ~isfolder(result_dir), mkdir(result_dir); end
-        fid = fopen(fullfile(result_dir, 'EMD_FAILED.txt'), 'w');
-        fprintf(fid, '%s\n', ME.message);
-        fclose(fid);
+        % as zero matches), as opposed to not having run yet. Running out of
+        % memory is the machine, not EMD: no marker, so the pair is retried.
+        if ~strcmp(ME.identifier, 'MATLAB:nomem')
+            if ~isfolder(result_dir), mkdir(result_dir); end
+            fid = fopen(fullfile(result_dir, 'EMD_FAILED.txt'), 'w');
+            fprintf(fid, '%s\n', ME.message);
+            fclose(fid);
+        end
     end
 end
 end
