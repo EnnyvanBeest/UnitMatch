@@ -44,6 +44,7 @@ import os
 import shutil
 import socket
 import sys
+import time
 import traceback
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -254,6 +255,31 @@ def publish(name, ckpt_path, extra=None):
 # ── stage 1: preprocessing ───────────────────────────────────────────────────
 
 
+def _move_into_place(partial, out, sentinel, attempts=6, wait_seconds=20):
+    """
+    Rename a finished partial folder to `out`; returns True if another machine
+    had already finished it (this copy is then deleted). On the share a
+    freshly written folder can briefly be held by another process (virus
+    scanner, indexer) and the rename fails with "Access is denied" (CB016
+    IMRO_1, 2026-10-11), so a PermissionError is retried a few times.
+    """
+    for attempt in range(attempts):
+        if os.path.isfile(sentinel):
+            shutil.rmtree(partial, ignore_errors=True)
+            return True
+        try:
+            os.rename(partial, out)
+            return False
+        except PermissionError:
+            if attempt == attempts - 1:
+                raise
+            print(f"  folder still in use, retrying the move in {wait_seconds} s")
+            time.sleep(wait_seconds)
+        except OSError:
+            if not os.path.isfile(sentinel):
+                raise
+
+
 def preprocess(groups):
     """DNN snippets of every location (param_fun.get_snippets) into cfg.TRAINING_CACHE."""
     for i, (group, merged_dir) in enumerate(sorted(groups.items())):
@@ -286,12 +312,7 @@ def preprocess(groups):
                 )
                 with open(os.path.join(partial, ".done"), "w") as f:
                     f.write(socket.gethostname())
-                try:
-                    os.rename(partial, out)
-                except OSError:
-                    if not os.path.isfile(sentinel):
-                        raise
-                    shutil.rmtree(partial)  # another machine finished it first
+                if _move_into_place(partial, out, sentinel):
                     print(f"  {group} was finished by another machine; discarded this copy")
                     continue
                 plog.log_event(LOG_STAGE, group, "preprocess", "done")
