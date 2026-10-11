@@ -1,3 +1,5 @@
+# SUPERSEDED (October 2026 rerun): the n_output sweep is PaperAnalyses/train_paper_models.py (DUM_n_output=*).
+# Kept for reference; not part of the pipeline.
 """Autoencoder latent feature dimension experiments.
 
 This script sweeps SpatioTemporalAutoEncoder_V2.n_output while keeping changes

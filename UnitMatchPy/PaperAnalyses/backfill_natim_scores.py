@@ -1,3 +1,5 @@
+# SUPERSEDED (October 2026 rerun): every matching run computes the natural-image score itself; only needed for outputs from before that.
+# Kept for reference; not part of the pipeline.
 # Backfill script: walks every completed DeepUnitMatch/UMPy output under
 # BASE_OUTPUT and adds the natim_correlations functional score + AUC wherever
 # it's missing, without re-running the rest of the pipeline (DUM/UMPy

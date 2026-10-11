@@ -1,3 +1,5 @@
+# SUPERSEDED (October 2026 rerun): all paper models are trained by train_paper_models.py (training variant chosen with compare_training_variants.py).
+# Kept for reference; not part of the pipeline.
 # Wrapper: preprocess the full merged-data corpus and train a new
 # DeepUnitMatch AE + finetuned model from ALL locations found in it.
 #

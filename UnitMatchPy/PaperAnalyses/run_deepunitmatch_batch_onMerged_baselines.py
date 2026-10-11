@@ -1,3 +1,5 @@
+# SUPERSEDED (October 2026 rerun): the baselines are trained and evaluated by train_paper_models.py (--jobs paper: DUM_untrained, DUM_AE_only, DUM_finetuned_only).
+# Kept for reference; not part of the pipeline.
 # Batch wrapper: runs DeepUnitMatch on the *merged* dataset (see
 # run_deepunitmatch_batch_onMerged.py for how that tree is built and how
 # sessions/good units are derived) once per baseline checkpoint under

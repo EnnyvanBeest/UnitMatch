@@ -1,3 +1,5 @@
+# SUPERSEDED (October 2026 rerun): see PaperAnalyses/train_paper_models.py (xval_m*).
+# Kept for reference; not part of the pipeline.
 """Train DeepUnitMatch with 1/18, 6/18, or 12/18 of the mice.
 
 The experiment follows ``AE_params_experiment.py``: each mouse subset is used

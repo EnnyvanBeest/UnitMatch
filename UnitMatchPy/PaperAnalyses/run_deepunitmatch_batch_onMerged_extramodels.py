@@ -1,3 +1,5 @@
+# SUPERSEDED (October 2026 rerun): W_ij and n_output models are trained and evaluated by train_paper_models.py (--jobs paper: DUM_W_ij=*, DUM_n_output=*).
+# Kept for reference; not part of the pipeline.
 # Batch wrapper: runs DeepUnitMatch on the *merged* dataset (see
 # run_deepunitmatch_batch_onMerged.py for how that tree is built and how
 # sessions/good units are derived) once per "extra" trained DNN checkpoint

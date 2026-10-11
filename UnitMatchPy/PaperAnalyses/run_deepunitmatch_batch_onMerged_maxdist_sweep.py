@@ -207,8 +207,7 @@ def main():
                 continue
 
             if model is None and any(method == "DUM" for _, method in pending):
-                print("Loading DeepUnitMatch model …")
-                model = test.load_trained_model(device=base_batch.DEVICE)
+                model = base_batch.load_dum_model()  # the paper model (pipeline_config.PAPER_MODEL_PATH)
 
             for max_dist, method in pending:
                 save_dir = get_maxdist_save_dir(merged_dir, max_dist, method)

@@ -137,9 +137,10 @@ def comparison_jobs(manifest):
     return jobs
 
 
-# Training variant of every paper model: set to the winner of the comparison
-# (compare_training_variants.py) before training any paper job.
-PAPER_VARIANT = None
+# Training variant of every paper model: the winner of the comparison
+# (compare_training_variants.py, report training_comparison_20261009_152150 in
+# cfg.REPORTS_DIR: C_v2 significantly worse than B_fixed; B_fixed ~ A_original).
+PAPER_VARIANT = "B_fixed"
 
 
 def paper_jobs(manifest):
@@ -157,7 +158,8 @@ def paper_jobs(manifest):
                            models are the comparison models of PAPER_VARIANT
                            (same mice, same training), reused rather than
                            retrained; the 18-mouse point is DUM_paper.
-    Every paper model is evaluated (inference) on all mice; which mice a
+    Every paper model is evaluated (inference) on all mice -- DUM_paper by
+    step 4 (run_deepunitmatch_batch_onMerged.py -> DeepUnitMatch/); which mice a
     model was trained on is in MODELS_ROOT/<name>/model.json and
     TRAINING_STATE_ROOT/manifest.json, so figures can mark training vs.
     held-out points.
@@ -167,7 +169,9 @@ def paper_jobs(manifest):
                          "chosen with compare_training_variants.py first.")
     v = PAPER_VARIANT
     everyone = manifest["m18_1"]
-    jobs = [make_job("DUM_paper", "paper_ae", everyone, v, evaluate="all")]
+    # DUM_paper is not evaluated here: it is the model of every step-4 run
+    # (cfg.PAPER_MODEL_PATH), whose results are the DeepUnitMatch/ folders
+    jobs = [make_job("DUM_paper", "paper_ae", everyone, v, evaluate=[])]
     for w in (1, 5, 15, 20):
         jobs.append(make_job(f"DUM_W_ij={w}", "paper_ae", everyone, v, evaluate="all",
                              ft_options={"negative_weight": float(w)}))

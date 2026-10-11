@@ -140,8 +140,7 @@ def main():
                 continue
 
             if model is None and "DUM_nodrift" in pending:
-                print("Loading DeepUnitMatch model …")
-                model = test.load_trained_model(device=base_batch.DEVICE)
+                model = base_batch.load_dum_model()  # the paper model (pipeline_config.PAPER_MODEL_PATH)
 
             for condition in pending:
                 save_dir = get_nodrift_save_dir(merged_dir, condition)

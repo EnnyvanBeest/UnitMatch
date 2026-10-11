@@ -1,3 +1,5 @@
+# SUPERSEDED (October 2026 rerun): the W_ij sweep is PaperAnalyses/train_paper_models.py (DUM_W_ij=*).
+# Kept for reference; not part of the pipeline.
 """Contrastive-loss off-diagonal weight sensitivity experiments.
 
 This script is intentionally self-contained in Rebuttal/ so the package training

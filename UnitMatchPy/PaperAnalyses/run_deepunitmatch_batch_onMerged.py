@@ -644,14 +644,30 @@ def run_dum_core(sess, save_dir, model, label="DeepUnitMatch", niter=2):
     )
 
 
+def load_dum_model(path=None):
+    """
+    The DeepUnitMatch model of the step-4 runs on the merged data: by default
+    the main paper model (cfg.PAPER_MODEL_PATH, trained by
+    train_paper_models.py --jobs paper). Fails loudly when it isn't there,
+    rather than silently falling back to another model.
+    """
+    path = path or cfg.PAPER_MODEL_PATH
+    if not os.path.isfile(path):
+        raise FileNotFoundError(
+            f"{path} not found: train the paper model first "
+            "(python train_paper_models.py --jobs paper --stage train --only DUM_paper)"
+        )
+    print(f"Loading DeepUnitMatch model {path} …")
+    return test.load_trained_model(device=DEVICE, read_path=path)
+
+
 def run_deep_unit_match(sess, model=None):
-    """Run DeepUnitMatch (default trained model) for one pre-loaded session."""
+    """Run DeepUnitMatch (the paper model unless given) for one pre-loaded session."""
     merged_dir = sess["merged_dir"]
     save_dir = get_save_dir(merged_dir)
 
     if model is None:
-        print("Loading DeepUnitMatch model …")
-        model = test.load_trained_model(device=DEVICE)
+        model = load_dum_model()
 
     run_dum_core(sess, save_dir, model, label="DeepUnitMatch")
 
@@ -668,8 +684,7 @@ def legacy_results_exist(merged_dir):
 def run_deep_unit_match_legacy(sess, model=None):
     """Previous DeepUnitMatch-specific pipeline (run_deep_unit_match_core), saved to DUM_legacy/."""
     if model is None:
-        print("Loading DeepUnitMatch model …")
-        model = test.load_trained_model(device=DEVICE)
+        model = load_dum_model()
     run_deep_unit_match_core(
         sess, get_legacy_save_dir(sess["merged_dir"]), model, label=LEGACY_SUBFOLDER
     )
@@ -1429,6 +1444,16 @@ def parse_args():
         action="store_true",
         help=f"Also run the previous DeepUnitMatch-specific pipeline into {LEGACY_SUBFOLDER}/.",
     )
+    parser.add_argument(
+        "--model",
+        default=None,
+        help="DeepUnitMatch checkpoint (default: the paper model, pipeline_config.PAPER_MODEL_PATH).",
+    )
+    parser.add_argument(
+        "--umpy-only",
+        action="store_true",
+        help="Only run UMPy (needs no DeepUnitMatch model, e.g. before the paper model is trained).",
+    )
     return parser.parse_args()
 
 
@@ -1447,16 +1472,15 @@ def main():
 
     print(f"Found {len(groups)} group(s).\n")
 
-    print("Loading DeepUnitMatch model …")
-    model = test.load_trained_model(device=DEVICE)
+    model = None if args.umpy_only else load_dum_model(args.model)
 
     for i, merged_dir in enumerate(groups):
         print(f"\n[{i + 1}/{len(groups)}] {merged_dir}")
 
         def todo():
-            run_deep = not results_exist(merged_dir)
+            run_deep = not args.umpy_only and not results_exist(merged_dir)
             run_ump = not umpy_results_exist(merged_dir)
-            run_legacy = args.with_legacy and not legacy_results_exist(merged_dir)
+            run_legacy = args.with_legacy and not args.umpy_only and not legacy_results_exist(merged_dir)
             return run_deep, run_ump, run_legacy
 
         if not any(todo()):
@@ -1486,7 +1510,7 @@ def main():
                 except Exception as e:
                     print(f"  DeepUnitMatch FAILED: {e}")
                     traceback.print_exc()
-            else:
+            elif not args.umpy_only:
                 print(
                     f"  Skipping DeepUnitMatch (results exist and are fresh): {get_save_dir(merged_dir)}"
                 )

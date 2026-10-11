@@ -54,10 +54,27 @@ DATABASE_PATH = os.path.join(ANALYSIS_OUTPUT, "matchtables.db")
 RESULTS_DIR = os.path.join(ANALYSIS_OUTPUT, "results")
 FIGURES_DIR = os.path.join(ANALYSIS_OUTPUT, "figures")
 REPORTS_DIR = os.path.join(ANALYSIS_OUTPUT, "pipeline_reports")
+# The DeepUnitMatch model of every step-4 run on the merged data
+# (DeepUnitMatch/, DUM_legacy/, DUM_nodrift/, DUM_maxdist=*/ ...): the main
+# paper model trained by train_paper_models.py (--jobs paper). Step 1 instead
+# uses the previous production model (DeepUnitMatch/utils/model).
+PAPER_MODEL_PATH = os.path.join(MODELS_ROOT, "DUM_paper", "model.pt")
+
 # step 6: default models (output folder names) that sql.py puts into the
 # database and fast_testing.py evaluates; both take --models to override.
-COMPARISON_MODELS = ["DeepUnitMatch", "UMPy", "DUM_legacy", "EMD", "DANT", "DANT_no_functional",
-                     "DANT_fixed", "DANT_no_functional_fixed"]
+COMPARISON_MODELS = [
+    # main comparison (run_deepunitmatch_batch_onMerged.py, EMD, DANT)
+    "DeepUnitMatch", "UMPy", "DUM_legacy", "EMD",
+    "DANT", "DANT_no_functional", "DANT_fixed", "DANT_no_functional_fixed",
+    # pipeline conditions (nodrift, maxdist sweep, spatial-only runners)
+    "DUM_nodrift", "UMPy_nodrift", "UMPy_spatialonly",
+    *[f"{m}_maxdist={d}" for d in ("20", "50", "100", "inf") for m in ("DUM", "UMPy")],
+    # paper models (train_paper_models.py --jobs paper; DUM_paper = DeepUnitMatch)
+    *[f"DUM_W_ij={w}" for w in (1, 5, 15, 20)],
+    *[f"DUM_n_output={n}" for n in (8, 32, 128)],
+    "DUM_untrained", "DUM_AE_only", "DUM_finetuned_only",
+    *[f"xval_m{k}_{r}" for k in (1, 3, 6, 12) for r in (1, 2, 3)],
+]
 
 # Batch scripts skip work whose output sentinel already exists. With fresh
 # output roots per run this stays None ("skip if present"); set a

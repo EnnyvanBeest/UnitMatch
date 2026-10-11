@@ -1,3 +1,5 @@
+# SUPERSEDED (October 2026 rerun): the cross-validation models are trained and evaluated by PaperAnalyses/train_paper_models.py (xval_m*). generate_manifest() here is still used for the mouse subsets.
+# Kept for reference; not part of the pipeline.
 """End-to-end mouse-count cross-validation: train + immediately evaluate.
 
 Redo of Exclude_mice_experiment.py (which trained on {1, 6, 12}-mouse subsets

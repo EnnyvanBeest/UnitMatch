@@ -1,3 +1,5 @@
+# SUPERSEDED (October 2026 rerun): the paper model is trained by train_paper_models.py and used by run_deepunitmatch_batch_onMerged.py (pipeline_config.PAPER_MODEL_PATH).
+# Kept for reference; not part of the pipeline.
 # Batch wrapper: runs DeepUnitMatch on the *merged* dataset (see
 # run_deepunitmatch_batch_onMerged.py for how that tree is built and how
 # sessions/good units are derived) using the new checkpoint trained by
