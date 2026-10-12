@@ -66,9 +66,11 @@ set(axISI,'XScale','log');
     function loadData()
         umFile = fullfile(SaveDir, 'UnitMatch.mat');
         if ~isfile(umFile)
-            error('UnitMatch.mat not found in %s', SaveDir);
+            % error('UnitMatch.mat not found in %s', SaveDir);
+            [~, UMparam, UniqueIDConversion, WaveformInfo] = loadPythonOutputForMatlab(SaveDir);
+        else
+            load(umFile, 'UniqueIDConversion', 'WaveformInfo', 'UMparam');
         end
-        load(umFile, 'UniqueIDConversion', 'WaveformInfo', 'UMparam');
         UIDList = unique(UniqueIDConversion.UniqueID(logical(UniqueIDConversion.GoodID)));
         currentIdx = 1;
     end
