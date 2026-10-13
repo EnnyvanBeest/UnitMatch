@@ -50,7 +50,6 @@ MODELS_ROOT = os.path.join(MERGED_ROOT, "models")
 
 # step 4 / 6: every matching output on the merged data, plus everything derived from it.
 ANALYSIS_OUTPUT = os.path.join(SHARE_ROOT, f"{RUN_NAME}_OnMergedData")
-DATABASE_PATH = os.path.join(ANALYSIS_OUTPUT, "matchtables.db")
 RESULTS_DIR = os.path.join(ANALYSIS_OUTPUT, "results")
 FIGURES_DIR = os.path.join(ANALYSIS_OUTPUT, "figures")
 REPORTS_DIR = os.path.join(ANALYSIS_OUTPUT, "pipeline_reports")
@@ -60,21 +59,40 @@ REPORTS_DIR = os.path.join(ANALYSIS_OUTPUT, "pipeline_reports")
 # uses the previous production model (DeepUnitMatch/utils/model).
 PAPER_MODEL_PATH = os.path.join(MODELS_ROOT, "DUM_paper", "model.pt")
 
-# step 6: default models (output folder names) that sql.py puts into the
-# database and fast_testing.py evaluates; both take --models to override.
-COMPARISON_MODELS = [
+# step 6: sql.py puts the match tables of a group of models (output folder
+# names) into one SQLite database per group, matchtables_<group>.db, and
+# fast_testing.py evaluates a group from its database (both: --group).
+# One database for every model would be far too large (the previous run's
+# per-group databases were 40-130 GB each). Every group starts with
+# DeepUnitMatch: fast_testing always reads its natural-image and
+# reference-population columns, and its free-N match count sets N for the
+# fixed-N comparison.
+MODEL_GROUPS = {
     # main comparison (run_deepunitmatch_batch_onMerged.py, EMD, DANT)
-    "DeepUnitMatch", "UMPy", "DUM_legacy", "EMD",
-    "DANT", "DANT_no_functional", "DANT_fixed", "DANT_no_functional_fixed",
-    # pipeline conditions (nodrift, maxdist sweep, spatial-only runners)
-    "DUM_nodrift", "UMPy_nodrift", "UMPy_spatialonly",
-    *[f"{m}_maxdist={d}" for d in ("20", "50", "100", "inf") for m in ("DUM", "UMPy")],
+    "algo": ["DeepUnitMatch", "UMPy", "DUM_legacy", "EMD",
+             "DANT", "DANT_no_functional", "DANT_fixed", "DANT_no_functional_fixed"],
     # paper models (train_paper_models.py --jobs paper; DUM_paper = DeepUnitMatch)
-    *[f"DUM_W_ij={w}" for w in (1, 5, 15, 20)],
-    *[f"DUM_n_output={n}" for n in (8, 32, 128)],
-    "DUM_untrained", "DUM_AE_only", "DUM_finetuned_only",
-    *[f"xval_m{k}_{r}" for k in (1, 3, 6, 12) for r in (1, 2, 3)],
-]
+    "models": ["DeepUnitMatch", *[f"DUM_W_ij={w}" for w in (1, 5, 15, 20)],
+               *[f"DUM_n_output={n}" for n in (8, 32, 128)],
+               "DUM_untrained", "DUM_AE_only", "DUM_finetuned_only"],
+    # pipeline conditions
+    "nodrift": ["DeepUnitMatch", "UMPy", "DUM_nodrift", "UMPy_nodrift"],
+    "spatial_only": ["DeepUnitMatch", "UMPy", "UMPy_spatialonly"],
+    "maxdist": ["DeepUnitMatch", "UMPy",
+                *[f"{m}_maxdist={d}" for d in ("20", "50", "100", "inf") for m in ("DUM", "UMPy")]],
+    # mouse-count cross-validation (the 18-mouse point is DeepUnitMatch)
+    "xval_1": ["DeepUnitMatch", *[f"xval_m1_{r}" for r in (1, 2, 3)]],
+    "xval_3-6": ["DeepUnitMatch", *[f"xval_m{k}_{r}" for k in (3, 6) for r in (1, 2, 3)]],
+    "xval_12": ["DeepUnitMatch", *[f"xval_m12_{r}" for r in (1, 2, 3)]],
+}
+
+
+def database_path(group):
+    """SQLite database of one model group (see MODEL_GROUPS)."""
+    return os.path.join(ANALYSIS_OUTPUT, f"matchtables_{group}.db")
+
+
+DATABASE_PATH = database_path("algo")  # the main comparison
 
 # Batch scripts skip work whose output sentinel already exists. With fresh
 # output roots per run this stays None ("skip if present"); set a

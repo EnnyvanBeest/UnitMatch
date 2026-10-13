@@ -163,13 +163,17 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Put the MatchTable.csv of every model and location into one SQLite table per location."
     )
-    parser.add_argument("--models", nargs="+", default=cfg.COMPARISON_MODELS,
-                        help="model folder names (default: pipeline_config.COMPARISON_MODELS)")
-    parser.add_argument("--db", default=DATABASE_PATH, help="SQLite database to write")
+    parser.add_argument("--group", choices=sorted(cfg.MODEL_GROUPS), default="algo",
+                        help="model group (pipeline_config.MODEL_GROUPS); written to matchtables_<group>.db")
+    parser.add_argument("--models", nargs="+", default=None,
+                        help="override the group's model folder names")
+    parser.add_argument("--db", default=None, help="override the group's database path")
     parser.add_argument("--data-root", default=PROJECT_ROOT, help="analysis output root holding the model folders")
     args = parser.parse_args()
     data_root = args.data_root
-    models = args.models
+    models = args.models or cfg.MODEL_GROUPS[args.group]
+    args.db = args.db or cfg.database_path(args.group)
+    print(f"group {args.group}: {models} -> {args.db}")
 
     for mouse in os.listdir(data_root):
         if os.path.isdir(os.path.join(data_root, mouse)):

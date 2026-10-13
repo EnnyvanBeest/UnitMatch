@@ -46,6 +46,7 @@ def test_models_optimized(col_names, fixed_n=True, save_names=None,
     """
     db_path = db_path or DATABASE_PATH
     results_dir = results_dir or RESULTS_DIR
+    os.makedirs(results_dir, exist_ok=True)
 
     if fixed_n:
         # N per session pair = number of matches of ref_model with free N, so
@@ -650,14 +651,24 @@ def parse_args():
         "first with each model's own matches (free N), then with N per session pair set by "
         "--ref-model (results in <results-dir>/N_set_by_<ref-model>)."
     )
-    parser.add_argument("--models", nargs="+", default=_cfg.COMPARISON_MODELS,
-                        help="model folder names (default: pipeline_config.COMPARISON_MODELS)")
+    parser.add_argument("--group", choices=sorted(_cfg.MODEL_GROUPS), default="algo",
+                        help="model group (pipeline_config.MODEL_GROUPS), read from matchtables_<group>.db")
+    parser.add_argument("--models", nargs="+", default=None,
+                        help="override the group's model folder names")
     parser.add_argument("--ref-model", default="DeepUnitMatch",
                         help="model whose free-N match count sets N for the fixed-N run")
     parser.add_argument("--mode", choices=["both", "free", "fixed"], default="both")
-    parser.add_argument("--db", default=DATABASE_PATH, help="match-table database (sql.py)")
-    parser.add_argument("--results-dir", default=RESULTS_DIR)
-    return parser.parse_args()
+    parser.add_argument("--db", default=None, help="override the group's database (sql.py)")
+    parser.add_argument("--results-dir", default=None,
+                        help="override the group's results folder (default RESULTS_DIR/<group>)")
+    args = parser.parse_args()
+    args.models = args.models or _cfg.MODEL_GROUPS[args.group]
+    args.db = args.db or _cfg.database_path(args.group)
+    # one folder per group: every group also evaluates DeepUnitMatch, so
+    # groups run at the same time must not write the same results files
+    args.results_dir = args.results_dir or os.path.join(RESULTS_DIR, args.group)
+    print(f"group {args.group}: {args.models} <- {args.db}")
+    return args
 
 
 if __name__ == "__main__":
