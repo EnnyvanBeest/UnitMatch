@@ -186,9 +186,11 @@ def paper_jobs(manifest):
     for k in (1, 3, 6, 12):
         for rep in (1, 2, 3):
             key = f"m{k}_{rep}"
-            same_as = f"cmp_m3_{rep}_{v}" if k == 3 else None
-            jobs.append(make_job(f"xval_{key}", f"xval_{key}_ae", manifest[key], v, evaluate="all",
-                                 same_as=same_as))
+            if k == 3:  # copies of the comparison models, with their autoencoders
+                ae, same_as = f"cmp_m3_{rep}", f"cmp_m3_{rep}_{v}"
+            else:
+                ae, same_as = f"xval_{key}_ae", None
+            jobs.append(make_job(f"xval_{key}", ae, manifest[key], v, evaluate="all", same_as=same_as))
     return jobs
 
 
