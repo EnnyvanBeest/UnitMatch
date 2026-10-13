@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 import argparse
 import subprocess
 import numpy as np
@@ -306,6 +307,32 @@ def run(args):
     return
 
 
+def _set_aside_other_run(save_folder, config):
+    """
+    Resuming (cont=True) must only continue *this* training run. If the
+    experiment folder holds checkpoints saved with a different config (or
+    none: saved before configs were stored), it belongs to another run with
+    the same name -- e.g. an older experiment left in this machine's local
+    ModelExp -- and resuming would silently return that model (Oct 2026:
+    three cross-validation models were "trained" in seconds that way). The
+    folder is then moved to <name>_previous_<time> and training starts anew.
+    """
+    ckpt_folder = os.path.join(save_folder, "ckpt")
+    if not os.path.isdir(ckpt_folder) or not any(
+        f.startswith("ckpt_epoch_") for f in os.listdir(ckpt_folder)
+    ):
+        return
+    previous = torch.load(latest_checkpoint(ckpt_folder), map_location="cpu", weights_only=False)
+    if previous.get("config") == config:
+        return
+    moved = f"{save_folder}_previous_{time.strftime('%Y%m%d_%H%M%S')}"
+    print(
+        f"WARNING: {save_folder} holds checkpoints of another training run "
+        f"(config {previous.get('config')}); moved to {moved}, starting from epoch 0"
+    )
+    os.rename(save_folder, moved)
+
+
 def run_finetune(
     exp_name,
     dataset,
@@ -385,6 +412,8 @@ def run_finetune(
         raise ValueError(
             "Running this experiment will overwrite a previous one. Please choose a different name."
         )
+    if args.cont:
+        _set_aside_other_run(save_folder, config)
 
     ckpt_folder = os.path.join(save_folder, "ckpt")
     log_folder = os.path.join(save_folder, "log")
