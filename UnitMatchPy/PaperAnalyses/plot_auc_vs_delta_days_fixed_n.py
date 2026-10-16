@@ -260,21 +260,19 @@ def _rank_based_fixed_n_matches(df, ref_counts_for_dataset, rng, rank_col="UM Pr
     # a conflict.
     pairs["avg_score"] = pairs["avg_score"].fillna(-np.inf)
 
-    # Resolve one-to-many conflicts per session pair before ranking (see
-    # docstring above): a candidate survives only if its avg_score is
-    # simultaneously maximal among every other candidate sharing its "lo"
-    # endpoint unit and every other candidate sharing its "hi" endpoint unit,
-    # within the same session pair -- same both-endpoints-maximal rule as
-    # dvd._resolve_match_conflicts()/fast_testing.remove_conflicts2(), just
-    # applied to canonical (direction-averaged) candidates instead of raw
-    # rows. Losing candidates are dropped from ranking entirely (rather than
-    # zeroed-but-still-eligible, as remove_conflicts2 does) so a conflict can
-    # never consume one of the N slots -- a minor, deliberate simplification
-    # that only differs from fast_testing in the rare case where a session
-    # pair has fewer than N conflict-free candidates.
+    # Rank as fast_testing.get_matches_1model(fixed_n=...) does: mutual-best
+    # candidates first (avg_score maximal among every candidate sharing its
+    # "lo" unit and among every candidate sharing its "hi" unit, within the
+    # session pair -- the remove_conflicts2() rule, on direction-averaged
+    # scores), then all other candidates, each group by avg_score, ties at
+    # random. When a session pair has fewer than N mutual-best candidates, the
+    # remaining slots are filled with the next most likely candidates (which
+    # can share a unit with a chosen one), as agreed for fast_testing.
     max_for_lo = pairs.groupby(["sess_lo", "sess_hi", "unit_lo"])["avg_score"].transform("max")
     max_for_hi = pairs.groupby(["sess_lo", "sess_hi", "unit_hi"])["avg_score"].transform("max")
-    pairs = pairs[(pairs["avg_score"] == max_for_lo) & (pairs["avg_score"] == max_for_hi)]
+    mutual_best = ((pairs["avg_score"] == max_for_lo) & (pairs["avg_score"] == max_for_hi)).to_numpy()
+    finite = np.isfinite(pairs["avg_score"].to_numpy())  # NaN scores (-inf above) are never matches
+    pairs, mutual_best = pairs[finite], mutual_best[finite]
 
     avg_score = pairs["avg_score"].to_numpy()
     tiebreak = rng.random(len(pairs))
@@ -288,8 +286,9 @@ def _rank_based_fixed_n_matches(df, ref_counts_for_dataset, rng, rank_col="UM Pr
             continue
         local = g.index.to_numpy()
         pos = pairs.index.get_indexer(local)
-        # Descending by avg_score, ties broken by the random draw.
-        order = np.lexsort((tiebreak[pos], -avg_score[pos]))
+        # Mutual-best first, then descending avg_score, ties broken by the random draw
+        # (np.lexsort sorts by the last key first).
+        order = np.lexsort((tiebreak[pos], -avg_score[pos], ~mutual_best[pos]))
         selected_canon_ids.append(local[order[:n_ref]])
 
     if selected_canon_ids:

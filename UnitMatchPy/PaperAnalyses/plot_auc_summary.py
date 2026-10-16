@@ -71,8 +71,12 @@ OUTPUT_DIR = os.path.join(BASE_OUTPUT, "auc_summary_report")
 #MODELS_TO_INCLUDE = {"DeepUnitMatch_AssignUniqueID_Conservative", "DeepUnitMatch_AssignUniqueID", "UMPy_AssignUniqueID_Conservative", "UMPy_AssignUniqueID", "EMD", "DANT", "DANT_no_functional"}
 MODELS_TO_INCLUDE = {"DeepUnitMatch_AssignUniqueID", "UMPy_AssignUniqueID"}
 
-#MODELS_TO_INCLUDE = {"DUM_NewModelAug2026","DeepUnitMatch","DeepUnitMatch_AssignUniqueID_Conservative", "DeepUnitMatch_AssignUniqueID", "UMPy","UMPy_AssignUniqueID_Conservative", "UMPy_AssignUniqueID", "EMD", "DANT", "DANT_no_functional"}
-#MODELS_TO_INCLUDE = {"DeepUnitMatch","n_output=256_after_ae_and_finetune","n_output=128_after_ae_and_finetune","n_output=32_after_ae_and_finetune","n_output=8_after_ae_and_finetune"}
+# Folder names of the October 2026 run (see pipeline_config.MODEL_GROUPS):
+#MODELS_TO_INCLUDE = {"DeepUnitMatch", "UMPy", "DUM_legacy", "EMD", "DANT", "DANT_no_functional", "DANT_fixed", "DANT_no_functional_fixed"}
+#MODELS_TO_INCLUDE = {"DeepUnitMatch", "DUM_n_output=128", "DUM_n_output=32", "DUM_n_output=8"}             # 256 = DeepUnitMatch
+#MODELS_TO_INCLUDE = {"DeepUnitMatch", "DUM_W_ij=1", "DUM_W_ij=5", "DUM_W_ij=15", "DUM_W_ij=20"}             # 10 = DeepUnitMatch
+#MODELS_TO_INCLUDE = {"DeepUnitMatch", "DUM_untrained", "DUM_AE_only", "DUM_finetuned_only"}
+# (cmp_* folders are the training-variant comparison, not for figures)
 # Reference level for the "vs reference" summaries (every other model's
 # coefficient/mean-difference is "difference from this model"). Falls back to
 # whichever model sorts first for a given score if this one has no data there.

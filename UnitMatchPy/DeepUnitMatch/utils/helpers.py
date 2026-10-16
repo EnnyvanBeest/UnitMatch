@@ -3,6 +3,7 @@ import numpy as np
 import os
 import h5py
 import json
+import pickle
 import sqlite3
 import datetime
 import sys
@@ -147,6 +148,44 @@ def _index_entry(key: str):
     return index[key]
 
 
+_session_folder_cache = {}
+
+
+def session_folders(mouse, probe, loc):
+    """
+    {RecSes (1-based int): position in the location's full session list} for
+    the merged-data runs of this location.
+
+    metadata_index.json numbers sessions by folder (key = folder + 1), but a
+    run's RecSes count only the sessions it loaded: sessions without usable
+    units are dropped (see run_deepunitmatch_batch_onMerged.load_waveforms_for_good_units),
+    so after a dropped session RecSes and folder differ. Every run saves the
+    folder of each RecSes as param["session_index"] (all methods load the same
+    sessions); older outputs without it fall back to RecSes = folder + 1.
+    """
+    key = (mouse, probe, loc)
+    if key not in _session_folder_cache:
+        mapping = None
+        for method in ("DeepUnitMatch", "UMPy"):
+            path = os.path.join(PROJECT_ROOT, mouse, probe, loc, method, "UMparam.pickle")
+            if os.path.isfile(path):
+                with open(path, "rb") as f:
+                    index = pickle.load(f).get("session_index")
+                if index is not None:
+                    mapping = {recses: int(folder) for recses, folder in enumerate(index, start=1)}
+                    break
+        _session_folder_cache[key] = mapping
+    return _session_folder_cache[key]
+
+
+def _by_recses(mouse, probe, loc, per_folder_key):
+    """Re-key a {str(folder + 1): value} dict of the metadata index by RecSes."""
+    folders = session_folders(mouse, probe, loc)
+    if folders is None:  # older outputs: RecSes = folder + 1
+        return {int(k): v for k, v in per_folder_key.items()}
+    return {recses: per_folder_key.get(str(folder + 1)) for recses, folder in folders.items()}
+
+
 def expids_from_index(mt_path: str):
     """Data-drive-free replacement for expids_from_metadata.
 
@@ -160,7 +199,7 @@ def expids_from_index(mt_path: str):
     loc-level dict with "mouse", "probe" and "loc".
     """
     entry = _index_entry(loc_key_from_mt_path(mt_path))
-    exp_ids = {int(recses): name for recses, name in entry["exp_ids"].items()}
+    exp_ids = _by_recses(entry["mouse"], entry["probe"], entry["loc"], entry["exp_ids"])
     metadata = {k: entry[k] for k in ("mouse", "probe", "loc")}
     return exp_ids, metadata
 
@@ -173,10 +212,9 @@ def index_dates_from_loc(mouse, probe, loc):
     data drive) is needed at test time.
     """
     entry = _index_entry(f"{mouse}/{probe}/{loc}")
-    dates = {}
-    for recses, date_str in entry.get("dates", {}).items():
-        dates[int(recses)] = datetime.date.fromisoformat(date_str) if date_str else None
-    return dates
+    # the index is keyed by folder; RecSes can differ (see session_folders)
+    by_recses = _by_recses(mouse, probe, loc, entry.get("dates", {}))
+    return {recses: datetime.date.fromisoformat(d) if d else None for recses, d in by_recses.items()}
 
 
 def pick(mt, r1, r2, tight: bool = False):
