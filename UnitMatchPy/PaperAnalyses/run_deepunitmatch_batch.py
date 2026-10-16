@@ -54,6 +54,7 @@ except Exception:
 # Paths come from pipeline_config.py (step 1: raw data -> non-merged output).
 BASE_INPUT = cfg.RAW_KS_BASE
 BASE_OUTPUT = cfg.UNMERGED_OUTPUT
+STEP1_MODEL_PATH = cfg.STEP1_MODEL_PATH
 
 DEVICE = "cuda" if test.torch.cuda.is_available() else "cpu"
 print(f"Device: {DEVICE}")
@@ -389,7 +390,9 @@ def main():
     WRITE_MATLAB_COMPAT = args.write_matlab_compat
     onm.WRITE_MATLAB_COMPAT = args.write_matlab_compat
     print("Loading DeepUnitMatch model …")
-    model = test.load_trained_model(device=DEVICE)
+    # Step 1 uses the model from before this rerun (the paper model is trained
+    # on step 1's output); utils/model is the paper model since October 2026.
+    model = test.load_trained_model(device=DEVICE, read_path=STEP1_MODEL_PATH)
 
     print(f"Scanning for UnitMatch.mat files under:\n  {BASE_INPUT}\n")
 

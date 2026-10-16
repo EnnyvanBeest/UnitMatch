@@ -55,9 +55,13 @@ FIGURES_DIR = os.path.join(ANALYSIS_OUTPUT, "figures")
 REPORTS_DIR = os.path.join(ANALYSIS_OUTPUT, "pipeline_reports")
 # The DeepUnitMatch model of every step-4 run on the merged data
 # (DeepUnitMatch/, DUM_legacy/, DUM_nodrift/, DUM_maxdist=*/ ...): the main
-# paper model trained by train_paper_models.py (--jobs paper). Step 1 instead
-# uses the previous production model (DeepUnitMatch/utils/model).
+# paper model trained by train_paper_models.py (--jobs paper); the same model
+# is shipped as the package default, DeepUnitMatch/utils/model.
 PAPER_MODEL_PATH = os.path.join(MODELS_ROOT, "DUM_paper", "model.pt")
+# Step 1 uses the model from before this rerun (the paper model is trained on
+# step 1's output), kept in the package as utils/model_PreJuly2026.
+STEP1_MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                "DeepUnitMatch", "utils", "model_PreJuly2026")
 
 # step 6: sql.py puts the match tables of a group of models (output folder
 # names) into one SQLite database per group, matchtables_<group>.db, and
