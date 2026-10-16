@@ -1,6 +1,9 @@
 import os, sys
-# DeepUnitMatch/ (parent of testing/) on the path, so `testing.*` / `utils.*` import on any machine.
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# PaperAnalyses/ (pipeline_config) and DeepUnitMatch/ on the path, so `testing.*` /
+# `utils.*` import on any machine.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, _HERE)
+sys.path.insert(0, os.path.join(os.path.dirname(_HERE), "DeepUnitMatch"))
 
 import os
 import pandas as pd
