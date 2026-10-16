@@ -34,6 +34,7 @@ import os
 import sys
 import copy
 import datetime
+import json
 import tempfile
 import traceback
 import numpy as np
@@ -611,6 +612,9 @@ def keep_units(sess, kept_idx):
 # distance, i.e. the same ratio as UMPy's five waveform metrics to its one
 # centroid distance; the Naive Bayes uses the two scores as its predictors.
 DUM_SCORES = ["similarity", "centroid_dist"]
+# UMPy's six scores (ov.extract_metric_scores): five waveform metrics + the centroid distance
+UMPY_SCORES = ["amp_score", "spatial_decay_score", "centroid_overlord_score", "centroid_dist",
+               "waveform_score", "trajectory_score"]
 DUM_SCORE_WEIGHTS = {"similarity": 5, "centroid_dist": 1}
 # Output folder of the previous, DeepUnitMatch-specific pipeline
 # (run_deep_unit_match_core: per-session-pair thresholds and Naive Bayes),
@@ -631,8 +635,10 @@ def dnn_similarity_score(sim_matrix):
     return (np.asarray(sim_matrix, dtype=float) + 1) / 2
 
 
-def run_dum_core(sess, save_dir, model, label="DeepUnitMatch", niter=2):
-    """DeepUnitMatch through the shared UMPy pipeline (see DUM_SCORES above)."""
+def run_dum_core(sess, save_dir, model, label="DeepUnitMatch", niter=2, score_weights=None,
+                 candidates="location", bayes="location"):
+    """DeepUnitMatch through the shared UMPy pipeline (see DUM_SCORES above).
+    score_weights / candidates / bayes: pipeline variants (see run_umpy_core)."""
     return run_umpy_core(
         sess,
         save_dir,
@@ -640,7 +646,9 @@ def run_dum_core(sess, save_dir, model, label="DeepUnitMatch", niter=2):
         to_use=DUM_SCORES,
         model=model,
         niter=niter,
-        score_weights=DUM_SCORE_WEIGHTS,
+        score_weights=score_weights or DUM_SCORE_WEIGHTS,
+        candidates=candidates,
+        bayes=bayes,
     )
 
 
@@ -1137,8 +1145,74 @@ def run_umpy(sess):
     run_umpy_core(sess, save_dir, label="UMPy")
 
 
+def pair_candidate_pairs(similarity, session_id, param, data_dir):
+    """
+    Candidate pairs selected per pair of sessions, as in the DUM_legacy
+    pipeline (run_deep_unit_match_core's pre-pass), as a boolean
+    (n_units, n_units) matrix: per session pair, pairs whose similarity
+    score exceeds that pair's same/different-unit crossing (test.get_threshold) in both
+    directions, within max_dist after a per-pair drift estimate, and mutual
+    best (test.get_matches); plus every unit with itself. Used for the
+    pipeline-variant conditions (run_deepunitmatch_batch_onMerged_pipelines.py).
+    """
+    n_total = len(session_id)
+    labels = np.eye(n_total, dtype=bool)
+    sessions = np.unique(session_id)
+    for r1 in sessions:
+        for r2 in sessions:
+            if r1 >= r2:
+                continue
+            mask = np.isin(session_id, [r1, r2])
+            indices = np.flatnonzero(mask)
+            sim = similarity[np.ix_(indices, indices)]
+            df = helpers.create_dataframe(
+                [param["good_units"][r1], param["good_units"][r2]], sim, session_list=[r1, r2]
+            )
+            matches = test.get_matches(df, sim, session_id[indices], data_dir, dist_thresh=param["max_dist"])
+            sub_session = session_id[indices]
+            for (s1, s2), group in matches.groupby(by=["RecSes1", "RecSes2"]):
+                block = group["match"].values.reshape(
+                    len(param["good_units"][s1]), len(param["good_units"][s2])
+                ).astype(bool)
+                rows, cols = indices[sub_session == s1], indices[sub_session == s2]
+                labels[np.ix_(rows, cols)] |= block
+    return labels
+
+
+def naive_bayes_per_session_pair(scores_to_include, predictors, candidate_pairs, session_id, param):
+    """
+    Match probabilities with a Naive Bayes (kernels and prior) fitted
+    separately for every pair of sessions, as in the DUM_legacy pipeline,
+    instead of once for the whole location. The prior of a session pair is
+    the fraction of its unit pairs that are candidate pairs (as run_umpy_core
+    computes it for the whole location).
+    """
+    n_units = param["n_units"]
+    probability = np.zeros((n_units, n_units))
+    sessions = np.unique(session_id)
+    for r1 in sessions:
+        for r2 in sessions:
+            if r1 > r2:
+                continue
+            idx = np.flatnonzero(np.isin(session_id, [r1, r2]))
+            block = np.ix_(idx, idx)
+            labels = candidate_pairs[block].astype(int)
+            cond = np.unique(labels)
+            if len(cond) < 2:  # no candidate (or only candidates): nothing to learn from
+                probability[block] = labels
+                continue
+            prior_match = 1 - labels.sum() / labels.size
+            kernels = bf.get_parameter_kernels(
+                {k: v[block] for k, v in scores_to_include.items()}, labels, cond, param, add_one=1
+            )
+            p = bf.apply_naive_bayes(kernels, np.array([prior_match, 1 - prior_match]), predictors[block], param, cond)
+            probability[block] = p[:, 1].reshape(len(idx), len(idx))
+    return probability
+
+
 @_logged_matching_run(default_label="UMPy", label_index=0)
-def run_umpy_core(sess, save_dir, label="UMPy", to_use=None, model=None, niter=2, score_weights=None):
+def run_umpy_core(sess, save_dir, label="UMPy", to_use=None, model=None, niter=2, score_weights=None,
+                  candidates="location", bayes="location"):
     """
     Run the full UMPy pipeline for one pre-loaded session, given an explicit
     output directory.
@@ -1178,6 +1252,20 @@ def run_umpy_core(sess, save_dir, label="UMPy", to_use=None, model=None, niter=2
         {score name: weight} for the total score (thresholds, candidate pairs,
         drift correction); default None = every score weighted 1, as in UMPy.
         The Naive Bayes predictors are not weighted. See run_dum_core.
+    candidates : "location" (default) or "pair"
+        How candidate pairs (drift correction, Naive Bayes labels and prior)
+        are chosen: "location" = one total-score crossing for the location,
+        after per-session-pair alignment (ov.extract_metric_scores); "pair" =
+        a threshold per pair of sessions, as in the DUM_legacy pipeline
+        (pair_candidate_pairs), on the DNN similarity for DeepUnitMatch and on
+        UMPy's waveform-metric total score (without the centroid distance)
+        for UMPy.
+    bayes : "location" (default) or "pair"
+        One Naive Bayes + prior for the whole location, or one per pair of
+        sessions (naive_bayes_per_session_pair), as in the DUM_legacy pipeline.
+    (candidates/bayes are for the pipeline-variant conditions,
+    run_deepunitmatch_batch_onMerged_pipelines.py; the defaults are the
+    unified pipeline of DeepUnitMatch/ and UMPy/.)
 
     Also used for the non-merged data (run_deepunitmatch_batch.py): such
     sessions carry "mat_path" instead of "merged_dir" and
@@ -1236,6 +1324,17 @@ def run_umpy_core(sess, save_dir, label="UMPy", to_use=None, model=None, niter=2
             return
         extra_scores = {"similarity": dnn_similarity_score(sim_matrix)}
 
+    if candidates not in ("location", "pair") or bayes not in ("location", "pair"):
+        raise ValueError(f"unknown candidates={candidates!r} / bayes={bayes!r}")
+    if candidates == "pair" and model is None:
+        # UMPy with the per-pair selection: its spatial filter reads the unit
+        # positions from the DNN snippets, as for DeepUnitMatch (same positions)
+        tmp_path = os.path.join(save_dir, "tmp_waveforms")
+        os.makedirs(tmp_path, exist_ok=True)
+        param_fun.get_snippets(waveform, channel_pos, session_id, save_path=tmp_path,
+                               unit_ids=np.concatenate(param["good_units"]).squeeze(), param=param)
+        data_dir = os.path.join(tmp_path, "processed_waveforms")
+
     if score_weights is not None:
         param["score_weights"] = dict(score_weights)
 
@@ -1252,6 +1351,36 @@ def run_umpy_core(sess, save_dir, label="UMPy", to_use=None, model=None, niter=2
         waveform, channel_pos, clus_info, param
     )
 
+    if candidates == "pair":
+        # per-pair selection (DUM_legacy pipeline): candidate pairs from the method's similarity
+        # score per session pair; they drive the drift correction (if any) and,
+        # below, the Naive Bayes labels and prior. The scores are then computed
+        # once from the drift-corrected waveforms (niter=1: no further correction).
+        if model is not None:
+            pair_score = sim_matrix  # raw DNN similarity, as in the DUM_legacy pipeline
+        else:
+            # UMPy's counterpart of the DNN similarity: its total score over its
+            # waveform metrics, i.e. without the centroid distance (as the DNN
+            # similarity), before drift correction
+            umpy_scores = [s for s in (to_use or UMPY_SCORES) if s != "centroid_dist"]
+            pair_score, _, _, _ = ov.extract_metric_scores(
+                copy.deepcopy(extracted_wave_properties), session_switch, within_session,
+                copy.deepcopy(param), niter=1, to_use=umpy_scores,
+            )
+        pair_candidates = pair_candidate_pairs(pair_score, session_id, param, data_dir)
+        if niter > 1:
+            _, extracted_wave_properties["avg_centroid"], extracted_wave_properties["avg_waveform_per_tp"] = (
+                mf.drift_n_sessions(
+                    pair_candidates, session_switch,
+                    extracted_wave_properties["avg_centroid"].copy(),
+                    extracted_wave_properties["avg_waveform_per_tp"].copy(),
+                    pair_score, param,
+                )
+            )
+        score_niter = 1
+    else:
+        score_niter = niter
+
     # ── extract metric scores (these go directly into Naive Bayes) ───────────
     print("Extracting metric scores …")
     try:
@@ -1261,7 +1390,7 @@ def run_umpy_core(sess, save_dir, label="UMPy", to_use=None, model=None, niter=2
                 session_switch,
                 within_session,
                 param,
-                niter=niter,
+                niter=score_niter,
                 to_use=to_use,
                 extra_scores=extra_scores,
             )
@@ -1270,20 +1399,38 @@ def run_umpy_core(sess, save_dir, label="UMPy", to_use=None, model=None, niter=2
         print(f"  ERROR in extract_metric_scores: {e}")
         traceback.print_exc()
         return
+    if candidates == "pair":
+        candidate_pairs = pair_candidates
+        param["n_expected_matches"] = int(candidate_pairs.sum())
+    # how many candidate pairs the selection gives (compare stringency between
+    # pipeline variants); own file, as every number in AUC_summary.json is
+    # read as a score
+    across = session_id[:, None] != session_id[None, :]
+    n_candidates = int(np.sum(np.triu(candidate_pairs.astype(bool) & across, 1)))
+    with open(os.path.join(save_dir, "candidate_pairs.json"), "w") as f:
+        json.dump({"candidates": candidates, "bayes": bayes,
+                   "n_candidate_pairs_across_sessions": n_candidates,
+                   "n_expected_matches": int(param["n_expected_matches"])}, f, indent=1)
+    print(f"  {n_candidates} across-session candidate pairs ({candidates} selection)")
 
     # ── Naive Bayes matching ─────────────────────────────────────────────────
-    print("Running Naive Bayes matching …")
-    prior_match = 1 - (param["n_expected_matches"] / param["n_units"] ** 2)
-    priors = np.array([prior_match, 1 - prior_match])
-    labels = candidate_pairs.astype(int)
-    cond = np.unique(labels)
-    parameter_kernels = bf.get_parameter_kernels(
-        scores_to_include, labels, cond, param, add_one=1
-    )
-    probability = bf.apply_naive_bayes(
-        parameter_kernels, priors, predictors, param, cond
-    )
-    output_prob_matrix = probability[:, 1].reshape(param["n_units"], param["n_units"])
+    print(f"Running Naive Bayes matching ({bayes}) …")
+    if bayes == "pair":
+        output_prob_matrix = naive_bayes_per_session_pair(
+            scores_to_include, predictors, candidate_pairs, session_id, param
+        )
+    else:
+        prior_match = 1 - (param["n_expected_matches"] / param["n_units"] ** 2)
+        priors = np.array([prior_match, 1 - prior_match])
+        labels = candidate_pairs.astype(int)
+        cond = np.unique(labels)
+        parameter_kernels = bf.get_parameter_kernels(
+            scores_to_include, labels, cond, param, add_one=1
+        )
+        probability = bf.apply_naive_bayes(
+            parameter_kernels, priors, predictors, param, cond
+        )
+        output_prob_matrix = probability[:, 1].reshape(param["n_units"], param["n_units"])
 
     match_threshold = param.get("match_threshold", THRESH)
     output_threshold = np.zeros_like(output_prob_matrix)
