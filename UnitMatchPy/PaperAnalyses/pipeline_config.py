@@ -84,8 +84,9 @@ MODEL_GROUPS = {
     "spatial_only": ["DeepUnitMatch", "UMPy", "UMPy_spatialonly"],
     # pipeline variants: which parts of the unified pipeline matter for DUM
     # (run_deepunitmatch_batch_onMerged_pipelines.py)
-    "pipelines": ["DeepUnitMatch", "UMPy", "DUM_legacy",
-                  "DUM_pairCandidates", "DUM_pairBayes", "DUM_pairCandidates_pairBayes", "DUM_weights1to1",
+    "pipelines_DUM": ["DeepUnitMatch","DUM_legacy",
+                  "DUM_pairCandidates", "DUM_pairBayes", "DUM_pairCandidates_pairBayes", "DUM_weights1to1"],
+    "pipelines_UMPy": ["DeepUnitMatch", "UMPy",
                   "UMPy_pairCandidates", "UMPy_pairBayes", "UMPy_pairCandidates_pairBayes", "UMPy_weights1to1"],
     "maxdist": ["DeepUnitMatch", "UMPy",
                 *[f"{m}_maxdist={d}" for d in ("20", "50", "100", "inf") for m in ("DUM", "UMPy")]],
