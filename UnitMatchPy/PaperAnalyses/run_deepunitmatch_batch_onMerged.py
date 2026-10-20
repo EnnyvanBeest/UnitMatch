@@ -636,7 +636,7 @@ def dnn_similarity_score(sim_matrix):
 
 
 def run_dum_core(sess, save_dir, model, label="DeepUnitMatch", niter=2, score_weights=None,
-                 candidates="location", bayes="location"):
+                 candidates="location", bayes="location", prior="candidates", final_rule="oneDirection"):
     """DeepUnitMatch through the shared UMPy pipeline (see DUM_SCORES above).
     score_weights / candidates / bayes: pipeline variants (see run_umpy_core)."""
     return run_umpy_core(
@@ -649,6 +649,8 @@ def run_dum_core(sess, save_dir, model, label="DeepUnitMatch", niter=2, score_we
         score_weights=score_weights or DUM_SCORE_WEIGHTS,
         candidates=candidates,
         bayes=bayes,
+        prior=prior,
+        final_rule=final_rule,
     )
 
 
@@ -1179,13 +1181,36 @@ def pair_candidate_pairs(similarity, session_id, param, data_dir):
     return labels
 
 
-def naive_bayes_per_session_pair(scores_to_include, predictors, candidate_pairs, session_id, param):
+def legacy_pair_prior(score, within_session, avg_waveform_per_tp, param):
+    """
+    Prior probability of a match for one block of units (a pair of
+    sessions), as the DUM_legacy pipeline computes it: the fraction of unit
+    pairs within max_dist whose selection score exceeds the block's
+    same/different-unit crossing (mf.get_threshold), with physical distances
+    from the (drift-corrected) waveforms of this block only.
+    """
+    n = score.shape[0]
+    flipped = mf.flip_dim(avg_waveform_per_tp, param, n)
+    euclid_dist = mf.get_Euclidean_dist(flipped, param, n)
+    peak_idx = int(np.flatnonzero(np.asarray(param["waveidx"]) == param["peak_loc"])[0])
+    raw_dist = np.nanmin(euclid_dist[:, peak_idx, :, :], axis=1)  # um, min over flips
+    include = raw_dist < param["max_dist"]
+    param_block = dict(param, n_units=n)
+    thrs = mf.get_threshold(score, within_session, raw_dist, param_block, is_first_pass=False)
+    n_expected = int(np.sum((score > thrs) & include))
+    return 1 - n_expected / max(int(np.sum(include)), 1)
+
+
+def naive_bayes_per_session_pair(scores_to_include, predictors, candidate_pairs, session_id, param,
+                                 legacy_prior=None):
     """
     Match probabilities with a Naive Bayes (kernels and prior) fitted
     separately for every pair of sessions, as in the DUM_legacy pipeline,
     instead of once for the whole location. The prior of a session pair is
     the fraction of its unit pairs that are candidate pairs (as run_umpy_core
-    computes it for the whole location).
+    computes it for the whole location), or, with legacy_prior = {"score",
+    "within_session", "avg_waveform_per_tp"} (location-wide arrays), the
+    DUM_legacy pipeline's prior (legacy_pair_prior).
     """
     n_units = param["n_units"]
     probability = np.zeros((n_units, n_units))
@@ -1201,7 +1226,13 @@ def naive_bayes_per_session_pair(scores_to_include, predictors, candidate_pairs,
             if len(cond) < 2:  # no candidate (or only candidates): nothing to learn from
                 probability[block] = labels
                 continue
-            prior_match = 1 - labels.sum() / labels.size
+            if legacy_prior is None:
+                prior_match = 1 - labels.sum() / labels.size
+            else:
+                prior_match = legacy_pair_prior(
+                    legacy_prior["score"][block], legacy_prior["within_session"][block],
+                    legacy_prior["avg_waveform_per_tp"][:, idx, :, :], param,
+                )
             kernels = bf.get_parameter_kernels(
                 {k: v[block] for k, v in scores_to_include.items()}, labels, cond, param, add_one=1
             )
@@ -1212,7 +1243,7 @@ def naive_bayes_per_session_pair(scores_to_include, predictors, candidate_pairs,
 
 @_logged_matching_run(default_label="UMPy", label_index=0)
 def run_umpy_core(sess, save_dir, label="UMPy", to_use=None, model=None, niter=2, score_weights=None,
-                  candidates="location", bayes="location"):
+                  candidates="location", bayes="location", prior="candidates", final_rule="oneDirection"):
     """
     Run the full UMPy pipeline for one pre-loaded session, given an explicit
     output directory.
@@ -1263,7 +1294,17 @@ def run_umpy_core(sess, save_dir, label="UMPy", to_use=None, model=None, niter=2
     bayes : "location" (default) or "pair"
         One Naive Bayes + prior for the whole location, or one per pair of
         sessions (naive_bayes_per_session_pair), as in the DUM_legacy pipeline.
-    (candidates/bayes are for the pipeline-variant conditions,
+    prior : "candidates" (default) or "pairThreshold"
+        Prior of the per-pair Naive Bayes (bayes="pair"): the fraction of
+        candidate pairs, or, as in the DUM_legacy pipeline, the fraction of
+        pairs within max_dist whose selection score exceeds the pair's
+        same/different-unit crossing (legacy_pair_prior; needs
+        candidates="pair").
+    final_rule : "oneDirection" (default) or "bothDirections"
+        A pair is a match if its probability > match_threshold, or, as in the
+        DUM_legacy pipeline, only across sessions and if both directions are
+        (test.directional_filter_matrix).
+    (candidates/bayes/prior/final_rule are for the pipeline-variant conditions,
     run_deepunitmatch_batch_onMerged_pipelines.py; the defaults are the
     unified pipeline of DeepUnitMatch/ and UMPy/.)
 
@@ -1326,6 +1367,10 @@ def run_umpy_core(sess, save_dir, label="UMPy", to_use=None, model=None, niter=2
 
     if candidates not in ("location", "pair") or bayes not in ("location", "pair"):
         raise ValueError(f"unknown candidates={candidates!r} / bayes={bayes!r}")
+    if prior not in ("candidates", "pairThreshold") or final_rule not in ("oneDirection", "bothDirections"):
+        raise ValueError(f"unknown prior={prior!r} / final_rule={final_rule!r}")
+    if prior == "pairThreshold" and (candidates != "pair" or bayes != "pair"):
+        raise ValueError('prior="pairThreshold" needs candidates="pair" and bayes="pair"')
     if candidates == "pair" and model is None:
         # UMPy with the per-pair selection: its spatial filter reads the unit
         # positions from the DNN snippets, as for DeepUnitMatch (same positions)
@@ -1408,7 +1453,7 @@ def run_umpy_core(sess, save_dir, label="UMPy", to_use=None, model=None, niter=2
     across = session_id[:, None] != session_id[None, :]
     n_candidates = int(np.sum(np.triu(candidate_pairs.astype(bool) & across, 1)))
     with open(os.path.join(save_dir, "candidate_pairs.json"), "w") as f:
-        json.dump({"candidates": candidates, "bayes": bayes,
+        json.dump({"candidates": candidates, "bayes": bayes, "prior": prior, "final_rule": final_rule,
                    "n_candidate_pairs_across_sessions": n_candidates,
                    "n_expected_matches": int(param["n_expected_matches"])}, f, indent=1)
     print(f"  {n_candidates} across-session candidate pairs ({candidates} selection)")
@@ -1416,8 +1461,12 @@ def run_umpy_core(sess, save_dir, label="UMPy", to_use=None, model=None, niter=2
     # ── Naive Bayes matching ─────────────────────────────────────────────────
     print(f"Running Naive Bayes matching ({bayes}) …")
     if bayes == "pair":
+        legacy_prior = None
+        if prior == "pairThreshold":
+            legacy_prior = {"score": pair_score, "within_session": within_session,
+                            "avg_waveform_per_tp": extracted_wave_properties["avg_waveform_per_tp"]}
         output_prob_matrix = naive_bayes_per_session_pair(
-            scores_to_include, predictors, candidate_pairs, session_id, param
+            scores_to_include, predictors, candidate_pairs, session_id, param, legacy_prior=legacy_prior
         )
     else:
         prior_match = 1 - (param["n_expected_matches"] / param["n_units"] ** 2)
@@ -1434,7 +1483,10 @@ def run_umpy_core(sess, save_dir, label="UMPy", to_use=None, model=None, niter=2
 
     match_threshold = param.get("match_threshold", THRESH)
     output_threshold = np.zeros_like(output_prob_matrix)
-    output_threshold[output_prob_matrix > match_threshold] = 1
+    if final_rule == "bothDirections":  # across sessions, both directions above threshold
+        output_threshold[test.directional_filter_matrix(output_prob_matrix, session_id, match_threshold)] = 1
+    else:
+        output_threshold[output_prob_matrix > match_threshold] = 1
     matches = np.argwhere(output_threshold == 1)
     n_matches = len(matches) // 2
     print(f"  {n_matches} matches found (threshold={match_threshold})")

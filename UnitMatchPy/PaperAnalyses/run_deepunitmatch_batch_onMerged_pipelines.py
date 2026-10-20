@@ -19,7 +19,15 @@
 #   candidates per pair        DUM_pairCandidates/    DUM_pairCandidates_pairBayes/
 #
 # and C. the similarity:distance weight in the total score, 1:1 instead of
-# 5:1 (DUM_weights1to1/).
+# 5:1 (DUM_weights1to1/). On top of per-pair candidates + per-pair Bayes,
+# the remaining two differences from the DUM_legacy pipeline: D. its prior per
+# session pair (_pairPrior: fraction of pairs within max_dist whose
+# similarity exceeds the pair's crossing, instead of the fraction of
+# candidate pairs) and E. its final rule (_bothDirections: a match only
+# across sessions with both directions > 0.5).
+# DUM_pairCandidates_pairBayes_pairPrior_bothDirections should then be close
+# to DUM_legacy (left: raw vs rescaled similarity in the Naive Bayes, and the
+# distance score normalised per session pair instead of per location).
 #
 # The same changes are applied to UMPy (UMPy_pairCandidates/,
 # UMPy_pairBayes/, UMPy_pairCandidates_pairBayes/, UMPy_weights1to1/), so
@@ -59,15 +67,24 @@ REDO_FROM_DATE = cfg.REDO_FROM_DATE  # see pipeline_config.py
 UMPY_WEIGHTS_1TO1 = {score: 0.2 for score in base_batch.UMPY_SCORES if score != "centroid_dist"}
 UMPY_WEIGHTS_1TO1["centroid_dist"] = 1.0
 
+# the remaining differences from the DUM_legacy pipeline, on top of per-pair
+# candidates + per-pair Bayes: its prior (fraction of pairs within max_dist
+# above the pair's similarity crossing) and its final rule (both directions)
+PAIR_PRIOR = dict(candidates="pair", bayes="pair", prior="pairThreshold")
+
 CONDITIONS = {
     "DUM_pairCandidates": ("DUM", dict(candidates="pair")),
     "DUM_pairBayes": ("DUM", dict(bayes="pair")),
     "DUM_pairCandidates_pairBayes": ("DUM", dict(candidates="pair", bayes="pair")),
     "DUM_weights1to1": ("DUM", dict(score_weights={"similarity": 1, "centroid_dist": 1})),
+    "DUM_pairCandidates_pairBayes_pairPrior": ("DUM", PAIR_PRIOR),
+    "DUM_pairCandidates_pairBayes_pairPrior_bothDirections": ("DUM", dict(PAIR_PRIOR, final_rule="bothDirections")),
     "UMPy_pairCandidates": ("UMPy", dict(candidates="pair")),
     "UMPy_pairBayes": ("UMPy", dict(bayes="pair")),
     "UMPy_pairCandidates_pairBayes": ("UMPy", dict(candidates="pair", bayes="pair")),
     "UMPy_weights1to1": ("UMPy", dict(score_weights=UMPY_WEIGHTS_1TO1)),
+    "UMPy_pairCandidates_pairBayes_pairPrior": ("UMPy", PAIR_PRIOR),
+    "UMPy_pairCandidates_pairBayes_pairPrior_bothDirections": ("UMPy", dict(PAIR_PRIOR, final_rule="bothDirections")),
 }
 
 
