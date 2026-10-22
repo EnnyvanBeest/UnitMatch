@@ -106,13 +106,12 @@ for midx = 1:length(MiceOpt)
     end
     for id = 1:numel(UnitMatchExist)
         if RemoveOldCopies && (UnitMatchExist(id).date<FromDate || Redo)
-            delete(fullfile(UnitMatchExist(id).folder,'**'))
-            rmdir(UnitMatchExist(id).folder)
+            rmdir(UnitMatchExist(id).folder,'s') % folder with all its contents
             MouseAllDone = 0;
         elseif any(cellfun(@(X) UnitMatchExist(id).date<=datetime(X),KSDates)) %Any new data since running this?
+            % NB: UniqueIDs are assigned anew; results saved with the old IDs must be recomputed
             if RemoveOldCopies
-                delete(fullfile(UnitMatchExist(id).folder,'**'))
-                rmdir(UnitMatchExist(id).folder)
+                rmdir(UnitMatchExist(id).folder,'s')
             end
             MouseAllDone = 0;
         end
@@ -209,8 +208,8 @@ for midx = 1:length(MiceOpt)
                     PipelineParams.AllDecompPaths = cellfun(@(X) fullfile(PipelineParams.tmpdatafolder, strrep(X.name, 'cbin', 'bin')), PipelineParams.RawDataPaths, 'Uni', 0);
                 end
             else
-                allDecompPaths_dirs = arrayfun(@(X) dir(Params.RawDataPaths{X}), 1:length(Params.RawDataPaths), 'Uni', 0);
-                PipelineParams.AllDecompPaths = arrayfun(@(X) fullfile(Params.tmpdatafolder, strrep(allDecompPaths_dirs{X}.name, 'cbin', 'bin')), 1:length(allDecompPaths_dirs), 'Uni', 0);
+                allDecompPaths_dirs = arrayfun(@(X) dir(PipelineParams.RawDataPaths{X}), 1:length(PipelineParams.RawDataPaths), 'Uni', 0);
+                PipelineParams.AllDecompPaths = arrayfun(@(X) fullfile(PipelineParams.tmpdatafolder, strrep(allDecompPaths_dirs{X}.name, 'cbin', 'bin')), 1:length(allDecompPaths_dirs), 'Uni', 0);
             end
 
             %% Load other (Default) parameters
@@ -273,6 +272,12 @@ for midx = 1:length(MiceOpt)
                     disp(['Couldn''t do Quality metrics for ' MiceOpt{midx}])
                 end
             
+            elseif ~isempty(UnitMatchExist)
+                % Not run again: continue the UniqueID numbering after this run's IDs
+                tmpUID = load(fullfile(UnitMatchExist.folder,UnitMatchExist.name),'UniqueIDConversion');
+                if isfield(tmpUID,'UniqueIDConversion') && ~isempty(tmpUID.UniqueIDConversion.UniqueID)
+                    StartUID = max(StartUID, max(tmpUID.UniqueIDConversion.UniqueID)+1);
+                end
             % else
             %     % Get clusinfo
             %     clusinfo = getClusinfo(UMparam.KSDir);
@@ -294,12 +299,14 @@ for midx = 1:length(MiceOpt)
             disp(['Preprocessed data for ' MiceOpt{midx} ' run  ' num2str(runid) '/' num2str(nRuns)])
             close all
         catch ME
-            keyboard
-            disp([MiceOpt{midx} ' run  ' num2str(runid) '/' num2str(nRuns) ' crashed... continue with others'])
-            LogError = {LogError{:} [MiceOpt{midx} '_run' num2str(runid)]};
+            disp([MiceOpt{midx} ' run  ' num2str(runid) '/' num2str(nRuns) ' crashed (' ME.message ')... continue with others'])
+            LogError = {LogError{:} [MiceOpt{midx} '_run' num2str(runid) ': ' ME.message]};
         end
 
 
     end
+end
+if ~isempty(LogError)
+    warning('RunUnitMatchAllDataPerMouse:Errors','UnitMatch failed for:\n%s',strjoin(LogError,newline))
 end
 %

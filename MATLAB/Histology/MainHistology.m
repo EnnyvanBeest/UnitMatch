@@ -74,10 +74,11 @@ for midx = 1:length(MiceOpt)
     else
         multidate=0;
     end
+    % Per probe (index: probe number + 1, from the Probe<N> folder name): first date already handled?
     if NewHistologyNeededOri || RedoUserInput
-        thefirstperprobe = zeros(1,2);
+        thefirstperprobe = zeros(1,16);
     else
-        thefirstperprobe = ones(1,2);
+        thefirstperprobe = ones(1,16);
     end
     % For every date a different dataset
     Dates4Mouse = DateOpt{midx};
@@ -118,6 +119,8 @@ for midx = 1:length(MiceOpt)
                 end
                 RedoUserInput = RedoUserInputOri;
                 NewHistologyNeeded = NewHistologyNeededOri;
+                pidx = sscanf(subksdirs(probeid).name,'Probe%d') + 1; % same probe on every date, also if a date lacks another probe
+                if isempty(pidx), pidx = probeid; end
 
                 % Copy to other folders with same probe SN
                 tmp = dir(fullfile(subksdirs(probeid).folder,subksdirs(probeid).name,'**','PreparedData.mat'));
@@ -137,9 +140,10 @@ for midx = 1:length(MiceOpt)
                     for rid = 1:length(rawD)
                         rawD{rid} = rawD{rid}(strfind(rawD{rid}, '"') + 1:end);
                         rawD{rid} = rawD{rid}(1:strfind(rawD{rid}, '"') - 1);
-                        rawD{rid} = dir(rawD{rid});
-                        if isempty(rawD{rid})
-                            rawD{rid} = dir(strrep(rawD{rid}, 'bin', 'cbin'));
+                        rawPath = rawD{rid};
+                        rawD{rid} = dir(rawPath);
+                        if isempty(rawD{rid}) % e.g. params.py names the .bin, the server has the compressed .cbin
+                            rawD{rid} = dir(regexprep(rawPath, '\.bin$', '.cbin'));
                         end
                     end
                     rawD = cat(2, rawD{:});
@@ -147,7 +151,7 @@ for midx = 1:length(MiceOpt)
                 end
 
 
-                if multidate && thefirstperprobe(probeid)
+                if multidate && thefirstperprobe(pidx)
                     RedoUserInput = 0;
                 end
 
@@ -175,7 +179,7 @@ for midx = 1:length(MiceOpt)
                             DrawProbeInBrain
                             nInsertionsIncluded = nInsertionsIncluded + 1;
                             nMiceIncluded(midx) = true;
-                            thefirstperprobe(probeid) = 1;
+                            thefirstperprobe(pidx) = 1;
                             continue
                         end
                     elseif ~multidate
@@ -231,20 +235,20 @@ for midx = 1:length(MiceOpt)
                 end
 
 
-                if multidate & thefirstperprobe(probeid) & NewHistologyNeeded
+                if multidate & thefirstperprobe(pidx) & NewHistologyNeeded
                     histfile = dir(fullfile(SaveDir,MiceOpt{midx},'**',[num2str(SN) '_HistoEphysAlignment_Auto.mat']));
                     if ~isempty(histfile)
                         if ~exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
                             mkdir(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
-                        else
-                            delete(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,'*'))
+                        else % only the old alignment: other scripts also save in this folder
+                            delete(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,'*_HistoEphysAlignment_Auto.*'))
                         end
                         copyfile(fullfile(histfile(1).folder,histfile(1).name),fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,histfile(1).name))
                         continue
                     end
-                elseif multidate & thefirstperprobe(probeid) & ~NewHistologyNeeded
+                elseif multidate & thefirstperprobe(pidx) & ~NewHistologyNeeded
                     continue
-                elseif multidate & ~thefirstperprobe(probeid) & ~NewHistologyNeeded
+                elseif multidate & ~thefirstperprobe(pidx) & ~NewHistologyNeeded
                     disp('Skip')
                     try
                         DrawProbeInBrain
@@ -253,11 +257,11 @@ for midx = 1:length(MiceOpt)
                     end
                     nInsertionsIncluded = nInsertionsIncluded + 1;
                     nMiceIncluded(midx) = true;
-                    thefirstperprobe(probeid) = 1;
+                    thefirstperprobe(pidx) = 1;
 
                     continue
                 end
-                thefirstperprobe(probeid) = 1;
+                thefirstperprobe(pidx) = 1;
 
                 %% Get cluster information
                 PipelineParams.thisdate = thisdate;

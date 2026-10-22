@@ -251,14 +251,8 @@ for midx = 1:length(MiceOpt)
                     %     Sesinfo = Sesinfo(end);
                     % end
 
-                    %                     myKsDir = fullfile(myKsDir,['Probe' num2str(probeid-1)])
-                    subksdirs = dir(fullfile(myKsDir,ProbeName,Sesinfo)); %This changed because now I suddenly had 2 probes per recording
-
-                    if ~isempty(subksdirs)
-                        continue
-                    end
-
-                    if ~isempty(dir(fullfile(myKsDir,ProbeName,Sesinfo,'spike*'))) && ~RedoKS
+                    % Done if the output folder holds Kilosort output (a folder alone may be a crashed/partial run)
+                    if ~isempty(dir(fullfile(myKsDir,ProbeName,Sesinfo,'**','spike_clusters.npy'))) && ~RedoKS
                         disp([fullfile(myKsDir,ProbeName,Sesinfo) ' already done, skip...'])
                         % Also extract KS data + do Bombcell, so that .bin file can be removed again afterwards
                         % PipelineParams = ExtractKilosortData({fullfile(myKsDir,ProbeName,Sesinfo)},PipelineParams);
@@ -279,6 +273,12 @@ for midx = 1:length(MiceOpt)
                     end
 
                     tmpdatafolder2 = fullfile(strrep(tmpfile(sesid).folder,DataDir{DataDir2Use(midx)},tmpdatafolder));
+                    % Safety: files are deleted from tmpdatafolder2 below, so it must be the local copy, never the raw data folder
+                    if strcmpi(tmpdatafolder2,tmpfile(sesid).folder) || ~startsWith(lower(tmpdatafolder2),lower(fullfile(tmpdatafolder)))
+                        warning('RunKS4:TmpFolder','Could not map %s to a folder in %s, skipping it',tmpfile(sesid).folder,tmpdatafolder)
+                        continue
+                    end
+                    RawName = tmpfile(sesid).name; % name of the raw data file on the server (.ap.bin or .ap.cbin)
 
                     if ~exist(tmpdatafolder2)
                         mkdir(tmpdatafolder2)
@@ -297,7 +297,7 @@ for midx = 1:length(MiceOpt)
                     [channelPos, probeSN, recordingduration] = ChannelIMROConversion(fullfile(tmpdatafolder2,metafile.name),1,0)
                     if ~exist(fullfile(tmpdatafolder2, strrep(tmpfile(sesid).name, 'cbin', 'bin')))
                         disp('This is compressed data and need to uncompress... uncompress temporarily')
-                        decompDataFile = bc.dcomp.extractCbinData(fullfile(tmpfile(sesid).folder, tmpfile(sesid).name), ...
+                        decompDataFile = bc.dcomp.extractCbinData(fullfile(tmpdatafolder2, tmpfile(sesid).name), ... % the local copy (with its .ch file)
                             [], [], 0, fullfile(tmpdatafolder2, strrep(tmpfile(sesid).name, 'cbin', 'bin')));
                         statusCopy = copyfile(strrep(fullfile(tmpfile(sesid).folder, tmpfile(sesid).name), 'cbin', 'meta'), strrep(fullfile(tmpdatafolder2, tmpfile(sesid).name), 'cbin', 'meta')); %QQ doesn't work on linux
                     end
@@ -352,7 +352,7 @@ for midx = 1:length(MiceOpt)
 
                     tmp = regexp(C{1}{idx},'='); %Find =
                     C{1}{idx}(tmp+1:end) = []; %Remove current paths
-                    C{1}{idx} = strcat(C{1}{idx}, ['r"' strrep(fullfile(tmpfile(sesid).folder,tmpfile(sesid).name),'\','/') '"'])
+                    C{1}{idx} = strcat(C{1}{idx}, ['r"' strrep(fullfile(tmpfile(sesid).folder,RawName),'\','/') '"']) % the raw file as it is on the server
 
                     % Rename old params
                     movefile(fullfile(myKsDir,ProbeName,Sesinfo,'params.py'),fullfile(myKsDir,ProbeName,Sesinfo,'paramsOri.py'))
@@ -367,8 +367,15 @@ for midx = 1:length(MiceOpt)
                     
                     %% Also extract KS data + do Bombcell, so that .bin file can be removed again afterwards
                     PipelineParams.tmpdatafolder = tmpdatafolder2;
-                    PipelineParams.RawDataPaths = {fullfile(tmpfile(sesid).folder,strrep(tmpfile(sesid).name,'bin','cbin'))};
+                    PipelineParams.RawDataPaths = {fullfile(tmpfile(sesid).folder,RawName)};
                     PipelineParams = ExtractKilosortData({fullfile(myKsDir,ProbeName,Sesinfo)},PipelineParams);
+
+                    % Remove the local copies of the raw data (tmpdatafolder2 was checked to be in tmpdatafolder)
+                    if PipelineParams.CleanUpTemporary
+                        for tmpname = unique({RawName, strrep(RawName,'.cbin','.bin')})
+                            if exist(fullfile(tmpdatafolder2,tmpname{1}),'file'); delete(fullfile(tmpdatafolder2,tmpname{1})); end
+                        end
+                    end
 
                 end
 
