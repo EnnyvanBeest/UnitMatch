@@ -37,6 +37,9 @@ end
 % selection of shanks:
 ShanksUsed = unique(clusinfo.Shank);
 histinfo = histinfo(ShanksUsed+1); % ID + 1 (0-indexed)
+if nargin > 5
+    trackcoordinates = trackcoordinates(ShanksUsed+1); % the same shanks as histinfo
+end
 numShanks = numel(histinfo);
 
 % Shared depth bounds — all shanks of the same probe are inserted to the
@@ -57,7 +60,7 @@ for shank = 1:numShanks
         trackcoordinates{shank} = flipud(trackcoordinates{shank});
         histinfo{shank} = flipud(histinfo{shank});
     end
-    probeLengths{shank} = sqrt(sum(trackcoordinates{shank}-trackcoordinates{shank}(end,:),2).^2); % Distance per segment
+    probeLengths{shank} = sqrt(sum((trackcoordinates{shank}-trackcoordinates{shank}(end,:)).^2,2)); % Euclidean distance of each track point to the last one
     totalProbeLength{shank} = max(probeLengths{shank}); % Total depth from the brain surface
 
     % Functional
@@ -84,7 +87,7 @@ for shank = 1:numShanks
     % % CrossCorrVar = CrossCorrVar./nanmax(CrossCorrVar);
     % maxDepthtmp2 = depthEdges{shank}(find(CrossCorrVar>0.15,1,'last'));
     % Good unit based
-    nGood = smoothdata(histcounts(clusinfo.depth(logical(clusinfo.Good_ID) & clusinfo.Shank'==shank-1),depthEdges{shank}),'gaussian',floor(500./nanmedian(unique(diff(depthEdges{shank})))));
+    nGood = smoothdata(histcounts(clusinfo.depth(logical(clusinfo.Good_ID) & clusinfo.Shank'==ShanksUsed(shank)),depthEdges{shank}),'gaussian',floor(500./nanmedian(unique(diff(depthEdges{shank})))));
 
     if all(nGood==0)
         nGood = nGood+1;
@@ -216,7 +219,7 @@ for shank = 1:numShanks
      if ~ActiveShanks(shank)
         continue
     end
-    Depth2Area{shank} = assignAreas(alignedHistology{shank}, acronyms, shank, color_hex);
+    Depth2Area{shank} = assignAreas(alignedHistology{shank}, acronyms, shank, ShanksUsed(shank), color_hex);
 end
 
 % Visualize results and collect features for GUI
@@ -367,18 +370,21 @@ scores = (scores-nanmin(scores,[],1))./(nanmax(scores,[],1)-nanmin(scores,[],1))
 F = [FreqIntens, spikeAmps, firingRates, activityClusters, scores];
 F(:,sum(isnan(F),1)==size(F,1)) = [];
 
-% PCA → first PC
+% PCA: as many components as needed to explain >= 65% of the variance of the features
 pcnum = 0;
 explained = 0;
 while sum(explained(1:pcnum))<65
     pcnum = pcnum + 1;
 
-    [~,PC1,~,~,explained] = pca(double(F),'NumComponents',pcnum);
+    [~,PCScores,~,~,explained] = pca(double(F),'NumComponents',pcnum);
     fprintf('PCA: %.0f PC explain %.1f%% of variance\n', pcnum, sum(explained(1:pcnum)));
 end
-PC1 = sum(PC1,2);
-PC1 = detrend(PC1);
-PC1 = (PC1-nanmin(PC1))./(nanmax(PC1)-nanmin(PC1));
+PCScores = detrend(PCScores); % per component
+% Boundaries are where the feature profile changes most: the size of the step between neighbouring
+% depths in all components together. Independent of the (arbitrary) sign of the components, and
+% changes in different components do not cancel (as they did when the components were summed and
+% only increases of the sum were detected).
+FeatureChange = @(S) vecnorm(diff(S,1,1),2,2); % (nDepth-1) x 1
 
 % Unique areas and gray-like identification
 [uniqueAreas, ~, table2areaidx] = unique(histinfo.RegionAcronym, 'stable');
@@ -448,8 +454,8 @@ end
 % Convert this into distance
 CoveragePerParent = numPerParent.*(max(histDepths)-min(histDepths))/height(histinfo);
 
-% 1) compute absolute first difference
-d = (diff(smoothdata(PC1,'gaussian',50)));       % (N-1)×1
+% 1) size of the change in the (smoothed) feature profile between neighbouring depths
+d = FeatureChange(smoothdata(PCScores,1,'gaussian',50));       % (N-1)×1
 
 % 2) sort descending, pick top nChanges
 topIdx = [];
@@ -532,7 +538,7 @@ for id = 1:max(assignment)
     % Where to draw the line between these areas?
     tmpVec = starterid:stopid;
     if nAreas>1
-        d = diff(PC1(starterid:stopid));
+        d = FeatureChange(PCScores(starterid:stopid,:));
         topIdx = [];
         qval = 1;
         while numel(topIdx)<nAreas-1
@@ -565,7 +571,7 @@ for id = 1:max(assignment)
         tblidx(tblidx>starterid+transitionPoints(aid2+1)-1) = [];
         newDepths(tblidx) = linspace(histdepthtmp(transitionPoints(aid2)), histdepthtmp(transitionPoints(aid2+1)), numel(tblidx));
         if any(newDepths(tblidx)' - newDepths(1:starterid-1)<0,'all')
-            keyboard
+            warning('alignatlasdata_automated:NonMonotonic','Aligned depths of %s are not monotonic: check this alignment in the curation GUI',TheseAreas{aid2})
         end
         for dimid = 1:3
             newTrackcoordinates(tblidx, dimid) = linspace(trackcoordinatestmp(transitionPoints(aid2), dimid), trackcoordinatestmp(transitionPoints(aid2+1), dimid), numel(tblidx));
@@ -636,8 +642,9 @@ else
 end
 end
 
-function Depth2Area = assignAreas(alignedHistology, acronyms, shank, color_hex)
+function Depth2Area = assignAreas(alignedHistology, acronyms, shank, shankAbs, color_hex)
 % Assigns brain areas to depths based on aligned histology
+% Shank: position among the shanks used (1-based, as before); ShankAbs: shank number (0-based, as clusinfo.Shank)
 depths = alignedHistology.Depth; % Compute bin centers
 colPerDepth = cell(1,numel(alignedHistology.RegionAcronym));
 for aid = 1:numel(alignedHistology.RegionAcronym)
@@ -652,7 +659,7 @@ if numel(depths) ~= numel(alignedHistology.RegionAcronym)
 end
 
 % Create table mapping each depth to an area
-Depth2Area = table(depths, repmat(shank, numel(depths),1), alignedHistology.RegionAcronym, colPerDepth', alignedHistology.trackcoordinates, 'VariableNames', {'Depth','Shank','Area','Color','Coordinates'});
+Depth2Area = table(depths, repmat(shank, numel(depths),1), repmat(shankAbs, numel(depths),1), alignedHistology.RegionAcronym, colPerDepth', alignedHistology.trackcoordinates, 'VariableNames', {'Depth','Shank','ShankAbs','Area','Color','Coordinates'});
 
 end
 

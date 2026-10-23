@@ -81,10 +81,36 @@ if ~histodone %Just in case it's not done yet
                 trackcoordinates{shid} = trackcoordinates{shid}(1:size(histinfo{shid},1),:);
             end
             % Align ephys data with probe
-            if exist('lfpD') && ~isempty(lfpD)
-                [Depth2Area,AlignmentFeatures] = alignatlasdata_automated(histinfo,AllenCCFPath,sp,clusinfo,removenoise,0,fullfile(lfpD.folder,lfpD.name),2,trackcoordinates);
-            else
+            if ~exist('HistologyAlignmentMethod','var'), HistologyAlignmentMethod = 'constrained'; end
+            if strcmpi(HistologyAlignmentMethod,'automated')
                 [Depth2Area, AlignmentFeatures] = alignatlasdata_automated(histinfo,AllenCCFPath,sp,clusinfo,removenoise,trackcoordinates);
+                AlignmentFit = [];
+            else
+                % Constrained alignment (scale/offset with the track end as tip, limited local warp),
+                % with LFP landmarks from all recordings used here (they may cover different shanks)
+                LFP = [];
+                RawForLFP = Params.RawDataPaths; if ~iscell(RawForLFP), RawForLFP = {RawForLFP}; end
+                for rfi = 1:numel(RawForLFP)
+                    rf = RawForLFP{rfi}; if isstruct(rf), rf = fullfile(rf(1).folder,rf(1).name); end
+                    try
+                        L = LFPDepthFeatures(rf);
+                        if isempty(LFP), LFP = L; elseif ~isempty(L)
+                            LFP.Shank = [LFP.Shank; L.Shank]; LFP.Depth = [LFP.Depth; L.Depth]; LFP.Values = [LFP.Values; L.Values];
+                        end
+                    catch ME
+                        warning('GetHistologyOutput:LFP','No LFP features from %s: %s',rf,ME.message)
+                    end
+                end
+                % Tuning landmarks from the passive stimulation analyses of this probe/day
+                % (LoadSpikesRFBoot, Generalmpep_Analysis: run these before MainHistology)
+                if exist('SaveRFDir','var'), TuningDir = SaveRFDir; else, TuningDir = SaveDir; end
+                try
+                    TuningLM = TuningLandmarks(fullfile(TuningDir,MiceOpt{midx},thisdate,thisprobe));
+                catch ME
+                    warning('GetHistologyOutput:Tuning','No tuning landmarks: %s',ME.message)
+                    TuningLM = [];
+                end
+                [Depth2Area, AlignmentFeatures, AlignmentFit] = alignatlasdata_constrained(histinfo,trackcoordinates,sp,clusinfo,AllenCCFPath,struct('LFP',LFP,'Landmarks',TuningLM));
             end
         end
     else
@@ -111,14 +137,30 @@ if ~histodone %Just in case it's not done yet
         [Depth2Area, AlignmentFeatures] = alignatlasdata_automated(histinfonew,AllenCCFPath,sp,clusinfo,removenoise,0,fullfile(lfpD.folder,lfpD.name),2);
     end
 end
-if histoflag && ~histodone
+if histoflag && ~histodone && isempty(Depth2Area)
+    warning('GetHistologyOutput:NoAlignment','%s %s %s: automatic alignment failed, nothing saved',MiceOpt{midx},thisdate,thisprobe)
+    histoflag = 0;
+elseif histoflag && ~histodone
+    OutBase = fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment']);
+    % Keep the previous (possibly manually curated) alignment as *_beforeRedo: the new automatic one
+    % replaces it. Only the first backup is kept, so running again does not overwrite the curated version.
+    for ext = {'.mat','.fig','.bmp'}
+        if exist([OutBase '_Auto' ext{1}],'file') && ~exist([OutBase '_beforeRedo' ext{1}],'file')
+            movefile([OutBase '_Auto' ext{1}],[OutBase '_beforeRedo' ext{1}])
+        end
+    end
     set(gcf,'name',sprintf('%s %s %s',MiceOpt{midx},thisdate,thisprobe))
-    saveas(gcf,fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment_Auto.fig']))
-    saveas(gcf,fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment_Auto.bmp']))
+    saveas(gcf,[OutBase '_Auto.fig'])
+    saveas(gcf,[OutBase '_Auto.bmp'])
 
     ManuallyCurated  = false;
     FlaggedForReview = false;
-    save(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment_Auto.mat']),'Depth2Area','AlignmentFeatures','ManuallyCurated','FlaggedForReview')
+    if ~exist('AlignmentFit','var'), AlignmentFit = []; end
+    % A tuning/LFP landmark without its areas on the track: check the track in the curation GUI
+    if isstruct(AlignmentFit) && isfield(AlignmentFit,'LandmarkWarnings') && ~isempty(AlignmentFit.LandmarkWarnings)
+        FlaggedForReview = true;
+    end
+    save([OutBase '_Auto.mat'],'Depth2Area','AlignmentFeatures','AlignmentFit','ManuallyCurated','FlaggedForReview')
 end
 
 % Add information to clusinfo
@@ -165,13 +207,30 @@ if exist('clusinfo','var') & ~isempty(Depth2Area)
     if all(isnan(clusinfo.AdjustedDepth))
         clusinfo.AdjustedDepth(isnan(clusinfo.AdjustedDepth)) = clusinfo.depth; % Just take normal depth
     end
-    allDists = abs(clusinfo.AdjustedDepth - Depth2Area.Depth') + abs(clusinfo.Shank - Depth2Area.Shank') * 1000;
+    % Shank number (0-based, as clusinfo.Shank) of each Depth2Area row. Depth2Area.Shank is the position
+    % of the shank among the shanks with units in the recordings the alignment was made with
+    % (alignatlasdata_automated), not the shank number; newer alignments store ShankAbs. All older
+    % alignments checked (EB036-EB055, 16 probes) were made with units on all shanks, so there
+    % shank number = Shank - 1. (Comparing Shank directly gave units on shanks 1-3 the areas of the
+    % neighbouring shank.)
+    if ismember('ShankAbs',Depth2Area.Properties.VariableNames)
+        D2AShank = Depth2Area.ShankAbs;
+    else
+        D2AShank = Depth2Area.Shank - 1;
+    end
+    NoAlignment = setdiff(unique(clusinfo.Shank),unique(D2AShank));
+    if ~isempty(NoAlignment)
+        warning('GetHistologyOutput:ShankWithoutAlignment','%s %s %s: no histology alignment for shank(s) %s: their units get the areas of the nearest aligned shank (see clusinfo.AreaDist)', ...
+            MiceOpt{midx},thisdate,thisprobe,mat2str(NoAlignment(:)'))
+    end
+    allDists = abs(clusinfo.AdjustedDepth - Depth2Area.Depth') + abs(clusinfo.Shank - D2AShank') * 1000;
 
     % Set distances to gray areas to Inf
     allDists(:, grayMask) = Inf;
 
     % Get closest non-gray region
     [mindist, DistIdx] = nanmin(allDists, [], 2);
+    clusinfo.AreaDist = mindist; % um to the assigned histology point (+1000 per shank away; large: outside the aligned range or in white matter)
 
     % Assign
     clusinfo.Area = lower(Depth2Area.Area(DistIdx));

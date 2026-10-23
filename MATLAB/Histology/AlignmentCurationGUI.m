@@ -66,6 +66,13 @@ if isfield(raw,'AlignmentFeatures') && ~isempty(raw.AlignmentFeatures)
         AlignmentFeatures = AF(:);   % ensure column cell
     end
 end
+% New format (alignatlasdata_constrained): features are structs with their own probe depths, and
+% Depth2Area has the position of each track point (TrackPosUm): boundary moves then shift/stretch
+% the histology instead of relabelling rows, and tip/surface/stretch can be shown.
+newFeatures = ~isempty(AlignmentFeatures) && isstruct(AlignmentFeatures{1});
+hasTrack    = ismember('TrackPosUm', D2A.Properties.VariableNames);
+AlignFit    = [];
+if isfield(raw,'AlignmentFit'), AlignFit = raw.AlignmentFit; end
 clear raw
 
 % Infer mouse name from path structure:  .../SaveDir/<Mouse>/<Date>/<Probe>/
@@ -113,7 +120,8 @@ useAtlas     = ~isempty(av);
 
 %% ── Mutable state ────────────────────────────────────────────────────────────
 boundaries    = computeBoundaries(D2A);  % per-shank cell array of boundary structs
-dragState     = struct('active',false,'shankIdx',0,'boundaryIdx',0);
+boundaries_orig = {};                    % boundary depths at the start of a drag
+dragState     = struct('active',false,'shankIdx',0,'boundaryIdx',0,'origDepth',NaN);
 lastShift     = 0;    % tracks cumulative slider shift so changes are incremental
 lastScale     = 1.0;  % tracks cumulative slider scale
 allShanks     = unique(D2A.Shank);
@@ -124,7 +132,7 @@ brainZoom     = 0.25;            % 1 = full slice view; <1 = zoomed in around pr
 %% ── Build figure ─────────────────────────────────────────────────────────────
 % hasFeatures is true only if at least one shank has a non-empty numeric matrix
 hasFeatures = ~isempty(AlignmentFeatures) && ...
-    any(cellfun(@(c) isnumeric(c) && ~isempty(c), AlignmentFeatures));
+    any(cellfun(@(c) (isnumeric(c) && ~isempty(c)) || isstruct(c), AlignmentFeatures));
 nRightCols  = 2 + hasFeatures;  % coronal + sagittal [+ features]
 nCols       = 1 + nRightCols;
 
@@ -245,7 +253,29 @@ else
 end
 lblStatus = uilabel(ctrlG, 'Text',initStatus, 'WordWrap','on', ...
     'HorizontalAlignment','left', 'FontSize',8, 'FontColor',[0.35 0.35 0.35]);
-lblStatus.Layout.Row = 2; lblStatus.Layout.Column = [11 13];
+lblStatus.Layout.Row = 2; lblStatus.Layout.Column = [12 13];
+
+% Start from: the automatic alignment, its global fit (no local warp) or an alternative global fit
+startItems = {'Automatic alignment'};
+if hasTrack && ismember('BaselineDepth', D2A.Properties.VariableNames)
+    startItems{end+1} = 'Global fit (no warp)';
+end
+if hasTrack && ~isempty(AlignFit) && isfield(AlignFit,'Alternatives')
+    for ai_ = 1:numel(AlignFit.Alternatives)
+        startItems{end+1} = sprintf('Alternative %d: scale %.2f, offset %.0f (r %.2f)', ai_, ...
+            AlignFit.Alternatives(ai_).Scale, AlignFit.Alternatives(ai_).Offset, AlignFit.Alternatives(ai_).Corr); %#ok<AGROW>
+        if isfield(AlignFit.Alternatives,'Components') && isfield(AlignFit,'ComponentNames')
+            % parts of the score: activity first, then each landmark (e.g. 'act 0.31, ripple -, RF 0.12')
+            cn = regexprep(AlignFit.ComponentNames, {'^activity$','^LFP ripple events$','^RF \(sig\. receptive field\)$','^mpep: '}, {'act','ripple','RF',''});
+            cv = AlignFit.Alternatives(ai_).Components;
+            parts = arrayfun(@(j) sprintf('%s %s', cn{j}, local_num(cv(j))), 1:numel(cv), 'Uni', 0);
+            startItems{end} = [startItems{end} ' | ' strjoin(parts, ', ')];
+        end
+    end
+end
+ddStart = uidropdown(ctrlG, 'Items',startItems, 'Value',startItems{1}, 'ValueChangedFcn',@onStartChanged, ...
+    'Tooltip','Start from another fit (resets manual changes)', 'Enable', matlab.lang.OnOffSwitchState(numel(startItems)>1));
+ddStart.Layout.Row = 2; ddStart.Layout.Column = 11;
 
 %% ── Initial draw ─────────────────────────────────────────────────────────────
 drawAll();
@@ -312,10 +342,42 @@ drawAll();
                     txtCol = [0 0 0];   % dark text on light background
                 end
                 segLabel = getParentAreaLocal(D2A.Area{idx(find(inSeg,1))});
+                % Stretch of this area relative to the shank's overall scale (track points are evenly
+                % spaced): squeezed/stretched areas in red
+                if hasTrack && sum(inSeg) >= 3
+                    rel = segmentStretch(idx(inSeg), idx);
+                    segLabel = sprintf('%s x%.2f', segLabel, rel);
+                    if rel < 0.67 || rel > 1.5, txtCol = [1 0.1 0.1]; end
+                end
                 text(axProbe, xMid, (yLo + yHi)/2, segLabel, ...
                     'FontSize', 7, 'FontWeight', 'bold', 'Color', txtCol, ...
                     'VerticalAlignment', 'middle', 'HorizontalAlignment', 'center', ...
                     'Clipping', 'on', 'HitTest', 'off');
+            end
+
+            % Geometry markers (new format): probe tip (fixed), track end and brain surface as aligned now.
+            % The track end should coincide with the tip; the surface should lie above the probe sites
+            % that were in the brain.
+            if hasTrack && newFeatures && si <= numel(AlignmentFeatures) && isstruct(AlignmentFeatures{si})
+                AFs = AlignmentFeatures{si};
+                if isfield(AFs,'TipDepth')
+                    plot(axProbe, [x0 x1], [AFs.TipDepth AFs.TipDepth], '--', 'Color',[0 0.6 0], 'LineWidth',2, 'HitTest','off');
+                    text(axProbe, x1, AFs.TipDepth, ' tip', 'Color',[0 0.5 0], 'FontSize',7, 'HitTest','off', 'Clipping','off');
+                end
+                trackEnd = trackPosToDepth(idx, 0);
+                plot(axProbe, xMid, trackEnd, 'v', 'Color',[0.8 0 0], 'MarkerFaceColor',[0.8 0 0], 'MarkerSize',7, 'HitTest','off');
+                text(axProbe, x0, trackEnd, 'track end ', 'Color',[0.8 0 0], 'FontSize',7, 'HorizontalAlignment','right', 'HitTest','off', 'Clipping','off');
+                if isfield(AFs,'SurfaceTrackPos')
+                    surf = trackPosToDepth(idx, AFs.SurfaceTrackPos);
+                    if isfield(AFs,'SiteRange'), topShown = AFs.SiteRange(2) + 250; else, topShown = max(depths_s) + 60; end
+                    if surf <= topShown
+                        plot(axProbe, [x0 x1], [surf surf], '-', 'Color',[0.2 0.2 1], 'LineWidth',2, 'HitTest','off');
+                        text(axProbe, x1, surf, ' surface', 'Color',[0.2 0.2 1], 'FontSize',7, 'HitTest','off', 'Clipping','off');
+                    else
+                        text(axProbe, xMid, topShown - 20 - 15*mod(si,2), sprintf('surf. %.0f\\uparrow', surf), ...
+                            'Color',[0.2 0.2 1], 'FontSize',6, 'HorizontalAlignment','center', 'HitTest','off', 'Clipping','off');
+                    end
+                end
             end
 
             % Shank label above column
@@ -340,8 +402,15 @@ drawAll();
             end
         end
 
-        set(axProbe, 'XLim',[0 1], 'YLim', ...
-            [min(D2A.Depth)-30, max(D2A.Depth)+60]);
+        yLo_ = min(D2A.Depth) - 30; yHi_ = max(D2A.Depth) + 60;
+        if newFeatures && isfield(AlignmentFeatures{1},'SiteRange')
+            % The table holds the whole track: show the recorded range with some margin (and the tip)
+            yLo_ = min(AlignmentFeatures{1}.SiteRange(1), AlignmentFeatures{1}.TipDepth) - 60;
+            yHi_ = AlignmentFeatures{1}.SiteRange(2) + 250;
+        elseif newFeatures && isfield(AlignmentFeatures{1},'TipDepth')
+            yLo_ = min(yLo_, AlignmentFeatures{1}.TipDepth - 60); % keep the tip in view
+        end
+        set(axProbe, 'XLim',[0 1], 'YLim', [yLo_, yHi_]);
 
         % Highlight the shank whose track is shown in the brain slices
         % (drawn last so the yellow box is always on top)
@@ -372,17 +441,25 @@ drawAll();
         if ~any(valid), return; end
         medCoord = median(coords(valid,:), 1);   % [AP DV ML] in µm
 
-        % Track overlay shows only the selected shank
+        % Track overlay shows only the selected shank: the whole track thin, the stretch with
+        % recording sites (under the current alignment) thick, so shifting/scaling moves the probe
         selSi = find(allShanks == selectedShank, 1);
-        tc = buildTrackVox(D2A(shankMask,:), useHistology, hVol, avSz);
-
-        % Boundary brain-space positions (interpolated along probe track)
-        bnd_s = boundaries{selSi};
-        bm    = buildBoundaryVox(D2A(shankMask,:), bnd_s.depths, useHistology, hVol, avSz);
-        % Probe entry (top) and tip (bottom) as extent markers on the brain plots
         shankDepths_vm = D2A.Depth(shankMask);
-        bm_extent = buildBoundaryVox(D2A(shankMask,:), ...
-            [min(shankDepths_vm); max(shankDepths_vm)], useHistology, hVol, avSz);
+        siteRange = [min(shankDepths_vm) max(shankDepths_vm)];
+        if newFeatures && selSi <= numel(AlignmentFeatures) && isfield(AlignmentFeatures{selSi},'SiteRange')
+            siteRange = AlignmentFeatures{selSi}.SiteRange;
+        end
+        recMask = shankMask & D2A.Depth >= siteRange(1) & D2A.Depth <= siteRange(2);
+        tc    = buildTrackVox(D2A(shankMask,:), useHistology, hVol, avSz);
+        tcRec = [];
+        if any(recMask), tcRec = buildTrackVox(D2A(recMask,:), useHistology, hVol, avSz); end
+
+        % Boundary brain-space positions (interpolated along probe track), within the recorded range
+        bnd_s = boundaries{selSi};
+        bndIn = bnd_s.depths(bnd_s.depths >= siteRange(1) - 50 & bnd_s.depths <= siteRange(2) + 50);
+        bm    = buildBoundaryVox(D2A(shankMask,:), bndIn, useHistology, hVol, avSz);
+        % Lowest and highest recording site as extent markers on the brain plots
+        bm_extent = buildBoundaryVox(D2A(shankMask,:), siteRange(:), useHistology, hVol, avSz);
 
         % ── Coronal slice (y=DV, x=ML) ───────────────────────────────────────
         cla(axCoronal);
@@ -406,8 +483,12 @@ drawAll();
         end
         hold(axCoronal,'on');
         if ~isempty(tc)
-            scatter(axCoronal, tc.ml, tc.dv, 20, tc.colors, 'filled', ...
-                'MarkerFaceAlpha',0.85, 'HitTest','off');
+            scatter(axCoronal, tc.ml, tc.dv, 6, tc.colors, 'filled', ...
+                'MarkerFaceAlpha',0.5, 'HitTest','off');
+        end
+        if ~isempty(tcRec)
+            scatter(axCoronal, tcRec.ml, tcRec.dv, 28, tcRec.colors, 'filled', ...
+                'MarkerFaceAlpha',0.9, 'MarkerEdgeColor','k', 'HitTest','off');
         end
         if ~isempty(bm)
             xl_c = axCoronal.XLim;
@@ -457,8 +538,12 @@ drawAll();
         end
         hold(axSagittal,'on');
         if ~isempty(tc)
-            scatter(axSagittal, tc.ap, tc.dv, 20, tc.colors, 'filled', ...
-                'MarkerFaceAlpha',0.85, 'HitTest','off');
+            scatter(axSagittal, tc.ap, tc.dv, 6, tc.colors, 'filled', ...
+                'MarkerFaceAlpha',0.5, 'HitTest','off');
+        end
+        if ~isempty(tcRec)
+            scatter(axSagittal, tcRec.ap, tcRec.dv, 28, tcRec.colors, 'filled', ...
+                'MarkerFaceAlpha',0.9, 'MarkerEdgeColor','k', 'HitTest','off');
         end
         if ~isempty(bm)
             xl_s = axSagittal.XLim;
@@ -543,6 +628,41 @@ drawAll();
             selSi = 1;
         end
         F = AlignmentFeatures{selSi};
+
+        if isstruct(F)
+            % New format: features at their own probe depths. They do not move with the histology,
+            % so a mismatch between ephys and histology stays visible while aligning.
+            V = double(F.Values);
+            cMin = min(V,[],1,'omitnan'); cRng = max(V,[],1,'omitnan') - cMin; cRng(cRng < eps) = 1;
+            V = (V - cMin) ./ cRng;
+            imagesc(axFeat, 1:size(V,2), F.Depth, V);
+            set(axFeat, 'YDir','normal');
+            colormap(axFeat, hot);
+            xl_f = [0.5, size(V,2) + 0.5];
+            short = regexprep(F.Names, {'^LFP: ','log10 ','good units per bin','mean amplitude','neighbour correlation','ripple events per min',' \d.*Hz$', ...
+                '^tuning: ','^mpep: ','RF \(sig\. receptive field\)','locked to grating TF','locked to sound modulation',' responsive$'}, ...
+                {'','','units','amplitude','nb corr','ripple ev','','','','RF','TF locked','AM locked',' resp'});
+            set(axFeat, 'YLim', axProbe.YLim, 'XLim', xl_f, 'XTick', 1:size(V,2), 'XTickLabel', short, 'XTickLabelRotation', 60, 'FontSize', 7);
+            hold(axFeat, 'on');
+            bnd_f = boundaries{selSi};
+            for bi = 1:numel(bnd_f.depths)
+                bd = bnd_f.depths(bi);
+                plot(axFeat, xl_f, [bd bd], '-', 'Color','k', 'LineWidth',4, 'HitTest','off', 'PickableParts','none');
+                plot(axFeat, xl_f, [bd bd], 'c-', 'LineWidth',1.5, 'HitTest','off', 'PickableParts','none');
+                text(axFeat, xl_f(2), bd, sprintf('  %s | %s', bnd_f.parentBelow{bi}, bnd_f.parentAbove{bi}), ...
+                    'FontSize',6, 'Color','k', 'VerticalAlignment','middle', 'HitTest','off', 'Clipping','off');
+            end
+            if isfield(F,'TipDepth')
+                plot(axFeat, xl_f, [F.TipDepth F.TipDepth], '--', 'Color',[0 0.6 0], 'LineWidth',2, 'HitTest','off');
+            end
+            ylabel(axFeat,'Depth on probe (µm)');
+            title(axFeat, sprintf('Ephys features at their recorded depths  (S%d)', selectedShank));
+            return
+        end
+
+        % Old format: features were stored per histology row, so they are drawn at the
+        % histology's (aligned) depths and move with it - not suited to judge the alignment
+        lblStatus.Text = 'Old alignment file: features move with the histology (not at their recorded depths).';
 
         % Validate: must be a non-empty numeric matrix
         if ~isnumeric(F) || isempty(F)
@@ -652,6 +772,8 @@ drawAll();
             dragState.active      = true;
             dragState.shankIdx    = si;
             dragState.boundaryIdx = bi;
+            dragState.origDepth   = bnd.depths(bi);
+            boundaries_orig       = cellfun(@(b) b.depths, boundaries, 'UniformOutput', false);
             fig.Pointer           = 'crosshair';
         end
     end
@@ -710,6 +832,17 @@ drawAll();
         pa_above = boundaries{si}.parentAbove{bi};
         dragState.active = false;
         fig.Pointer = 'arrow';
+
+        if hasTrack
+            % New format: stretch the histology between the neighbouring boundaries (labels stay);
+            % only this shank (shanks are 250 µm apart and have their own anatomy)
+            D2A        = warpBoundaryMove(D2A, si, dragState.origDepth, newDepth);
+            boundaries = computeBoundaries(D2A);
+            drawAll();
+            lblStatus.Text = sprintf('Boundary moved (histology stretched).  %s', ...
+                char(datetime('now','Format','HH:mm:ss')));
+            return
+        end
 
         % Commit: reassign area labels for the selected shank
         D2A        = applyBoundaryMove(D2A, si, bi, newDepth);
@@ -774,6 +907,22 @@ drawAll();
         drawAll();
     end
 
+    function onStartChanged(~,~)
+        % Replace the current alignment by the chosen fit (manual changes are discarded)
+        k = find(strcmp(startItems, ddStart.Value), 1);
+        D2A = D2A_orig;
+        if k == 2 && ismember('BaselineDepth', D2A.Properties.VariableNames)
+            D2A.Depth = D2A.BaselineDepth;
+        elseif k >= 3
+            alt = AlignFit.Alternatives(k-2);
+            D2A.Depth = alt.Scale * D2A.TrackPosUm + alt.Offset;
+        end
+        lastShift = 0; lastScale = 1.0; slShift.Value = 0; slScale.Value = 1.0;
+        boundaries = computeBoundaries(D2A);
+        drawAll();
+        lblStatus.Text = sprintf('Started from: %s', ddStart.Value);
+    end
+
     %% ── Button callbacks ─────────────────────────────────────────────────────
 
     function onReset(~,~)
@@ -782,6 +931,7 @@ drawAll();
         lastScale  = 1.0;
         slShift.Value = 0;
         slScale.Value = 1.0;
+        ddStart.Value = startItems{1};
         boundaries = computeBoundaries(D2A);
         drawAll();
         lblStatus.Text = 'Reset to automated alignment.';
@@ -807,9 +957,48 @@ drawAll();
         FlaggedForReview = flagged;
         CurationNotes    = notes;
         CurationDate     = char(datetime('now','Format','yyyy-MM-dd HH:mm:ss'));
+        CurationStartedFrom = ddStart.Value;
+        CurationVersion  = 2 * hasTrack + 1 * ~hasTrack; % 2: features at recorded depths, histology stretched
         save(matFile, 'Depth2Area','ManuallyCurated','FlaggedForReview', ...
-            'CurationNotes','CurationDate', '-append');
+            'CurationNotes','CurationDate','CurationStartedFrom','CurationVersion', '-append');
         fprintf('AlignmentCurationGUI: saved to %s\n', matFile);
+    end
+
+    %% ── Track helpers (new format: TrackPosUm per row) ───────────────────────
+
+    function rel = segmentStretch(rowsSeg, rowsShank)
+        % Depth per track distance of a segment, relative to the whole shank (1 = same scale)
+        segRatio = range(D2A.Depth(rowsSeg)) / max(range(D2A.TrackPosUm(rowsSeg)), eps);
+        allRatio = range(D2A.Depth(rowsShank)) / max(range(D2A.TrackPosUm(rowsShank)), eps);
+        rel = segRatio / max(allRatio, eps);
+    end
+
+    function d = trackPosToDepth(rowsShank, pos)
+        % Depth of a track position under the current alignment: linear fit to the nearest track
+        % points (extrapolates beyond the recorded range with the local scale)
+        tp = D2A.TrackPosUm(rowsShank); dp = D2A.Depth(rowsShank);
+        [~, o] = sort(abs(tp - pos));
+        o = o(1:min(15, numel(o)));
+        if range(tp(o)) < eps, d = mean(dp(o)); return; end
+        c = polyfit(tp(o), dp(o), 1);
+        d = polyval(c, pos);
+    end
+
+    function D2A_out = warpBoundaryMove(D2A_in, si, origDepth, newDepth)
+        % Move one boundary of shank si from origDepth to newDepth by stretching the histology
+        % (track points) between the neighbouring boundaries; area labels do not change.
+        D2A_out = D2A_in;
+        shanks  = unique(D2A_in.Shank);
+        rows    = find(D2A_in.Shank == shanks(si));
+        dep     = D2A_in.Depth(rows);
+        bndD    = sort(boundaries_orig{si});
+        lo = max([bndD(bndD < origDepth - eps); min(dep) - 1]);
+        hi = min([bndD(bndD > origDepth + eps); max(dep) + 1]);
+        below = dep > lo & dep <= origDepth;
+        above = dep > origDepth & dep < hi;
+        dep(below) = lo + (dep(below) - lo) * (newDepth - lo) / max(origDepth - lo, eps);
+        dep(above) = newDepth + (dep(above) - origDepth) * (hi - newDepth) / max(hi - origDepth, eps);
+        D2A_out.Depth(rows) = dep;
     end
 
     %% ── Boundary helpers ─────────────────────────────────────────────────────
@@ -1178,6 +1367,11 @@ if isfield(s, field)
 else
     val = default;
 end
+end
+
+function s = local_num(x)
+% Correlation as text; '-' for a landmark that was not used
+if isnan(x), s = '-'; else, s = sprintf('%.2f', x); end
 end
 
 function ptr = conditional_ptr(condition)
