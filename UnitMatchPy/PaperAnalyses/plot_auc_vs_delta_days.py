@@ -48,6 +48,7 @@ import json
 import pickle
 import datetime
 import warnings
+from itertools import combinations
 
 import numpy as np
 import pandas as pd
@@ -1419,26 +1420,81 @@ def mouse_balanced_quality_quantity(combined_df_long):
     return pd.DataFrame(rows)
 
 
+def _nested_paired_test(sub, model_a, model_b):
+    """
+    This module's model comparison on long-format rows of one score (mouse,
+    dataset, RecSes 1, RecSes 2, model, value): paired difference
+    model_a - model_b per session pair, diff ~ 1 + (1 | mouse) +
+    (1 | mouse:dataset), intercept against t with (n_mice - 1) df (as
+    test_overall_model_effect). Returns (p, mean difference) or (None, None).
+    """
+    keys = ["mouse", "dataset", "RecSes 1", "RecSes 2"]
+    wide = sub[sub["model"].isin([model_a, model_b])].pivot_table(index=keys, columns="model", values="value")
+    if model_a not in wide.columns or model_b not in wide.columns:
+        return None, None
+    paired = (wide[model_a] - wide[model_b]).dropna().rename("diff").reset_index()
+    n_mice = paired["mouse"].nunique()
+    if n_mice < 2 or np.allclose(paired["diff"], 0):
+        return None, None
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        try:
+            result = smf.mixedlm("diff ~ 1", paired, groups=paired["mouse"], re_formula="1",
+                                 vc_formula={"location": "0 + C(dataset)"}).fit()
+        except Exception:
+            return None, None
+    coef = result.params["Intercept"]
+    return float(2 * t_dist.sf(abs(coef / result.bse["Intercept"]), n_mice - 1)), float(coef)
+
+
+def _nested_pairwise_stats(combined_df_long, score):
+    """
+    Every pair of models for one score with _nested_paired_test, Holm-
+    Bonferroni corrected across pairs. combined_df_long has one row per
+    session pair (see _session_pairs_to_dataset_rows). Returns
+    (pvals_adj {frozenset: p_adj}, lines for the stats file).
+    """
+    sub = combined_df_long[combined_df_long["score"] == score].dropna(subset=["value"]).copy()
+    if score in auc_summary_mod.LOG_TRANSFORM_FOR_STATS:
+        sub["value"] = np.log1p(sub["value"])
+    models = sorted(sub["model"].unique())
+    per_mouse = sub.groupby(["model", "mouse"])["value"].agg(WITHIN_MOUSE_AGG)
+    lines = ["  Per model: median over each mouse's session pairs, then mean +/- s.e. across mice:"]
+    for m in models:
+        v = per_mouse.loc[m]
+        lines.append(f"    {m}: {v.mean():.4g} +/- {v.std(ddof=1) / np.sqrt(len(v)):.2g} (n={len(v)} mice)")
+    raw, diffs = {}, {}
+    for m1, m2 in combinations(models, 2):
+        p, diff = _nested_paired_test(sub, m1, m2)
+        if p is not None:
+            raw[frozenset((m1, m2))] = p
+            diffs[frozenset((m1, m2))] = (m1, m2, diff)
+    pvals_adj = auc_summary_mod._holm_correct(raw)
+    lines.append("  Pairwise (paired session-pair differences, random intercepts for mouse and location "
+                 "within mouse, t with mice - 1 df; Holm-Bonferroni across pairs):")
+    if not pvals_adj:
+        lines.append("    (skipped: fewer than 2 comparable models/mice)")
+    for pair, p in sorted(pvals_adj.items(), key=lambda kv: kv[1]):
+        m1, m2, diff = diffs[pair]
+        lines.append(f"    {m1} - {m2}: mean difference {diff:+.4g}, p_adj = {p:.4g}")
+    return pvals_adj, lines
+
+
+def _mouse_values(combined_df_long):
+    """One value per (mouse, model, score): median over the mouse's session pairs (for plotting)."""
+    return combined_df_long.groupby(["mouse", "model", "score"], as_index=False)["value"].agg(WITHIN_MOUSE_AGG)
+
+
 def test_ptrack_mouse_balanced(combined_df_long, output_dir):
     """
-    Mouse-aware significance test + plot for P_track specifically -- the one
-    genuinely new metric here (the 7 functional-score AUCs already get their
-    own dataset-level mixed-model comparison from plot_auc_summary.py's own
-    main(), no need to regenerate those). Reuses that module's dataset-level
-    machinery (mixed model + Holm-Bonferroni post-hoc + jittered-by-mouse
-    plot with significance brackets) exactly as it does for every AUC score.
+    Significance test + plot for P_track: every pair of models compared with
+    the module's nested paired model on session pairs (_nested_pairwise_stats),
+    plotted as one point per mouse (median over its session pairs).
     """
-    pvals_adj = auc_summary_mod.pairwise_mixed_pvalues(combined_df_long, "P_track")
-    png_path = auc_summary_mod.plot_score(combined_df_long, "P_track", output_dir, pvals_adj=pvals_adj)
-
-    result = auc_summary_mod.fit_mixed_model(combined_df_long, "P_track")
-    stats_lines = [f"{'=' * 70}\nP_track (fraction of units tracked into another session)\n{'=' * 70}"]
-    if result is None:
-        stats_lines.append("  (skipped: fewer than 2 models or fewer than 2 mice with data)")
-    else:
-        stats_lines.append(str(result.summary()))
-        stats_lines.append("")
-        stats_lines.extend(auc_summary_mod._format_posthoc_lines(pvals_adj))
+    pvals_adj, lines = _nested_pairwise_stats(combined_df_long, "P_track")
+    png_path = auc_summary_mod.plot_score_mouse_avg(_mouse_values(combined_df_long), "P_track", output_dir,
+                                                    pvals_adj=pvals_adj)
+    stats_lines = [f"{'=' * 70}\nP_track (fraction of units tracked into another session)\n{'=' * 70}"] + lines
     stats_path = os.path.join(output_dir, "P_track_mixed_model_summary.txt")
     with open(stats_path, "w") as f:
         f.write("\n".join(stats_lines))
@@ -1447,7 +1503,7 @@ def test_ptrack_mouse_balanced(combined_df_long, output_dir):
 
 def test_functional_scores_mouse_balanced(combined_df_long, output_dir, filename="functional_score_mixed_model_summaries.txt"):
     """
-    Same dataset-level mixed-model + Holm-Bonferroni machinery as
+    Same nested paired session-pair model + Holm-Bonferroni machinery as
     test_ptrack_mouse_balanced(), generalised to every functional score in
     combined_df_long (not just P_track) -- one combined stats file, formatted
     like plot_auc_summary.py's own mixed_model_summaries.txt.
@@ -1470,19 +1526,13 @@ def test_functional_scores_mouse_balanced(combined_df_long, output_dir, filename
     stats_lines = []
     png_paths = []
     for score in scores:
-        pvals_adj = auc_summary_mod.pairwise_mixed_pvalues(combined_df_long, score)
-        png_path = auc_summary_mod.plot_score(combined_df_long, score, output_dir, pvals_adj=pvals_adj)
+        pvals_adj, lines = _nested_pairwise_stats(combined_df_long, score)
+        png_path = auc_summary_mod.plot_score_mouse_avg(_mouse_values(combined_df_long), score, output_dir,
+                                                        pvals_adj=pvals_adj)
         if png_path:
             png_paths.append(png_path)
-
-        result = auc_summary_mod.fit_mixed_model(combined_df_long, score)
         stats_lines.append(f"\n{'=' * 70}\n{score}\n{'=' * 70}")
-        if result is None:
-            stats_lines.append("  (skipped: fewer than 2 models or fewer than 2 mice with data)")
-            continue
-        stats_lines.append(str(result.summary()))
-        stats_lines.append("")
-        stats_lines.extend(auc_summary_mod._format_posthoc_lines(pvals_adj))
+        stats_lines.extend(lines)
 
     stats_path = os.path.join(output_dir, filename)
     with open(stats_path, "w") as f:
