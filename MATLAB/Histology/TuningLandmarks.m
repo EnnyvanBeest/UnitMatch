@@ -107,7 +107,7 @@ for i = 1:numel(mpFiles)
 end
 
 %% Output: landmarks with enough units
-Landmarks = struct('Name',{},'Shank',{},'Depth',{},'Value',{},'AreaPaths',{},'Weight',{},'Files',{});
+Landmarks = struct('Name',{},'Type',{},'Shank',{},'Depth',{},'Value',{},'AreaPaths',{},'AreaRegex',{},'Weight',{},'Files',{});
 for k = 1:numel(Acc)
     if numel(Acc(k).Value) < Opt.MinUnits || sum(Acc(k).Value > 0) < Opt.MinPositive
         fprintf('Landmark %s not used: %d units, %d positive\n',Acc(k).Name,numel(Acc(k).Value),sum(Acc(k).Value > 0))
@@ -116,8 +116,8 @@ for k = 1:numel(Acc)
     % Plain responsiveness (onset of a full-field stimulus) is found in many areas: half the weight of
     % the specific properties (receptive field, locking to the stimulus modulation)
     w = Opt.Weight; if endsWith(Acc(k).Name,'responsive'), w = w/2; end
-    Landmarks(end+1) = struct('Name',Acc(k).Name,'Shank',Acc(k).Shank,'Depth',Acc(k).Depth,'Value',Acc(k).Value, ...
-        'AreaPaths',{Acc(k).AreaPaths},'Weight',w,'Files',{Acc(k).Files}); %#ok<AGROW>
+    Landmarks(end+1) = struct('Name',Acc(k).Name,'Type','fraction','Shank',Acc(k).Shank,'Depth',Acc(k).Depth,'Value',Acc(k).Value, ...
+        'AreaPaths',{Acc(k).AreaPaths},'AreaRegex','','Weight',w,'Files',{Acc(k).Files}); %#ok<AGROW>
     fprintf('Landmark %s: %d units, %d positive (%s)\n',Acc(k).Name,numel(Acc(k).Value),sum(Acc(k).Value),strjoin(unique(Acc(k).Files),', '))
 end
 end

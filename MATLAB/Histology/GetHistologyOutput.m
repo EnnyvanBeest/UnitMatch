@@ -93,9 +93,26 @@ if ~histodone %Just in case it's not done yet
                 for rfi = 1:numel(RawForLFP)
                     rf = RawForLFP{rfi}; if isstruct(rf), rf = fullfile(rf(1).folder,rf(1).name); end
                     try
-                        L = LFPDepthFeatures(rf);
+                        % running vs still periods from the mpep sessions in this recording (if saved)
+                        if exist('SaveRFDir','var'), RunDir = SaveRFDir; else, RunDir = SaveDir; end
+                        % running speed of all sessions in this recording (each its own Timeline):
+                        % synced here if not saved yet (MainAnalysis_SpatialNavigation pipeline)
+                        if exist('ExtractRunTiming','file') == 2 && exist('nidq_sync_used','var') && exist('DataDir2Use','var')
+                            try
+                                ExtractRunTiming(rf,DataDir,DataDir2Use,MiceOpt,midx,thisdate,thisprobe,nidq_sync_used,RunDir);
+                            catch ME
+                                warning('GetHistologyOutput:RunTiming','No running speed for %s: %s',rf,ME.message)
+                            end
+                        end
+                        Run = RunningOnProbe(fullfile(RunDir,MiceOpt{midx},thisdate,thisprobe),rf);
+                        L = LFPDepthFeatures(rf,struct('Run',Run));
+                        fprintf('LFP %s: brain state from %s\n',rf,L.State.Source)
                         if isempty(LFP), LFP = L; elseif ~isempty(L)
                             LFP.Shank = [LFP.Shank; L.Shank]; LFP.Depth = [LFP.Depth; L.Depth]; LFP.Values = [LFP.Values; L.Values];
+                            if isempty(LFP.RippleCSD), LFP.RippleCSD = L.RippleCSD; elseif ~isempty(L.RippleCSD), LFP.RippleCSD = [LFP.RippleCSD L.RippleCSD]; end
+                            for fc = {'ThetaCSD','DentateCSD','SlowCSD'} % per-shank CSD structs of each recording
+                                if isempty(LFP.(fc{1})), LFP.(fc{1}) = L.(fc{1}); elseif ~isempty(L.(fc{1})), LFP.(fc{1}) = [LFP.(fc{1}) L.(fc{1})]; end
+                            end
                         end
                     catch ME
                         warning('GetHistologyOutput:LFP','No LFP features from %s: %s',rf,ME.message)
@@ -110,7 +127,17 @@ if ~histodone %Just in case it's not done yet
                     warning('GetHistologyOutput:Tuning','No tuning landmarks: %s',ME.message)
                     TuningLM = [];
                 end
-                [Depth2Area, AlignmentFeatures, AlignmentFit] = alignatlasdata_constrained(histinfo,trackcoordinates,sp,clusinfo,AllenCCFPath,struct('LFP',LFP,'Landmarks',TuningLM));
+                % Visually evoked CSD (early sink: VIS layer 4 / superficial SC), from the mpep
+                % trial onsets on the probe clock (StimTiming in MPEPData.mat)
+                EvokedCSD = [];
+                try
+                    [CSDLM,EvokedCSD] = EvokedCSDLandmarks(fullfile(TuningDir,MiceOpt{midx},thisdate,thisprobe));
+                    if ~isempty(CSDLM), TuningLM = [TuningLM(:); CSDLM(:)]'; end
+                catch ME
+                    warning('GetHistologyOutput:CSD','No visual CSD: %s',ME.message)
+                end
+                [Depth2Area, AlignmentFeatures, AlignmentFit] = alignatlasdata_constrained(histinfo,trackcoordinates,sp,clusinfo,AllenCCFPath, ...
+                    struct('LFP',LFP,'Landmarks',TuningLM,'CSD',EvokedCSD));
             end
         end
     else
