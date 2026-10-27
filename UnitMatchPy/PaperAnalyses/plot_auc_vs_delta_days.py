@@ -155,10 +155,12 @@ N_BOOTSTRAP = 50
 # times would be needlessly slow.
 BOOTSTRAP_MAX_N = 20000
 
-# Aggregation chain for every per-dataset/per-mouse number in this module:
-# one value per session pair -> median across session pairs within a dataset
-# (recording location) -> median across datasets within a mouse
-# (WITHIN_MOUSE_AGG) -> mean +/- SEM across mice. A session pair's AUCs only
+# Aggregation chain for every per-mouse number in this module: one value per
+# session pair -> median across all session pairs of a mouse, pooled across
+# its recording locations (WITHIN_MOUSE_AGG) -> mean +/- SEM across mice
+# (level="dataset": median per location instead, n = locations). The overall
+# model comparison (test_overall_model_effect) is fitted on the session pairs
+# themselves, with random intercepts for mouse and location within mouse. A session pair's AUCs only
 # enter that chain if at least one included model found this many matches
 # for it -- the same per-session-pair cut figure2.ipynb /
 # figure-model-comparison.ipynb apply (N >= 20, MIN_MATCHES there) -- so a pair
@@ -420,20 +422,18 @@ def _session_pairs_to_dataset_rows(session_pair_auc_rows, session_pair_rate_rows
         f">= {min_matches_per_session_pair} matches."
     )
 
-    dataset_bin_auc_rows = (
-        sp_auc.groupby(["mouse", "dataset", "model", "score", "bin"], as_index=False)["auc"].median().to_dict("records")
-    )
-    dataset_level_auc_rows = (
-        sp_auc.groupby(["mouse", "dataset", "model", "score"], as_index=False)["auc"].median()
-        .rename(columns={"auc": "value"}).to_dict("records")
-    )
-    dataset_bin_rate_rows = (
-        sp_rate.groupby(["mouse", "dataset", "model", "bin"], as_index=False)[["rate", N_MATCHES_COL]].median()
-        .to_dict("records")
-    )
+    # One row per session pair (keeping its dataset): every per-mouse value is
+    # the median across all session pairs of that mouse, pooled across its
+    # recording locations (WITHIN_MOUSE_AGG over these rows), as in
+    # figure-model-comparison.ipynb / figure2.ipynb; level="dataset" summaries
+    # take the median per location instead. (Previously these rows were
+    # already per-location medians, so a mouse's value was a median of medians.)
+    keys = ["mouse", "dataset", "model", "RecSes 1", "RecSes 2"]
+    dataset_bin_auc_rows = sp_auc[keys + ["score", "bin", "auc"]].to_dict("records")
+    dataset_level_auc_rows = sp_auc[keys + ["score", "auc"]].rename(columns={"auc": "value"}).to_dict("records")
+    dataset_bin_rate_rows = sp_rate[keys + ["bin", "rate", N_MATCHES_COL]].to_dict("records")
     dataset_level_rows = (
-        sp_rate.groupby(["mouse", "dataset", "model"], as_index=False)["rate"].median()
-        .rename(columns={"rate": "value"}).assign(score="P_track").to_dict("records")
+        sp_rate[keys + ["rate"]].rename(columns={"rate": "value"}).assign(score="P_track").to_dict("records")
     )
     return dataset_level_rows, dataset_level_auc_rows, dataset_bin_auc_rows, dataset_bin_rate_rows
 
@@ -1720,11 +1720,13 @@ def test_overall_model_effect(rows, value_col, model_a, model_b, score=None, lev
     """
     Mixed-effects test of whether model_a's values are overall higher than
     model_b's, pooling every ΔDay bin. Fit on the paired difference
-    diff = model_a - model_b, one row per (unit, bin), where both models were
-    measured on the same session pairs:
+    diff = model_a - model_b of every session pair both models were measured
+    on (one row per session pair):
 
-      level="mouse":   diff ~ 1 + (1 | mouse)
-      level="dataset": diff ~ 1 + (1 | mouse) + (1 | mouse:dataset)
+      diff ~ 1 + (1 | mouse) + (1 | mouse:dataset)
+
+    (rows without session-pair keys: one row per (unit, bin), with
+    level="mouse": diff ~ 1 + (1 | mouse); level="dataset": as above.)
 
     The random intercepts make repeated bins of the same mouse (and, at
     dataset level, of the same recording location within that mouse) count
@@ -1742,11 +1744,25 @@ def test_overall_model_effect(rows, value_col, model_a, model_b, score=None, lev
     to fit (fewer than 2 mice with both models), when every paired difference
     is zero (e.g. N forced equal by construction), or when the fit fails.
     """
-    sub = _mouse_bin_values(rows, value_col, model_a, model_b, score=score, level=level).dropna(subset=[value_col])
+    # Fitted on the session pairs themselves (rows carry RecSes 1/2): the
+    # paired difference of every session pair, with random intercepts for
+    # mouse and for location within mouse -- for either level (level only
+    # changes the per-unit values that are plotted and that the per-bin tests
+    # use). Rows without session-pair keys fall back to per-unit values.
+    if rows and "RecSes 1" in rows[0]:
+        sub = pd.DataFrame(rows)
+        if score is not None:
+            sub = sub[sub["score"] == score]
+        sub = sub[sub["model"].isin([model_a, model_b])].dropna(subset=[value_col])
+        unit_cols = ["mouse", "dataset", "RecSes 1", "RecSes 2"]
+        nested = True
+    else:
+        sub = _mouse_bin_values(rows, value_col, model_a, model_b, score=score, level=level).dropna(subset=[value_col])
+        unit_cols = ["mouse"] if level == "mouse" else ["mouse", "dataset"]
+        nested = level == "dataset"
     if sub.empty:
         return None, None
 
-    unit_cols = ["mouse"] if level == "mouse" else ["mouse", "dataset"]
     wide = sub.pivot_table(index=unit_cols + ["bin"], columns="model", values=value_col)
     if model_a not in wide.columns or model_b not in wide.columns:
         return None, None
@@ -1754,7 +1770,7 @@ def test_overall_model_effect(rows, value_col, model_a, model_b, score=None, lev
     if paired["mouse"].nunique() < 2 or np.allclose(paired["diff"], 0):
         return None, None
 
-    vc_formula = {"location": "0 + C(dataset)"} if level == "dataset" else None
+    vc_formula = {"location": "0 + C(dataset)"} if nested else None
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         try:
