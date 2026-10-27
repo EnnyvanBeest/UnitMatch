@@ -90,8 +90,9 @@ MODEL_GROUPS = {
     "pipelines_UMPy": ["DeepUnitMatch", "UMPy",
                   "UMPy_pairCandidates", "UMPy_pairBayes", "UMPy_pairCandidates_pairBayes", "UMPy_weights1to1"],
     "pipelines_UMPy2": ["UMPy_pairCandidates_pairBayes_pairPrior", "UMPy_pairCandidates_pairBayes_pairPrior_bothDirections"],
+    # max_dist 100 um is the default: DeepUnitMatch / UMPy are its results
     "maxdist": ["DeepUnitMatch", "UMPy",
-                *[f"{m}_maxdist={d}" for d in ("20", "50", "100", "inf") for m in ("DUM", "UMPy")]],
+                *[f"{m}_maxdist={d}" for d in ("20", "50", "inf") for m in ("DUM", "UMPy")]],
     # mouse-count cross-validation (the 18-mouse point is DeepUnitMatch)
     "xval_1": ["DeepUnitMatch", *[f"xval_m1_{r}" for r in (1, 2, 3)]],
     "xval_3-6": ["DeepUnitMatch", *[f"xval_m{k}_{r}" for k in (3, 6) for r in (1, 2, 3)]],

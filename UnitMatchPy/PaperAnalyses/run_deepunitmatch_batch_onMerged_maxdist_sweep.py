@@ -60,7 +60,10 @@ import UnitMatchPy.default_params as default_params
 import run_deepunitmatch_batch_onMerged as base_batch
 from DeepUnitMatch.testing import test
 
-MAX_DIST_VALUES = [20, 50, 100, float("inf")]
+# The default max_dist (100 um, default_params) is not rerun: its results are
+# DeepUnitMatch/ and UMPy/ (pipeline_config.MODEL_GROUPS["maxdist"]).
+DEFAULT_MAX_DIST = default_params.get_default_param()["max_dist"]
+MAX_DIST_VALUES = [d for d in (20, 50, 100, float("inf")) if d != DEFAULT_MAX_DIST]
 DEFAULT_NEIGHBOUR_DIST = default_params.get_default_param()["neighbour_dist"]
 
 # See batch_lock.sentinel_is_fresh() / run_deepunitmatch_batch_onMerged.py's
