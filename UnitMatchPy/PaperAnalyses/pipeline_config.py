@@ -86,10 +86,10 @@ MODEL_GROUPS = {
     # (run_deepunitmatch_batch_onMerged_pipelines.py)
     "pipelines_DUM": ["DeepUnitMatch","DUM_legacy",
                   "DUM_pairCandidates", "DUM_pairBayes", "DUM_pairCandidates_pairBayes", "DUM_weights1to1"],
-    "pipelines_DUM2": ["DUM_pairCandidates_pairBayes_pairPrior", "DUM_pairCandidates_pairBayes_pairPrior_bothDirections"],
+    "pipelines_DUM2": ["DeepUnitMatch","DUM_pairCandidates_pairBayes_pairPrior", "DUM_pairCandidates_pairBayes_pairPrior_bothDirections"],
     "pipelines_UMPy": ["DeepUnitMatch", "UMPy",
                   "UMPy_pairCandidates", "UMPy_pairBayes", "UMPy_pairCandidates_pairBayes", "UMPy_weights1to1"],
-    "pipelines_UMPy2": ["UMPy_pairCandidates_pairBayes_pairPrior", "UMPy_pairCandidates_pairBayes_pairPrior_bothDirections"],
+    "pipelines_UMPy2": ["DeepUnitMatch","UMPy_pairCandidates_pairBayes_pairPrior", "UMPy_pairCandidates_pairBayes_pairPrior_bothDirections"],
     "maxdist": ["DeepUnitMatch", "UMPy",
                 *[f"{m}_maxdist={d}" for d in ("20", "50", "100", "inf") for m in ("DUM", "UMPy")]],
     # mouse-count cross-validation (the 18-mouse point is DeepUnitMatch)
