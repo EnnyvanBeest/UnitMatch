@@ -27,7 +27,9 @@ if strcmpi(ext,'.cbin')
     first = sampleStart - bounds(c1) + 1;
     data = data(first:first+(sampleEnd-sampleStart)-1,:);
 else
-    meta = ReadMeta2(fold);
+    % the meta file of this stream (ap or lf): the folder holds both, with different sampling rates
+    [~,~,stream] = fileparts(name); stream = stream(2:end); % e.g. 'lf' for x.imec0.lf.bin
+    if ismember(stream,{'ap','lf'}), meta = ReadMeta2(fold,stream); else, meta = ReadMeta2(fold); end
     nChan = str2double(meta.nSavedChans);
     if isfield(meta,'imSampRate'), fs = str2double(meta.imSampRate); else, fs = str2double(meta.niSampRate); end
     fid = fopen(rawFile,'r'); cleanup = onCleanup(@() fclose(fid));

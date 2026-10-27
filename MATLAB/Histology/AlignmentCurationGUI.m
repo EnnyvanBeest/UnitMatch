@@ -149,23 +149,26 @@ outerG = uigridlayout(fig, [2, nCols], ...
     'ColumnWidth', colWidths, ...
     'Padding', [4 4 4 4], 'ColumnSpacing', 5, 'RowSpacing', 4);
 
+% The plot panels share one container with fixed margins (layoutAxes), so their plot areas have
+% identical top and bottom: the depth axes of probe, brain (along the probe) and features line up
+% whatever the tick labels below them
+axPanel = uipanel(outerG, 'BorderType','none', 'AutoResizeChildren','off');
+axPanel.Layout.Row = 1; axPanel.Layout.Column = [1 nCols];
+
 % ── Probe depth bar ──────────────────────────────────────────────────────────
-axProbe = uiaxes(outerG);
-axProbe.Layout.Row = 1; axProbe.Layout.Column = 1;
+axProbe = uiaxes(axPanel);
 hold(axProbe,'on');
 set(axProbe, 'YDir','normal', 'XTick',[], 'Box','off', 'FontSize',8);
 title(axProbe, 'Probe  —  drag boundary lines here');
 ylabel(axProbe, 'Depth on probe (µm)');
 
 % ── Brain slice axes ─────────────────────────────────────────────────────────
-axCoronal = uiaxes(outerG);
-axCoronal.Layout.Row = 1; axCoronal.Layout.Column = 2;
+axCoronal = uiaxes(axPanel);
 hold(axCoronal,'on'); axis(axCoronal,'image');
 set(axCoronal, 'YDir','reverse', 'XTickLabel',{}, 'YTickLabel',{});
 title(axCoronal,'Coronal'); xlabel(axCoronal,'ML'); ylabel(axCoronal,'DV');
 
-axSagittal = uiaxes(outerG);
-axSagittal.Layout.Row = 1; axSagittal.Layout.Column = 3;
+axSagittal = uiaxes(axPanel);
 hold(axSagittal,'on'); axis(axSagittal,'image');
 set(axSagittal, 'YDir','reverse', 'XTickLabel',{}, 'YTickLabel',{});
 title(axSagittal,'Sagittal'); xlabel(axSagittal,'AP'); ylabel(axSagittal,'DV');
@@ -173,13 +176,16 @@ title(axSagittal,'Sagittal'); xlabel(axSagittal,'AP'); ylabel(axSagittal,'DV');
 % ── Features axis (optional) ─────────────────────────────────────────────────
 axFeat = [];
 if hasFeatures
-    axFeat = uiaxes(outerG);
-    axFeat.Layout.Row = 1; axFeat.Layout.Column = 4;
+    axFeat = uiaxes(axPanel);
     hold(axFeat,'on');
     set(axFeat, 'YDir','normal', 'FontSize',8);
     title(axFeat,'Functional features');
     xlabel(axFeat,'Feature'); ylabel(axFeat,'Depth (µm)');
 end
+plotAxes = [{axProbe, axCoronal, axSagittal} repmat({axFeat}, 1, hasFeatures)];
+colWeights = [0.65 ones(1, nRightCols)];
+axPanel.SizeChangedFcn = @(~,~) layoutAxes();
+layoutAxes();
 
 %% ── Control panel ────────────────────────────────────────────────────────────
 % Layout: 2 rows × 11 cols
@@ -226,10 +232,16 @@ slAtlas.Layout.Row = [1 2]; slAtlas.Layout.Column = 8;
 
 % Brain view zoom
 lblZoom = uilabel(ctrlG, 'Text','View:', 'HorizontalAlignment','right', 'FontWeight','bold');
-lblZoom.Layout.Row = [1 2]; lblZoom.Layout.Column = 9;
+lblZoom.Layout.Row = 1; lblZoom.Layout.Column = 9;
 slZoom = uislider(ctrlG, 'Limits',[0.05 1.0], 'Value',0.25, ...
     'MajorTicks',[0.05 0.25 0.5 0.75 1.0], 'ValueChangedFcn',@onZoomChanged);
-slZoom.Layout.Row = [1 2]; slZoom.Layout.Column = 10;
+slZoom.Layout.Row = 1; slZoom.Layout.Column = 10;
+% Brain panels on the probe depth axis: the histology resampled along the track, so the y axis
+% equals the probe column and the features panel
+cbAlong = uicheckbox(ctrlG, 'Text','Brain on probe depth axis', 'Value',false, ...
+    'ValueChangedFcn',@(~,~) drawSlices(), ...
+    'Tooltip','Show the brain resampled along the track: y = depth on the probe (follows shift/scale/drag)');
+cbAlong.Layout.Row = 2; cbAlong.Layout.Column = [9 10];
 
 % Buttons (row 1)
 btnReset = uibutton(ctrlG, 'Text','Reset', ...
@@ -283,6 +295,19 @@ drawAll();
 %% ════════════════════════════════════════════════════════════════════════════
 %  NESTED FUNCTIONS
 %% ════════════════════════════════════════════════════════════════════════════
+
+    % ── Plot areas: same top and bottom for all panels ────────────────────────
+    function layoutAxes()
+        pp = getpixelposition(axPanel);
+        W = pp(3); H = pp(4);
+        mLeft = 60; mRight = 12; mBottom = 95; mTop = 28; % room for tick labels, (rotated) x labels, titles
+        colW = W * colWeights / sum(colWeights);
+        x0 = [0 cumsum(colW(1:end-1))];
+        for ai = 1:numel(plotAxes)
+            plotAxes{ai}.PositionConstraint = 'innerposition';
+            plotAxes{ai}.InnerPosition = [x0(ai) + mLeft, mBottom, max(colW(ai) - mLeft - mRight, 20), max(H - mBottom - mTop, 20)];
+        end
+    end
 
     % ── Draw all panels ───────────────────────────────────────────────────────
     function drawAll()
@@ -430,6 +455,9 @@ drawAll();
 
     % ── Brain slices ──────────────────────────────────────────────────────────
     function drawSlices()
+        if cbAlong.Value, drawAlongProbe(); return; end
+        % limits from the along-probe view would otherwise persist
+        set([axCoronal axSagittal], 'XLimMode','auto', 'YLimMode','auto', 'FontSize',10);
         % Use the selected shank's coordinates to centre the slices.
         shankMask = D2A.Shank == selectedShank;
         coords    = D2A.Coordinates(shankMask, :);
@@ -573,6 +601,98 @@ drawAll();
         end
     end
 
+    % ── Brain along the probe: y = depth on the probe ─────────────────────────
+    % Each row is sampled at the track point that the current alignment puts at that probe depth
+    % (beyond the track ends: continued along the track direction), x = distance from the track
+    % in the coronal (ML) or sagittal (AP) direction. Area boundaries, recorded range and the
+    % anatomy line up with the probe column and the features panel.
+    function drawAlongProbe()
+        shankMask = D2A.Shank == selectedShank;
+        Dsh = D2A(shankMask,:);
+        [dK, cK] = trackCurve(Dsh);
+        if numel(dK) < 2, return; end
+        yl = axProbe.YLim;
+        dG = (yl(1):10:yl(2))';
+        C = zeros(numel(dG),3);
+        for k = 1:3
+            c = interp1(dK, cK(:,k), dG, 'linear');
+            pf = polyfit(dK, cK(:,k), 1); % track direction (atlas um per probe um)
+            lo = dG < dK(1); hi = dG > dK(end);
+            c(lo) = cK(1,k) + pf(1)*(dG(lo) - dK(1));
+            c(hi) = cK(end,k) + pf(1)*(dG(hi) - dK(end));
+            C(:,k) = c;
+        end
+        halfW = 4000*brainZoom;
+        if useHistology, stepX = hVol.voxSize_um; else, stepX = 10; end
+        xG = -halfW:stepX:halfW;
+
+        selSi = find(allShanks == selectedShank, 1);
+        siteRange = [min(Dsh.Depth) max(Dsh.Depth)];
+        if newFeatures && selSi <= numel(AlignmentFeatures) && isfield(AlignmentFeatures{selSi},'SiteRange')
+            siteRange = AlignmentFeatures{selSi}.SiteRange;
+        end
+        bnd_s = boundaries{selSi};
+        bndIn = bnd_s.depths(bnd_s.depths >= siteRange(1) - 50 & bnd_s.depths <= siteRange(2) + 50);
+        v = ~any(isnan(Dsh.Coordinates), 2);
+        tc = buildTrackVox(Dsh, useHistology, hVol, avSz);
+        dTrack = Dsh.Depth(v);
+        rec = dTrack >= siteRange(1) & dTrack <= siteRange(2);
+
+        axs = {axCoronal, axSagittal};
+        names = {'Coronal', 'Sagittal'};
+        xlab = {'ML from track (µm, L→R)', 'AP from track (µm)'};
+        for p = 1:2
+            ax = axs{p};
+            cla(ax); hold(ax,'on');
+            AP = repmat(C(:,1), 1, numel(xG)); DV = repmat(C(:,2), 1, numel(xG)); ML = repmat(C(:,3), 1, numel(xG));
+            if p == 1, ML = ML - xG; else, AP = AP + xG; end % same orientation as the slices
+            if useHistology
+                raw_ = local_sampleVol(hVol.volR, hVol.voxSize_um, DV, ML, AP);
+                bg = local_norm(raw_); bg(isnan(raw_)) = 0; % outside the volume: black
+                imagesc(ax, xG, dG, bg);
+                colormap(ax, gray(256)); clim(ax, [0 1]);
+                alphaA = atlasAlpha;
+            else
+                alphaA = 1;
+            end
+            if useAtlas && alphaA > 0
+                ids = local_sampleVol(av, 10, AP, DV, ML); ids(isnan(ids)) = 0;
+                hi_ = image(ax, 'XData',xG([1 end]), 'YData',dG([1 end]), 'CData',ind2rgb(ids + 1, atlasCmap));
+                hi_.AlphaData = alphaA * double(ids > 0);
+                hi_.HitTest = 'off'; hi_.PickableParts = 'none';
+            end
+            % track: whole track thin, recorded stretch thick (colours as the probe column)
+            if ~isempty(tc)
+                scatter(ax, zeros(sum(~rec),1), dTrack(~rec), 6, tc.colors(~rec,:), 'filled', ...
+                    'MarkerFaceAlpha',0.5, 'HitTest','off');
+                scatter(ax, zeros(sum(rec),1), dTrack(rec), 28, tc.colors(rec,:), 'filled', ...
+                    'MarkerFaceAlpha',0.9, 'MarkerEdgeColor','k', 'HitTest','off');
+            end
+            for b = bndIn(:)'
+                plot(ax, xG([1 end]), [b b], 'w--', 'LineWidth',1.5, 'HitTest','off', 'PickableParts','none');
+            end
+            for b = siteRange(:)'
+                plot(ax, xG([1 end]), [b b], 'w:', 'LineWidth',1.5, 'HitTest','off', 'PickableParts','none');
+            end
+            axis(ax, 'normal');
+            set(ax, 'YDir','normal', 'YLim',yl, 'XLim',xG([1 end]), ...
+                'XTickLabelMode','auto', 'YTickLabelMode','auto', 'FontSize',8);
+            title(ax, sprintf('%s, along the probe  (S%d)', names{p}, selectedShank));
+            xlabel(ax, xlab{p}); ylabel(ax, 'Depth on probe (µm)');
+        end
+    end
+
+    % Track coordinates as a function of (current) probe depth: sorted, unique depths
+    function [depths, coords] = trackCurve(D2A_shank)
+        coords = D2A_shank.Coordinates;
+        depths = D2A_shank.Depth;
+        valid  = ~any(isnan(coords), 2);
+        [depths, sOrd] = sort(depths(valid));
+        coords = coords(valid,:); coords = coords(sOrd,:);
+        [depths, ~, uIdx] = unique(depths, 'stable');
+        coords = cell2mat(arrayfun(@(u) mean(coords(uIdx == u,:), 1), (1:numel(depths))', 'Uni', 0));
+    end
+
     % ── Brain slice zoom helper ───────────────────────────────────────────────
     % Narrows the X-axis view to brainZoom fraction of its full width,
     % centred on cx (probe position in image x-coordinates).
@@ -642,8 +762,22 @@ drawAll();
             short = regexprep(F.Names, {'^LFP: ','log10 ','good units per bin','mean amplitude','neighbour correlation','ripple events per min',' \d.*Hz$', ...
                 '^tuning: ','^mpep: ','RF \(sig\. receptive field\)','locked to grating TF','locked to sound modulation',' responsive$'}, ...
                 {'','','units','amplitude','nb corr','ripple ev','','','','RF','TF locked','AM locked',' resp'});
-            set(axFeat, 'YLim', axProbe.YLim, 'XLim', xl_f, 'XTick', 1:size(V,2), 'XTickLabel', short, 'XTickLabelRotation', 60, 'FontSize', 7);
+            xTk = 1:size(V,2); xLb = short;
             hold(axFeat, 'on');
+            % CSD images (ripple-triggered, visually evoked) next to the features: depth x time,
+            % sinks blue, sources red (in noise SDs), dotted line at the event/stimulus onset
+            if isfield(F,'CSD')
+                for ci = 1:numel(F.CSD)
+                    c = F.CSD(ci);
+                    x1 = size(V,2) + 0.8 + (ci-1)*3.3; x2 = x1 + 3;
+                    image(axFeat, 'XData',[x1 x2], 'YData',c.Depth([1 end]), 'CData',local_csdRGB(c.CSD), 'HitTest','off', 'PickableParts','none');
+                    x0 = x1 + (0 - c.t(1))/(c.t(end) - c.t(1))*(x2 - x1);
+                    plot(axFeat, [x0 x0], c.Depth([1 end]), 'k:', 'LineWidth',1, 'HitTest','off');
+                    xTk(end+1) = (x1 + x2)/2; xLb{end+1} = c.Name; %#ok<AGROW>
+                    xl_f(2) = x2 + 0.5;
+                end
+            end
+            set(axFeat, 'YLim', axProbe.YLim, 'XLim', xl_f, 'XTick', xTk, 'XTickLabel', xLb, 'XTickLabelRotation', 60, 'FontSize', 7);
             bnd_f = boundaries{selSi};
             for bi = 1:numel(bnd_f.depths)
                 bd = bnd_f.depths(bi);
@@ -732,14 +866,13 @@ drawAll();
     % In uifigures, axProbe.CurrentPoint is not reliably updated inside
     % WindowButton* callbacks, so we transform fig.CurrentPoint manually.
     function [cx, cy, inside] = figPtToAxProbe()
-        axPos   = getpixelposition(axProbe, true); % [left bottom w h] in fig pixels
-        figPx = fig.CurrentPoint;               % [x y] in figure pixels (from bottom-left)
-        ti    = axProbe.TightInset;              % [left bottom right top] in pixels
-        % Map into the inner data area so the transform is accurate at all depths
-        innerLeft   = axPos(1) + ti(1);
-        innerBottom = axPos(2) + ti(2);
-        innerW      = axPos(3) - ti(1) - ti(3);
-        innerH      = axPos(4) - ti(2) - ti(4);
+        pp    = getpixelposition(axPanel, true); % panel [left bottom w h] in fig pixels
+        ip    = axProbe.InnerPosition;           % plot area within the panel (pixels, set by layoutAxes)
+        figPx = fig.CurrentPoint;                % [x y] in figure pixels (from bottom-left)
+        innerLeft   = pp(1) + ip(1);
+        innerBottom = pp(2) + ip(2);
+        innerW      = ip(3);
+        innerH      = ip(4);
         px = figPx(1) - innerLeft;
         py = figPx(2) - innerBottom;
         xl = axProbe.XLim;
@@ -1367,6 +1500,27 @@ if isfield(s, field)
 else
     val = default;
 end
+end
+
+function out = local_sampleVol(V, vs, c1, c2, c3)
+% Nearest-voxel values of volume V (voxel size vs um) at coordinates c1/c2/c3 (um along V's
+% dimensions 1/2/3, as the track coordinates: index = round(coord/vs)); NaN outside the volume
+sz = size(V);
+i1 = round(c1/vs); i2 = round(c2/vs); i3 = round(c3/vs);
+ok = i1 >= 1 & i1 <= sz(1) & i2 >= 1 & i2 <= sz(2) & i3 >= 1 & i3 <= sz(3);
+out = nan(size(c1));
+out(ok) = double(V(sub2ind(sz(1:3), i1(ok), i2(ok), i3(ok))));
+end
+
+function rgb = local_csdRGB(M)
+% CSD (in noise SDs) as RGB: sinks (negative) blue, sources red, white 0 or unknown; scaled to the
+% 99th percentile of |CSD| (at least 3 SD)
+s = max(3, prctile(abs(M(:)), 99));
+v = max(-1, min(1, M/s)); v(isnan(M)) = 0; % (min/max ignore NaN: test M itself)
+R = ones(size(v)); G = ones(size(v)); B = ones(size(v));
+R(v < 0) = 1 + v(v < 0); G(v < 0) = 1 + v(v < 0);
+G(v > 0) = 1 - v(v > 0); B(v > 0) = 1 - v(v > 0);
+rgb = cat(3, R, G, B);
 end
 
 function s = local_num(x)

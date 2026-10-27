@@ -43,6 +43,17 @@ function [Depth2Area, AlignmentFeatures, Fit] = alignatlasdata_constrained(histi
 %    AreaPaths (Allen structure id path tokens) and Weight; the fraction of positive units per depth
 %    (smoothed over Opt.LandmarkSmoothUm) is fitted to those areas, e.g. units with a receptive field
 %    to visual areas. A landmark whose areas are not in the recorded range gives no evidence.
+%    Type 'profile' (e.g. EvokedCSDLandmarks, the visual early CSD sink -> VIS layer 4/superficial SC
+%    via AreaRegex on the acronym): a value per depth instead of per unit.
+%  - Ripple-triggered CSD (Opt.LFP.RippleCSD): the ripple landmark is used only where the sharp-wave
+%    sink/source of CA1 is present (or, without a CSD, where the ripple band is narrow). Confirmed
+%    strongly by the CSD (source and sink >= Opt.RippleCSDStrongSD) it gets weight
+%    Opt.RippleCSDWeight (as the activity profile), outside the cap, and
+%    the profile becomes a Gaussian (sd Opt.RipplePyrSdUm) at the CSD source (pyramidal layer),
+%    fitted to CA and prosubiculum.
+%  - Theta CSD (Opt.LFP.ThetaCSD): theta sinks/sources are confined to the hippocampus -> HIP,
+%    weight Opt.ThetaCSDWeight.
+%  - Opt.CSD: CSD images (EvokedCSDLandmarks) passed on to the curation GUI (AlignmentFeatures.CSD).
 % Brain surface from the data: units cannot lie outside the brain, so the aligned surface may not be
 % below the highest good units (hard-ish penalty). If the top >= Opt.SurfaceGapUm of the probe has no
 % good units, the probe was partly outside the brain: the surface is expected Opt.SurfaceAboveUnitsUm
@@ -51,9 +62,10 @@ if nargin < 6, Opt = struct; end
 Def = struct('BinUm',10,'SmoothUm',30,'ScaleRange',[0.8 1.3],'ScaleStep',0.01,'OffsetRangeUm',[-1000 1000], ...
     'OffsetStepUm',10,'ShankOffsetUm',100,'KnotUm',50,'MaxWarpUm',150,'MaxStretchDev',0.3,'WarpPenalty',0.5,'MarginUm',50, ...
     'TipToSiteUm',175,'OffsetPriorSdUm',300,'PriorWeight',0.05,'PriorCapSD',2,'LFP',[],'LFPWeight',0.3, ...
-    'MaxLandmarkWeight',0.5,'RippleMaxWidthUm',700, ...
+    'MaxLandmarkWeight',0.5,'RippleMaxWidthUm',700,'ThetaCSDWeight',0.3,'ThetaCSDMinSD',4,'RippleCSDWeight',1,'RipplePyrSdUm',75,'RippleCSDStrongSD',20,'DSWeight',0.5,'SlowCSDWeight',0, ...
     'SurfaceGapUm',300,'SurfaceAboveUnitsUm',100,'SurfaceSdUm',150,'SurfaceWeight',0.05, ...
-    'Landmarks',struct('Name',{},'Shank',{},'Depth',{},'Value',{},'AreaPaths',{},'Weight',{}),'LandmarkSmoothUm',100);
+    'Landmarks',struct('Name',{},'Type',{},'Shank',{},'Depth',{},'Value',{},'AreaPaths',{},'AreaRegex',{},'Weight',{}), ...
+    'LandmarkSmoothUm',100,'CSD',[]);
 Def.OffsetRangeUm = [-2000 1000]; % the track end can be >1 mm deeper than the tip
 for fn = fieldnames(Def)'
     if ~isfield(Opt,fn{1}), Opt.(fn{1}) = Def.(fn{1}); end
@@ -101,14 +113,16 @@ end
 % structure id path tokens), each fitted with its weight next to the activity profile.
 % LM{si}: nDepth x nLandmark (z-scored, NaN where unknown)
 Fit = struct; Fit.LandmarkWarnings = {}; Fit.LandmarkNotes = {};
-LMName = {}; LMAreas = {}; LMW = [];
+LMName = {}; LMAreas = {}; LMRegex = {}; LMW = [];
 LM = repmat({zeros(numel(dGrid),0)},1,nSh);
 % LFP features on the same depth bins (per shank); the ripple event rate marks Ammon's horn
-UseLFP = ~isempty(Opt.LFP);
+UseLFP = ~isempty(Opt.LFP); RipCSD = []; RipValid = false(1,nSh);
 if UseLFP
     ripCol = find(contains(Opt.LFP.Names,'ripple events'),1); % event rate: not dominated by spikes, unlike ripple-band power
     if isempty(ripCol), ripCol = find(contains(Opt.LFP.Names,'ripple'),1); end
-    LMName{end+1} = 'LFP ripple events'; LMAreas{end+1} = {'/375/'}; LMW(end+1) = Opt.LFPWeight;
+    % areas: Ammon's horn and prosubiculum (continuous with the CA1 pyramidal layer)
+    LMName{end+1} = 'LFP ripple events'; LMAreas{end+1} = {'/375/','/484682470/'}; LMRegex{end+1} = ''; LMW(end+1) = Opt.LFPWeight;
+    if isfield(Opt.LFP,'RippleCSD'), RipCSD = Opt.LFP.RippleCSD; end
     for si = 1:nSh
         LM{si}(:,end+1) = NaN;
         ch = Opt.LFP.Shank == ShanksUsed(si);
@@ -126,7 +140,26 @@ if UseLFP
             lo = find(r(1:ipk) < hm,1,'last'); if isempty(lo), lo = 0; end
             hi = find(r(ipk:end) < hm,1,'first'); if isempty(hi), hi = numel(r) - ipk + 2; end
             widthUm = ((ipk + hi - 1) - lo - 1)*Opt.BinUm;
-            if widthUm > Opt.RippleMaxWidthUm
+            % Ripple-triggered CSD (LFPDepthFeatures): a sharp-wave sink below a source at the
+            % ripples identifies CA1; without it the events are not CA1. It overrides the width rule.
+            rc = []; if ~isempty(RipCSD), rc = RipCSD([RipCSD.Shank] == ShanksUsed(si)); end
+            if ~isempty(rc)
+                [~,best] = max([rc.nEvents]); rc = rc(best);
+                if rc.Valid && min(rc.SourceZ,-rc.SinkZ) >= Opt.RippleCSDStrongSD
+                    % strong sharp-wave CSD: its source marks the CA1 pyramidal layer: a narrow profile there
+                    LM{si}(:,end) = Z(exp(-0.5*((dGrid - rc.SourceDepth)/Opt.RipplePyrSdUm).^2)); RipValid(si) = true;
+                    Fit.LandmarkNotes{end+1} = sprintf('Shank %d: strong ripple-triggered CSD: CA1 pyramidal layer at %.0f um (source %.1f SD, sink %.1f SD at %.0f um; %d events)', ...
+                        ShanksUsed(si),rc.SourceDepth,rc.SourceZ,rc.SinkZ,rc.SinkDepth,rc.nEvents);
+                elseif rc.Valid
+                    LM{si}(:,end) = r; % weak: the ripple rate profile, normal weight
+                    Fit.LandmarkNotes{end+1} = sprintf('Shank %d: ripple-triggered CSD confirms CA1 (source %.1f SD at %.0f um, sink %.1f SD at %.0f um; %d events)', ...
+                        ShanksUsed(si),rc.SourceZ,rc.SourceDepth,rc.SinkZ,rc.SinkDepth,rc.nEvents);
+                else
+                    Fit.LandmarkNotes{end+1} = sprintf('Shank %d: ripple events without a CA1 sharp-wave CSD (source %.1f SD, sink %.1f SD; %d events): not used', ...
+                        ShanksUsed(si),rc.SourceZ,rc.SinkZ,rc.nEvents);
+                end
+                fprintf('%s\n',Fit.LandmarkNotes{end})
+            elseif widthUm > Opt.RippleMaxWidthUm
                 Fit.LandmarkNotes{end+1} = sprintf('Shank %d: ripple events in a %.0f um wide band (peak %.0f um): not used (not specific to CA1)', ...
                     ShanksUsed(si),widthUm,dGrid(ipk));
                 fprintf('%s\n',Fit.LandmarkNotes{end})
@@ -136,24 +169,109 @@ if UseLFP
         end
     end
 end
-% Unit landmarks (e.g. TuningLandmarks: fraction of units with a receptive field / locked to a
-% stimulus): fraction per depth, smoothed over Opt.LandmarkSmoothUm; unknown where < 2 units nearby
+% Theta CSD (LFPDepthFeatures): the CSD removes volume conduction, so theta sinks/sources are
+% confined to the hippocampus (CA and DG, Allen 'HIP' /1080/). Landmark: the theta CSD strength per
+% depth (RMS over the cycle, in noise SDs); used where it is clear (max >= Opt.ThetaCSDMinSD)
+if UseLFP && isfield(Opt.LFP,'ThetaCSD') && ~isempty(Opt.LFP.ThetaCSD)
+    LMName{end+1} = 'theta CSD'; LMAreas{end+1} = {'/1080/'}; LMRegex{end+1} = ''; LMW(end+1) = Opt.ThetaCSDWeight;
+    for si = 1:nSh
+        LM{si}(:,end+1) = NaN;
+        tc_ = Opt.LFP.ThetaCSD([Opt.LFP.ThetaCSD.Shank] == ShanksUsed(si));
+        if isempty(tc_), continue; end
+        [~,best] = max([tc_.nEvents]); tc_ = tc_(best);
+        rmsZ = sqrt(mean((tc_.CSD/max(tc_.Noise,eps)).^2,2,'omitnan'));
+        if max(rmsZ) < Opt.ThetaCSDMinSD
+            Fit.LandmarkNotes{end+1} = sprintf('Shank %d: no clear theta CSD (max %.1f SD): not used',ShanksUsed(si),max(rmsZ));
+            continue
+        end
+        b = discretize(tc_.Depth,Edges); okb = ~isnan(b) & ~isnan(rmsZ);
+        prof = accumarray(b(okb),rmsZ(okb),[numel(dGrid) 1],@mean,NaN);
+        LM{si}(:,end) = Z(prof);
+        Feat{si}.Values = [Feat{si}.Values prof];
+        Feat{si}.Names = [Feat{si}.Names {'theta CSD strength'}];
+        Fit.LandmarkNotes{end+1} = sprintf('Shank %d: theta CSD up to %.1f SD, strongest at %.0f um',ShanksUsed(si),max(rmsZ),tc_.Depth(find(rmsZ == max(rmsZ),1)));
+        fprintf('%s\n',Fit.LandmarkNotes{end})
+    end
+end
+% Point landmarks from the LFP CSDs (LFPDepthFeatures), where confirmed (Valid): a Gaussian (sd
+% given) at the depth, fitted to the areas:
+%  - dentate spikes: the reference channel (largest dentate spikes) -> DG hilus/granule layer
+%  - slow waves: the strongest deep sink -> isocortex layer 5 (Opt.SlowCSDWeight 0: shown, not
+%    fitted; on EB001 the strongest slow-wave generator was hippocampal despite the exclusions)
+PointLM = {'DentateCSD','dentate spikes (DG hilus)','RefDepth',{},'^DG-(po|sg)$',Opt.DSWeight,75; ...
+           'SlowCSD','slow-wave sink (cortex L5)','SinkDepth',{'/315/'},'5$',Opt.SlowCSDWeight,100};
+for pl = 1:size(PointLM,1)
+    if ~UseLFP || ~isfield(Opt.LFP,PointLM{pl,1}) || isempty(Opt.LFP.(PointLM{pl,1})), continue; end
+    PC = Opt.LFP.(PointLM{pl,1});
+    LMName{end+1} = PointLM{pl,2}; LMAreas{end+1} = PointLM{pl,4}; LMRegex{end+1} = PointLM{pl,5}; LMW(end+1) = PointLM{pl,6}; %#ok<AGROW>
+    for si = 1:nSh
+        LM{si}(:,end+1) = NaN;
+        pc = PC([PC.Shank] == ShanksUsed(si));
+        if isempty(pc), continue; end
+        [~,best] = max([pc.nEvents]); pc = pc(best);
+        if ~pc.Valid
+            Fit.LandmarkNotes{end+1} = sprintf('Shank %d: %s not confirmed (%d events)',ShanksUsed(si),PointLM{pl,2},pc.nEvents);
+            continue
+        end
+        d0 = pc.(PointLM{pl,3});
+        LM{si}(:,end) = Z(exp(-0.5*((dGrid - d0)/PointLM{pl,7}).^2));
+        Fit.LandmarkNotes{end+1} = sprintf('Shank %d: %s at %.0f um (%d events)',ShanksUsed(si),PointLM{pl,2},d0,pc.nEvents);
+        fprintf('%s\n',Fit.LandmarkNotes{end})
+    end
+end
+% Other landmarks (Opt.Landmarks), by Type:
+%  'fraction' (default; e.g. TuningLandmarks): Value 0/1 per unit; fraction per depth, smoothed over
+%    Opt.LandmarkSmoothUm; unknown where < 2 units nearby
+%  'profile' (e.g. EvokedCSDLandmarks): Value per depth sample; mean per depth bin (smoothed over
+%    Opt.SmoothUm), unknown where there are no samples
+% Areas: Allen structure id path tokens (AreaPaths) and/or a regular expression on the acronym (AreaRegex)
 SmL = @(x) smoothdata(x,1,'gaussian',max(3,round(5*Opt.LandmarkSmoothUm/Opt.BinUm)));
 MinDens = 2/(2.5*Opt.LandmarkSmoothUm/Opt.BinUm); % ~2 units within +- 1 sigma
 for k = 1:numel(Opt.Landmarks)
     L = Opt.Landmarks(k);
-    LMName{end+1} = L.Name; LMAreas{end+1} = cellstr(L.AreaPaths); LMW(end+1) = L.Weight; %#ok<AGROW>
+    typ = 'fraction'; if isfield(L,'Type') && ~isempty(L.Type), typ = L.Type; end
+    rx = ''; if isfield(L,'AreaRegex'), rx = L.AreaRegex; end
+    LMName{end+1} = L.Name; LMAreas{end+1} = cellstr(L.AreaPaths); LMRegex{end+1} = rx; LMW(end+1) = L.Weight; %#ok<AGROW>
     for si = 1:nSh
         LM{si}(:,end+1) = NaN;
         on = L.Shank(:) == ShanksUsed(si);
         if sum(on) < 10 || ~any(L.Value(on)), continue; end
-        cnt = SmL(histcounts(L.Depth(on),Edges)');
-        pos = SmL(histcounts(L.Depth(on & L.Value(:) > 0),Edges)');
-        frac = pos./cnt; frac(cnt < MinDens) = NaN;
-        if mean(~isnan(frac)) < 0.2, continue; end
-        LM{si}(:,end) = Z(frac);
-        Feat{si}.Values = [Feat{si}.Values frac];
-        Feat{si}.Names = [Feat{si}.Names {['tuning: ' L.Name]}];
+        if strcmp(typ,'profile')
+            b = discretize(L.Depth(on),Edges); v = L.Value(on); okb = ~isnan(b);
+            prof = accumarray(b(okb),v(okb),[numel(dGrid) 1],@mean,NaN);
+            known = ~isnan(prof);
+            prof = Sm(fillmissing(prof,'linear','EndValues','nearest')); prof(~known) = NaN;
+        else
+            cnt = SmL(histcounts(L.Depth(on),Edges)');
+            pos = SmL(histcounts(L.Depth(on & L.Value(:) > 0),Edges)');
+            prof = pos./cnt; prof(cnt < MinDens) = NaN;
+        end
+        if mean(~isnan(prof)) < 0.2, continue; end
+        LM{si}(:,end) = Z(prof);
+        Feat{si}.Values = [Feat{si}.Values prof];
+        if strcmp(typ,'profile'), Feat{si}.Names = [Feat{si}.Names {L.Name}]; else, Feat{si}.Names = [Feat{si}.Names {['tuning: ' L.Name]}]; end
+    end
+end
+% CSD images for the curation GUI (ripple-triggered from Opt.LFP, stimulus-evoked from Opt.CSD)
+for si = 1:nSh
+    Feat{si}.CSD = struct('Name',{},'Depth',{},'t',{},'CSD',{});
+    if UseLFP && ~isempty(RipCSD)
+        for c = RipCSD([RipCSD.Shank] == ShanksUsed(si))
+            Feat{si}.CSD(end+1) = struct('Name',sprintf('ripple CSD (%d ev)',c.nEvents),'Depth',c.Depth,'t',c.t,'CSD',c.CSD/max(c.Noise,eps));
+        end
+    end
+    lfpCSD = {'ThetaCSD','theta CSD (%d cyc)'; 'DentateCSD','dentate spike CSD (%d ev)'; 'SlowCSD','slow-wave CSD (%d waves)'};
+    for kc = 1:size(lfpCSD,1)
+        if ~UseLFP || ~isfield(Opt.LFP,lfpCSD{kc,1}) || isempty(Opt.LFP.(lfpCSD{kc,1})), continue; end
+        CC = Opt.LFP.(lfpCSD{kc,1});
+        for c = CC([CC.Shank] == ShanksUsed(si))
+            Feat{si}.CSD(end+1) = struct('Name',sprintf(lfpCSD{kc,2},c.nEvents),'Depth',c.Depth,'t',c.t,'CSD',c.CSD/max(c.Noise,eps));
+        end
+    end
+    if isstruct(Opt.CSD) && ~isempty(Opt.CSD)
+        for c = Opt.CSD([Opt.CSD.Shank] == ShanksUsed(si))
+            Feat{si}.CSD(end+1) = struct('Name',c.Name,'Depth',c.Depth,'t',c.t,'CSD',c.CSD);
+        end
     end
 end
 nLM = numel(LMName);
@@ -178,7 +296,12 @@ for si = 1:nSh
         if row(k) == 0, continue; end % 'Not found in brain' etc.
         col{k} = stCol{row(k)};
         pth = st.structure_id_path{row(k)};
-        for j = 1:nLM, lm(k,j) = any(cellfun(@(a) contains(pth,a),LMAreas{j})); end % e.g. Ammon's horn for ripples
+        for j = 1:nLM % e.g. Ammon's horn for ripples, VIS layer 4 for the visual CSD sink
+            % path tokens and/or acronym pattern; with both, both must match (e.g. isocortex AND layer 5)
+            inPath = any(cellfun(@(a) contains(pth,a),LMAreas{j}));
+            inRx = ~isempty(LMRegex{j}) && ~isempty(regexp(acr{k},LMRegex{j},'once'));
+            if ~isempty(LMAreas{j}) && ~isempty(LMRegex{j}), lm(k,j) = inPath && inRx; else, lm(k,j) = inPath || inRx; end
+        end
         if contains(pth,'/1009/') || contains(pth,'/73/') || strcmpi(stAcr{row(k)},'root'), continue; end % fibre tract, ventricle
         efr = stEFR(row(k)); if isnan(efr) || efr <= 0, efr = 1; end
         pred(k) = 1 + 0.25*log10(efr);
@@ -192,13 +315,20 @@ end
 % landmark's area list) may be wrong; it cannot help the fit then
 for k = 1:numel(Opt.Landmarks)
     j = find(strcmp(LMName,Opt.Landmarks(k).Name),1);
+    if Opt.Landmarks(k).Weight <= 0, continue; end % display only
+    isProfile = isfield(Opt.Landmarks,'Type') && strcmp(Opt.Landmarks(k).Type,'profile'); % only passed on when clear (e.g. CSD sink > threshold)
     for si = 1:nSh
         on = Opt.Landmarks(k).Shank(:) == ShanksUsed(si);
-        if sum(on) >= 10 && mean(Opt.Landmarks(k).Value(on) > 0) >= 0.2 && ~any(Hist{si}.lm(:,j))
+        if sum(on) < 10 || any(Hist{si}.lm(:,j)), continue; end
+        if isProfile
+            Fit.LandmarkWarnings{end+1} = sprintf('Shank %d: clear "%s", but none of its areas on the histology track',ShanksUsed(si),LMName{j});
+        elseif mean(Opt.Landmarks(k).Value(on) > 0) >= 0.2
             Fit.LandmarkWarnings{end+1} = sprintf('Shank %d: %.0f%% of units "%s", but none of its areas on the histology track', ...
                 ShanksUsed(si),100*mean(Opt.Landmarks(k).Value(on) > 0),LMName{j});
-            warning('alignatlasdata_constrained:Landmark','%s',Fit.LandmarkWarnings{end})
+        else
+            continue
         end
+        warning('alignatlasdata_constrained:Landmark','%s',Fit.LandmarkWarnings{end})
     end
 end
 % Highest good units per shank (and whether the top of the probe was without units: outside the brain)
@@ -218,6 +348,17 @@ LmAt   = @(H,s) local_pred(H,s,'lm');
 % Landmark weights per shank (0 for landmarks without data on that shank)
 Wsh = cellfun(@(L) LMW .* any(~isnan(L),1),LM,'Uni',0);
 Wsh = cellfun(@(w) w*min(1,Opt.MaxLandmarkWeight/max(sum(w),eps)),Wsh,'Uni',0); % activity dominates
+% Ripples confirmed by the ripple-triggered CSD (CA1 sharp-wave sink below a source at the ripples)
+% are a precise anchor for the CA1 pyramidal layer: weight Opt.RippleCSDWeight, outside the cap
+rc = find(strcmp(LMName,'LFP ripple events'),1);
+if ~isempty(rc)
+    for si = find(RipValid), Wsh{si}(rc) = Opt.RippleCSDWeight; end
+end
+% confirmed dentate spikes likewise mark one layer precisely: their weight outside the cap too
+jd = find(strcmp(LMName,'dentate spikes (DG hilus)'),1);
+if ~isempty(jd)
+    for si = 1:nSh, if any(~isnan(LM{si}(:,jd))), Wsh{si}(jd) = Opt.DSWeight; end, end
+end
 % Score of a mapping s(d) for one shank: correlation of the activity with the predicted profile,
 % combined with the correlation of each landmark with its areas
 ScoreAt = @(si,s) local_score(E{si},LM{si},PredAt(Hist{si},s),LmAt(Hist{si},s),Wsh{si});
