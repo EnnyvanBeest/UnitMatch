@@ -89,7 +89,23 @@ if ~histodone %Just in case it's not done yet
                 % Constrained alignment (scale/offset with the track end as tip, limited local warp),
                 % with LFP landmarks from all recordings used here (they may cover different shanks)
                 LFP = [];
-                RawForLFP = Params.RawDataPaths; if ~iscell(RawForLFP), RawForLFP = {RawForLFP}; end
+                RawForLFP = {}; if isfield(Params,'RawDataPaths'), RawForLFP = Params.RawDataPaths; end
+                if ~iscell(RawForLFP), RawForLFP = {RawForLFP}; end
+                % Params.RawDataPaths only lists recordings that are in a UnitMatch run: otherwise take
+                % the raw files from the Kilosort folders' PreparedData.mat
+                if isempty(RawForLFP) && exist('myKsDir','var') && iscell(myKsDir)
+                    for ki = 1:numel(myKsDir)
+                        pd = fullfile(myKsDir{ki},'PreparedData.mat');
+                        if ~exist(pd,'file'), continue; end
+                        tmpSP = load(pd,'SessionParams');
+                        if isfield(tmpSP,'SessionParams') && isfield(tmpSP.SessionParams,'RawDataPaths')
+                            rp = tmpSP.SessionParams.RawDataPaths; if ~iscell(rp), rp = {rp}; end
+                            RawForLFP = [RawForLFP(:)' rp(:)'];
+                        end
+                    end
+                    if ~isempty(RawForLFP), fprintf('LFP: raw files from PreparedData.mat (not in a UnitMatch run)\n'); end
+                end
+                if isempty(RawForLFP), warning('GetHistologyOutput:NoRaw','No raw data file for LFP features'); end
                 for rfi = 1:numel(RawForLFP)
                     rf = RawForLFP{rfi}; if isstruct(rf), rf = fullfile(rf(1).folder,rf(1).name); end
                     try

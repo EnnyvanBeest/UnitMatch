@@ -18,7 +18,10 @@ function fig = AlignmentCurationGUI(matFile, allenCCFPath, histoRoot)
 %                  <histoRoot>/<Mouse>/brainreg_output/downsampled_standard.tiff
 %
 % What the GUI shows:
-%   - Probe depth bar (left): area-coloured patches, draggable white boundary lines
+%   - Probe depth bar (left): area-coloured patches, draggable white boundary lines; with
+%     <SaveDir>\InsertionDepths.xlsx the brain surface expected from the noted insertion depth
+%     (magenta, +-300 um band; dotted: the other probe's note), and a red title if the aligned
+%     surface is > 500 um away from it
 %   - Coronal + Sagittal brain slices: probe track overlaid, coloured by area
 %     Uses per-mouse brainreg histology when available, falls back to Allen CCF atlas
 %   - Functional features panel (right, only when AlignmentFeatures was saved)
@@ -80,6 +83,14 @@ clear raw
 parts = strsplit(matDir, filesep);
 mouseName = '';
 if numel(parts) >= 3, mouseName = parts{end-2}; end
+% Insertion depth noted during the experiment (SaveDir\InsertionDepths.xlsx: Mouse, Date, Probe0 and
+% Probe1 depth in um; imprecise, a few 100 um): drawn as the expected brain surface on the probe
+NotedDepth = NaN; NotedOther = NaN;
+if numel(parts) >= 4
+    [NotedDepth, NotedOther] = local_notedDepth(fullfile(strjoin(parts(1:end-3), filesep), 'InsertionDepths.xlsx'), ...
+        mouseName, parts{end-1}, parts{end});
+end
+NotedTolUm = 500; % aligned surface further than this from the noted one: warn
 
 %% ── Load Allen CCF annotation volume ─────────────────────────────────────────
 av = []; avSz = [0 0 0]; atlasCmap = []; st = [];
@@ -323,6 +334,7 @@ drawAll();
 
         shanks = unique(D2A.Shank);
         nS  = numel(shanks);
+        surfOff = 0; % largest distance between the aligned and the noted surface (um)
         gap = 0.05;
         sw  = (1 - gap*(nS+1)) / nS;
 
@@ -402,6 +414,16 @@ drawAll();
                         text(axProbe, xMid, topShown - 20 - 15*mod(si,2), sprintf('surf. %.0f\\uparrow', surf), ...
                             'Color',[0.2 0.2 1], 'FontSize',6, 'HorizontalAlignment','center', 'HitTest','off', 'Clipping','off');
                     end
+                    if ~isnan(NotedDepth) && isfield(AFs,'TipDepth')
+                        surfOff = max(surfOff, abs(surf - (AFs.TipDepth + NotedDepth)));
+                    end
+                end
+                % Noted insertion depth: expected surface (tip + noted depth), with its imprecision
+                if ~isnan(NotedDepth) && isfield(AFs,'TipDepth')
+                    drawNotedSurface(x0, x1, xMid, si, AFs.TipDepth + NotedDepth, 'noted surface', [0.85 0 0.85], '--');
+                end
+                if ~isnan(NotedOther) && NotedOther ~= NotedDepth && isfield(AFs,'TipDepth')
+                    drawNotedSurface(x0, x1, xMid, si, AFs.TipDepth + NotedOther, 'other probe''s note', [0.55 0.3 0.55], ':');
                 end
             end
 
@@ -449,8 +471,30 @@ drawAll();
                 'Color',[1 1 0], 'LineWidth',2.5, 'HitTest','off', 'PickableParts','none');
         end
 
-        title(axProbe, sprintf('Probe  shift=%.0fµm  scale=%.2fx  —  drag boundaries here', ...
-            slShift.Value, slScale.Value));
+        ttl = sprintf('Probe  shift=%.0fµm  scale=%.2fx  —  drag boundaries here', slShift.Value, slScale.Value);
+        if surfOff > NotedTolUm
+            title(axProbe, {ttl, sprintf('Surface %.0f µm from the noted insertion depth (%.0f µm)', surfOff, NotedDepth)}, 'Color',[0.8 0 0]);
+        elseif ~isnan(NotedDepth)
+            title(axProbe, {ttl, sprintf('Noted insertion depth %.0f µm', NotedDepth)}, 'Color',[0 0 0]);
+        else
+            title(axProbe, ttl, 'Color',[0 0 0]);
+        end
+    end
+
+    % Expected brain surface from a noted insertion depth: a line with a band of +-300 um (the notes
+    % can be off by a few 100 um); above the shown range only an arrow with its depth
+    function drawNotedSurface(x0, x1, xMid, si, d, lbl, col, ls)
+        yl = axProbe.YLim;
+        if newFeatures && isfield(AlignmentFeatures{1},'SiteRange'), yTop = AlignmentFeatures{1}.SiteRange(2) + 250; else, yTop = yl(2); end
+        if d <= yTop
+            patch(axProbe, [x0 x1 x1 x0], [d-300 d-300 min(d+300,yTop) min(d+300,yTop)], col, ...
+                'FaceAlpha',0.12, 'EdgeColor','none', 'HitTest','off', 'PickableParts','none');
+            plot(axProbe, [x0 x1], [d d], ls, 'Color',col, 'LineWidth',2, 'HitTest','off', 'PickableParts','none');
+            text(axProbe, x0, d, [lbl ' '], 'Color',col, 'FontSize',7, 'HorizontalAlignment','right', 'HitTest','off', 'Clipping','off');
+        else
+            text(axProbe, xMid, yTop - 50 - 15*mod(si,2), sprintf('%s %.0f\\uparrow', lbl, d), ...
+                'Color',col, 'FontSize',6, 'HorizontalAlignment','center', 'HitTest','off', 'Clipping','off');
+        end
     end
 
     % ── Brain slices ──────────────────────────────────────────────────────────
@@ -1526,6 +1570,31 @@ end
 function s = local_num(x)
 % Correlation as text; '-' for a landmark that was not used
 if isnan(x), s = '-'; else, s = sprintf('%.2f', x); end
+end
+
+function [d, dOther] = local_notedDepth(xlsxFile, mouse, dateStr, probe)
+% Noted insertion depth (um) of this probe and of the other probe that day, from a sheet with
+% columns Mouse (only on a mouse's first row), Date, Probe0 depth, Probe1 depth. NaN if not noted.
+d = NaN; dOther = NaN;
+if ~exist(xlsxFile,'file'), return; end
+pr = sscanf(lower(probe), 'probe%d');
+if isempty(pr) || pr > 1, return; end
+try
+    T = readtable(xlsxFile, 'VariableNamingRule','preserve');
+    m = string(T{:,1}); m(ismissing(m)) = "";
+    for i = 2:numel(m), if m(i) == "", m(i) = m(i-1); end, end
+    dt = T{:,2}; if ~isdatetime(dt), dt = datetime(string(dt)); end
+    want = datetime(dateStr, 'InputFormat','yyyy-MM-dd');
+    row = find(m == string(mouse) & dt == want, 1);
+    if isempty(row) % e.g. a year typo in the notes
+        row = find(m == string(mouse) & month(dt) == month(want) & day(dt) == day(want), 1);
+    end
+    if isempty(row), return; end
+    v = double(T{row, 3:4});
+    d = v(pr + 1); dOther = v(2 - pr);
+catch ME
+    warning('AlignmentCurationGUI:Notes', 'Could not read %s: %s', xlsxFile, ME.message)
+end
 end
 
 function ptr = conditional_ptr(condition)

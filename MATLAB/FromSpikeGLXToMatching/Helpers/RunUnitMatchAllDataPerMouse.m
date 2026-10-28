@@ -9,6 +9,12 @@ DateOpt = cellfun(@(X) {X.name},DateOpt,'UniformOutput',0);
 
 RemoveOldCopies = 1;
 Redo = 0; % Redo generally
+% Fill missing only: run UnitMatch just for recordings that are in no existing UnitMatch run (never
+% run, crashed or empty folder). Existing runs and their UniqueIDs are left untouched (nothing is
+% removed); new units get UniqueIDs after the highest existing one of that mouse, in a free IMRO_<n>
+% folder. Downstream, only the added recordings need (re)processing.
+if ~isfield(PipelineParams,'UnitMatchFillMissingOnly'), PipelineParams.UnitMatchFillMissingOnly = 0; end
+FillMissingOnly = PipelineParams.UnitMatchFillMissingOnly;
 LogError = {}; % Keep track of which runs didn't work
 if ~exist('PipelineParamsOri','var')
     PipelineParamsOri = PipelineParams;
@@ -101,8 +107,26 @@ for midx = 1:length(MiceOpt)
 
     if ~isempty(UnitMatchExist)
         MouseAllDone = 1;
-    else 
+    else
         MouseAllDone = 0;
+    end
+    % Fill missing only: keep every existing run; note which Kilosort folders they cover and the
+    % highest UniqueID used for this mouse
+    CoveredKS = {}; MaxUIDExisting = 0;
+    if FillMissingOnly
+        for id = 1:numel(UnitMatchExist)
+            tmpUM = load(fullfile(UnitMatchExist(id).folder,UnitMatchExist(id).name),'UMparam','UniqueIDConversion');
+            CoveredKS = [CoveredKS, tmpUM.UMparam.KSDir(:)']; %#ok<AGROW>
+            if isfield(tmpUM,'UniqueIDConversion') && ~isempty(tmpUM.UniqueIDConversion.UniqueID)
+                MaxUIDExisting = max(MaxUIDExisting, max(tmpUM.UniqueIDConversion.UniqueID));
+            end
+        end
+        MissingKS = AllKiloSortPaths(~ismember(lower(AllKiloSortPaths),lower(CoveredKS)));
+        fprintf('%s: %d of %d recordings not in a UnitMatch run (new UniqueIDs from %d)\n',MiceOpt{midx},numel(MissingKS),numel(AllKiloSortPaths),MaxUIDExisting+1)
+        if isempty(MissingKS)
+            continue
+        end
+        UnitMatchExist = UnitMatchExist([]); MouseAllDone = 0; % nothing removed below
     end
     for id = 1:numel(UnitMatchExist)
         if RemoveOldCopies && (UnitMatchExist(id).date<FromDate || Redo)
@@ -171,6 +195,7 @@ for midx = 1:length(MiceOpt)
     ORIParams = PipelineParams; % RESET
 
     StartUID = 1; % To continue UIDs over an entire dataset (per mouse)
+    if FillMissingOnly, StartUID = MaxUIDExisting + 1; end
 
     %% Run UnitMatch
     for runid = 1:nRuns
@@ -194,6 +219,25 @@ for midx = 1:length(MiceOpt)
                 % % to compare to Yuan (makes the data according to their
                 % format, then you need to download their pipeline to run
                 % it)
+            end
+
+            if FillMissingOnly
+                % only runs whose recordings are all missing; never write into an existing run's folder
+                isCov = ismember(lower(PipelineParams.KSDir),lower(CoveredKS));
+                if any(isCov)
+                    if ~all(isCov) % (chronic) adding days to an existing run would renumber its units
+                        fprintf('Fill missing: %s not added - its run already exists for other recordings (redo that run to include it)\n', ...
+                            strjoin(PipelineParams.KSDir(~isCov),'; '))
+                    end
+                    continue
+                end
+                if exist(fullfile(PipelineParams.SaveDir,'UnitMatch','UnitMatch.mat'),'file')
+                    [ParentDir,~] = fileparts(PipelineParams.SaveDir);
+                    Used = dir(fullfile(ParentDir,'IMRO_*'));
+                    Used = cellfun(@(X) str2double(strrep(X,'IMRO_','')),{Used.name});
+                    PipelineParams.SaveDir = fullfile(ParentDir,['IMRO_' num2str(max([Used nRuns])+1)]);
+                end
+                fprintf('Fill missing: UnitMatch for %s -> %s\n',strjoin(PipelineParams.KSDir,'; '),PipelineParams.SaveDir)
             end
 
             %% Prepare personal save/directory and decompressed data paths

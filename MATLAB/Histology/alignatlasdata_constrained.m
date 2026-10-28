@@ -50,9 +50,12 @@ function [Depth2Area, AlignmentFeatures, Fit] = alignatlasdata_constrained(histi
 %    strongly by the CSD (source and sink >= Opt.RippleCSDStrongSD) it gets weight
 %    Opt.RippleCSDWeight (as the activity profile), outside the cap, and
 %    the profile becomes a Gaussian (sd Opt.RipplePyrSdUm) at the CSD source (pyramidal layer),
-%    fitted to CA and prosubiculum.
+%    fitted to Opt.RippleAreas (default CA, prosubiculum and subiculum).
 %  - Theta CSD (Opt.LFP.ThetaCSD): theta sinks/sources are confined to the hippocampus -> HIP,
 %    weight Opt.ThetaCSDWeight.
+%  - Hippocampal fissure: the theta-trough sink below a confirmed CA1 ripple CSD (local_fissure) ->
+%    the lower (molecular-layer) edge of CA1/ProS/SUB, or the top of DG-mo below it, weight
+%    Opt.FissureWeight outside the cap (as dentate spikes)
 %  - Opt.CSD: CSD images (EvokedCSDLandmarks) passed on to the curation GUI (AlignmentFeatures.CSD).
 % Brain surface from the data: units cannot lie outside the brain, so the aligned surface may not be
 % below the highest good units (hard-ish penalty). If the top >= Opt.SurfaceGapUm of the probe has no
@@ -63,6 +66,8 @@ Def = struct('BinUm',10,'SmoothUm',30,'ScaleRange',[0.8 1.3],'ScaleStep',0.01,'O
     'OffsetStepUm',10,'ShankOffsetUm',100,'KnotUm',50,'MaxWarpUm',150,'MaxStretchDev',0.3,'WarpPenalty',0.5,'MarginUm',50, ...
     'TipToSiteUm',175,'OffsetPriorSdUm',300,'PriorWeight',0.05,'PriorCapSD',2,'LFP',[],'LFPWeight',0.3, ...
     'MaxLandmarkWeight',0.5,'RippleMaxWidthUm',700,'ThetaCSDWeight',0.3,'ThetaCSDMinSD',4,'RippleCSDWeight',1,'RipplePyrSdUm',75,'RippleCSDStrongSD',20,'DSWeight',0.5,'SlowCSDWeight',0, ...
+    'FissureWeight',0.5,'FissureNearUm',75,'FissureMinSD',6, ...
+    'RippleAreas',{{'/375/','/484682470/','/502/'}}, ... % CA, ProS, SUB ({'/375/','/484682470/'}: without SUB)
     'SurfaceGapUm',300,'SurfaceAboveUnitsUm',100,'SurfaceSdUm',150,'SurfaceWeight',0.05, ...
     'Landmarks',struct('Name',{},'Type',{},'Shank',{},'Depth',{},'Value',{},'AreaPaths',{},'AreaRegex',{},'Weight',{}), ...
     'LandmarkSmoothUm',100,'CSD',[]);
@@ -120,8 +125,9 @@ UseLFP = ~isempty(Opt.LFP); RipCSD = []; RipValid = false(1,nSh);
 if UseLFP
     ripCol = find(contains(Opt.LFP.Names,'ripple events'),1); % event rate: not dominated by spikes, unlike ripple-band power
     if isempty(ripCol), ripCol = find(contains(Opt.LFP.Names,'ripple'),1); end
-    % areas: Ammon's horn and prosubiculum (continuous with the CA1 pyramidal layer)
-    LMName{end+1} = 'LFP ripple events'; LMAreas{end+1} = {'/375/','/484682470/'}; LMRegex{end+1} = ''; LMW(end+1) = Opt.LFPWeight;
+    % areas (Opt.RippleAreas): Ammon's horn and prosubiculum (continuous with the CA1 pyramidal layer)
+    % and, by default, subiculum (CA1 ripples propagate into it; subicular bursts ride on them)
+    LMName{end+1} = 'LFP ripple events'; LMAreas{end+1} = Opt.RippleAreas; LMRegex{end+1} = ''; LMW(end+1) = Opt.LFPWeight;
     if isfield(Opt.LFP,'RippleCSD'), RipCSD = Opt.LFP.RippleCSD; end
     for si = 1:nSh
         LM{si}(:,end+1) = NaN;
@@ -198,12 +204,23 @@ end
 %  - dentate spikes: the reference channel (largest dentate spikes) -> DG hilus/granule layer
 %  - slow waves: the strongest deep sink -> isocortex layer 5 (Opt.SlowCSDWeight 0: shown, not
 %    fitted; on EB001 the strongest slow-wave generator was hippocampal despite the exclusions)
+%  - hippocampal fissure: the theta-trough sink below a confirmed CA1 ripple source (local_fissure).
+%    It is the perforant-path input layer (CA1 lacunosum-moleculare, or the subicular molecular
+%    layer where the track crosses subiculum; DG need not be below) -> the lower edge of the
+%    CA1/ProS/SUB band and the top of DG-mo just below it (LMNear, within Opt.FissureNearUm).
+%    Evidence for DG itself comes from dentate spikes.
 PointLM = {'DentateCSD','dentate spikes (DG hilus)','RefDepth',{},'^DG-(po|sg)$',Opt.DSWeight,75; ...
-           'SlowCSD','slow-wave sink (cortex L5)','SinkDepth',{'/315/'},'5$',Opt.SlowCSDWeight,100};
+           'SlowCSD','slow-wave sink (cortex L5)','SinkDepth',{'/315/'},'5$',Opt.SlowCSDWeight,100; ...
+           'FissureCSD','hippocampal fissure (theta CSD)','SinkDepth',{},'^(CA1|CA2|CA3|ProS|SUB|DG-mo)$',Opt.FissureWeight,50};
+LMNear = {}; % per landmark (optional): {partner regex A, partner regex B, um}: only points of A near B or B near A
+if UseLFP && isfield(Opt.LFP,'ThetaCSD') && ~isempty(Opt.LFP.ThetaCSD) && ~isempty(RipCSD)
+    Opt.LFP.FissureCSD = local_fissure(Opt.LFP.ThetaCSD,RipCSD,Opt);
+end
 for pl = 1:size(PointLM,1)
     if ~UseLFP || ~isfield(Opt.LFP,PointLM{pl,1}) || isempty(Opt.LFP.(PointLM{pl,1})), continue; end
     PC = Opt.LFP.(PointLM{pl,1});
     LMName{end+1} = PointLM{pl,2}; LMAreas{end+1} = PointLM{pl,4}; LMRegex{end+1} = PointLM{pl,5}; LMW(end+1) = PointLM{pl,6}; %#ok<AGROW>
+    if strcmp(PointLM{pl,1},'FissureCSD'), LMNear{numel(LMName)} = {'^(CA1|CA2|CA3|ProS|SUB)$','^DG-mo$',Opt.FissureNearUm}; end %#ok<AGROW>
     for si = 1:nSh
         LM{si}(:,end+1) = NaN;
         pc = PC([PC.Shank] == ShanksUsed(si));
@@ -306,6 +323,22 @@ for si = 1:nSh
         efr = stEFR(row(k)); if isnan(efr) || efr <= 0, efr = 1; end
         pred(k) = 1 + 0.25*log10(efr);
     end
+    % Edge landmarks (LMNear = {A, B, um}): the lower edge of area A along the track (points of A with
+    % a point outside A in the brain at most um deeper), plus points of B at most um below A, e.g. the
+    % molecular-layer side of CA1/ProS/SUB, and the top of DG-mo where DG lies below
+    inBrain = ~strcmpi(acr,'Not found in brain') & row > 0;
+    for j = find(~cellfun(@isempty,LMNear(1:min(end,nLM))))
+        nr = LMNear{j};
+        inA = ~cellfun(@isempty,regexp(acr,nr{1},'once')); inB = ~cellfun(@isempty,regexp(acr,nr{2},'once'));
+        edge = false(nPt,1);
+        dt_ = tTrack(:)' - tTrack(:); % (k,m): how much deeper point m is than point k
+        if any(inA)
+            other = inBrain(:)' & ~inA(:)';
+            edge = edge | (inA(:) & any(dt_ > 0 & dt_ <= nr{3} & other,2));
+            edge = edge | (inB(:) & any(-dt_ > 0 & -dt_ <= nr{3} & inA(:)',2)); % B just below A
+        end
+        lm(:,j) = lm(:,j) & edge;
+    end
     sTrack = max(tTrack) - tTrack; % distance above the track end (um, atlas)
     [sTrack,o] = sort(sTrack,'ascend'); % from the track end upwards
     Hist{si} = struct('s',sTrack,'pred',pred(o),'lm',lm(o,:),'acr',{acr(o)},'col',{col(o)},'coords',coords(o,:));
@@ -329,6 +362,20 @@ for k = 1:numel(Opt.Landmarks)
             continue
         end
         warning('alignatlasdata_constrained:Landmark','%s',Fit.LandmarkWarnings{end})
+    end
+end
+% Likewise for the confirmed hippocampal CSD landmarks (CA1 ripples, fissure, dentate spikes): their
+% areas missing on the track means the track does not pass where the probe recorded (e.g. a track of
+% another insertion). The score gives such a landmark no evidence (0), so it would not show otherwise.
+for jn = {'LFP ripple events','hippocampal fissure (theta CSD)','dentate spikes (DG hilus)'}
+    j = find(strcmp(LMName,jn{1}),1); if isempty(j), continue; end
+    for si = 1:nSh
+        confirmed = any(~isnan(LM{si}(:,j)));
+        if strcmp(jn{1},'LFP ripple events'), confirmed = RipValid(si); end
+        if confirmed && ~any(Hist{si}.lm(:,j))
+            Fit.LandmarkWarnings{end+1} = sprintf('Shank %d: confirmed "%s", but none of its areas on the histology track (wrong track?)',ShanksUsed(si),LMName{j});
+            warning('alignatlasdata_constrained:Landmark','%s',Fit.LandmarkWarnings{end})
+        end
     end
 end
 % Highest good units per shank (and whether the top of the probe was without units: outside the brain)
@@ -358,6 +405,11 @@ end
 jd = find(strcmp(LMName,'dentate spikes (DG hilus)'),1);
 if ~isempty(jd)
     for si = 1:nSh, if any(~isnan(LM{si}(:,jd))), Wsh{si}(jd) = Opt.DSWeight; end, end
+end
+% and the hippocampal fissure (theta sink below the confirmed CA1 pyramidal layer)
+jf = find(strcmp(LMName,'hippocampal fissure (theta CSD)'),1);
+if ~isempty(jf)
+    for si = 1:nSh, if any(~isnan(LM{si}(:,jf))), Wsh{si}(jf) = Opt.FissureWeight; end, end
 end
 % Score of a mapping s(d) for one shank: correlation of the activity with the predicted profile,
 % combined with the correlation of each landmark with its areas
@@ -579,4 +631,29 @@ for j = find(w > 0)
     r = r + w(j)*rr; comp(1 + j) = rr;
 end
 r = r/(1 + sum(w));
+end
+
+function FC = local_fissure(ThetaCSD, RipCSD, Opt)
+% Hippocampal fissure per shank: the strongest theta-trough sink below a confirmed CA1 ripple CSD.
+% The overall strongest theta sink is not reliable (often above the pyramidal layer), but across
+% recordings with a strong ripple CSD the theta-trough CSD has a sink 210-430 um below the ripple
+% source (lacunosum-moleculare/fissure; median 300-450 um) with a source in stratum radiatum. The
+% sign of the trough-locked CSD depends on where the theta reference channel is, so it is oriented
+% with stratum radiatum (the ripple-CSD sink) as a source. Searched from 20 um below the ripple sink
+% down to 650 um below the ripple source. Valid if the sink is >= Opt.FissureMinSD.
+FC = struct('Shank',{},'SinkDepth',{},'SinkZ',{},'RadiatumZ',{},'nEvents',{},'Valid',{});
+for sh = unique([ThetaCSD.Shank])
+    rc = RipCSD([RipCSD.Shank] == sh & [RipCSD.Valid]);
+    tc = ThetaCSD([ThetaCSD.Shank] == sh);
+    if isempty(rc) || isempty(tc), continue; end
+    [~,b] = max([rc.nEvents]); rc = rc(b); [~,b] = max([tc.nEvents]); tc = tc(b);
+    m = mean(tc.CSD(:,abs(tc.t) <= 0.01),2)/max(tc.Noise,eps);
+    rad = mean(m(abs(tc.Depth - rc.SinkDepth) <= 40),'omitnan');
+    if rad < 0, m = -m; end
+    win = tc.Depth <= rc.SinkDepth - 20 & tc.Depth >= rc.SourceDepth - 650 & ~isnan(m);
+    if ~any(win), continue; end
+    mw = m; mw(~win) = Inf; [z,i] = min(mw);
+    FC(end+1) = struct('Shank',sh,'SinkDepth',tc.Depth(i),'SinkZ',z,'RadiatumZ',abs(rad),'nEvents',tc.nEvents, ...
+        'Valid',z <= -Opt.FissureMinSD); %#ok<AGROW>
+end
 end
