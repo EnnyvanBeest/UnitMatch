@@ -242,6 +242,7 @@ for modethis = 1:3
     linkaxes
 
 end
+end
 
 function [clusinfoOut, UMparamOut, UniqueIDConversionOut, WaveformInfoOut] = ensureUnitMatchOutput(SaveDir)
     if ~ischar(SaveDir) && ~isstring(SaveDir)
