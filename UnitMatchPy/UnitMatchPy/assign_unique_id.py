@@ -47,6 +47,13 @@ def _filter_pairs_by_isi(pairs, clus_info, param):
     ks_dirs = param["KS_dirs"]
 
     spike_cache = {}  # sess_id -> (spike_times_sec, spike_clusters) or None
+    unit_spikes = {}  # (sess_id, cluster id) -> sorted spike times (s)
+
+    def sorted_spikes(sess, clus):
+        if (sess, clus) not in unit_spikes:
+            st_sec, sc = spike_cache[sess]
+            unit_spikes[(sess, clus)] = np.sort(st_sec[sc == clus])
+        return unit_spikes[(sess, clus)]
 
     for pid, pair in enumerate(pairs):
         uid_a, uid_b = int(pair[0]), int(pair[1])
@@ -81,17 +88,11 @@ def _filter_pairs_by_isi(pairs, clus_info, param):
         if spike_cache[sess_a] is None:
             continue
 
-        st_sec, sc = spike_cache[sess_a]
-        clus_a = original_ids[uid_a]
-        clus_b = original_ids[uid_b]
-
-        mask_a = sc == clus_a
-        mask_b = sc == clus_b
-        if not np.any(mask_a) or not np.any(mask_b):
+        st_a = sorted_spikes(sess_a, original_ids[uid_a])
+        st_b = sorted_spikes(sess_a, original_ids[uid_b])
+        if len(st_a) == 0 or len(st_b) == 0:
             continue
 
-        st_a = np.sort(st_sec[mask_a])
-        st_b = np.sort(st_sec[mask_b])
         st_merged = np.sort(np.concatenate([st_a, st_b]))
 
         diffs_a = np.diff(st_a) * 1000
@@ -198,6 +199,15 @@ def assign_unique_id(output_prob_array, param, clus_info):
     pairs_all = np.zeros((pairs_unique_filt.shape[0] * 2, 2))
     pairs_all[: pairs_unique_filt.shape[0], :] = pairs_unique_filt
     pairs_all[pairs_unique_filt.shape[0] :, :] = pairs_unique_filt[:, (1, 0)]
+    # is_pair[a, b]: (a, b) is in pairs_all. Same answer as check_is_in(x, pairs_all),
+    # but a lookup instead of comparing every row of x with every row of
+    # pairs_all, which took days with hundreds of thousands of matches
+    is_pair = np.zeros(output_prob_array.shape, dtype=bool)
+    is_pair[pairs_unique_filt[:, 0], pairs_unique_filt[:, 1]] = True
+    is_pair[pairs_unique_filt[:, 1], pairs_unique_filt[:, 0]] = True
+
+    def all_in_pairs(check_pairs):
+        return np.all(is_pair[check_pairs[..., 0], check_pairs[..., 1]])
 
     n_matches_conservative = 0
     n_matches_liberal = 0
@@ -250,8 +260,8 @@ def assign_unique_id(output_prob_array, param, clus_info):
         )
 
         if np.logical_and(
-            np.all(check_is_in(check_pairs_a, pairs_all)),
-            np.all(check_is_in(check_pairs_b, pairs_all)),
+            all_in_pairs(check_pairs_a),
+            all_in_pairs(check_pairs_b),
         ):
             # If each pairs matches with every unit in the other pairs group
             # can add as match to all classes
@@ -314,8 +324,8 @@ def assign_unique_id(output_prob_array, param, clus_info):
             unique_id[all_group_idxs] = np.min(unique_id[all_group_idxs])
             n_matches += 1
         elif np.logical_and(
-            np.all(check_is_in(check_pairs_near_a, pairs_all)),
-            np.all(check_is_in(check_pairs_near_b, pairs_all)),
+            all_in_pairs(check_pairs_near_a),
+            all_in_pairs(check_pairs_near_b),
         ):
             all_pairs = np.vstack((check_pairs_a, check_pairs_b))
             all_group_idxs = np.unique(all_pairs)
