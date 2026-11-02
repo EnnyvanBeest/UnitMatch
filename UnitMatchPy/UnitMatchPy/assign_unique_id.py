@@ -88,8 +88,9 @@ def _filter_pairs_by_isi(pairs, clus_info, param):
         if spike_cache[sess_a] is None:
             continue
 
-        st_a = sorted_spikes(sess_a, original_ids[uid_a])
-        st_b = sorted_spikes(sess_a, original_ids[uid_b])
+        # .item(): original_ids may be (n_units, 1)
+        st_a = sorted_spikes(sess_a, original_ids[uid_a].item())
+        st_b = sorted_spikes(sess_a, original_ids[uid_b].item())
         if len(st_a) == 0 or len(st_b) == 0:
             continue
 
