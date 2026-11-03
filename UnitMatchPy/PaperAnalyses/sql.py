@@ -50,6 +50,12 @@ def merge_match_tables(df_1, df_2, sub1, sub2):
     suff_sub1 = f"_{sub1}" if sub1 is not None else ""
     suff_sub2 = f"_{sub2}" if sub2 is not None else ""
 
+    if len(df_1) != len(df_2):
+        raise ValueError(
+            f"Match tables have different lengths ({len(df_1)} vs {len(df_2)} rows for "
+            f"'{sub2}'); one MatchTable.csv is probably truncated from an interrupted run."
+        )
+
     df_1 = df_1.copy()
     df_2 = df_2.copy()
 
