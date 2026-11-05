@@ -161,7 +161,8 @@ BOOTSTRAP_MAX_N = 20000
 # its recording locations (WITHIN_MOUSE_AGG) -> mean +/- SEM across mice
 # (level="dataset": median per location instead, n = locations). The overall
 # model comparison (test_overall_model_effect) is fitted on the session pairs
-# themselves, with random intercepts for mouse and location within mouse. A session pair's AUCs only
+# themselves, with random intercepts for mouse, location within mouse, and
+# unordered session pair within location (so (i, j) and (j, i) share one). A session pair's AUCs only
 # enter that chain if at least one included model found this many matches
 # for it -- the same per-session-pair cut figure2.ipynb /
 # figure-model-comparison.ipynb apply (N >= 20, MIN_MATCHES there) -- so a pair
@@ -1420,19 +1421,41 @@ def mouse_balanced_quality_quantity(combined_df_long):
     return pd.DataFrame(rows)
 
 
+def _add_unordered_pair_id(df):
+    """
+    Adds a "pair" column naming the unordered session pair of every row
+    (dataset + sorted RecSes numbers), so (i, j) and (j, i) -- the two
+    cross-validated directions of the same two recordings (fold 1 of one
+    session's units vs fold 2 of the other's, and vice versa) -- share one
+    random intercept in the mixed models below instead of entering as two
+    unrelated observations.
+    """
+    lo = df[["RecSes 1", "RecSes 2"]].min(axis=1).astype(int).astype(str)
+    hi = df[["RecSes 1", "RecSes 2"]].max(axis=1).astype(int).astype(str)
+    return df.assign(pair=df["dataset"].astype(str) + ":" + lo + "-" + hi)
+
+
+# Variance components (within the mouse grouping) of every session-pair-level
+# mixed model: location within mouse, and unordered session pair within
+# location -- see _add_unordered_pair_id().
+SESSION_PAIR_VC_FORMULA = {"location": "0 + C(dataset)", "pair": "0 + C(pair)"}
+
+
 def _nested_paired_test(sub, model_a, model_b):
     """
     This module's model comparison on long-format rows of one score (mouse,
     dataset, RecSes 1, RecSes 2, model, value): paired difference
     model_a - model_b per session pair, diff ~ 1 + (1 | mouse) +
-    (1 | mouse:dataset), intercept against t with (n_mice - 1) df (as
-    test_overall_model_effect). Returns (p, mean difference) or (None, None).
+    (1 | mouse:dataset) + (1 | mouse:dataset:pair), with pair the unordered
+    session pair (see _add_unordered_pair_id()), intercept against t with
+    (n_mice - 1) df (as test_overall_model_effect). Returns (p, mean
+    difference) or (None, None).
     """
     keys = ["mouse", "dataset", "RecSes 1", "RecSes 2"]
     wide = sub[sub["model"].isin([model_a, model_b])].pivot_table(index=keys, columns="model", values="value")
     if model_a not in wide.columns or model_b not in wide.columns:
         return None, None
-    paired = (wide[model_a] - wide[model_b]).dropna().rename("diff").reset_index()
+    paired = _add_unordered_pair_id((wide[model_a] - wide[model_b]).dropna().rename("diff").reset_index())
     n_mice = paired["mouse"].nunique()
     if n_mice < 2 or np.allclose(paired["diff"], 0):
         return None, None
@@ -1440,7 +1463,7 @@ def _nested_paired_test(sub, model_a, model_b):
         warnings.simplefilter("ignore")
         try:
             result = smf.mixedlm("diff ~ 1", paired, groups=paired["mouse"], re_formula="1",
-                                 vc_formula={"location": "0 + C(dataset)"}).fit()
+                                 vc_formula=SESSION_PAIR_VC_FORMULA).fit()
         except Exception:
             return None, None
     coef = result.params["Intercept"]
@@ -1470,8 +1493,9 @@ def _nested_pairwise_stats(combined_df_long, score):
             raw[frozenset((m1, m2))] = p
             diffs[frozenset((m1, m2))] = (m1, m2, diff)
     pvals_adj = auc_summary_mod._holm_correct(raw)
-    lines.append("  Pairwise (paired session-pair differences, random intercepts for mouse and location "
-                 "within mouse, t with mice - 1 df; Holm-Bonferroni across pairs):")
+    lines.append("  Pairwise (paired session-pair differences, random intercepts for mouse, location "
+                 "within mouse and unordered session pair within location, t with mice - 1 df; "
+                 "Holm-Bonferroni across pairs):")
     if not pvals_adj:
         lines.append("    (skipped: fewer than 2 comparable models/mice)")
     for pair, p in sorted(pvals_adj.items(), key=lambda kv: kv[1]):
@@ -1773,7 +1797,11 @@ def test_overall_model_effect(rows, value_col, model_a, model_b, score=None, lev
     diff = model_a - model_b of every session pair both models were measured
     on (one row per session pair):
 
-      diff ~ 1 + (1 | mouse) + (1 | mouse:dataset)
+      diff ~ 1 + (1 | mouse) + (1 | mouse:dataset) + (1 | mouse:dataset:pair)
+
+    pair = the unordered session pair, so the two cross-validated directions
+    (i, j) and (j, i) of the same two recordings share an intercept rather
+    than counting as unrelated observations (see _add_unordered_pair_id()).
 
     (rows without session-pair keys: one row per (unit, bin), with
     level="mouse": diff ~ 1 + (1 | mouse); level="dataset": as above.)
@@ -1820,7 +1848,12 @@ def test_overall_model_effect(rows, value_col, model_a, model_b, score=None, lev
     if paired["mouse"].nunique() < 2 or np.allclose(paired["diff"], 0):
         return None, None
 
-    vc_formula = {"location": "0 + C(dataset)"} if nested else None
+    if "RecSes 1" in paired.columns:
+        # Session-pair rows: (i, j) and (j, i) share a random intercept.
+        paired = _add_unordered_pair_id(paired)
+        vc_formula = SESSION_PAIR_VC_FORMULA
+    else:
+        vc_formula = {"location": "0 + C(dataset)"} if nested else None
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         try:
