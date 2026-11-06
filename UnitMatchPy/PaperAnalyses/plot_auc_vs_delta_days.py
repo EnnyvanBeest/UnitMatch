@@ -109,9 +109,11 @@ KEY_SCORE_TITLES = {
 # Shared y-limits for every AUC-diff panel of the key-scores figure.
 KEY_DIFF_YLIM = (-0.1, 0.2)
 
-# Per-(dataset, bin) median number of matches per session pair (see
-# dataset_bin_rate_rows in collect_binned_pairs()) -- the key-scores figure's
-# first panel.
+# Number of matched unit pairs of a session pair, as fast_testing.py's N (see
+# dataset_bin_rate_rows in collect_binned_pairs()). Equal between models under
+# a fixed N, and the same for (i, j) and (j, i) up to conflict resolution, so
+# it can't show any asymmetry over ΔDay -- the key-scores figure's first panel
+# is P(track) instead, which divides by the units of the source session.
 N_MATCHES_COL = "n_matches_per_sp"
 
 # Bin edges in days between the two sessions of a pair (right-open: [lo, hi)),
@@ -130,6 +132,10 @@ BIN_EDGES = np.array(
 # dumtest.NEGATE_FOR_AUC itself) since it's only ever computed on the fly by
 # this module, not a column the shared pipeline/test.py code knows about yet.
 NEGATE_FOR_AUC = dumtest.NEGATE_FOR_AUC | {auc_summary_mod.FR_DIFF_NORM_SCORE}
+
+# Scores left out per mouse, as in fast_testing.py's AUC_natim: AV009 was not
+# recorded in visual cortex, so natural-image responses mean nothing there.
+SCORES_EXCLUDED_PER_MOUSE = {"AV009": {"natim_correlations"}}
 
 
 # ── session date lookup (reconstructed, not persisted by the pipeline) ─────
@@ -976,6 +982,8 @@ def collect_binned_pairs(
         sp_index = df.groupby(["RecSes 1", "RecSes 2"], sort=False).indices
 
         for score in scores:
+            if score in SCORES_EXCLUDED_PER_MOUSE.get(mouse, ()):
+                continue
             signed_metric = -df[score].to_numpy() if score in NEGATE_FOR_AUC else df[score].to_numpy()
             valid = np.isfinite(signed_metric)
             if restrict_to_max_dist and dist_col is not None:
@@ -1038,10 +1046,12 @@ def collect_binned_pairs(
             entry["matches"].append(int(tracked[mask].sum()))
             entry["total"].append(int(mask.sum()))
 
-        # Per session pair: P(track) and number of tracked units -- first
+        # Per session pair: P(track) and number of matched unit pairs -- first
         # step of the aggregation chain (see MIN_MATCHES_PER_SESSION_PAIR);
         # reduced to per-dataset medians after the walk.
-        sp_rate = per_unit.groupby(["RecSes 1", "RecSes 2"])["Matches"].agg(["mean", "sum"]).reset_index()
+        sp_rate = per_unit.groupby(["RecSes 1", "RecSes 2"])["Matches"].mean().to_frame("mean")
+        sp_rate["sum"] = df["Matches"].astype(np.int64).groupby([df["RecSes 1"], df["RecSes 2"]]).sum()
+        sp_rate = sp_rate.reset_index()
         sp_bins = _signed_bin_ids(
             (pd.to_datetime(sp_rate["RecSes 2"].map(date_map)) - pd.to_datetime(sp_rate["RecSes 1"].map(date_map))).dt.days.to_numpy()
         )
@@ -1254,20 +1264,20 @@ def summarise_match_rate_mouse_averaged(dataset_bin_rate_rows, min_mice=MIN_MICE
     return _mean_sem_across_mice(per_mouse, ["model", "bin"], "match_rate", min_mice=min_mice)
 
 
-def summarise_n_matches(dataset_bin_rate_rows, models=None, level="mouse", min_units=MIN_MICE_PER_BIN):
+def summarise_session_pair_value(dataset_bin_rate_rows, value_col, models=None, level="mouse", min_units=MIN_MICE_PER_BIN):
     """
-    Number of matches per session pair (N_MATCHES_COL) per (model, bin):
-    mean +/- SEM across mice (median within mouse first) for level="mouse",
-    or across datasets for level="dataset" -- see LEVELS.
+    A per-session-pair value ("rate" = P(track), or N_MATCHES_COL) per (model,
+    bin): mean +/- SEM across mice (median within mouse first) for
+    level="mouse", or across datasets for level="dataset" -- see LEVELS.
     """
-    cols = ["model", "bin", N_MATCHES_COL, f"{N_MATCHES_COL}_se", "n_units", "n_mice"]
+    cols = ["model", "bin", value_col, f"{value_col}_se", "n_units", "n_mice"]
     if not dataset_bin_rate_rows:
         return pd.DataFrame(columns=cols)
     df = pd.DataFrame(dataset_bin_rate_rows)
     if models is not None:
         df = df[df["model"].isin(models)]
-    per_unit = _per_unit_values(df, ["model", "bin"], N_MATCHES_COL, level=level)
-    return _mean_sem_across_mice(per_unit, ["model", "bin"], N_MATCHES_COL, min_mice=min_units, unit_col=level)
+    per_unit = _per_unit_values(df, ["model", "bin"], value_col, level=level)
+    return _mean_sem_across_mice(per_unit, ["model", "bin"], value_col, min_mice=min_units, unit_col=level)
 
 
 def summarise_dataset_counts(count_bins):
@@ -2191,7 +2201,7 @@ def plot_model_diff_summary(
     return out_path
 
 
-# ── key-scores paper figure: n matches + one AUC-diff panel per score ──────
+# ── key-scores paper figure: P(track) + one AUC-diff panel per score ───────
 
 
 def compute_auc_diff_per_unit(model_a, model_b, dataset_bin_auc_rows, scores, level="mouse", min_units=MIN_MICE_PER_BIN):
@@ -2231,29 +2241,28 @@ def _paper_model_style(model, colour_for_model):
 
 
 def plot_key_scores_diff_figure(
-    model_a, model_b, matches_df, diff_df, colour_for_model, out_path,
+    model_a, model_b, ptrack_df, diff_df, colour_for_model, out_path,
     scores=KEY_SCORES_FOR_DIFF_SUMMARY, ylim=KEY_DIFF_YLIM,
-    matches_overall=None, matches_bin_pvals=None,
+    ptrack_overall=None, ptrack_bin_pvals=None,
     score_overall=None, score_bin_pvals=None,
 ):
     """
-    One-row paper figure: number of matches per session pair for model_a and
-    model_b (first panel, from summarise_n_matches()), then one panel per
+    One-row paper figure: P(track) for model_a and model_b (first panel, from
+    summarise_session_pair_value(), every session pair included), then one panel per
     score with AUC(model_a) - AUC(model_b) (from compute_auc_diff_per_unit()),
     all vs signed ΔDay. Error bars are SEM across whichever unit (mice or
     datasets) the inputs were computed over. Stars mark bins where the per-bin paired t-test (Holm
     corrected) is significant; each diff panel's title carries that score's
     overall mixed-model p-value.
     """
-    matches_df = matches_df[matches_df["model"].isin([model_a, model_b])]
+    ptrack_df = ptrack_df[ptrack_df["model"].isin([model_a, model_b])]
     diff_df = diff_df[diff_df["score"].isin(scores)]
     scores = [s for s in scores if s in set(diff_df["score"])]
-    if matches_df.empty and not scores:
+    if ptrack_df.empty and not scores:
         return None
 
-    bins_present = _bin_order(set(matches_df["bin"]) | set(diff_df["bin"]))
+    bins_present = _bin_order(set(ptrack_df["bin"]) | set(diff_df["bin"]))
     x_pos = {b: i for i, b in enumerate(bins_present)}
-    se_col = f"{N_MATCHES_COL}_se"
     label_a, _ = _paper_model_style(model_a, colour_for_model)
     label_b, _ = _paper_model_style(model_b, colour_for_model)
 
@@ -2268,22 +2277,22 @@ def plot_key_scores_diff_figure(
         )
         axes = np.atleast_1d(axes)
 
-        ax_n = axes[0]
+        ax_p = axes[0]
         for model in (model_a, model_b):
             label, color = _paper_model_style(model, colour_for_model)
-            s = matches_df[matches_df["model"] == model].copy()
+            s = ptrack_df[ptrack_df["model"] == model].copy()
             s["x"] = s["bin"].map(x_pos)
             s = s.sort_values("x")
-            ax_n.errorbar(s["x"], s[N_MATCHES_COL], yerr=s[se_col], color=color, label=label, **line_kw)
-        n_y_at_bin = (matches_df[N_MATCHES_COL] + matches_df[se_col].fillna(0)).groupby(matches_df["bin"]).max().to_dict()
-        _annotate_bin_stars(ax_n, x_pos, matches_bin_pvals, n_y_at_bin, fontsize=paper_style.FONT_SIZE)
-        ax_n.margins(y=0.2)  # headroom for the stars above the top line
-        ax_n.set_ylabel("Matches per session pair")
-        n_title = "Number of matches"
-        if matches_overall is not None and matches_overall[0] is not None:
-            n_title += f"\np={matches_overall[0]:.2g}"
-        ax_n.set_title(n_title)
-        ax_n.legend(loc="best")
+            ax_p.errorbar(s["x"], s["rate"], yerr=s["rate_se"], color=color, label=label, **line_kw)
+        p_y_at_bin = (ptrack_df["rate"] + ptrack_df["rate_se"].fillna(0)).groupby(ptrack_df["bin"]).max().to_dict()
+        _annotate_bin_stars(ax_p, x_pos, ptrack_bin_pvals, p_y_at_bin, fontsize=paper_style.FONT_SIZE)
+        ax_p.margins(y=0.2)  # headroom for the stars above the top line
+        ax_p.set_ylabel("P(track)")
+        p_title = "P(track)"
+        if ptrack_overall is not None and ptrack_overall[0] is not None:
+            p_title += f"\np={ptrack_overall[0]:.2g}"
+        ax_p.set_title(p_title)
+        ax_p.legend(loc="best")
 
         for i, (ax, score) in enumerate(zip(axes[1:], scores)):
             s = diff_df[diff_df["score"] == score].copy()
@@ -2342,13 +2351,15 @@ def make_key_scores_figures(
         diff_df.to_csv(diff_csv, index=False)
         print(f"Wrote {diff_csv}")
 
-        matches_df = summarise_n_matches(dataset_bin_rate_rows, models=[model_a, model_b], level=level)
-        matches_csv = os.path.join(output_dir, f"n_matches_vs_delta_days{tag}_{pair_tag}.csv")
-        matches_df.to_csv(matches_csv, index=False)
-        print(f"Wrote {matches_csv}")
+        for value_col, stem in ((N_MATCHES_COL, "n_matches"), ("rate", "ptrack")):
+            value_df = summarise_session_pair_value(dataset_bin_rate_rows, value_col, models=[model_a, model_b], level=level)
+            value_csv = os.path.join(output_dir, f"{stem}_vs_delta_days{tag}_{pair_tag}.csv")
+            value_df.to_csv(value_csv, index=False)
+            print(f"Wrote {value_csv}")
+        ptrack_df = value_df  # the last one written: "rate"
 
-        matches_overall = test_overall_model_effect(dataset_bin_rate_rows, N_MATCHES_COL, model_a, model_b, level=level)
-        matches_bin_pvals = test_per_bin_model_effect(dataset_bin_rate_rows, N_MATCHES_COL, model_a, model_b, level=level)
+        ptrack_overall = test_overall_model_effect(dataset_bin_rate_rows, "rate", model_a, model_b, level=level)
+        ptrack_bin_pvals = test_per_bin_model_effect(dataset_bin_rate_rows, "rate", model_a, model_b, level=level)
         score_overall = {
             s: test_overall_model_effect(dataset_bin_auc_rows, "auc", model_a, model_b, score=s, level=level)
             for s in key_scores
@@ -2360,8 +2371,8 @@ def make_key_scores_figures(
 
         out_path = os.path.join(output_dir, f"summary_diff_key_scores{tag}_{pair_tag}.png")
         result = plot_key_scores_diff_figure(
-            model_a, model_b, matches_df, diff_df, colour_for_model, out_path, scores=key_scores,
-            matches_overall=matches_overall, matches_bin_pvals=matches_bin_pvals,
+            model_a, model_b, ptrack_df, diff_df, colour_for_model, out_path, scores=key_scores,
+            ptrack_overall=ptrack_overall, ptrack_bin_pvals=ptrack_bin_pvals,
             score_overall=score_overall, score_bin_pvals=score_bin_pvals,
         )
         if result:
@@ -2458,7 +2469,7 @@ def main():
         if result:
             print(f"  Plotted AUC-diff summary ({model_a} vs {model_b}) -> {result}")
 
-        # Compact paper figure: n matches + one mouse-level AUC-diff panel per
+        # Compact paper figure: P(track) + one mouse-level AUC-diff panel per
         # KEY_SCORES_FOR_DIFF_SUMMARY score -- see plot_key_scores_diff_figure().
         # Mouse-level and dataset-level versions.
         make_key_scores_figures(

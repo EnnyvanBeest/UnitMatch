@@ -86,12 +86,9 @@ RANK_ELIGIBLE_MODELS = {
 }
 
 # Every model's per-session-pair positive count is re-derived relative to
-# this model's own match count for that pair (see module docstring). Chosen
-# over bare "UMPy" (the notebooks' hardcoded default) because bare UMPy isn't
-# itself one of MODELS_TO_INCLUDE here -- its UID-clustering variants are --
-# and the conservative variant is the closest analogue to a single, stable
-# "how many matches did UMPy actually commit to" count.
-REFERENCE_MODEL = "UMPy_AssignUniqueID"
+# this model's own match count for that pair (see module docstring): N is set
+# by DeepUnitMatch, so UMPy is the model re-ranked to a count it did not choose.
+REFERENCE_MODEL = "DeepUnitMatch_AssignUniqueID"
 
 # Which unit pairs survive the top-N selection is tie-broken randomly per
 # (dataset, session pair); fixed so re-running this script reproduces the
