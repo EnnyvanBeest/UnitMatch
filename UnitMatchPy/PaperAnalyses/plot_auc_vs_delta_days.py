@@ -88,10 +88,10 @@ METADATA_INDEX_PATH = cfg.METADATA_INDEX_PATH
 SESSION_DATE_CACHE_PATH = os.path.join(OUTPUT_DIR, "session_dates_cache.json")
 
 MODELS_TO_INCLUDE = auc_summary_mod.MODELS_TO_INCLUDE
-# A dataset is only included here if it also passes plot_auc_summary's
-# get_passing_datasets() -- at least one included model found this many
-# across-session matches for it -- see plot_auc_summary.MIN_MATCHES_TO_INCLUDE.
-MIN_MATCHES_TO_INCLUDE = auc_summary_mod.MIN_MATCHES_TO_INCLUDE
+# No minimum per dataset: P(track) covers every pair of days, also of a dataset
+# where no model found any match. AUCs have their own minimum per session pair
+# (MIN_MATCHES_PER_SESSION_PAIR).
+MIN_MATCHES_TO_INCLUDE = 0
 
 # Restricted score set for the compact paper figure
 # summary_diff_key_scores_{model_a}_vs_{model_b} (plot_key_scores_diff_figure())
@@ -414,10 +414,12 @@ def _session_pairs_to_dataset_rows(session_pair_auc_rows, session_pair_rate_rows
     """
     sp_keys = ["dataset", "RecSes 1", "RecSes 2"]
     sp_rate = pd.DataFrame(
-        session_pair_rate_rows, columns=["mouse", "dataset", "model", "RecSes 1", "RecSes 2", "bin", "rate", N_MATCHES_COL]
+        session_pair_rate_rows,
+        columns=["mouse", "dataset", "model", "RecSes 1", "RecSes 2", "delta_days", "bin", "rate", N_MATCHES_COL],
     )
     sp_auc = pd.DataFrame(
-        session_pair_auc_rows, columns=["mouse", "dataset", "model", "score", "RecSes 1", "RecSes 2", "bin", "auc"]
+        session_pair_auc_rows,
+        columns=["mouse", "dataset", "model", "score", "RecSes 1", "RecSes 2", "delta_days", "bin", "auc"],
     )
 
     best_n = sp_rate.groupby(sp_keys)[N_MATCHES_COL].max().rename("best_n").reset_index()
@@ -436,7 +438,7 @@ def _session_pairs_to_dataset_rows(session_pair_auc_rows, session_pair_rate_rows
     # figure-model-comparison.ipynb / figure2.ipynb; level="dataset" summaries
     # take the median per location instead. (Previously these rows were
     # already per-location medians, so a mouse's value was a median of medians.)
-    keys = ["mouse", "dataset", "model", "RecSes 1", "RecSes 2"]
+    keys = ["mouse", "dataset", "model", "RecSes 1", "RecSes 2", "delta_days"]
     dataset_bin_auc_rows = sp_auc[keys + ["score", "bin", "auc"]].to_dict("records")
     dataset_level_auc_rows = sp_auc[keys + ["score", "auc"]].rename(columns={"auc": "value"}).to_dict("records")
     dataset_bin_rate_rows = sp_rate[keys + ["bin", "rate", N_MATCHES_COL]].to_dict("records")
@@ -722,14 +724,14 @@ def collect_binned_pairs(
     beyond the pipeline's own max_dist (see the dist_col comment below and
     RESTRICT_TO_MAX_DIST's module-level comment for why this is opt-in).
 
-    matches_transform, if given, is called as matches_transform(dataset, df)
+    matches_transform, if given, is called as matches_transform(dataset, df, model)
     on each model's per-dataset MatchTable (already restricted to
     across-session rows with a resolvable delta-days) and must return a
     replacement array for df["Matches"] -- everything downstream (AUC, P(track),
     dataset counts) then uses that replacement instead of the pipeline's own
-    match decision. Used by plot_auc_vs_delta_days_fixed_n.py to cap each
-    model's positive set to a reference model's own per-session-pair match
-    count, without duplicating this function. extra_usecols (a {col: dtype}
+    match decision. Used by plot_auc_vs_delta_days_fixed_n.py to give both
+    models the same number of matches per session pair, without duplicating
+    this function. extra_usecols (a {col: dtype}
     dict) is loaded alongside the usual columns for matches_transform's use
     (e.g. {"ID2": "int32"}) -- not read by default since most callers don't
     need it and it isn't free on the largest merged groups.
@@ -968,7 +970,7 @@ def collect_binned_pairs(
         bin_idx = _signed_bin_ids(delta_days)
 
         if matches_transform is not None:
-            df = df.assign(Matches=matches_transform(dataset, df))
+            df = df.assign(Matches=matches_transform(dataset, df, model))
 
         if resolve_match_conflicts:
             resolved = _resolve_match_conflicts(df)
@@ -1018,7 +1020,7 @@ def collect_binned_pairs(
                     session_pair_auc_rows.append(
                         {
                             "mouse": mouse, "dataset": dataset, "model": model, "score": score,
-                            "RecSes 1": int(r1), "RecSes 2": int(r2),
+                            "RecSes 1": int(r1), "RecSes 2": int(r2), "delta_days": int(delta_days[idx[0]]),
                             "bin": _signed_bin_label(bin_idx[idx[0]]), "auc": sp_auc,
                         }
                     )
@@ -1052,14 +1054,13 @@ def collect_binned_pairs(
         sp_rate = per_unit.groupby(["RecSes 1", "RecSes 2"])["Matches"].mean().to_frame("mean")
         sp_rate["sum"] = df["Matches"].astype(np.int64).groupby([df["RecSes 1"], df["RecSes 2"]]).sum()
         sp_rate = sp_rate.reset_index()
-        sp_bins = _signed_bin_ids(
-            (pd.to_datetime(sp_rate["RecSes 2"].map(date_map)) - pd.to_datetime(sp_rate["RecSes 1"].map(date_map))).dt.days.to_numpy()
-        )
-        for (r1, r2, rate, n_matches), b in zip(sp_rate[["RecSes 1", "RecSes 2", "mean", "sum"]].itertuples(index=False), sp_bins):
+        sp_days = (pd.to_datetime(sp_rate["RecSes 2"].map(date_map)) - pd.to_datetime(sp_rate["RecSes 1"].map(date_map))).dt.days.to_numpy()
+        sp_bins = _signed_bin_ids(sp_days)
+        for (r1, r2, rate, n_matches), days, b in zip(sp_rate[["RecSes 1", "RecSes 2", "mean", "sum"]].itertuples(index=False), sp_days, sp_bins):
             session_pair_rate_rows.append(
                 {
                     "mouse": mouse, "dataset": dataset, "model": model,
-                    "RecSes 1": int(r1), "RecSes 2": int(r2), "bin": _signed_bin_label(b),
+                    "RecSes 1": int(r1), "RecSes 2": int(r2), "delta_days": int(days), "bin": _signed_bin_label(b),
                     "rate": float(rate), N_MATCHES_COL: float(n_matches),
                 }
             )
@@ -1881,6 +1882,104 @@ def test_overall_model_effect(rows, value_col, model_a, model_b, score=None, lev
     return p, direction
 
 
+def _fit_days_model(formula, data, label):
+    """
+    Fits one of the two parts of test_model_by_days(). Random Days slope and
+    intercept per mouse, dropped in that order when the fit gives no standard
+    error: a variance estimated at exactly 0 leaves statsmodels without one
+    (seen for NatImg with few mice). Returns (result, the random terms kept).
+    """
+    for re_formula in ("1 + days", "1", "0"):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            try:
+                result = smf.mixedlm(formula, data, groups=data["mouse"], re_formula=re_formula,
+                                     vc_formula=SESSION_PAIR_VC_FORMULA).fit()
+            except Exception as e:
+                print(f"  {label}: fit with random part '{re_formula}' failed: {e}")
+                continue
+        if np.all(np.isfinite(result.bse[["Intercept", "days"]])):
+            if re_formula != "1 + days":
+                print(f"  {label}: reduced random part per mouse to '{re_formula}'")
+            return result, re_formula
+    return None, None
+
+
+def test_model_by_days(rows, value_col, model_a, model_b, score=None):
+    """
+    The figure's model of value (P(track) or an AUC) on Model, Days and their
+    interaction, on every session pair both models were measured on, with
+    Model = model_a vs model_b, and Days = log(1 + |ΔDay|), centred, so that
+    Model is the difference at the average Days and Days the average of both
+    models:
+
+      value ~ 1 + Model * Days + (1 | mouse) + (1 | mouse:location)
+              + (1 | mouse:location:session pair)
+              + (Model * Days | mouse)
+
+    The last term lets the Model and Days effects differ between mice. Without
+    it, the model assumes the difference between the models is the same in
+    every mouse, and in simulations with no true effect it gave p < 0.05 in 65%
+    of runs for Model and 47% for Model x Days.
+
+    Fitted as two models that together are this one: the paired difference
+    model_a - model_b ~ 1 + Days gives Model (intercept) and Model x Days
+    (slope), and their mean ~ 1 + Days gives Days (slope). Each has random
+    intercepts for mouse, location within mouse and unordered session pair
+    within location, and a random Days slope per mouse. Coefficients are tested
+    against t with (n_mice - 1) degrees of freedom, see test_overall_model_effect().
+
+    Returns {"Model": ..., "Days": ..., "Model x Days": ...}, each a dict with
+    estimate, se, p and random_part, or None with too little data.
+    """
+    sub = pd.DataFrame(rows)
+    if score is not None:
+        sub = sub[sub["score"] == score]
+    sub = sub[sub["model"].isin([model_a, model_b])].dropna(subset=[value_col])
+    if sub.empty:
+        return None
+    wide = sub.pivot_table(index=["mouse", "dataset", "RecSes 1", "RecSes 2", "delta_days"], columns="model", values=value_col)
+    if model_a not in wide.columns or model_b not in wide.columns:
+        return None
+    wide = wide[[model_a, model_b]].dropna()
+    data = _add_unordered_pair_id(wide.reset_index())
+    n_mice = data["mouse"].nunique()
+    if n_mice < 3:
+        return None
+    data["days"] = np.log1p(data["delta_days"].abs())
+    data["days"] -= data["days"].mean()
+    data["diff"] = data[model_a] - data[model_b]
+    data["average"] = (data[model_a] + data[model_b]) / 2
+
+    label = score or value_col
+    stats = {}
+    fit_diff = not np.allclose(data["diff"], 0)  # equal by construction
+    if fit_diff:
+        result, random_part = _fit_days_model("diff ~ days", data, f"{label}, model difference")
+        if result is not None:
+            for name, term in (("Model", "Intercept"), ("Model x Days", "days")):
+                t_value = result.params[term] / result.bse[term]
+                stats[name] = {"estimate": float(result.params[term]), "se": float(result.bse[term]),
+                               "p": float(2 * t_dist.sf(abs(t_value), n_mice - 1)), "random_part": random_part}
+    result, random_part = _fit_days_model("average ~ days", data, f"{label}, model average")
+    if result is not None:
+        t_value = result.params["days"] / result.bse["days"]
+        stats["Days"] = {"estimate": float(result.params["days"]), "se": float(result.bse["days"]),
+                         "p": float(2 * t_dist.sf(abs(t_value), n_mice - 1)), "random_part": random_part}
+    for values in stats.values():
+        values.update(n_mice=n_mice, n_locations=data["dataset"].nunique(), n_rows=len(data))
+    return stats
+
+
+def _model_by_days_title(title, stats):
+    """title plus the three p-values of test_model_by_days(), one line each."""
+    lines = [title]
+    for name in ("Model", "Days", "Model x Days"):
+        if stats and name in stats:
+            lines.append(f"{name.replace(' x ', ' × ')} p={stats[name]['p']:.2g}")
+    return "\n".join(lines)
+
+
 def test_per_bin_model_effect(rows, value_col, model_a, model_b, score=None, level="mouse"):
     """
     Per-ΔDay-bin paired t-test (paired by mouse) of model_a vs model_b, Holm-
@@ -2252,8 +2351,8 @@ def plot_key_scores_diff_figure(
     score with AUC(model_a) - AUC(model_b) (from compute_auc_diff_per_unit()),
     all vs signed ΔDay. Error bars are SEM across whichever unit (mice or
     datasets) the inputs were computed over. Stars mark bins where the per-bin paired t-test (Holm
-    corrected) is significant; each diff panel's title carries that score's
-    overall mixed-model p-value.
+    corrected) is significant; every panel's title carries the p-values of
+    Model, Days and Model x Days from test_model_by_days().
     """
     ptrack_df = ptrack_df[ptrack_df["model"].isin([model_a, model_b])]
     diff_df = diff_df[diff_df["score"].isin(scores)]
@@ -2288,10 +2387,7 @@ def plot_key_scores_diff_figure(
         _annotate_bin_stars(ax_p, x_pos, ptrack_bin_pvals, p_y_at_bin, fontsize=paper_style.FONT_SIZE)
         ax_p.margins(y=0.2)  # headroom for the stars above the top line
         ax_p.set_ylabel("P(track)")
-        p_title = "P(track)"
-        if ptrack_overall is not None and ptrack_overall[0] is not None:
-            p_title += f"\np={ptrack_overall[0]:.2g}"
-        ax_p.set_title(p_title)
+        ax_p.set_title(_model_by_days_title("P(track)", ptrack_overall))
         ax_p.legend(loc="best")
 
         for i, (ax, score) in enumerate(zip(axes[1:], scores)):
@@ -2305,11 +2401,7 @@ def plot_key_scores_diff_figure(
             y_at_bin = {b: min(y, ylim[1]) for b, y in (s["diff"] + s["diff_se"].fillna(0)).groupby(s["bin"]).max().items()}
             _annotate_bin_stars(ax, x_pos, (score_bin_pvals or {}).get(score), y_at_bin, fontsize=paper_style.FONT_SIZE)
 
-            title = KEY_SCORE_TITLES.get(score, score)
-            overall = (score_overall or {}).get(score)
-            if overall is not None and overall[0] is not None:
-                title += f"\np={overall[0]:.2g}"
-            ax.set_title(title)
+            ax.set_title(_model_by_days_title(KEY_SCORE_TITLES.get(score, score), (score_overall or {}).get(score)))
             if i == 0:
                 ax.set_ylabel(f"ΔAUC ({label_a} − {label_b})")
 
@@ -2343,6 +2435,18 @@ def make_key_scores_figures(
         return []
     pair_tag = f"{model_a}_vs_{model_b}"
 
+    # On the session pairs themselves, so the same for every level.
+    ptrack_overall = test_model_by_days(dataset_bin_rate_rows, "rate", model_a, model_b)
+    score_overall = {s: test_model_by_days(dataset_bin_auc_rows, "auc", model_a, model_b, score=s) for s in key_scores}
+    all_stats = {"P(track)": ptrack_overall, **{KEY_SCORE_TITLES.get(s, s): score_overall[s] for s in key_scores}}
+    stats_rows = [
+        {"panel": panel, "term": term, **values}
+        for panel, stats in all_stats.items() for term, values in (stats or {}).items()
+    ]
+    stats_csv = os.path.join(output_dir, f"model_by_days_stats{file_tag}_{pair_tag}.csv")
+    pd.DataFrame(stats_rows).to_csv(stats_csv, index=False)
+    print(f"Wrote {stats_csv}")
+
     results = []
     for level in levels:
         tag = f"{file_tag}_{level}_level"
@@ -2358,12 +2462,7 @@ def make_key_scores_figures(
             print(f"Wrote {value_csv}")
         ptrack_df = value_df  # the last one written: "rate"
 
-        ptrack_overall = test_overall_model_effect(dataset_bin_rate_rows, "rate", model_a, model_b, level=level)
         ptrack_bin_pvals = test_per_bin_model_effect(dataset_bin_rate_rows, "rate", model_a, model_b, level=level)
-        score_overall = {
-            s: test_overall_model_effect(dataset_bin_auc_rows, "auc", model_a, model_b, score=s, level=level)
-            for s in key_scores
-        }
         score_bin_pvals = {
             s: test_per_bin_model_effect(dataset_bin_auc_rows, "auc", model_a, model_b, score=s, level=level)
             for s in key_scores

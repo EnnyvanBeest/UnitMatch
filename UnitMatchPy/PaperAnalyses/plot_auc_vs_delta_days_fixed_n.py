@@ -1,61 +1,37 @@
-# Companion to plot_auc_vs_delta_days.py: that script pools every across-
-# session pair a model itself decided was a "Match" into its ΔDay bins, so a
-# model that simply calls more pairs matches (a more lenient threshold) gets
-# a different, not-directly-comparable AUC from a model that calls fewer --
-# AUC is sensitive to how many/which positives are in the pool, independent
-# of whether the *ranking* of functional-score similarity is actually
-# better. This script controls for that the same way figure2.ipynb/
-# figure-model-comparison.ipynb already do for two models at a time
-# (fast_testing.py's get_matches_1model(fixed_n=...)/"N_set_by_UM"),
-# generalised here to every rank-eligible model (see RANK_ELIGIBLE_MODELS
-# below) and applied per ΔDay bin like plot_auc_vs_delta_days.py: for every
-# session pair, every model's positive set is *re-derived* as the top N
-# candidate pairs by that model's own "UM Probabilities" score, where N is
-# REFERENCE_MODEL's own conflict-resolved match count for that same pair (an
-# unordered-unit-pair count, not identity -- see _build_reference_n_lookup()).
-# This mirrors fast_testing.py's get_matches_1model(fixed_n=...) closely: the
-# ranking operates over the *full* across-session candidate pool for that
-# pair, not just the pipeline's own already-decided matches, so a model can
-# both lose matches it had decided on (if they rank low) and gain ones it
-# hadn't (if they rank in the top N despite being below that model's own
-# decision threshold) -- unlike an earlier, more conservative version of this
-# script that only ever discarded a model's own decided matches and never
-# added new ones. Per-pair scores are averaged across both directions before
-# ranking (mirrors the notebooks' avg_across_directions()), one-to-many
-# conflicts are resolved on that averaged score before ranking (mirrors
-# remove_conflicts2(), and runs in the same order fast_testing uses: resolve
-# conflicts, then take the top N), and ties are broken by a random draw
-# (mirrors get_ordered_matches()'s random_tiebreaker column) -- see
-# _rank_based_fixed_n_matches()'s docstring for what's still not reproduced
-# (directional_filter's require-both-directions-above-threshold check).
+# Companion to plot_auc_vs_delta_days.py: that script compares every match each
+# model's tracking found, so a model that tracks more units gets a different,
+# not directly comparable AUC from one that tracks fewer -- AUC is sensitive to
+# how many positives are in the pool, whether or not the matches are better.
+# This script controls for that and stays on the tracking results.
 #
-# "UM Probabilities" is only a real, continuously-rankable score for
-# DeepUnitMatch/UMPy-family models -- EMD/DANT/DANT_no_functional save
-# final_matches.astype(float) into that same column (confirmed in
-# run_emd_batch_onMerged.py), i.e. a bare 0/1 decision with nothing to rank
-# among the rejected candidates. Padding those models up to N would mean
-# picking additional "matches" uniformly at random from an undifferentiated
-# pile of non-matches -- not a meaningful re-derivation, and not comparable
-# to what's done for the ranked models -- so RANK_ELIGIBLE_MODELS excludes
-# them entirely rather than represent them with a different, weaker method.
+# N per session pair is the number of DeepUnitMatch UID matches, and
+# DeepUnitMatch keeps exactly those. UMPy gets the same N by lowering the
+# threshold of its tracking: assign_unique_id() is rerun on UMPy's saved
+# probabilities at RETRACK_THRESHOLDS, and each session pair uses the highest
+# threshold at which UMPy reaches N, keeping its N most likely matches there.
 #
-# Even restricted to ranked models, REFERENCE_MODEL itself is structurally
-# advantaged: N for a pair is defined as *its* own decided count, so its own
-# top-N-by-probability selection for that pair will typically reproduce (or
-# closely approximate) its own real decision, while every other model's
-# selection is actively reshaped to hit that same N. This is an inherent
-# property of pinning N to one fixed model rather than, say, the per-pair
-# minimum across included models -- known and not corrected for here.
+# This is fast_testing.py's fixed N with tracking added: it takes the N most
+# likely candidates of each session pair, which amounts to lowering the
+# threshold per session pair until there are N. UMPy's matches thus come from
+# different thresholds for different session pairs, not from one clustering.
+# Session pairs that stay below N at the lowest threshold keep the matches they
+# have (see retracking_thresholds_fixed_n.csv and fixed_n_run_info.txt).
 #
-# Reuses plot_auc_vs_delta_days.py for everything except the re-derivation
-# step itself (session-date lookup, binning, AUC/summary/plotting functions
-# are all identical once Matches has been replaced) via that module's
-# matches_transform hook on collect_binned_pairs().
+# "Most likely" is the model's "UM Probabilities", averaged across both
+# directions of the unit pair (as fast_testing's avg_across_directions), ties
+# at random. One-to-many conflicts are resolved first, as in
+# plot_auc_vs_delta_days.py, so each unit keeps at most one partner per session.
+#
+# Reuses plot_auc_vs_delta_days.py for everything except this selection, via
+# its matches_transform hook on collect_binned_pairs().
 #
 # Output goes to BASE_OUTPUT/auc_vs_delta_days_fixed_n_report, a sibling of
 # plot_auc_vs_delta_days.py's own auc_vs_delta_days_report.
 
+import contextlib
+import io
 import os
+import pickle
 import sys
 
 import numpy as np
@@ -67,6 +43,7 @@ sys.path.insert(0, os.path.dirname(_HERE))
 
 import plot_auc_vs_delta_days as dvd
 import plot_auc_summary as auc_summary_mod
+import UnitMatchPy.assign_unique_id as aid
 
 BASE_OUTPUT = dvd.BASE_OUTPUT
 OUTPUT_DIR = os.path.join(BASE_OUTPUT, "auc_vs_delta_days_fixed_n_report")
@@ -74,225 +51,200 @@ OUTPUT_DIR = os.path.join(BASE_OUTPUT, "auc_vs_delta_days_fixed_n_report")
 MIN_MATCHES_TO_INCLUDE = dvd.MIN_MATCHES_TO_INCLUDE
 MIN_MICE_PER_BIN = dvd.MIN_MICE_PER_BIN
 
-# Only models with a real per-pair "UM Probabilities" score can be re-ranked
-# to hit a fixed N (see module docstring) -- the DeepUnitMatch/UMPy-family
-# entries of plot_auc_vs_delta_days.MODELS_TO_INCLUDE. EMD, DANT and
-# DANT_no_functional are deliberately left out.
-RANK_ELIGIBLE_MODELS = {
-    "DeepUnitMatch_AssignUniqueID_Conservative",
-    "DeepUnitMatch_AssignUniqueID",
-    "UMPy_AssignUniqueID_Conservative",
-    "UMPy_AssignUniqueID",
-}
-
-# Every model's per-session-pair positive count is re-derived relative to
-# this model's own match count for that pair (see module docstring): N is set
-# by DeepUnitMatch, so UMPy is the model re-ranked to a count it did not choose.
-REFERENCE_MODEL = "DeepUnitMatch_AssignUniqueID"
-
-# Which unit pairs survive the top-N selection is tie-broken randomly per
-# (dataset, session pair); fixed so re-running this script reproduces the
-# same figures.
-RANDOM_SEED = 0
-
-# The two RANK_ELIGIBLE_MODELS compared by the compact key-scores AUC-diff
-# summary (dvd.plot_model_diff_summary(), restricted to
-# dvd.KEY_SCORES_FOR_DIFF_SUMMARY) -- the Conservative UID variants are left
-# out of this particular comparison sinOce it's meant as a quick DUM-vs-UMPy
-# headline, not a full model sweep (see main()'s own len(models) == 2 guard
-# for the fuller all-scores version this module doesn't otherwise produce).
 DIFF_SUMMARY_MODEL_A = "DeepUnitMatch_AssignUniqueID"
 DIFF_SUMMARY_MODEL_B = "UMPy_AssignUniqueID"
+COMPARED_MODELS = {DIFF_SUMMARY_MODEL_A, DIFF_SUMMARY_MODEL_B}
+
+N_MODEL = DIFF_SUMMARY_MODEL_A  # its UID matches set N
+RETRACKED_MODEL = DIFF_SUMMARY_MODEL_B  # its tracking threshold is lowered to reach N
+
+# Thresholds tried below the model's own match_threshold, highest first.
+RETRACK_THRESHOLDS = (0.4, 0.3, 0.2, 0.15, 0.1, 0.07, 0.05, 0.03, 0.02, 0.01)
+
+# The rerun of the tracking is by far the slowest step. Delete this file to redo
+# it, e.g. after the matching itself was rerun; a different RETRACK_THRESHOLDS
+# or RANDOM_SEED is noticed and redoes it automatically.
+RETRACK_CACHE_PATH = os.path.join(OUTPUT_DIR, "retracking_cache_fixed_n.pickle")
+
+# Ties in the selection are broken at random; fixed so re-running this script
+# reproduces the same figures.
+RANDOM_SEED = 0
+
+_flagged_units = {}  # dataset -> within-session duplicates, slow to read and the same for every model
 
 
-def _build_reference_n_lookup(session_date_lookup, base_output=BASE_OUTPUT, reference_model=REFERENCE_MODEL):
+def _read_match_table(dataset, model, base_output=BASE_OUTPUT):
     """
-    {dataset: {(RecSes1, RecSes2) with RecSes1 < RecSes2: N}} -- N = how many
-    unordered unit pairs reference_model committed to as a match for that
-    session pair, in that dataset, AFTER resolving one-to-many conflicts
-    (dvd._resolve_match_conflicts(), ranked by "UM Probabilities" same as
-    everywhere else) -- not the raw pipeline "Matches" column's count, which
-    has no uniqueness constraint at write time (see
-    dvd._resolve_match_conflicts()'s docstring) and so can overcount relative
-    to what reference_model actually settled on for a unit. This mirrors
-    fast_testing.py's own reference N: it comes from a prior
-    get_matches_1model(fixed_n=False) run, whose remove_conflicts2() always
-    resolves conflicts before N = len(match_indices) is recorded.
-
-    Datasets/pairs missing here get treated as N=0 by
-    _rank_based_fixed_n_matches() (every other model's matches for that pair
-    are then dropped entirely) -- reference_model not having found anything
-    for a pair is itself information: no other model's matches for that pair
-    are better-supported than reference_model's null result, so this
-    comparison shouldn't count them either.
-
-    Same discovery walk as plot_auc_vs_delta_days.collect_binned_pairs(), but
-    restricted to reference_model's own folders, and only reading the columns
-    needed to count matches (no functional scores).
-
-    Also excludes pairs touching an unresolved within-session oversplit
-    residual (dvd.exclude_within_session_duplicates's own default in
-    collect_binned_pairs()) -- otherwise N here could count a match that
-    collect_binned_pairs() itself will go on to drop for every model,
-    including reference_model's own re-derived selection.
+    The source MatchTable.csv of a "<Source>_AssignUniqueID" model with "Matches"
+    its UID matches, with one row per ordered unit pair and the default index,
+    as collect_binned_pairs() reads it. None if the model has no output here.
     """
-    variant = dvd._uid_variant_source_model(reference_model)
+    source_model, (uid_col_a, uid_col_b) = dvd._uid_variant_source_model(model)
+    dataset_dir = os.path.join(base_output, *dataset.split("/"))
+    path = os.path.join(dataset_dir, source_model, "MatchTable.csv")
+    if not os.path.isfile(path) or not os.path.isfile(os.path.join(dataset_dir, model, "AUC_summary.json")):
+        return None
+    columns = {"ID1": "int32", "ID2": "int32", "RecSes 1": "int32", "RecSes 2": "int32",
+               uid_col_a: "int32", uid_col_b: "int32", dvd.MATCH_CONFLICT_RANK_COL: "float32"}
+    df = pd.read_csv(path, usecols=list(columns), dtype=columns)
+    df["Matches"] = (df[uid_col_a] == df[uid_col_b]).astype(np.int8)
+    return df
 
+
+def _across_sessions(df, dataset, base_output=BASE_OUTPUT):
+    """The across-session rows of df without within-session duplicates, as collect_binned_pairs() uses them."""
+    if dataset not in _flagged_units:
+        _flagged_units[dataset] = dvd._build_within_session_duplicate_lookup(base_output, {dataset}).get(dataset, set())
+    df, _ = dvd._drop_within_session_duplicate_pairs(df[df["RecSes 1"] != df["RecSes 2"]], _flagged_units[dataset])
+    return df
+
+
+def _build_n_lookup(session_date_lookup, base_output=BASE_OUTPUT):
+    """
+    {dataset: {(RecSes1, RecSes2) with RecSes1 < RecSes2: N}}: number of
+    conflict-resolved UID matches of N_MODEL. Session pairs without a match are
+    absent, i.e. N = 0.
+    """
     lookup = {}
-    n_found = 0
-    for root, dirs, files in os.walk(base_output, topdown=True):
-        dirs[:] = [d for d in dirs if not auc_summary_mod._should_skip_dir(d)]
-        if "AUC_summary.json" not in files:
+    for dataset, dates in session_date_lookup.items():
+        if not dates:
             continue
-        dirs[:] = []
-
-        if os.path.basename(root) != reference_model:
+        df = _read_match_table(dataset, N_MODEL, base_output)
+        if df is None:
             continue
-
-        dataset = os.path.relpath(os.path.dirname(root), base_output).replace("\\", "/")
-        if not session_date_lookup.get(dataset):
-            continue
-
-        match_table_dir = os.path.join(os.path.dirname(root), variant[0]) if variant is not None else root
-        match_table_path = os.path.join(match_table_dir, "MatchTable.csv")
-        if not os.path.isfile(match_table_path):
-            continue
-
-        header = pd.read_csv(match_table_path, nrows=0).columns
-        usecols = ["ID1", "ID2", "RecSes 1", "RecSes 2", "Matches"]
-        dtype_map = {"ID1": "int32", "ID2": "int32", "RecSes 1": "int32", "RecSes 2": "int32", "Matches": "int8"}
-        if dvd.MATCH_CONFLICT_RANK_COL in header:
-            usecols.append(dvd.MATCH_CONFLICT_RANK_COL)
-            dtype_map[dvd.MATCH_CONFLICT_RANK_COL] = "float32"
-        if variant is not None:
-            _, (uid_col_a, uid_col_b) = variant
-            if uid_col_a not in header or uid_col_b not in header:
-                print(f"  {match_table_path} missing '{uid_col_a}'/'{uid_col_b}', skipping reference lookup for {dataset}.")
-                continue
-            usecols += [uid_col_a, uid_col_b]
-            dtype_map[uid_col_a] = dtype_map[uid_col_b] = "int32"
-
-        df = pd.read_csv(match_table_path, usecols=usecols, dtype=dtype_map)
-        if variant is not None:
-            _, (uid_col_a, uid_col_b) = variant
-            df["Matches"] = (df[uid_col_a] == df[uid_col_b]).astype(np.int8)
-
+        df = _across_sessions(df, dataset, base_output)
         df = df.assign(Matches=dvd._resolve_match_conflicts(df))
-
-        pos = df[(df["RecSes 1"] < df["RecSes 2"]) & (df["Matches"] == 1)]
-        dup_flagged = dvd._build_within_session_duplicate_lookup(base_output, {dataset}).get(dataset, set())
-        pos, _ = dvd._drop_within_session_duplicate_pairs(pos, dup_flagged)
-        counts = pos.groupby(["RecSes 1", "RecSes 2"]).size()
-        lookup[dataset] = {(int(r1), int(r2)): int(n) for (r1, r2), n in counts.items()}
-        n_found += 1
-
-    print(f"Built reference-N lookup ({reference_model}) for {n_found} dataset(s).")
+        n_per_pair = df[(df["RecSes 1"] < df["RecSes 2"]) & (df["Matches"] == 1)].groupby(["RecSes 1", "RecSes 2"]).size()
+        lookup[dataset] = {(int(r1), int(r2)): int(n) for (r1, r2), n in n_per_pair.items()}
+    print(f"Built N per session pair for {len(lookup)} dataset(s).")
     return lookup
 
 
-def _rank_based_fixed_n_matches(df, ref_counts_for_dataset, rng, rank_col="UM Probabilities"):
+def _best_n_uid_matches(df, n_for_dataset, rng, rank_col=dvd.MATCH_CONFLICT_RANK_COL):
     """
-    Returns a new int8 array, same length as df, replacing df["Matches"]
-    entirely: for each session pair, the top ref_counts_for_dataset[(r1, r2)]
-    candidate unit pairs by rank_col (0 if that pair isn't in
-    ref_counts_for_dataset at all) become the new positives -- everything
-    else, including pairs the pipeline itself called a match, becomes a
-    negative. Mirrors fast_testing.get_matches_1model(fixed_n=...): the
-    ranking runs over every across-session candidate pair for that session
-    pair (df must already be restricted to RecSes 1 != RecSes 2), not just
-    the ones already flagged Matches==1, so this can both add matches a
-    model's own threshold rejected and drop ones it accepted.
+    Returns a new int8 array replacing df["Matches"] (df restricted to RecSes 1 !=
+    RecSes 2, "Matches" already UID matches): for each session pair, the
+    n_for_dataset[(r1, r2)] most likely conflict-resolved UID matches, in both
+    directions. Everything else becomes a non-match, so a selected pair counts
+    the same for (i, j) and (j, i).
 
-    df must have "ID2" and rank_col columns loaded (see extra_usecols on
-    collect_binned_pairs()). rank_col is averaged across both directions of
-    each unordered unit pair before ranking (mirrors the notebooks'
-    avg_across_directions()) since a per-direction "UM Probabilities" value
-    need not itself be symmetric; ties are broken by a per-call random draw
-    (mirrors get_ordered_matches()'s random_tiebreaker column).
-
-    Not reproduced here: the notebooks additionally run directional_filter
-    (require both directions individually above threshold) before ranking.
-    Averaging across directions already softly penalises one-way-only
-    candidates rather than excluding them outright -- a simplification
-    relative to the notebooks' own fixed_n comparison. One-to-many conflicts
-    (remove_conflicts2's one-partner-per-unit constraint) ARE resolved here,
-    on the direction-averaged score, before top-N ranking -- same order
-    fast_testing.get_matches_1model(fixed_n=...) uses (remove_conflicts2()
-    runs, THEN .head(fixed_n) picks winners from what's left), rather than
-    collect_binned_pairs()'s own post-hoc resolve_match_conflicts pass, which
-    would otherwise run after N is already fixed (on raw per-direction
-    "UM Probabilities" values, a different score source) and could shrink the
-    selected set below N. main() passes resolve_match_conflicts=False to
-    collect_binned_pairs() for this reason -- conflict resolution happens
-    exactly once, here.
+    A unit pair is a candidate if it survived conflict resolution in the
+    forward direction (RecSes 1 < RecSes 2), the direction N is counted in.
+    Ranked by rank_col averaged over both directions, ties at random.
     """
-    r1 = df["RecSes 1"].to_numpy()
-    r2 = df["RecSes 2"].to_numpy()
-    id1 = df["ID1"].to_numpy()
-    id2 = df["ID2"].to_numpy()
-    score = df[rank_col].to_numpy()
+    r1, r2 = df["RecSes 1"].to_numpy(), df["RecSes 2"].to_numpy()
+    id1, id2 = df["ID1"].to_numpy(), df["ID2"].to_numpy()
+    resolved = dvd._resolve_match_conflicts(df).astype(bool)
+    selected = np.zeros(len(df), dtype=np.int8)
 
-    lo = r1 < r2
-    sess_lo, sess_hi = np.where(lo, r1, r2), np.where(lo, r2, r1)
-    unit_lo, unit_hi = np.where(lo, id1, id2), np.where(lo, id2, id1)
+    rows = np.flatnonzero(df["Matches"].to_numpy())  # both directions of every UID match
+    if len(rows) == 0:
+        return selected
 
-    canon = pd.DataFrame({
-        "sess_lo": sess_lo, "sess_hi": sess_hi,
-        "unit_lo": unit_lo, "unit_hi": unit_hi,
-        "score": score,
-        "row": np.arange(len(df)),
+    forward = r1[rows] < r2[rows]
+    keys = ["sess_lo", "sess_hi", "unit_lo", "unit_hi"]
+    candidates = pd.DataFrame({
+        "sess_lo": np.where(forward, r1[rows], r2[rows]), "sess_hi": np.where(forward, r2[rows], r1[rows]),
+        "unit_lo": np.where(forward, id1[rows], id2[rows]), "unit_hi": np.where(forward, id2[rows], id1[rows]),
+        "score": df[rank_col].to_numpy()[rows],
+        "kept": forward & resolved[rows],
+        "row": rows,
     })
-    # One id per distinct unordered unit pair -- 2 rows per id (this row + its
-    # mirror direction) in the normal case, 1 if only one direction is
-    # present in this bin/dataset's data.
-    canon["canon_id"] = canon.groupby(["sess_lo", "unit_lo", "sess_hi", "unit_hi"], sort=False).ngroup()
+    pairs = candidates.groupby(keys, sort=False).agg(score=("score", "mean"), kept=("kept", "max")).reset_index()
+    pairs = pairs[pairs["kept"]].copy()
+    pairs["tiebreak"] = rng.random(len(pairs))
+    pairs = pairs.sort_values(["score", "tiebreak"], ascending=[False, True])
 
-    pairs = canon.groupby("canon_id", sort=False).agg(
-        sess_lo=("sess_lo", "first"), sess_hi=("sess_hi", "first"),
-        unit_lo=("unit_lo", "first"), unit_hi=("unit_hi", "first"),
-        avg_score=("score", "mean"),
-    )
-    # NaN scores (shouldn't normally occur -- UM Probabilities is computed for
-    # every candidate pair -- but handled defensively) never win a ranking or
-    # a conflict.
-    pairs["avg_score"] = pairs["avg_score"].fillna(-np.inf)
+    rank = pairs.groupby(["sess_lo", "sess_hi"], sort=False).cumcount().to_numpy()
+    n_allowed = np.array([n_for_dataset.get((int(a), int(b)), 0) for a, b in zip(pairs["sess_lo"], pairs["sess_hi"])])
+    chosen = pairs.loc[rank < n_allowed, keys]
 
-    # Rank as fast_testing.get_matches_1model(fixed_n=...) does: mutual-best
-    # candidates first (avg_score maximal among every candidate sharing its
-    # "lo" unit and among every candidate sharing its "hi" unit, within the
-    # session pair -- the remove_conflicts2() rule, on direction-averaged
-    # scores), then all other candidates, each group by avg_score, ties at
-    # random. When a session pair has fewer than N mutual-best candidates, the
-    # remaining slots are filled with the next most likely candidates (which
-    # can share a unit with a chosen one), as agreed for fast_testing.
-    max_for_lo = pairs.groupby(["sess_lo", "sess_hi", "unit_lo"])["avg_score"].transform("max")
-    max_for_hi = pairs.groupby(["sess_lo", "sess_hi", "unit_hi"])["avg_score"].transform("max")
-    mutual_best = ((pairs["avg_score"] == max_for_lo) & (pairs["avg_score"] == max_for_hi)).to_numpy()
-    finite = np.isfinite(pairs["avg_score"].to_numpy())  # NaN scores (-inf above) are never matches
-    pairs, mutual_best = pairs[finite], mutual_best[finite]
+    selected[candidates.merge(chosen, on=keys)["row"].to_numpy()] = 1
+    return selected
 
-    avg_score = pairs["avg_score"].to_numpy()
-    tiebreak = rng.random(len(pairs))
-    rows_by_canon = canon.groupby("canon_id", sort=False)["row"].apply(np.asarray)
 
-    matches_fixed = np.zeros(len(df), dtype=np.int8)
-    selected_canon_ids = []
-    for (s_lo, s_hi), g in pairs.groupby(["sess_lo", "sess_hi"]):
-        n_ref = ref_counts_for_dataset.get((int(s_lo), int(s_hi)), 0)
-        if n_ref <= 0:
-            continue
-        local = g.index.to_numpy()
-        pos = pairs.index.get_indexer(local)
-        # Mutual-best first, then descending avg_score, ties broken by the random draw
-        # (np.lexsort sorts by the last key first).
-        order = np.lexsort((tiebreak[pos], -avg_score[pos], ~mutual_best[pos]))
-        selected_canon_ids.append(local[order[:n_ref]])
+def _retrack_to_n(dataset, n_for_dataset, rng, base_output=BASE_OUTPUT):
+    """
+    Lowers RETRACKED_MODEL's tracking threshold per session pair until it has
+    n_for_dataset[(r1, r2)] matches. Returns (rows of its MatchTable.csv that
+    are matches, in both directions; one info dict per session pair).
+    """
+    source_model, _ = dvd._uid_variant_source_model(RETRACKED_MODEL)
+    table = _read_match_table(dataset, RETRACKED_MODEL, base_output)
+    if table is None:
+        return np.array([], dtype=np.int64), []
 
-    if selected_canon_ids:
-        sel_ids = np.concatenate(selected_canon_ids)
-        sel_rows = np.concatenate(rows_by_canon.loc[sel_ids].to_numpy())
-        matches_fixed[sel_rows] = 1
-    return matches_fixed
+    # A MatchTable is an (n_units, n_units) matrix with ID1 cycling fastest
+    # (save_utils.make_match_table), so a row number gives both units.
+    n_units = int(np.sqrt(len(table)))
+    probs = table[dvd.MATCH_CONFLICT_RANK_COL].to_numpy().reshape(n_units, n_units)
+    clus_info = {
+        "original_ids": table["ID1"].to_numpy()[:n_units].reshape(-1, 1),
+        "session_id": table["RecSes 1"].to_numpy()[:n_units] - 1,
+    }
+    with open(os.path.join(base_output, *dataset.split("/"), source_model, "UMparam.pickle"), "rb") as f:
+        param = pickle.load(f)
+
+    df = _across_sessions(table, dataset, base_output)
+    rows = df.index.to_numpy()
+    unit_1, unit_2 = rows % n_units, rows // n_units
+    r1, r2 = df["RecSes 1"].to_numpy(), df["RecSes 2"].to_numpy()
+    n_sessions = int(max(r1.max(), r2.max())) + 1
+    pair_code = np.minimum(r1, r2).astype(np.int64) * n_sessions + np.maximum(r1, r2)
+
+    thresholds = [param["match_threshold"]] + [t for t in RETRACK_THRESHOLDS if t < param["match_threshold"]]
+    remaining = dict(n_for_dataset)
+    selected_rows, info = [], []
+    for threshold in thresholds:
+        if not remaining:
+            break
+        with contextlib.redirect_stdout(io.StringIO()):
+            uids = aid.assign_unique_id(probs, {**param, "match_threshold": threshold, "use_data_driven_prob_thrs": False}, clus_info)[1]
+        matches = (uids[unit_1] == uids[unit_2]).astype(np.int8)
+        chosen = _best_n_uid_matches(df.assign(Matches=matches), remaining, rng).astype(bool)
+        forward = chosen & (r1 < r2)
+        found = dict(zip(*np.unique(pair_code[forward], return_counts=True)))
+
+        done = []
+        for (s1, s2), n in remaining.items():
+            n_found = int(found.get(s1 * n_sessions + s2, 0))
+            if n_found >= n or threshold == thresholds[-1]:
+                done.append((s1, s2))
+                info.append({"dataset": dataset, "RecSes 1": s1, "RecSes 2": s2, "N": n,
+                             "n_matches": n_found, "threshold": threshold})
+        codes = [s1 * n_sessions + s2 for s1, s2 in done]
+        selected_rows.append(rows[chosen & np.isin(pair_code, codes)])
+        for pair in done:
+            del remaining[pair]
+
+    return np.concatenate(selected_rows) if selected_rows else np.array([], dtype=np.int64), info
+
+
+def _get_retracked_matches(n_lookup, rng, base_output=BASE_OUTPUT):
+    """
+    ({dataset: matched rows of RETRACKED_MODEL}, one row per session pair with
+    N > 0 saying which threshold it needed), cached in RETRACK_CACHE_PATH.
+    """
+    settings = {"thresholds": RETRACK_THRESHOLDS, "seed": RANDOM_SEED}
+    if os.path.isfile(RETRACK_CACHE_PATH):
+        with open(RETRACK_CACHE_PATH, "rb") as f:
+            cache = pickle.load(f)
+        if cache["settings"] == settings:
+            print(f"Loading cached retracking from {RETRACK_CACHE_PATH}")
+            return cache["rows"], cache["info"]
+
+    rows, info = {}, []
+    for i, (dataset, n_for_dataset) in enumerate(n_lookup.items()):
+        if n_for_dataset:
+            rows[dataset], dataset_info = _retrack_to_n(dataset, n_for_dataset, rng, base_output)
+            info += dataset_info
+        print(f"  retracked {i + 1}/{len(n_lookup)}: {dataset}", flush=True)
+
+    info = pd.DataFrame(info, columns=["dataset", "RecSes 1", "RecSes 2", "N", "n_matches", "threshold"])
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(RETRACK_CACHE_PATH, "wb") as f:
+        pickle.dump({"settings": settings, "rows": rows, "info": info}, f)
+    return rows, info
 
 
 def main():
@@ -302,37 +254,41 @@ def main():
     n_datasets_with_dates = sum(1 for m in session_date_lookup.values() if m)
     print(f"Have session dates for {n_datasets_with_dates}/{len(session_date_lookup)} dataset(s).\n")
 
-    ref_n_lookup = _build_reference_n_lookup(session_date_lookup)
+    n_lookup = _build_n_lookup(session_date_lookup)
     rng = np.random.default_rng(RANDOM_SEED)
+    retracked_rows, retrack_info = _get_retracked_matches(n_lookup, rng)
 
-    def matches_transform(dataset, df):
-        return _rank_based_fixed_n_matches(df, ref_n_lookup.get(dataset, {}), rng)
+    retrack_csv = os.path.join(OUTPUT_DIR, "retracking_thresholds_fixed_n.csv")
+    retrack_info.to_csv(retrack_csv, index=False)
+    print(f"Wrote {retrack_csv}")
 
+    def matches_transform(dataset, df, model):
+        if model == N_MODEL:
+            return _best_n_uid_matches(df, n_lookup.get(dataset, {}), rng)
+        return np.isin(df.index.to_numpy(), retracked_rows.get(dataset, [])).astype(np.int8)
+
+    n_short = int((retrack_info["n_matches"] < retrack_info["N"]).sum())
     with open(os.path.join(OUTPUT_DIR, "fixed_n_run_info.txt"), "w") as f:
         f.write(
-            f"reference_model = {REFERENCE_MODEL}\n"
-            f"rank_eligible_models = {sorted(RANK_ELIGIBLE_MODELS)}\n"
-            f"excluded_models = {sorted(dvd.MODELS_TO_INCLUDE - RANK_ELIGIBLE_MODELS)} "
-            f"(no continuous per-pair score to rank by -- see module docstring)\n"
+            f"N per session pair = number of UID matches of {N_MODEL}\n"
+            f"{RETRACKED_MODEL} retracked at thresholds {list(RETRACK_THRESHOLDS)}\n"
+            f"session pairs with N > 0 = {len(retrack_info)}\n"
+            f"of which {RETRACKED_MODEL} did not reach N at the lowest threshold = {n_short}\n"
             f"random_seed = {RANDOM_SEED}\n"
-            f"datasets_with_reference_matches = {len(ref_n_lookup)}\n"
         )
+    print(f"{n_short}/{len(retrack_info)} session pair(s) did not reach N at the lowest threshold.")
 
     (
         score_bins, rate_bins, count_bins, dataset_level_rows, dataset_level_auc_rows,
         auc_long_df, dataset_bin_auc_rows, dataset_bin_rate_rows,
     ) = dvd.collect_binned_pairs(
         session_date_lookup,
-        models_to_include=RANK_ELIGIBLE_MODELS,
+        models_to_include=COMPARED_MODELS,
         matches_transform=matches_transform,
         extra_usecols={"ID2": "int32", "UM Probabilities": "float32"},
-        # _rank_based_fixed_n_matches() already resolves one-to-many conflicts
-        # itself, before picking the top N (see its docstring) -- running
-        # collect_binned_pairs()'s own post-hoc pass here too would re-decide
-        # conflicts from raw per-direction "UM Probabilities" values (a
-        # different score source than the direction-averaged one used for
-        # ranking) after N is already fixed, and could shrink a model's
-        # selected set below N.
+        # _best_n_uid_matches() already resolves one-to-many conflicts itself,
+        # before picking the best N -- a second pass here could shrink a
+        # model's selected set below N.
         resolve_match_conflicts=False,
     )
 
@@ -445,7 +401,7 @@ def main():
     pooled_png = os.path.join(OUTPUT_DIR, "quality_vs_quantity_fixed_n_pooled.png")
     result = dvd.plot_quality_vs_quantity(
         summary_df, colour_for, pooled_png,
-        title=f"Quality vs quantity, fixed N (pooled across datasets/ΔDay, N capped to {REFERENCE_MODEL})",
+        title="Quality vs quantity, fixed N (pooled across datasets/ΔDay, N = smaller UID match count)",
     )
     if result:
         print(f"  Plotted pooled quality-vs-quantity -> {result}")
