@@ -1,8 +1,12 @@
 %% User Input
-NewHistologyNeeded = 1; %Automatically to 1 after RedoAfterClustering
+NewHistologyNeeded = 0; %Automatically to 1 after RedoAfterClustering
 RedoAfterClustering = 0;
 RedoUserInput = 0;
 UseLFP = 0;
+% Manual curation (end of script): 'new' - alignments not yet curated (or flagged); 'flagged' - only
+% those flagged for review; 'all' - browse every alignment, also the curated ones (they open with the
+% saved curation; closing the GUI without Accept/Flag leaves the file unchanged)
+CurationMode = 'new';%'new';
 
 % directory of reference atlas files
 ann = 10; %Steps in micron that's used
@@ -22,6 +26,7 @@ show_region_table = true;
 black_brain = false;
 AllenCCFPath = fullfile(GithubDir,'allenCCF');
 InclNrecordings = 8; % we typically have 8 mapping sessions at the start
+MinGoodUnitsCuration = PipelineParams.minGoodUnits; % manual curation: skip recordings with fewer good units (as UnitMatch's minGoodUnits)
 %% Automated
 % Load all data
 % Find available datasets (always using dates as folders)
@@ -74,12 +79,8 @@ for midx = 1:length(MiceOpt)
     else
         multidate=0;
     end
-    % Per probe (index: probe number + 1, from the Probe<N> folder name): first date already handled?
-    if NewHistologyNeededOri || RedoUserInput
-        thefirstperprobe = zeros(1,16);
-    else
-        thefirstperprobe = ones(1,16);
-    end
+    % Chronic probes: every date is aligned on its own recordings, then all dates of a probe are fitted
+    % jointly (JointChronicAlignment, after this loop)
     % For every date a different dataset
     Dates4Mouse = DateOpt{midx};
     for didx = 1:length(Dates4Mouse)
@@ -119,8 +120,6 @@ for midx = 1:length(MiceOpt)
                 end
                 RedoUserInput = RedoUserInputOri;
                 NewHistologyNeeded = NewHistologyNeededOri;
-                pidx = sscanf(subksdirs(probeid).name,'Probe%d') + 1; % same probe on every date, also if a date lacks another probe
-                if isempty(pidx), pidx = probeid; end
 
                 % Copy to other folders with same probe SN
                 tmp = dir(fullfile(subksdirs(probeid).folder,subksdirs(probeid).name,'**','PreparedData.mat'));
@@ -151,10 +150,6 @@ for midx = 1:length(MiceOpt)
                 end
 
 
-                if multidate && thefirstperprobe(pidx)
-                    RedoUserInput = 0;
-                end
-
                 %Saving directory
                 thisprobe = subksdirs(probeid).name
 
@@ -179,11 +174,9 @@ for midx = 1:length(MiceOpt)
                             DrawProbeInBrain
                             nInsertionsIncluded = nInsertionsIncluded + 1;
                             nMiceIncluded(midx) = true;
-                            thefirstperprobe(pidx) = 1;
                             continue
                         end
-                    elseif ~multidate
-
+                    else
 
                         disp('Skip')
                         try
@@ -234,34 +227,6 @@ for midx = 1:length(MiceOpt)
                     end
                 end
 
-
-                if multidate & thefirstperprobe(pidx) & NewHistologyNeeded
-                    histfile = dir(fullfile(SaveDir,MiceOpt{midx},'**',[num2str(SN) '_HistoEphysAlignment_Auto.mat']));
-                    if ~isempty(histfile)
-                        if ~exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
-                            mkdir(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
-                        else % only the old alignment: other scripts also save in this folder
-                            delete(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,'*_HistoEphysAlignment_Auto.*'))
-                        end
-                        copyfile(fullfile(histfile(1).folder,histfile(1).name),fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,histfile(1).name))
-                        continue
-                    end
-                elseif multidate & thefirstperprobe(pidx) & ~NewHistologyNeeded
-                    continue
-                elseif multidate & ~thefirstperprobe(pidx) & ~NewHistologyNeeded
-                    disp('Skip')
-                    try
-                        DrawProbeInBrain
-                    catch ME
-
-                    end
-                    nInsertionsIncluded = nInsertionsIncluded + 1;
-                    nMiceIncluded(midx) = true;
-                    thefirstperprobe(pidx) = 1;
-
-                    continue
-                end
-                thefirstperprobe(pidx) = 1;
 
                 %% Get cluster information
                 PipelineParams.thisdate = thisdate;
@@ -366,6 +331,34 @@ for midx = 1:length(MiceOpt)
     end
     %     end
 end
+
+%% Chronic probes: joint fit over the recording days (shared scale, day offsets follow the drift)
+% Each day keeps its own alignment, in that day's probe depth. Refitted when a day is new or was
+% realigned (no JointFit, or JointFit made with another set of days); curated days are not changed.
+for midx = find(strcmp(RecordingType(:)','Chronic') & ~cellfun(@isempty,MiceOpt))
+    hits = dir(fullfile(SaveDir,MiceOpt{midx},'**','*_HistoEphysAlignment_Auto.mat'));
+    if isempty(hits), continue; end
+    sns = strrep({hits.name},'_HistoEphysAlignment_Auto.mat','');
+    for sn = unique(sns)
+        files = sort(fullfile({hits(strcmp(sns,sn{1})).folder},{hits(strcmp(sns,sn{1})).name}));
+        if numel(files) < 2, continue; end
+        redo = false;
+        for fid = 1:numel(files)
+            if ~ismember('AlignmentState',who('-file',files{fid})), continue; end % older alignment: not in the joint fit
+            tmp = load(files{fid},'JointFit');
+            redo = redo || ~isfield(tmp,'JointFit') || ~isequal(sort(tmp.JointFit.Files(:)),files(:));
+        end
+        if redo
+            fprintf('%s probe %s: joint chronic alignment over %d days\n',MiceOpt{midx},sn{1},numel(files))
+            try
+                JointChronicAlignment(files);
+            catch ME
+                warning('MainHistology:JointChronic','%s probe %s: joint chronic alignment failed: %s',MiceOpt{midx},sn{1},ME.message)
+            end
+        end
+    end
+end
+
 % Save image
 figure(fwireframe)
 saveas(gcf,fullfile(SaveDir,['3DProbes2.fig']))
@@ -434,55 +427,107 @@ else
         linkedPaths{gid}    = memberPaths(2:end);  % copies to propagate to (chronic only)
     end
 
-    % Filter groups whose canonical file has not been curated yet
-    needsCuration = false(nGroups, 1);
+    % Select groups by the state of their canonical file (CurationMode)
+    isCurated = false(nGroups, 1); isFlagged = false(nGroups, 1);
     for gid = 1:nGroups
         try
-            tmp = load(canonicalPaths{gid}, 'ManuallyCurated');
-            needsCuration(gid) = ~isfield(tmp, 'ManuallyCurated') || ~tmp.ManuallyCurated;
+            tmp = load(canonicalPaths{gid}, 'ManuallyCurated', 'FlaggedForReview');
+            isCurated(gid) = isfield(tmp, 'ManuallyCurated') && tmp.ManuallyCurated;
+            isFlagged(gid) = isfield(tmp, 'FlaggedForReview') && tmp.FlaggedForReview;
         catch
-            needsCuration(gid) = true;
         end
     end
-    toReview = find(needsCuration);
+    switch CurationMode
+        case 'all',     needsCuration = true(nGroups, 1);
+        case 'flagged', needsCuration = isFlagged;
+        otherwise,      needsCuration = ~isCurated;
+    end
+    % Skip recordings with fewer than MinGoodUnitsCuration good units (Good_ID in the Kilosort
+    % folders' PreparedData.mat, as UnitMatch counts them); a chronic probe is skipped only if all
+    % its days are below it. Unknown counts (no PreparedData.mat) are not skipped.
+    tooFewUnits = false(nGroups, 1);
+    for gid = find(needsCuration)'
+        members = [canonicalPaths(gid) linkedPaths{gid}];
+        nGood = nan(1, numel(members));
+        for mi = 1:numel(members)
+            parts = strsplit(fileparts(members{mi}), filesep); % ...\Mouse\Date\ProbeX
+            pd = dir(fullfile(KilosortDir, parts{end-2}, parts{end-1}, parts{end}, '**', 'PreparedData.mat'));
+            if isempty(pd), continue; end
+            nGood(mi) = 0;
+            for pdi = 1:numel(pd)
+                try
+                    ci = load(fullfile(pd(pdi).folder, pd(pdi).name), 'clusinfo');
+                    nGood(mi) = nGood(mi) + sum(logical(ci.clusinfo.Good_ID));
+                catch
+                    nGood(mi) = NaN;
+                end
+            end
+        end
+        if ~any(isnan(nGood)) && all(nGood < MinGoodUnitsCuration)
+            tooFewUnits(gid) = true;
+            fprintf('Curation skipped (%s good units < %d): %s\n', strjoin(arrayfun(@num2str, nGood, 'Uni', 0), '/'), ...
+                MinGoodUnitsCuration, canonicalPaths{gid})
+        end
+    end
+    toReview = find(needsCuration & ~tooFewUnits);
 
     if isempty(toReview)
-        disp('All alignments already manually curated — nothing to review.')
+        fprintf('No alignments to review (CurationMode ''%s'').\n', CurationMode)
     else
-        fprintf('Starting manual curation: %d alignment(s) to review.\n', numel(toReview))
+        fprintf('Starting manual curation (%s): %d alignment(s) to review.\n', CurationMode, numel(toReview))
         for gi = 1:numel(toReview)
             gid        = toReview(gi);
             canonPath  = canonicalPaths{gid};
             linked     = linkedPaths{gid};
             nLinked    = numel(linked);
 
+            state = 'not curated'; if isCurated(gid), state = 'curated'; elseif isFlagged(gid), state = 'flagged'; end
             if nLinked > 0
-                fprintf('[%d/%d]  %s  (+%d chronic copy/copies)\n', ...
-                    gi, numel(toReview), canonPath, nLinked)
+                fprintf('[%d/%d]  %s  (%s; +%d chronic copy/copies)\n', ...
+                    gi, numel(toReview), canonPath, state, nLinked)
             else
-                fprintf('[%d/%d]  %s\n', gi, numel(toReview), canonPath)
+                fprintf('[%d/%d]  %s  (%s)\n', gi, numel(toReview), canonPath, state)
             end
 
+            before = load(canonPath, 'CurationDate');
             guiFig = AlignmentCurationGUI(canonPath, fullfile(GithubDir,'allenCCF'), HistoFolder);
             waitfor(guiFig)  % block until GUI is closed before opening the next
+            after = load(canonPath, 'CurationDate');
+            saved = ~isequal(getfield_or(before,'CurationDate',''), getfield_or(after,'CurationDate',''));
 
-            % Propagate curation result to all chronic date-copies
-            if nLinked > 0
+            % Propagate curation result to the other days of a chronic probe. With a joint chronic
+            % fit, each day's alignment is in its own probe depth: the curated alignment is shifted by
+            % the difference of the days' joint offsets (the drift between them). Older (copied)
+            % alignments are copied as they are (their units are placed by AdjustedDepth).
+            % Only when saved (Accept/Flag): browsing without changes leaves the copies as they are.
+            if nLinked > 0 && saved
                 try
-                    cur = load(canonPath, 'Depth2Area','AlignmentFeatures', ...
-                        'ManuallyCurated','FlaggedForReview','CurationNotes','CurationDate');
+                    cur = load(canonPath, 'Depth2Area', ...
+                        'ManuallyCurated','FlaggedForReview','CurationNotes','CurationDate','JointFit');
                     % Extract fields with safe fallbacks for pre-existing files
-                    Depth2Area       = cur.Depth2Area;
-                    AlignmentFeatures = getfield_or(cur, 'AlignmentFeatures', []);
                     ManuallyCurated  = getfield_or(cur, 'ManuallyCurated',  false);
                     FlaggedForReview = getfield_or(cur, 'FlaggedForReview', false);
                     CurationNotes    = getfield_or(cur, 'CurationNotes',    '');
                     CurationDate     = getfield_or(cur, 'CurationDate',     '');
                     for lid = 1:nLinked
-                        save(linked{lid}, 'Depth2Area','AlignmentFeatures', ...
-                            'ManuallyCurated','FlaggedForReview', ...
-                            'CurationNotes','CurationDate', '-append');
-                        fprintf('   propagated to %s\n', linked{lid})
+                        Depth2Area = cur.Depth2Area;
+                        lnk = load(linked{lid}, 'JointFit');
+                        if isfield(cur,'JointFit') && isfield(lnk,'JointFit')
+                            shift = lnk.JointFit.Offset - cur.JointFit.Offset;
+                            Depth2Area.Depth = Depth2Area.Depth + shift;
+                            if ismember('BaselineDepth',Depth2Area.Properties.VariableNames)
+                                Depth2Area.BaselineDepth = Depth2Area.BaselineDepth + shift;
+                            end
+                            CurationShiftUm = shift;
+                            save(linked{lid}, 'Depth2Area','ManuallyCurated','FlaggedForReview', ...
+                                'CurationNotes','CurationDate','CurationShiftUm','-append');
+                            fprintf('   propagated to %s (shifted %.0f um)\n', linked{lid}, shift)
+                        else
+                            save(linked{lid}, 'Depth2Area', ...
+                                'ManuallyCurated','FlaggedForReview', ...
+                                'CurationNotes','CurationDate', '-append');
+                            fprintf('   propagated to %s\n', linked{lid})
+                        end
                     end
                 catch ME
                     warning('AlignmentCuration:propagateFailed', '%s', ME.message)

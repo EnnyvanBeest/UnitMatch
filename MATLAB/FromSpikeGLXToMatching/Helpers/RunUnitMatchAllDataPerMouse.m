@@ -138,6 +138,9 @@ for midx = 1:length(MiceOpt)
                 rmdir(UnitMatchExist(id).folder,'s')
             end
             MouseAllDone = 0;
+        elseif ~exist(fullfile(UnitMatchExist(id).folder,'VennFunctionalScores.bmp'),'file') % Functional scores not computed (e.g. crashed before)
+            disp([MiceOpt{midx} ': no functional scores in ' UnitMatchExist(id).folder])
+            MouseAllDone = 0;
         end
     end
 
@@ -317,6 +320,20 @@ for midx = 1:length(MiceOpt)
                 end
             
             elseif ~isempty(UnitMatchExist)
+                % Not run again, but functional scores may be missing (e.g. crashed before)
+                if ~exist(fullfile(UMparam.SaveDir,'VennFunctionalScores.bmp'),'file')
+                    disp(['Functional scores missing for ' UMparam.SaveDir ', computing...'])
+                    ComputeFunctionalScores(UMparam.SaveDir,1)
+                    % Steps after functional scores were skipped as well
+                    if UMparam.AssignUniqueID % Sanity check
+                        summaryMatchingPlots(UMparam.SaveDir,{'UID1Liberal','UID1','UID1Conservative'},1,0)
+                    end
+                    try
+                        QualityMetricsROCs(UMparam.SaveDir);
+                    catch ME
+                        disp(['Couldn''t do Quality metrics for ' MiceOpt{midx}])
+                    end
+                end
                 % Not run again: continue the UniqueID numbering after this run's IDs
                 tmpUID = load(fullfile(UnitMatchExist.folder,UnitMatchExist.name),'UniqueIDConversion');
                 if isfield(tmpUID,'UniqueIDConversion') && ~isempty(tmpUID.UniqueIDConversion.UniqueID)

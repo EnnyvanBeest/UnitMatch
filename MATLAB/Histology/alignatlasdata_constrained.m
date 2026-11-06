@@ -1,5 +1,5 @@
-function [Depth2Area, AlignmentFeatures, Fit] = alignatlasdata_constrained(histinfo, trackcoordinates, sp, clusinfo, AllenCCFPath, Opt)
-% [Depth2Area, AlignmentFeatures, Fit] = alignatlasdata_constrained(histinfo, trackcoordinates, sp, clusinfo, AllenCCFPath, Opt)
+function [Depth2Area, AlignmentFeatures, Fit, AlignmentState] = alignatlasdata_constrained(histinfo, trackcoordinates, sp, clusinfo, AllenCCFPath, Opt)
+% [Depth2Area, AlignmentFeatures, Fit, AlignmentState] = alignatlasdata_constrained(histinfo, trackcoordinates, sp, clusinfo, AllenCCFPath, Opt)
 % Aligns the histology track(s) of a probe to its recording depths with a constrained model:
 %  1. Ephys profile per shank along the probe (depth = site position, um): log spike rate (all
 %     spikes), density of good units and mean amplitude, smoothed. Activity = mean of the z-scored
@@ -16,6 +16,8 @@ function [Depth2Area, AlignmentFeatures, Fit] = alignatlasdata_constrained(histi
 % Inputs as alignatlasdata_automated: histinfo {shank} tables from the BrainGlobe track csv files
 % (distance from the first (surface) point, region acronym), trackcoordinates {shank} (npy, atlas
 % coordinates per track point), sp/clusinfo (LoadPreparedClusInfo; clusinfo.Shank 0-based).
+% The track's area labels are cleaned of registration flicker first (local_cleanlabels: runs shorter
+% than Opt.MinAreaRunUm, and A > B > A with B shorter than Opt.MaxSandwichUm, are merged).
 % Output:
 %  Depth2Area: one row per histology track point in the recorded range: Depth (aligned, um),
 %    Shank (position among the shanks used, 1-based, as before), ShankAbs (shank number, 0-based),
@@ -28,6 +30,9 @@ function [Depth2Area, AlignmentFeatures, Fit] = alignatlasdata_constrained(histi
 %  Fit: Scale, Offset, per-shank offsets, correlations of the global fit and after the warp;
 %    Alternatives (Scale, Offset, Corr, Score, Components: the correlation per part of the score,
 %    named in Fit.ComponentNames: activity and each landmark); LandmarkWarnings
+%  AlignmentState: the prepared profiles (steps 1-2), to fit again with AlignmentFitStage (steps 3-4),
+%    e.g. at a given scale/offset (JointChronicAlignment). Opt.FixedFit ([Scale Offset], default
+%    empty) fixes the global fit here too.
 
 % Prior on the offset: the deepest histology point is taken as the probe tip, which lies
 % Opt.TipToSiteUm below the first recording site (depth 0). The track end can be far off (traced past
@@ -46,11 +51,14 @@ function [Depth2Area, AlignmentFeatures, Fit] = alignatlasdata_constrained(histi
 %    Type 'profile' (e.g. EvokedCSDLandmarks, the visual early CSD sink -> VIS layer 4/superficial SC
 %    via AreaRegex on the acronym): a value per depth instead of per unit.
 %  - Ripple-triggered CSD (Opt.LFP.RippleCSD): the ripple landmark is used only where the sharp-wave
-%    sink/source of CA1 is present (or, without a CSD, where the ripple band is narrow). Confirmed
+%    sink/source of CA1 is present, with the sink Opt.RippleSinkDistUm below the source (or, without
+%    a CSD, where the ripple band is narrow). Confirmed
 %    strongly by the CSD (source and sink >= Opt.RippleCSDStrongSD) it gets weight
 %    Opt.RippleCSDWeight (as the activity profile), outside the cap, and
 %    the profile becomes a Gaussian (sd Opt.RipplePyrSdUm) at the CSD source (pyramidal layer),
-%    fitted to Opt.RippleAreas (default CA, prosubiculum and subiculum).
+%    fitted to Opt.RippleAreas (default CA, prosubiculum and subiculum). Ripples also reach the
+%    pre-, post- and parasubiculum (Opt.RippleTolerantAreas): no evidence there, but no penalty
+%    for a missing landmark either (below; also for the fissure, which is found from the ripple CSD).
 %  - Theta CSD (Opt.LFP.ThetaCSD): theta sinks/sources are confined to the hippocampus -> HIP,
 %    weight Opt.ThetaCSDWeight.
 %  - Hippocampal fissure: the theta-trough sink below a confirmed CA1 ripple CSD (local_fissure) ->
@@ -66,8 +74,11 @@ Def = struct('BinUm',10,'SmoothUm',30,'ScaleRange',[0.8 1.3],'ScaleStep',0.01,'O
     'OffsetStepUm',10,'ShankOffsetUm',100,'KnotUm',50,'MaxWarpUm',150,'MaxStretchDev',0.3,'WarpPenalty',0.5,'MarginUm',50, ...
     'TipToSiteUm',175,'OffsetPriorSdUm',300,'PriorWeight',0.05,'PriorCapSD',2,'LFP',[],'LFPWeight',0.3, ...
     'MaxLandmarkWeight',0.5,'RippleMaxWidthUm',700,'ThetaCSDWeight',0.3,'ThetaCSDMinSD',4,'RippleCSDWeight',1,'RipplePyrSdUm',75,'RippleCSDStrongSD',20,'DSWeight',0.5,'SlowCSDWeight',0, ...
-    'FissureWeight',0.5,'FissureNearUm',75,'FissureMinSD',6, ...
+    'FissureWeight',0.5,'FissureNearUm',75,'FissureMinSD',6,'AbsentLandmarkScore',-0.5,'RippleSinkDistUm',[60 450], ...
+    'MinAreaRunUm',20,'MaxSandwichUm',60, ...
     'RippleAreas',{{'/375/','/484682470/','/502/'}}, ... % CA, ProS, SUB ({'/375/','/484682470/'}: without SUB)
+    'RippleTolerantAreas',{{'/1037/','/1084/','/843/'}}, ... % POST, PRE, PAR
+    'FixedFit',[], ...
     'SurfaceGapUm',300,'SurfaceAboveUnitsUm',100,'SurfaceSdUm',150,'SurfaceWeight',0.05, ...
     'Landmarks',struct('Name',{},'Type',{},'Shank',{},'Depth',{},'Value',{},'AreaPaths',{},'AreaRegex',{},'Weight',{}), ...
     'LandmarkSmoothUm',100,'CSD',[]);
@@ -129,13 +140,24 @@ if UseLFP
     % and, by default, subiculum (CA1 ripples propagate into it; subicular bursts ride on them)
     LMName{end+1} = 'LFP ripple events'; LMAreas{end+1} = Opt.RippleAreas; LMRegex{end+1} = ''; LMW(end+1) = Opt.LFPWeight;
     if isfield(Opt.LFP,'RippleCSD'), RipCSD = Opt.LFP.RippleCSD; end
+    % A CA1 sharp wave has its radiatum sink Opt.RippleSinkDistUm below the pyramidal-layer source;
+    % a source/sink pair closer together (or further apart) is not one (e.g. a noisy channel)
+    for k = 1:numel(RipCSD)
+        dSS = RipCSD(k).SourceDepth - RipCSD(k).SinkDepth;
+        if RipCSD(k).Valid && ~(dSS >= Opt.RippleSinkDistUm(1) && dSS <= Opt.RippleSinkDistUm(2))
+            RipCSD(k).Valid = false;
+            Fit.LandmarkNotes{end+1} = sprintf('Shank %d: ripple CSD sink %.0f um below its source (source %.1f SD at %.0f um, sink %.1f SD): not a CA1 sharp wave, not used', ...
+                RipCSD(k).Shank,dSS,RipCSD(k).SourceZ,RipCSD(k).SourceDepth,RipCSD(k).SinkZ);
+            fprintf('%s\n',Fit.LandmarkNotes{end})
+        end
+    end
     for si = 1:nSh
         LM{si}(:,end+1) = NaN;
         ch = Opt.LFP.Shank == ShanksUsed(si);
         if ~any(ch), continue; end
         b = discretize(Opt.LFP.Depth(ch),Edges); V = Opt.LFP.Values(ch,:); okb = ~isnan(b);
         Vb = nan(numel(dGrid),size(V,2));
-        for k = 1:size(V,2), Vb(:,k) = accumarray(b(okb),V(okb,k),[numel(dGrid) 1],@mean,NaN); end
+        for k = 1:size(V,2), Vb(:,k) = accumarray(b(okb),V(okb,k),[numel(dGrid) 1],@(x) mean(x,'omitnan'),NaN); end % bad channels: NaN
         Vb = Sm(fillmissing(Vb,'linear','EndValues','nearest'));
         Feat{si}.Values = [Feat{si}.Values Vb];
         Feat{si}.Names = [Feat{si}.Names strcat('LFP: ',Opt.LFP.Names)];
@@ -302,11 +324,20 @@ end
 Hist = cell(1,nSh);
 for si = 1:nSh
     H = histinfo{si}; vn = H.Properties.VariableNames;
-    distV = vn{find(contains(vn,'Distance','IgnoreCase',true),1)};
+    distV = vn(find(contains(vn,'Distance','IgnoreCase',true),1));
     acrV  = vn{find(contains(vn,'Acronym','IgnoreCase',true),1)};
-    tTrack = double(H.(distV)); acr = H.(acrV);
+    acr = H.(acrV);
+    if ~isempty(distV)
+        tTrack = double(H.(distV{1}));
+    else
+        % older brainreg-segment tracks (Position, Region ID, ...): no distance column. It is the
+        % path length along the track points (um; as the 'Distance from first position' of newer files)
+        nC = min(height(H),size(trackcoordinates{si},1));
+        tTrack = [0; cumsum(sqrt(sum(diff(double(trackcoordinates{si}(1:nC,:))).^2,2)))];
+    end
     nPt = min(numel(tTrack),size(trackcoordinates{si},1));
     tTrack = tTrack(1:nPt); acr = acr(1:nPt); coords = trackcoordinates{si}(1:nPt,:);
+    acr = local_cleanlabels(acr,tTrack,Opt);
     [~,row] = ismember(lower(strrep(acr,'/','')),stAcr);
     pred = zeros(nPt,1); lm = zeros(nPt,nLM); col = repmat({'000000'},nPt,1);
     for k = 1:nPt
@@ -339,9 +370,16 @@ for si = 1:nSh
         end
         lm(:,j) = lm(:,j) & edge;
     end
+    % Areas where the ripples (and the fissure found from them) may be although not listed: no penalty
+    tol = zeros(nPt,nLM);
+    jt = find(ismember(LMName,{'LFP ripple events','hippocampal fissure (theta CSD)'}));
+    okr = row > 0;
+    if ~isempty(jt) && any(okr)
+        tol(okr,jt) = repmat(cellfun(@(p) any(cellfun(@(a) contains(p,a),Opt.RippleTolerantAreas)),st.structure_id_path(row(okr))),1,numel(jt));
+    end
     sTrack = max(tTrack) - tTrack; % distance above the track end (um, atlas)
     [sTrack,o] = sort(sTrack,'ascend'); % from the track end upwards
-    Hist{si} = struct('s',sTrack,'pred',pred(o),'lm',lm(o,:),'acr',{acr(o)},'col',{col(o)},'coords',coords(o,:));
+    Hist{si} = struct('s',sTrack,'pred',pred(o),'lm',lm(o,:),'tol',tol(o,:),'acr',{acr(o)},'col',{col(o)},'coords',coords(o,:));
     Hist{si}.sSurface = max(sTrack(~strcmpi(acr(o),'Not found in brain')));
 end
 % A landmark that is clearly present while its areas are nowhere on the track: the track (or the
@@ -372,7 +410,10 @@ for jn = {'LFP ripple events','hippocampal fissure (theta CSD)','dentate spikes 
     for si = 1:nSh
         confirmed = any(~isnan(LM{si}(:,j)));
         if strcmp(jn{1},'LFP ripple events'), confirmed = RipValid(si); end
-        if confirmed && ~any(Hist{si}.lm(:,j))
+        if confirmed && ~any(Hist{si}.lm(:,j)) && any(Hist{si}.tol(:,j))
+            Fit.LandmarkNotes{end+1} = sprintf('Shank %d: confirmed "%s"; none of its areas on the histology track, but pre/post/parasubiculum (no penalty)',ShanksUsed(si),LMName{j});
+            fprintf('%s\n',Fit.LandmarkNotes{end})
+        elseif confirmed && ~any(Hist{si}.lm(:,j))
             Fit.LandmarkWarnings{end+1} = sprintf('Shank %d: confirmed "%s", but none of its areas on the histology track (wrong track?)',ShanksUsed(si),LMName{j});
             warning('alignatlasdata_constrained:Landmark','%s',Fit.LandmarkWarnings{end})
         end
@@ -388,10 +429,6 @@ for si = 1:nSh
         SurfaceObs(si) = TopUnit(si) + Opt.SurfaceAboveUnitsUm;
     end
 end
-SurfacePen = @(a,b) local_surfpen(a,b,Hist,TopUnit,SurfaceObs,Opt);
-% Predicted value at probe depths d for a mapping s(d); NaN below the track end, 0 above the surface
-PredAt = @(H,s) local_pred(H,s,'pred');
-LmAt   = @(H,s) local_pred(H,s,'lm');
 % Landmark weights per shank (0 for landmarks without data on that shank)
 Wsh = cellfun(@(L) LMW .* any(~isnan(L),1),LM,'Uni',0);
 Wsh = cellfun(@(w) w*min(1,Opt.MaxLandmarkWeight/max(sum(w),eps)),Wsh,'Uni',0); % activity dominates
@@ -411,226 +448,44 @@ jf = find(strcmp(LMName,'hippocampal fissure (theta CSD)'),1);
 if ~isempty(jf)
     for si = 1:nSh, if any(~isnan(LM{si}(:,jf))), Wsh{si}(jf) = Opt.FissureWeight; end, end
 end
-% Score of a mapping s(d) for one shank: correlation of the activity with the predicted profile,
-% combined with the correlation of each landmark with its areas
-ScoreAt = @(si,s) local_score(E{si},LM{si},PredAt(Hist{si},s),LmAt(Hist{si},s),Wsh{si});
-OffsetPrior = @(b) -Opt.PriorWeight*min(((b + Opt.TipToSiteUm)/Opt.OffsetPriorSdUm).^2, Opt.PriorCapSD^2);
-
-%% 3. Global fit (scale and offset shared by the shanks), then per-shank offset
-Scales = Opt.ScaleRange(1):Opt.ScaleStep:Opt.ScaleRange(2);
-Offsets = Opt.OffsetRangeUm(1):Opt.OffsetStepUm:Opt.OffsetRangeUm(2);
-C = nan(numel(Scales),numel(Offsets));
-for ia = 1:numel(Scales)
-    for ib = 1:numel(Offsets)
-        r = arrayfun(@(si) ScoreAt(si,(dGrid - Offsets(ib))/Scales(ia)),1:nSh);
-        C(ia,ib) = mean(r,'omitnan');
-    end
-end
-Cp = C + OffsetPrior(Offsets); % with the prior on the offset
-for ia = 1:numel(Scales) % and the brain surface constraint
-    Cp(ia,:) = Cp(ia,:) - arrayfun(@(b) SurfacePen(Scales(ia),b),Offsets);
-end
-[~,best] = max(Cp(:)); [ia,ib] = ind2sub(size(Cp),best);
-Fit.Scale = Scales(ia); Fit.Offset = Offsets(ib); Fit.CorrGlobal = C(ia,ib);
-Fit.Landscape = struct('Scales',Scales,'Offsets',Offsets,'Corr',C,'CorrWithPrior',Cp);
-% Alternative solutions (for the curator): best per offset over scales, local maxima >= 200 um apart
-[cOff,iaOff] = max(Cp,[],1);
-[~,loc] = findpeaks(fillmissing(cOff,'constant',-10),'MinPeakDistance',round(200/Opt.OffsetStepUm),'SortStr','descend');
-loc = loc(1:min(4,end));
-Fit.Alternatives = struct('Scale',num2cell(Scales(iaOff(loc))),'Offset',num2cell(Offsets(loc)), ...
-    'Corr',num2cell(C(sub2ind(size(C),iaOff(loc),loc))),'Score',num2cell(cOff(loc)));
-% Parts of the score per alternative (mean over shanks), so the curator can see what drives it
-Fit.ComponentNames = [{'activity'} LMName];
-for k = 1:numel(Fit.Alternatives)
-    cs = nan(nSh,1 + nLM);
-    for si = 1:nSh
-        [~,cs(si,:)] = local_score(E{si},LM{si},PredAt(Hist{si},(dGrid - Fit.Alternatives(k).Offset)/Fit.Alternatives(k).Scale), ...
-            LmAt(Hist{si},(dGrid - Fit.Alternatives(k).Offset)/Fit.Alternatives(k).Scale),Wsh{si});
-    end
-    Fit.Alternatives(k).Components = mean(cs,1,'omitnan');
-end
-fprintf('Global fit alternatives (scale, offset um, correlation, score with prior | %s):\n',strjoin(Fit.ComponentNames,', '))
-for k = 1:numel(Fit.Alternatives)
-    fprintf('   %.2f  %5.0f  %.2f  %.2f | %s\n',Fit.Alternatives(k).Scale,Fit.Alternatives(k).Offset,Fit.Alternatives(k).Corr,Fit.Alternatives(k).Score, ...
-        strjoin(arrayfun(@(c) sprintf('%.2f',c),Fit.Alternatives(k).Components,'Uni',0),'  '))
-end
-Fit.ShankOffset = nan(1,nSh); Fit.CorrShankGlobal = nan(1,nSh); Fit.CorrAligned = nan(1,nSh);
+% These confirmed hippocampal CSD landmarks are tied to specific layers: a mapping that puts none of
+% their areas in the recorded range is a mismatch (Opt.AbsentLandmarkScore), not just no evidence.
+% (Tuning and visual-CSD landmarks also occur outside their listed areas: 0 there.)
+Pen = repmat({zeros(1,nLM)},1,nSh);
 for si = 1:nSh
-    bs = Fit.Offset + (-Opt.ShankOffsetUm:Opt.OffsetStepUm:Opt.ShankOffsetUm);
-    rs = arrayfun(@(b) ScoreAt(si,(dGrid - b)/Fit.Scale),bs);
-    sp_ = arrayfun(@(b) local_surfpen(Fit.Scale,b,Hist(si),TopUnit(si),SurfaceObs(si),Opt),bs);
-    [~,k] = max(rs + OffsetPrior(bs) - sp_); Fit.ShankOffset(si) = bs(k); Fit.CorrShankGlobal(si) = rs(k);
+    if ~isempty(rc) && RipValid(si), Pen{si}(rc) = Opt.AbsentLandmarkScore; end
+    for jj = [jd jf], if any(~isnan(LM{si}(:,jj))), Pen{si}(jj) = Opt.AbsentLandmarkScore; end, end
+end
+% Steps 3-4 (AlignmentFitStage): global fit, per-shank offsets, local warp, figure. The prepared
+% profiles are returned (AlignmentState) to fit again, e.g. at a given scale/offset (chronic probes)
+Feat0 = cellfun(@(F) rmfield(F,'CSD'),Feat,'Uni',0); % CSD images: large, not used in the fit
+AlignmentState = struct('Opt',rmfield(Opt,intersect(fieldnames(Opt),{'LFP','Landmarks','CSD'})),'E',{E},'LM',{LM}, ...
+    'Hist',{Hist},'Wsh',{Wsh},'Pen',{Pen},'dGrid',dGrid,'TopUnit',TopUnit,'SurfaceObs',SurfaceObs, ...
+    'Feat',{Feat0},'ShanksUsed',ShanksUsed,'LMName',{LMName},'Fit',Fit);
+[Depth2Area, AlignmentFeatures, Fit] = AlignmentFitStage(AlignmentState, Opt.FixedFit);
+for si = 1:nSh, AlignmentFeatures{si}.CSD = Feat{si}.CSD; end
 end
 
-%% 4. Local warp per shank (dynamic programming over displacements at knots)
-Depth2Area = cell(nSh,1);
-for si = 1:nSh
-    a = Fit.Scale; b0 = Fit.ShankOffset(si);
-    sGlobal = (dGrid - b0)/a;
-    pG = PredAt(Hist{si},sGlobal); okG = ~isnan(pG);
-    beta = [pG(okG) ones(sum(okG),1)] \ E{si}(okG); % scale the prediction to the activity
-    % scale each landmark's area indicator to its profile
-    W = Wsh{si}; hG = LmAt(Hist{si},sGlobal); betaL = zeros(2,nLM);
-    for j = find(W > 0)
-        okj = okG & ~isnan(LM{si}(:,j));
-        if sum(okj) < 10 || std(hG(okj,j)) == 0, W(j) = 0; continue; end
-        betaL(:,j) = [hG(okj,j) ones(sum(okj),1)] \ LM{si}(okj,j);
-    end
-    knots = (dGrid(1):Opt.KnotUm:dGrid(end))'; if knots(end) < dGrid(end), knots(end+1) = dGrid(end); end %#ok<AGROW>
-    U = (-Opt.MaxWarpUm:Opt.BinUm:Opt.MaxWarpUm)'; nU = numel(U);
-    MaxStep = Opt.MaxStretchDev*Opt.KnotUm/a; % max change in displacement between knots (um)
-    % cost of displacement u around each knot
-    Cost = zeros(numel(knots),nU);
-    for kk = 1:numel(knots)
-        w = abs(dGrid - knots(kk)) <= Opt.KnotUm/2;
-        for iu = 1:nU
-            p = PredAt(Hist{si},sGlobal(w) + U(iu));
-            res = E{si}(w) - (beta(1)*p + beta(2)); res(isnan(res)) = 1; % no histology there: penalised
-            c = mean(res.^2);
-            if any(W > 0)
-                h = LmAt(Hist{si},sGlobal(w) + U(iu)); cw = 0;
-                for j = find(W > 0)
-                    L = LM{si}(w,j); known = ~isnan(L); % unknown landmark: no evidence
-                    if ~any(known), continue; end
-                    resL = L(known) - (betaL(1,j)*h(known,j) + betaL(2,j)); resL(isnan(resL)) = 1;
-                    c = c + W(j)*mean(resL.^2); cw = cw + W(j);
-                end
-                c = c/(1 + cw);
-            end
-            Cost(kk,iu) = c + Opt.WarpPenalty*(U(iu)/Opt.MaxWarpUm)^2;
-        end
-    end
-    % Viterbi
-    Acc = Cost(1,:); Back = zeros(numel(knots),nU);
-    for kk = 2:numel(knots)
-        newAcc = inf(1,nU);
-        for iu = 1:nU
-            allowed = abs(U - U(iu)) <= MaxStep + eps;
-            [v,j] = min(Acc(allowed)); idx = find(allowed);
-            newAcc(iu) = v + Cost(kk,iu); Back(kk,iu) = idx(j);
-        end
-        Acc = newAcc;
-    end
-    path = zeros(numel(knots),1); [~,path(end)] = min(Acc);
-    for kk = numel(knots):-1:2, path(kk-1) = Back(kk,path(kk)); end
-    uKnot = U(path);
-    u = interp1(knots,uKnot,dGrid,'linear','extrap');
-    sAligned = sGlobal + u;
-    pA = PredAt(Hist{si},sAligned);
-    Fit.CorrAligned(si) = ScoreAt(si,sAligned);
-    Feat{si}.PredictedGlobal = pG; Feat{si}.PredictedAligned = pA;
-    Feat{si}.LandmarkAreasGlobal = hG; Feat{si}.LandmarkAreasAligned = LmAt(Hist{si},sAligned);
-    Feat{si}.Warp = u; Feat{si}.ShankAbs = ShanksUsed(si);
-
-    % Depth of every track point: invert s(d) (monotonic), beyond the recorded range with the global fit
-    H = Hist{si};
-    dPt = interp1(sAligned,dGrid,H.s,'linear',NaN);
-    below = H.s < sAligned(1); above = H.s > sAligned(end);
-    dPt(below) = dGrid(1) + (H.s(below) - sAligned(1))*a;
-    dPt(above) = dGrid(end) + (H.s(above) - sAligned(end))*a;
-    dBase = H.s*a + b0;
-    % All in-brain track points (also outside the recorded range), so a curator who shifts the
-    % alignment brings the neighbouring anatomy into the recorded range
-    keep = ~strcmpi(H.acr,'Not found in brain');
-    n = sum(keep);
-    Depth2Area{si} = table(dPt(keep), repmat(si,n,1), repmat(ShanksUsed(si),n,1), H.acr(keep), H.col(keep), H.coords(keep,:), ...
-        dBase(keep), dPt(keep) - dBase(keep), H.s(keep), 'VariableNames',{'Depth','Shank','ShankAbs','Area','Color','Coordinates','BaselineDepth','WarpUm','TrackPosUm'});
-    % Geometry for the curation GUI: the tip (TipToSiteUm below the first site) should coincide with
-    % the track end (TrackPosUm 0); the brain surface is the first in-brain track point
-    inBrain = ~strcmpi(H.acr,'Not found in brain');
-    Feat{si}.TipDepth = -Opt.TipToSiteUm;
-    Feat{si}.SurfaceTrackPos = max(H.s(inBrain));
-    Feat{si}.TrackSpacingUm = median(diff(H.s));
-    Feat{si}.Scale = a; Feat{si}.Offset = b0;
-    Feat{si}.SiteRange = [min(dGrid) max(dGrid)]; % recorded range on the probe (um)
+function acr = local_cleanlabels(acr, t, Opt)
+% Area labels along the track without the flicker of an imperfect registration: a track running
+% close to a boundary jumps between the areas on either side (e.g. VISp4 > VISp6a > VISp4, or
+% or > ar > or), which is not anatomy. Merged into a neighbour, shortest first:
+%  - runs shorter than Opt.MinAreaRunUm (into the longer neighbour)
+%  - runs shorter than Opt.MaxSandwichUm with the same area on both sides (A > B > A -> A)
+% acr: labels in track order, t: distance along the track (um). 0 for both keeps the labels.
+if numel(acr) < 3 || (Opt.MinAreaRunUm <= 0 && Opt.MaxSandwichUm <= 0), return; end
+t = t(:); sp = median(diff(t)); if ~(sp > 0), return; end
+while true
+    st = [true; ~strcmp(acr(2:end),acr(1:end-1))]; s0 = find(st); s1 = [s0(2:end)-1; numel(acr)];
+    len = (s1 - s0 + 1)*sp; nR = numel(s0);
+    if nR < 2, return; end
+    sand = false(nR,1); sand(2:end-1) = strcmp(acr(s0(1:end-2)),acr(s0(3:end)));
+    cand = find(len < Opt.MinAreaRunUm | (sand & len < Opt.MaxSandwichUm));
+    if isempty(cand), return; end
+    [~,k] = min(len(cand)); k = cand(k);
+    if k == 1, nbr = 2; elseif k == nR, nbr = nR - 1; elseif sand(k) || len(k-1) >= len(k+1), nbr = k - 1; else, nbr = k + 1; end
+    acr(s0(k):s1(k)) = acr(s0(nbr));
 end
-Depth2Area = vertcat(Depth2Area{:});
-AlignmentFeatures = Feat(:);
-fprintf('Histology alignment: scale %.2f, offset %.0f um, correlation global %.2f -> aligned %s\n', ...
-    Fit.Scale, Fit.Offset, Fit.CorrGlobal, mat2str(round(Fit.CorrAligned,2)))
-
-%% Figure: activity vs predicted profile per shank, areas with global fit and aligned
-figure('Name','Histology alignment','Position',[50 50 300*nSh 800]);
-for si = 1:nSh
-    subplot(1,nSh,si); hold on
-    F = Feat{si}; pz = @(x) (x - min(x))./max(max(x)-min(x),eps);
-    plot(pz(F.Activity),F.Depth,'k','LineWidth',1.5)
-    plot(pz(F.PredictedGlobal)*0.9+0.05,F.Depth,'--','Color',[0.5 0.5 0.5])
-    plot(pz(F.PredictedAligned)*0.9+0.05,F.Depth,'r')
-    lmCol = lines(nLM + 1); lmCol = lmCol(2:end,:);
-    for j = 1:nLM
-        if all(isnan(F.Landmarks(:,j))), continue; end
-        plot(pz(F.Landmarks(:,j)),F.Depth,'-','Color',lmCol(j,:))
-        plot(F.LandmarkAreasAligned(:,j)*(0.95 - 0.03*j),F.Depth,':','Color',lmCol(j,:),'LineWidth',1.5)
-    end
-    T = Depth2Area(Depth2Area.Shank==si,:);
-    for k = 1:height(T)
-        c = sscanf(T.Color{k},'%2x%2x%2x')'/255;
-        plot([1.1 1.3],[T.Depth(k) T.Depth(k)],'-','Color',c,'LineWidth',3)
-        plot([1.35 1.55],[T.BaselineDepth(k) T.BaselineDepth(k)],'-','Color',c,'LineWidth',3)
-    end
-    xlim([0 1.6]); ylim([min(F.Depth) max(F.Depth)])
-    set(gca,'XTick',[0.5 1.2 1.45],'XTickLabel',{'profiles','aligned','global'})
-    title(sprintf('Shank %d: r %.2f -> %.2f',ShanksUsed(si),Fit.CorrShankGlobal(si),Fit.CorrAligned(si)))
-    if si == 1
-        ylabel('Depth on probe (um)')
-        lg = {'activity','predicted (global)','predicted (aligned)'};
-        for j = 1:nLM
-            if all(isnan(F.Landmarks(:,j))), continue; end
-            lg = [lg {LMName{j}, [LMName{j} ': areas (aligned)']}]; %#ok<AGROW>
-        end
-        legend(lg,'Location','southoutside','Interpreter','none')
-    end
-end
-end
-
-function p = local_pred(H,s,field)
-% Value of H.(field) at histology positions s (um above the track end): NaN below the track end,
-% 0 above the surface (outside the brain), else the nearest track point's value
-% (one column per column of H.(field))
-V = H.(field); s = s(:);
-p = nan(numel(s),size(V,2));
-inside = s >= 0 & s <= max(H.s);
-if any(inside) && ~isempty(V)
-    p(inside,:) = interp1(H.s,V,s(inside),'nearest');
-end
-p(s > max(H.s),:) = 0;
-end
-
-function pen = local_surfpen(a,b,Hist,TopUnit,SurfaceObs,Opt)
-% Brain-surface penalty, averaged over shanks: the aligned surface (a*sSurface + b) may not be below
-% the highest units; if the probe was partly outside the brain, it is expected near SurfaceObs
-pen = 0; n = 0;
-for si = 1:numel(Hist)
-    if isnan(TopUnit(si)), continue; end
-    dSurf = a*Hist{si}.sSurface + b;
-    p = 0;
-    if dSurf < TopUnit(si) % units outside the brain: not possible
-        p = p + Opt.SurfaceWeight*min(((TopUnit(si) - dSurf)/100)^2, 9);
-    end
-    if ~isnan(SurfaceObs(si))
-        p = p + Opt.SurfaceWeight*min(((dSurf - SurfaceObs(si))/Opt.SurfaceSdUm)^2, 9);
-    end
-    pen = pen + p; n = n + 1;
-end
-pen = pen/max(n,1);
-end
-
-function [r,comp] = local_score(E,L,p,h,w)
-% Correlation of activity E with predicted profile p, combined with the correlation of each landmark
-% profile L(:,j) with its area indicator h(:,j) (weights w). NaN if less than 60% of the depths have
-% histology. comp: [r_activity r_landmark1 ...] (NaN for unused landmarks)
-r = NaN; comp = nan(1,1 + numel(w));
-ok = ~isnan(p) & ~isnan(E);
-if mean(ok) <= 0.6 || std(p(ok)) == 0, return; end
-r = corr(E(ok),p(ok)); comp(1) = r;
-for j = find(w > 0)
-    okj = ok & ~isnan(L(:,j));
-    rr = 0; % areas not in range (or landmark unknown there): no evidence
-    if sum(okj) >= 10 && std(h(okj,j)) > 0, rr = corr(L(okj,j),h(okj,j)); end
-    r = r + w(j)*rr; comp(1 + j) = rr;
-end
-r = r/(1 + sum(w));
 end
 
 function FC = local_fissure(ThetaCSD, RipCSD, Opt)

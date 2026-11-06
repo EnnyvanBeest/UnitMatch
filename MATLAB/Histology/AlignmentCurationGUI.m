@@ -28,8 +28,11 @@ function fig = AlignmentCurationGUI(matFile, allenCCFPath, histoRoot)
 %
 % Interactions:
 %   Drag boundary lines  - reassign areas at probe depth transitions
-%   Shift slider         - rigid up/down offset to all depths (µm)
+%   Shift slider         - rigid up/down offset to all depths (µm); extends by 500 µm when released at an end
 %   Scale slider         - stretch/compress probe depth range around midpoint
+%   Selected shank only  - shift/scale move only the selected shank
+%   Extend track to tip  - continue the selected shank's track below its traced end along its
+%                          direction, with the atlas regions, down to the tip (saved: TrackExtendedUm)
 %   Reset button         - restore automated alignment
 %   Accept & Save        - write updated Depth2Area + ManuallyCurated=true
 %   Flag for Review      - write ManuallyCurated=false + FlaggedForReview=true
@@ -142,6 +145,11 @@ brainZoom     = 0.25;            % 1 = full slice view; <1 = zoomed in around pr
 
 %% ── Build figure ─────────────────────────────────────────────────────────────
 % hasFeatures is true only if at least one shank has a non-empty numeric matrix
+% Font sizes of the plot panels (pt)
+fsTiny = 8;  % small labels (depth of a boundary above the view, boundary names next to the features)
+fsSmall = 9; % area names, tip/surface/track end, feature names
+fsAxes = 10; % axes of the probe and features panels
+fsSlice = 11; % axes of the brain panels
 hasFeatures = ~isempty(AlignmentFeatures) && ...
     any(cellfun(@(c) (isnumeric(c) && ~isempty(c)) || isstruct(c), AlignmentFeatures));
 nRightCols  = 2 + hasFeatures;  % coronal + sagittal [+ features]
@@ -169,7 +177,7 @@ axPanel.Layout.Row = 1; axPanel.Layout.Column = [1 nCols];
 % ── Probe depth bar ──────────────────────────────────────────────────────────
 axProbe = uiaxes(axPanel);
 hold(axProbe,'on');
-set(axProbe, 'YDir','normal', 'XTick',[], 'Box','off', 'FontSize',8);
+set(axProbe, 'YDir','normal', 'XTick',[], 'Box','off', 'FontSize',fsAxes);
 title(axProbe, 'Probe  —  drag boundary lines here');
 ylabel(axProbe, 'Depth on probe (µm)');
 
@@ -189,7 +197,7 @@ axFeat = [];
 if hasFeatures
     axFeat = uiaxes(axPanel);
     hold(axFeat,'on');
-    set(axFeat, 'YDir','normal', 'FontSize',8);
+    set(axFeat, 'YDir','normal', 'FontSize',fsAxes);
     title(axFeat,'Functional features');
     xlabel(axFeat,'Feature'); ylabel(axFeat,'Depth (µm)');
 end
@@ -230,16 +238,28 @@ lblShank.Layout.Row = [1 2]; lblShank.Layout.Column = 5;
 shankItems = arrayfun(@(s) sprintf('S%d',s), allShanks, 'UniformOutput',false);
 ddShank = uidropdown(ctrlG, 'Items',shankItems, 'Value',shankItems{1}, ...
     'ValueChangedFcn',@onShankChanged, 'Enable', matlab.lang.OnOffSwitchState(numel(allShanks)>1));
-ddShank.Layout.Row = [1 2]; ddShank.Layout.Column = 6;
+ddShank.Layout.Row = 1; ddShank.Layout.Column = 6;
+% Shift/scale only the selected shank (e.g. a shank whose histology track is off)
+cbShankOnly = uicheckbox(ctrlG, 'Text','Selected shank only', 'Value',false, ...
+    'ValueChangedFcn',@(~,~) resetSliders(), 'Enable', matlab.lang.OnOffSwitchState(numel(allShanks)>1), ...
+    'Tooltip','Shift and scale move only the selected shank');
+cbShankOnly.Layout.Row = 2; cbShankOnly.Layout.Column = [5 6];
 
 % Atlas overlay alpha slider (only shown when both histology and atlas are available)
 lblAtlas = uilabel(ctrlG, 'Text','Atlas:', 'HorizontalAlignment','right', 'FontWeight','bold');
-lblAtlas.Layout.Row = [1 2]; lblAtlas.Layout.Column = 7;
+lblAtlas.Layout.Row = 1; lblAtlas.Layout.Column = 7;
 canOverlay = useHistology && useAtlas;
 slAtlas = uislider(ctrlG, 'Limits',[0 0.8], 'Value', 0.4 * canOverlay, ...
     'MajorTicks',[0 0.4 0.8], 'ValueChangedFcn',@onAtlasAlphaChanged, ...
     'Enable', matlab.lang.OnOffSwitchState(canOverlay));
-slAtlas.Layout.Row = [1 2]; slAtlas.Layout.Column = 8;
+slAtlas.Layout.Row = 1; slAtlas.Layout.Column = 8;
+% Extend the selected shank's track below its traced end (e.g. the track faded in the histology),
+% along its direction with the atlas regions, down to the probe tip as aligned now
+btnExtend = uibutton(ctrlG, 'Text','Extend track to tip (atlas)', 'ButtonPushedFcn',@onExtendTrack, ...
+    'Enable', matlab.lang.OnOffSwitchState(hasTrack && useAtlas && ~isempty(st)), ...
+    'Tooltip','Add atlas regions below the traced track end of the selected shank, along the track, down to the tip');
+btnExtend.Layout.Row = 2; btnExtend.Layout.Column = [7 8];
+extendedUm = zeros(1, numel(allShanks)); % track added per shank (um), saved as TrackExtendedUm
 
 % Brain view zoom
 lblZoom = uilabel(ctrlG, 'Text','View:', 'HorizontalAlignment','right', 'FontWeight','bold');
@@ -249,7 +269,7 @@ slZoom = uislider(ctrlG, 'Limits',[0.05 1.0], 'Value',0.25, ...
 slZoom.Layout.Row = 1; slZoom.Layout.Column = 10;
 % Brain panels on the probe depth axis: the histology resampled along the track, so the y axis
 % equals the probe column and the features panel
-cbAlong = uicheckbox(ctrlG, 'Text','Brain on probe depth axis', 'Value',false, ...
+cbAlong = uicheckbox(ctrlG, 'Text','Brain on probe depth axis', 'Value',true, ...
     'ValueChangedFcn',@(~,~) drawSlices(), ...
     'Tooltip','Show the brain resampled along the track: y = depth on the probe (follows shift/scale/drag)');
 cbAlong.Layout.Row = 2; cbAlong.Layout.Column = [9 10];
@@ -279,7 +299,7 @@ lblStatus = uilabel(ctrlG, 'Text',initStatus, 'WordWrap','on', ...
 lblStatus.Layout.Row = 2; lblStatus.Layout.Column = [12 13];
 
 % Start from: the automatic alignment, its global fit (no local warp) or an alternative global fit
-startItems = {'Automatic alignment'};
+if wasCurated || wasFlagged, startItems = {'Saved curation'}; else, startItems = {'Automatic alignment'}; end
 if hasTrack && ismember('BaselineDepth', D2A.Properties.VariableNames)
     startItems{end+1} = 'Global fit (no warp)';
 end
@@ -311,12 +331,14 @@ drawAll();
     function layoutAxes()
         pp = getpixelposition(axPanel);
         W = pp(3); H = pp(4);
-        mLeft = 60; mRight = 12; mBottom = 95; mTop = 28; % room for tick labels, (rotated) x labels, titles
+        mLeft = 60; mRight = 12; mBottom = 120; mTop = 28; % room for tick labels, (rotated) x labels, titles
         colW = W * colWeights / sum(colWeights);
         x0 = [0 cumsum(colW(1:end-1))];
         for ai = 1:numel(plotAxes)
+            mR = mRight;
+            if hasFeatures && ai == numel(plotAxes), mR = 90; end % boundary names right of the features
             plotAxes{ai}.PositionConstraint = 'innerposition';
-            plotAxes{ai}.InnerPosition = [x0(ai) + mLeft, mBottom, max(colW(ai) - mLeft - mRight, 20), max(H - mBottom - mTop, 20)];
+            plotAxes{ai}.InnerPosition = [x0(ai) + mLeft, mBottom, max(colW(ai) - mLeft - mR, 20), max(H - mBottom - mTop, 20)];
         end
     end
 
@@ -387,7 +409,7 @@ drawAll();
                     if rel < 0.67 || rel > 1.5, txtCol = [1 0.1 0.1]; end
                 end
                 text(axProbe, xMid, (yLo + yHi)/2, segLabel, ...
-                    'FontSize', 7, 'FontWeight', 'bold', 'Color', txtCol, ...
+                    'FontSize', fsSmall, 'FontWeight', 'bold', 'Color', txtCol, ...
                     'VerticalAlignment', 'middle', 'HorizontalAlignment', 'center', ...
                     'Clipping', 'on', 'HitTest', 'off');
             end
@@ -399,20 +421,20 @@ drawAll();
                 AFs = AlignmentFeatures{si};
                 if isfield(AFs,'TipDepth')
                     plot(axProbe, [x0 x1], [AFs.TipDepth AFs.TipDepth], '--', 'Color',[0 0.6 0], 'LineWidth',2, 'HitTest','off');
-                    text(axProbe, x1, AFs.TipDepth, ' tip', 'Color',[0 0.5 0], 'FontSize',7, 'HitTest','off', 'Clipping','off');
+                    text(axProbe, x1, AFs.TipDepth, ' tip', 'Color',[0 0.5 0], 'FontSize',fsSmall, 'HitTest','off', 'Clipping','off');
                 end
                 trackEnd = trackPosToDepth(idx, 0);
                 plot(axProbe, xMid, trackEnd, 'v', 'Color',[0.8 0 0], 'MarkerFaceColor',[0.8 0 0], 'MarkerSize',7, 'HitTest','off');
-                text(axProbe, x0, trackEnd, 'track end ', 'Color',[0.8 0 0], 'FontSize',7, 'HorizontalAlignment','right', 'HitTest','off', 'Clipping','off');
+                text(axProbe, x0, trackEnd, 'track end ', 'Color',[0.8 0 0], 'FontSize',fsSmall, 'HorizontalAlignment','right', 'HitTest','off', 'Clipping','off');
                 if isfield(AFs,'SurfaceTrackPos')
                     surf = trackPosToDepth(idx, AFs.SurfaceTrackPos);
                     if isfield(AFs,'SiteRange'), topShown = AFs.SiteRange(2) + 250; else, topShown = max(depths_s) + 60; end
                     if surf <= topShown
                         plot(axProbe, [x0 x1], [surf surf], '-', 'Color',[0.2 0.2 1], 'LineWidth',2, 'HitTest','off');
-                        text(axProbe, x1, surf, ' surface', 'Color',[0.2 0.2 1], 'FontSize',7, 'HitTest','off', 'Clipping','off');
+                        text(axProbe, x1, surf, ' surface', 'Color',[0.2 0.2 1], 'FontSize',fsSmall, 'HitTest','off', 'Clipping','off');
                     else
                         text(axProbe, xMid, topShown - 20 - 15*mod(si,2), sprintf('surf. %.0f\\uparrow', surf), ...
-                            'Color',[0.2 0.2 1], 'FontSize',6, 'HorizontalAlignment','center', 'HitTest','off', 'Clipping','off');
+                            'Color',[0.2 0.2 1], 'FontSize',fsTiny, 'HorizontalAlignment','center', 'HitTest','off', 'Clipping','off');
                     end
                     if ~isnan(NotedDepth) && isfield(AFs,'TipDepth')
                         surfOff = max(surfOff, abs(surf - (AFs.TipDepth + NotedDepth)));
@@ -429,7 +451,7 @@ drawAll();
 
             % Shank label above column
             text(axProbe, xMid, max(depths_s)+30, sprintf('S%d',shk), ...
-                'HorizontalAlignment','center', 'FontSize',7, 'FontWeight','bold', ...
+                'HorizontalAlignment','center', 'FontSize',fsSmall, 'FontWeight','bold', ...
                 'HitTest','off');
 
             % Boundary lines with labels
@@ -490,10 +512,10 @@ drawAll();
             patch(axProbe, [x0 x1 x1 x0], [d-300 d-300 min(d+300,yTop) min(d+300,yTop)], col, ...
                 'FaceAlpha',0.12, 'EdgeColor','none', 'HitTest','off', 'PickableParts','none');
             plot(axProbe, [x0 x1], [d d], ls, 'Color',col, 'LineWidth',2, 'HitTest','off', 'PickableParts','none');
-            text(axProbe, x0, d, [lbl ' '], 'Color',col, 'FontSize',7, 'HorizontalAlignment','right', 'HitTest','off', 'Clipping','off');
+            text(axProbe, x0, d, [lbl ' '], 'Color',col, 'FontSize',fsSmall, 'HorizontalAlignment','right', 'HitTest','off', 'Clipping','off');
         else
             text(axProbe, xMid, yTop - 50 - 15*mod(si,2), sprintf('%s %.0f\\uparrow', lbl, d), ...
-                'Color',col, 'FontSize',6, 'HorizontalAlignment','center', 'HitTest','off', 'Clipping','off');
+                'Color',col, 'FontSize',fsTiny, 'HorizontalAlignment','center', 'HitTest','off', 'Clipping','off');
         end
     end
 
@@ -501,7 +523,7 @@ drawAll();
     function drawSlices()
         if cbAlong.Value, drawAlongProbe(); return; end
         % limits from the along-probe view would otherwise persist
-        set([axCoronal axSagittal], 'XLimMode','auto', 'YLimMode','auto', 'FontSize',10);
+        set([axCoronal axSagittal], 'XLimMode','auto', 'YLimMode','auto', 'FontSize',fsSlice);
         % Use the selected shank's coordinates to centre the slices.
         shankMask = D2A.Shank == selectedShank;
         coords    = D2A.Coordinates(shankMask, :);
@@ -720,7 +742,7 @@ drawAll();
             end
             axis(ax, 'normal');
             set(ax, 'YDir','normal', 'YLim',yl, 'XLim',xG([1 end]), ...
-                'XTickLabelMode','auto', 'YTickLabelMode','auto', 'FontSize',8);
+                'XTickLabelMode','auto', 'YTickLabelMode','auto', 'FontSize',fsAxes);
             title(ax, sprintf('%s, along the probe  (S%d)', names{p}, selectedShank));
             xlabel(ax, xlab{p}); ylabel(ax, 'Depth on probe (µm)');
         end
@@ -798,6 +820,10 @@ drawAll();
             % so a mismatch between ephys and histology stays visible while aligning.
             V = double(F.Values);
             cMin = min(V,[],1,'omitnan'); cRng = max(V,[],1,'omitnan') - cMin; cRng(cRng < eps) = 1;
+            % Fractions of units (tuning landmarks: RF, locked, responsive) on a fixed 0-1 scale, so a
+            % low fraction stays dark; the other features per column from their min to max
+            isFrac = startsWith(F.Names(:)', 'tuning: ');
+            cMin(isFrac) = 0; cRng(isFrac) = 1;
             V = (V - cMin) ./ cRng;
             imagesc(axFeat, 1:size(V,2), F.Depth, V);
             set(axFeat, 'YDir','normal');
@@ -821,14 +847,14 @@ drawAll();
                     xl_f(2) = x2 + 0.5;
                 end
             end
-            set(axFeat, 'YLim', axProbe.YLim, 'XLim', xl_f, 'XTick', xTk, 'XTickLabel', xLb, 'XTickLabelRotation', 60, 'FontSize', 7);
+            set(axFeat, 'YLim', axProbe.YLim, 'XLim', xl_f, 'XTick', xTk, 'XTickLabel', xLb, 'XTickLabelRotation', 60, 'FontSize', fsSmall);
             bnd_f = boundaries{selSi};
             for bi = 1:numel(bnd_f.depths)
                 bd = bnd_f.depths(bi);
                 plot(axFeat, xl_f, [bd bd], '-', 'Color','k', 'LineWidth',4, 'HitTest','off', 'PickableParts','none');
                 plot(axFeat, xl_f, [bd bd], 'c-', 'LineWidth',1.5, 'HitTest','off', 'PickableParts','none');
                 text(axFeat, xl_f(2), bd, sprintf('  %s | %s', bnd_f.parentBelow{bi}, bnd_f.parentAbove{bi}), ...
-                    'FontSize',6, 'Color','k', 'VerticalAlignment','middle', 'HitTest','off', 'Clipping','off');
+                    'FontSize',fsTiny, 'Color','k', 'VerticalAlignment','middle', 'HitTest','off', 'Clipping','off');
             end
             if isfield(F,'TipDepth')
                 plot(axFeat, xl_f, [F.TipDepth F.TipDepth], '--', 'Color',[0 0.6 0], 'LineWidth',2, 'HitTest','off');
@@ -895,7 +921,7 @@ drawAll();
                 'HitTest','off', 'PickableParts','none');
             text(axFeat, xl_f(2), bd, ...
                 sprintf('  %s | %s', bnd_f.parentBelow{bi}, bnd_f.parentAbove{bi}), ...
-                'FontSize',6, 'Color','w', 'FontWeight','bold', ...
+                'FontSize',fsTiny, 'Color','w', 'FontWeight','bold', ...
                 'VerticalAlignment','middle', 'HitTest','off', 'Clipping','off');
         end
 
@@ -1049,7 +1075,65 @@ drawAll();
     function onShankChanged(~,~)
         % Parse selected shank number from dropdown label (e.g. 'S2' → 2)
         selectedShank = sscanf(ddShank.Value, 'S%d');
+        if cbShankOnly.Value, resetSliders(); end % the sliders now act on this shank
         drawAll();   % redraw everything: probe bar (yellow box) + slices
+    end
+
+    function resetSliders()
+        % Sliders back to neutral: shifts/scales already applied are kept (they are incremental)
+        lastShift = 0; lastScale = 1.0; slShift.Value = 0; slScale.Value = 1.0;
+    end
+
+    function rows = sliderRows()
+        % Rows moved by the shift and scale sliders
+        if cbShankOnly.Value, rows = D2A.Shank == selectedShank; else, rows = true(height(D2A),1); end
+    end
+
+    function onExtendTrack(~,~)
+        % Continue the selected shank's track below its traced end, straight along the track
+        % direction (from its lowest 1 mm), with the atlas region of each point, down to the tip
+        si = find(allShanks == selectedShank, 1);
+        rows = find(D2A.Shank == selectedShank);
+        [tp, o] = sort(D2A.TrackPosUm(rows)); rows = rows(o);
+        tip = -Inf;
+        if newFeatures && si <= numel(AlignmentFeatures) && isfield(AlignmentFeatures{si},'TipDepth')
+            tip = AlignmentFeatures{si}.TipDepth;
+        end
+        if isinf(tip), tip = min(D2A.Depth); end
+        endDepth = trackPosToDepth(rows, tp(1));
+        lowRows = rows(tp <= tp(1) + 1000);
+        cf = polyfit(D2A.TrackPosUm(lowRows), D2A.Depth(lowRows), 1); % depth per track um (local scale)
+        if endDepth - tip < 20 || cf(1) <= 0
+            lblStatus.Text = sprintf('S%d: the track already reaches the tip.', selectedShank); return
+        end
+        c = D2A.Coordinates(lowRows,:); tpl = D2A.TrackPosUm(lowRows);
+        u = [tpl ones(numel(tpl),1)] \ c; u = u(1,:); % coordinates per track um (upwards)
+        step = median(diff(tp)); if ~(step > 0), step = 10; end
+        newPos = tp(1) - (step:step:(endDepth - tip)/cf(1) + step)';
+        newC = D2A.Coordinates(rows(1),:) + (newPos - tp(1)) * u;
+        vox = round(newC/10);
+        ok = all(vox >= 1 & vox <= avSz, 2);
+        v = zeros(numel(newPos),1);
+        v(ok) = double(av(sub2ind(avSz, vox(ok,1), vox(ok,2), vox(ok,3))));
+        inBrain = v > 1 & v <= height(st); % 0/1: outside the brain
+        if ~any(inBrain)
+            lblStatus.Text = sprintf('S%d: no brain below the track end.', selectedShank); return
+        end
+        n = sum(inBrain); vi = v(inBrain);
+        New = D2A(repmat(rows(1), n, 1), :);
+        New.TrackPosUm  = newPos(inBrain);
+        New.Depth       = endDepth + (New.TrackPosUm - tp(1)) * cf(1);
+        New.Coordinates = newC(inBrain,:);
+        New.Area        = st.acronym(vi);
+        New.Color       = arrayfun(@(r) local_getHex(st, r), vi, 'Uni', 0);
+        if ismember('BaselineDepth', D2A.Properties.VariableNames), New.BaselineDepth = New.Depth; end
+        if ismember('WarpUm', D2A.Properties.VariableNames), New.WarpUm(:) = 0; end
+        D2A = sortrows([D2A; New], {'Shank','Depth'});
+        extendedUm(si) = extendedUm(si) + tp(1) - min(New.TrackPosUm);
+        boundaries = computeBoundaries(D2A);
+        drawAll();
+        lblStatus.Text = sprintf('S%d: track extended by %.0f µm (atlas: %s).', selectedShank, ...
+            tp(1) - min(New.TrackPosUm), strjoin(unique(cellfun(@getParentAreaLocal, New.Area, 'Uni', 0), 'stable'), ', '));
     end
 
     function onAtlasAlphaChanged(~,~)
@@ -1067,7 +1151,13 @@ drawAll();
         newShift = slShift.Value;
         delta    = newShift - lastShift;
         lastShift = newShift;
-        D2A.Depth  = D2A.Depth + delta;
+        % Released at an end of the slider: extend its range by 500 um on both sides
+        if newShift <= slShift.Limits(1) || newShift >= slShift.Limits(2)
+            slShift.Limits = slShift.Limits + [-500 500];
+            slShift.MajorTicks = linspace(slShift.Limits(1), slShift.Limits(2), 5);
+        end
+        rows = sliderRows();
+        D2A.Depth(rows) = D2A.Depth(rows) + delta;
         boundaries = computeBoundaries(D2A);
         drawAll();
     end
@@ -1078,8 +1168,9 @@ drawAll();
         if abs(lastScale) < 1e-9, return; end
         ratio    = newScale / lastScale;
         lastScale = newScale;
-        mid       = mean([min(D2A.Depth), max(D2A.Depth)]);
-        D2A.Depth  = mid + (D2A.Depth - mid) * ratio;
+        rows      = sliderRows();
+        mid       = mean([min(D2A.Depth(rows)), max(D2A.Depth(rows))]);
+        D2A.Depth(rows) = mid + (D2A.Depth(rows) - mid) * ratio;
         boundaries = computeBoundaries(D2A);
         drawAll();
     end
@@ -1094,7 +1185,7 @@ drawAll();
             alt = AlignFit.Alternatives(k-2);
             D2A.Depth = alt.Scale * D2A.TrackPosUm + alt.Offset;
         end
-        lastShift = 0; lastScale = 1.0; slShift.Value = 0; slScale.Value = 1.0;
+        resetSliders(); extendedUm(:) = 0;
         boundaries = computeBoundaries(D2A);
         drawAll();
         lblStatus.Text = sprintf('Started from: %s', ddStart.Value);
@@ -1104,14 +1195,11 @@ drawAll();
 
     function onReset(~,~)
         D2A        = D2A_orig;
-        lastShift  = 0;
-        lastScale  = 1.0;
-        slShift.Value = 0;
-        slScale.Value = 1.0;
+        resetSliders(); extendedUm(:) = 0;
         ddStart.Value = startItems{1};
         boundaries = computeBoundaries(D2A);
         drawAll();
-        lblStatus.Text = 'Reset to automated alignment.';
+        lblStatus.Text = sprintf('Reset to: %s.', startItems{1});
     end
 
     function onAccept(~,~)
@@ -1136,9 +1224,41 @@ drawAll();
         CurationDate     = char(datetime('now','Format','yyyy-MM-dd HH:mm:ss'));
         CurationStartedFrom = ddStart.Value;
         CurationVersion  = 2 * hasTrack + 1 * ~hasTrack; % 2: features at recorded depths, histology stretched
+        TrackExtendedUm  = extendedUm; % per shank: track added below the traced end from the atlas (um)
         save(matFile, 'Depth2Area','ManuallyCurated','FlaggedForReview', ...
-            'CurationNotes','CurationDate','CurationStartedFrom','CurationVersion', '-append');
+            'CurationNotes','CurationDate','CurationStartedFrom','CurationVersion','TrackExtendedUm', '-append');
         fprintf('AlignmentCurationGUI: saved to %s\n', matFile);
+        saveSVG();
+    end
+
+    function saveSVG()
+        % The plot panels as they are on screen, as a vector .svg next to the .mat (for figures):
+        % uifigures cannot be printed, so the axes are copied into a hidden figure of the same size
+        [fp, fn] = fileparts(matFile);
+        svgFile = fullfile(fp, [fn '_Curation.svg']);
+        try
+            pp = getpixelposition(axPanel);
+            f = figure('Visible','off', 'Color','w', 'Units','pixels', 'Position',[0 0 pp(3) pp(4)], ...
+                'PaperPositionMode','auto', 'InvertHardcopy','off');
+            cleanup = onCleanup(@() close(f));
+            for ai = 1:numel(plotAxes)
+                copyobj(plotAxes{ai}, f);
+            end
+            % Editable text in the .svg: MATLAB writes all text as outlines if any text uses TeX or
+            % has a character outside Latin-1 (e.g. an arrow), so those are replaced (µ stays)
+            for t = findall(f, 'Type','text')'
+                s = regexprep(t.String, {'\\uparrow|\x2191','\\downarrow|\x2193','\x2192','\x2190','\xD7','\x2014|\x2013'}, ...
+                    {'^','v','->','<-','x','-'});
+                s = regexprep(s, '[^\x00-\xFF]', '');
+                set(t, 'Interpreter','none', 'String',s);
+            end
+            set(findall(f, '-property','TickLabelInterpreter'), 'TickLabelInterpreter','none');
+            set(findall(f, '-property','FontName'), 'FontName','Arial');
+            print(f, svgFile, '-dsvg', '-vector');
+            fprintf('AlignmentCurationGUI: figure saved to %s\n', svgFile);
+        catch ME
+            warning('AlignmentCurationGUI:svg', 'No .svg saved: %s', ME.message);
+        end
     end
 
     %% ── Track helpers (new format: TrackPosUm per row) ───────────────────────

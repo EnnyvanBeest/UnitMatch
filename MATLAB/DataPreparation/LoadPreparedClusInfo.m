@@ -85,6 +85,7 @@ clear spnew
 recsesidxIncluded = false(1,length(KiloSortPaths));
 nclus = length(clusinfo.cluster_id);
 RawPathsUsed = {};
+UMDirsUsed = {}; % UnitMatch run(s) the unique IDs and AdjustedDepth come from
 sp.UniqClu = sp.clu;
 sp.SpikeOnProbe = nan(size(sp.clu));
 clusinfo.UniqueID = (1:length(clusinfo.cluster_id))';
@@ -112,7 +113,13 @@ if Params.UnitMatch
             continue
         end
 
-        UMOutput = load(fullfile(UMOutputAll(imroid).folder,UMOutputAll(imroid).name),'UMparam');
+        try
+            UMOutput = load(fullfile(UMOutputAll(imroid).folder,UMOutputAll(imroid).name),'UMparam');
+        catch ME % e.g. a save that was interrupted: rerun UnitMatch for this probe/IMRO
+            warning('LoadPreparedClusInfo:UMUnreadable','Cannot read %s (%s): skipped, its recordings get no unique IDs or drift correction', ...
+                fullfile(UMOutputAll(imroid).folder,UMOutputAll(imroid).name),ME.message)
+            continue
+        end
         UMparam = UMOutput.UMparam;
         SN = UMparam.AllProbeSN;
         recsesidx = find(ismember(UMparam.KSDir,KiloSortPaths)); % Find which recses id they should have in UM output
@@ -121,6 +128,7 @@ if Params.UnitMatch
             continue
         else
             nAssigned = nAssigned + 1;
+            UMDirsUsed{end+1} = UMOutputAll(imroid).folder; %#ok<AGROW>
         end
 
         UMOutput = load(fullfile(UMOutputAll(imroid).folder,UMOutputAll(imroid).name),'UMparam','UniqueIDConversion');       
@@ -155,6 +163,7 @@ if Params.UnitMatch
     end
 end
 Params.RawDataPaths = RawPathsUsed;
+Params.UMDir = UMDirsUsed;
 Params.KSDir = KiloSortPaths;
 Params.SN = SN;
 %% add nans for missing UID values to not confuse them with other UIDs

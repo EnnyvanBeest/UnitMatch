@@ -9,11 +9,14 @@ function LFP = LFPDepthFeatures(apFile, Opt)
 %  - ripple-triggered CSD per shank (LFP.RippleCSD): the sharp wave (1-40 Hz) averaged around the
 %    ripple events of the channel with the most events. In CA1 the sharp wave has a sink in stratum
 %    radiatum, below a source at the pyramidal layer (where the ripples are): Valid if both are
-%    there (> Opt.CSDThrSD x noise). Ripple-band events without this pattern (e.g. thalamic bursts)
+%    there (> Opt.CSDThrSD x noise), the sink Opt.RippleSinkDistUm below the source. Ripple-band
+%    events without this pattern (e.g. thalamic bursts)
 %    are not CA1.
 %  - theta-trough-triggered CSD per shank (LFP.ThetaCSD)
 %  - dentate spikes per minute and the dentate-spike CSD per shank (LFP.DentateCSD): DG hilus
 %  - slow-wave (delta trough) CSD per shank (LFP.SlowCSD): deep-layer sink in the neocortex
+% Bad channels (BadLFPChannels on the 1-40 Hz LFP; Opt.Bad passed on) are left out of the CSDs (which
+% interpolate over them), are never the reference channel of an event type, and get NaN features.
 % Brain state: ripples (and sharp waves) occur mostly during quiet rest, theta during running. The
 % Opt.nSeg short segments are ranked by the theta/delta power ratio on the channel with the most theta
 % (a reliable correlate of locomotion; no behavioural sync needed): the theta CSD uses the most
@@ -27,12 +30,13 @@ function LFP = LFPDepthFeatures(apFile, Opt)
 % Opt.nSeg segments of Opt.SegSec s, spread over the recording, downsampled to 1 kHz.
 % LFP: Shank (0-based), Depth (um, as the probe's site positions), Values (nChan x nFeatures), Names,
 %   RippleCSD (struct per shank: ComputeCSD output + RefDepth, nEvents, SinkDepth, SourceDepth,
-%   SinkZ, SourceZ, Valid), ThetaCSD, State (theta/delta ratio per segment, Quiet, Active, RefDepth)
+%   SinkZ, SourceZ, Valid), ThetaCSD, State (theta/delta ratio per segment, Quiet, Active, RefDepth),
+%   Bad (nChan x 1 logical), BadStats
 
 if nargin < 2, Opt = struct; end
 Def = struct('nSeg',90,'SegSec',4,'PieceSec',4,'StateFrac',1/3,'Run',[],'RunThr',5,'StillThr',1,'RippleThrSD',5,'RippleMinMs',15,'RippleBandRatio',2, ...
-    'RippleNbUm',40,'RippleNbSD',3,'RippleMinNbFrac',0.5,'CSDMinEvents',25,'CSDThrSD',3,'CSDWinSec',0.15, ...
-    'DSThrSD',6,'DSWidthMs',[5 25],'DSMinEvents',20,'DSCSDThrSD',5,'SlowExclThetaSD',10,'SlowHippoThetaSD',20,'SlowCSDThrSD',5);
+    'RippleNbUm',40,'RippleNbSD',3,'RippleMinNbFrac',0.5,'CSDMinEvents',25,'CSDThrSD',3,'CSDWinSec',0.15,'RippleSinkDistUm',[60 450], ...
+    'DSThrSD',6,'DSWidthMs',[5 25],'DSMinEvents',20,'DSCSDThrSD',5,'SlowExclThetaSD',10,'SlowHippoThetaSD',20,'SlowCSDThrSD',5,'Bad',struct);
 for fn = fieldnames(Def)', if ~isfield(Opt,fn{1}), Opt.(fn{1}) = Def.(fn{1}); end, end
 LFP = [];
 [fold,~,~] = fileparts(apFile);
@@ -117,8 +121,14 @@ for s = 1:numel(starts)
     segSec(s) = size(Y,1)/fsOut; totSec = totSec + segSec(s);
 end
 
+%% Bad channels (noisy, dead, other gain): out of the CSDs and never a reference channel
+[Bad,BadStats] = BadLFPChannels(Ylow,Shank,Depth,Opt.Bad);
+if any(Bad), fprintf('LFP %s: %d bad channel(s) left out (shank/depth: %s)\n',rawFile,sum(Bad), ...
+        strjoin(arrayfun(@(c) sprintf('%d/%d',Shank(c),round(Depth(c))),find(Bad)','Uni',0),', ')); end
+
 %% Brain state per segment: theta/delta ratio on the channel with the most theta power
-[~,refT] = max(sum(segTheta,1));
+st = sum(segTheta,1); st(Bad) = -Inf;
+[~,refT] = max(st);
 ratio = segTheta(:,refT)./max(segDelta(:,refT),eps);
 if any(segLabel == 1) && any(segLabel == -1) % running speed known
     Active = segLabel == 1; Quiet = segLabel == -1; src = 'running speed';
@@ -131,13 +141,14 @@ State = struct('Source',src,'ThetaDeltaRatio',ratio,'Quiet',Quiet,'Active',Activ
 % ripple events in the quiet segments
 nEvents = zeros(nRec,1);
 for s = find(Quiet)', nEvents = nEvents + cellfun(@numel,evPk{s}); end
+nEvents(Bad) = 0;
 quietSec = sum(segSec(Quiet));
 
 %% Ripple-triggered CSD per shank (events of the channel with the most events)
 RippleCSD = [];
 hw = round(Opt.CSDWinSec*fsOut/dsS); tS = (-hw:hw)/(fsOut/dsS);
 for sh = unique(Shank(:))'
-    ch = find(Shank == sh);
+    ch = find(Shank == sh & ~Bad);
     [nRef,k] = max(nEvents(ch)); ref = ch(k);
     if nRef < Opt.CSDMinEvents, continue; end
     Sum = zeros(numel(ch),numel(tS)); n = 0;
@@ -160,7 +171,9 @@ for sh = unique(Shank(:))'
     C.SourceZ = NaN; C.SourceDepth = NaN; C.SinkZ = NaN; C.SinkDepth = NaN;
     if any(inSrc & ~isnan(m)), [C.SourceZ,i] = max(m .* (inSrc./inSrc)); C.SourceDepth = C.Depth(i); end
     if any(inSnk & ~isnan(m)), [C.SinkZ,i] = min(m .* (inSnk./inSnk)); C.SinkDepth = C.Depth(i); end
-    C.Valid = C.SourceZ >= Opt.CSDThrSD && C.SinkZ <= -Opt.CSDThrSD;
+    % and the sink at a plausible distance below the source (radiatum; not a pair on adjacent channels)
+    dSS = C.SourceDepth - C.SinkDepth;
+    C.Valid = C.SourceZ >= Opt.CSDThrSD && C.SinkZ <= -Opt.CSDThrSD && dSS >= Opt.RippleSinkDistUm(1) && dSS <= Opt.RippleSinkDistUm(2);
     if isempty(RippleCSD), RippleCSD = C; else, RippleCSD(end+1) = C; end %#ok<AGROW>
 end
 
@@ -174,11 +187,11 @@ fsL = fsOut/dsS;
 dsPk = cell(numel(starts),nRec);
 for s = find(Quiet)'
     nearRip = false(size(Ylow{s},1),1);
-    for c = 1:nRec % +-50 ms around any ripple
+    for c = find(~Bad)' % +-50 ms around any ripple
         for pk = round(evPk{s}{c}/dsS), nearRip(max(1,pk-round(0.05*fsL)):min(end,pk+round(0.05*fsL))) = true; end
     end
     Zs = (double(Ylow{s}) - median(Ylow{s},1))./(1.4826*mad(double(Ylow{s}),1,1));
-    for c = 1:nRec
+    for c = find(~Bad)'
         [~,l,w] = findpeaks(Zs(:,c),'MinPeakHeight',Opt.DSThrSD,'MinPeakDistance',round(0.1*fsL),'WidthReference','halfheight');
         wMs = w/fsL*1000;
         l = l(wMs >= Opt.DSWidthMs(1) & wMs <= Opt.DSWidthMs(2) & ~nearRip(l));
@@ -187,7 +200,7 @@ for s = find(Quiet)'
 end
 hwD = round(0.1*fsL); tD = (-hwD:hwD)/fsL;
 for sh = unique(Shank(:))'
-    ch = find(Shank == sh);
+    ch = find(Shank == sh & ~Bad);
     [nRef,k] = max(nDS(ch)); ref = ch(k);
     if nRef < Opt.DSMinEvents, continue; end
     Sum = zeros(numel(ch),numel(tD)); n = 0;
@@ -216,7 +229,7 @@ ThetaCSD = [];
 fsL = fsOut/dsS; [bT,aT] = butter(2,[6 10]/(fsL/2),'bandpass');
 thetaPow = mean(Pxx(f >= 6 & f <= 10,:),1)';
 for sh = unique(Shank(:))'
-    ch = find(Shank == sh);
+    ch = find(Shank == sh & ~Bad);
     [~,k] = max(thetaPow(ch)); ref = ch(k);
     Sum = zeros(numel(ch),numel(tS)); n = 0;
     for s = find(Active)'
@@ -251,7 +264,7 @@ SlowCSD = [];
 [bD,aD] = butter(2,[1 4]/(fsL/2),'bandpass');
 hwS = round(0.3*fsL); tSW = (-hwS:hwS)/fsL;
 for sh = unique(Shank(:))'
-    ch = find(Shank == sh);
+    ch = find(Shank == sh & ~Bad);
     % delta-band CSD time series of each quiet segment
     Cs = cell(numel(starts),1); pw = 0; grid_ = [];
     for s = find(Quiet)'
@@ -305,6 +318,8 @@ end
 Values(:,end-1) = nEvents/max(quietSec,eps)*60; % during quiet segments
 Values(:,end) = NbCorr;
 Values(:,end+1) = nDS/max(quietSec,eps)*60;
+Values(Bad,:) = NaN;
 LFP = struct('Shank',Shank,'Depth',Depth,'Values',Values,'Names',{[Bands(:,1)' {'ripple events per min','neighbour correlation','dentate spikes per min'}]}, ...
-    'File',rawFile,'Seconds',totSec,'RippleCSD',RippleCSD,'ThetaCSD',ThetaCSD,'DentateCSD',DentateCSD,'SlowCSD',SlowCSD,'State',State);
+    'File',rawFile,'Seconds',totSec,'RippleCSD',RippleCSD,'ThetaCSD',ThetaCSD,'DentateCSD',DentateCSD,'SlowCSD',SlowCSD,'State',State, ...
+    'Bad',Bad,'BadStats',BadStats);
 end

@@ -9,11 +9,12 @@ function C = StimulusCSD(apFile, onsetSamples, Opt)
 % average stays small. Response onset: first time (> 15 ms) the mean squared z over depth exceeds
 % Opt.OnsetPowerX times its baseline level for 10 ms. Early sink: the largest sink in the first
 % Opt.EarlyWinSec after that onset (Opt.SinkWin if no onset).
+% Bad channels (BadLFPChannels on up to Opt.BadTrials of the trials) are left out of the CSD.
 % C: struct array per shank: Shank, Depth, t, LFP, CSD (z), nTrials, OnsetMs, SinkWin, SinkDepth,
 %   SinkZ, EarlySink (per depth, sink positive), File
 if nargin < 3, Opt = struct; end
 Def = struct('Win',[-0.1 0.3],'BaseWin',[-0.1 0],'SinkWin',[0.04 0.08],'OnsetPowerX',4,'EarlyWinSec',0.03, ...
-    'LowPassHz',100,'MaxTrials',300,'MinTrials',20);
+    'LowPassHz',100,'MaxTrials',300,'MinTrials',20,'BadTrials',50);
 for fn = fieldnames(Def)', if ~isfield(Opt,fn{1}), Opt.(fn{1}) = Def.(fn{1}); end, end
 C = [];
 if ~exist(apFile,'file') % .bin in the metadata, compressed .cbin on the server (or vice versa)
@@ -34,6 +35,7 @@ pad = 0.2;
 tOut = (round(Opt.Win(1)*fsOut):round(Opt.Win(2)*fsOut))/fsOut;
 base = tOut >= Opt.BaseWin(1) & tOut < Opt.BaseWin(2);
 Sum = zeros(nRec,numel(tOut)); n = 0;
+Ytr = {}; % trials for the bad-channel check
 for tr = 1:numel(on)
     s0 = round(on(tr)*apToRaw + (Opt.Win(1) - pad)*fs);
     nS = round((diff(Opt.Win) + 2*pad)*fs);
@@ -47,9 +49,11 @@ for tr = 1:numel(on)
     Y = Y(i0:i0+numel(tOut)-1,:);
     Y = Y - mean(Y(base,:),1);
     Sum = Sum + Y'; n = n + 1;
+    if mod(n,ceil(numel(on)/Opt.BadTrials)) == 1 || numel(on) <= Opt.BadTrials, Ytr{end+1} = single(Y); end %#ok<AGROW>
 end
 if n < Opt.MinTrials, return; end
-CC = ComputeCSD(Sum/n,Shank,Depth,tOut,struct('BaseWin',Opt.BaseWin));
+Bad = BadLFPChannels(Ytr,Shank,Depth);
+CC = ComputeCSD(Sum(~Bad,:)/n,Shank(~Bad),Depth(~Bad),tOut,struct('BaseWin',Opt.BaseWin));
 for c = 1:numel(CC)
     nz = std(CC(c).CSD(:,base),0,2,'omitnan'); nz = max(nz,median(nz,'omitnan'));
     Zc = CC(c).CSD./nz;

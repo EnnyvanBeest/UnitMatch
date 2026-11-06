@@ -1,7 +1,10 @@
 histodone=0;
 histoflag = 0;
+HistoReason = ''; % why there is no alignment (histoflag 0), for MainHistology's run log
+HistoWarnings = {}; % warnings while aligning, idem
 Depth2Area = [];
 AlignmentFeatures = [];
+DepthIsRaw = false; % Depth2Area in the depth of the recordings it was fitted on (see the area assignment below)
 removenoise = 0;
 AllenCCFPath = fullfile(GithubDir,'allenCCF');
 if ~exist(fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe))
@@ -15,6 +18,7 @@ if ~isempty(tmphistfile) && ~NewHistologyNeeded
     tmpfile = load(fullfile(tmphistfile.folder,tmphistfile.name));
     try
         Depth2Area = tmpfile.Depth2Area;
+        DepthIsRaw = isfield(tmpfile,'DepthIsRaw') && tmpfile.DepthIsRaw;
         histodone=1;
         disp('Data already aligned to histology')
         histoflag=1;
@@ -23,6 +27,7 @@ if ~isempty(tmphistfile) && ~NewHistologyNeeded
     end
 end
 if ~histodone %Just in case it's not done yet
+    myKsDirAll = cellstr(myKsDir); % all recordings, for the raw files of the LFP features below
     if iscell(myKsDir)
         myKsDir = myKsDir{1};
     end
@@ -58,6 +63,7 @@ if ~histodone %Just in case it's not done yet
             if isempty(histofile)
                 disp('No channel locations known yet, do histology first')
                 histoflag=0;
+                HistoReason = 'no probe track: no channel_locations.json or track .csv (Kilosort folder, HistoFolder ProbeTracks by date/probe or SN)';
             else
                 disp('This doesn''t work yet')
                 keyboard
@@ -93,9 +99,9 @@ if ~histodone %Just in case it's not done yet
                 if ~iscell(RawForLFP), RawForLFP = {RawForLFP}; end
                 % Params.RawDataPaths only lists recordings that are in a UnitMatch run: otherwise take
                 % the raw files from the Kilosort folders' PreparedData.mat
-                if isempty(RawForLFP) && exist('myKsDir','var') && iscell(myKsDir)
-                    for ki = 1:numel(myKsDir)
-                        pd = fullfile(myKsDir{ki},'PreparedData.mat');
+                if isempty(RawForLFP)
+                    for ki = 1:numel(myKsDirAll)
+                        pd = fullfile(myKsDirAll{ki},'PreparedData.mat');
                         if ~exist(pd,'file'), continue; end
                         tmpSP = load(pd,'SessionParams');
                         if isfield(tmpSP,'SessionParams') && isfield(tmpSP.SessionParams,'RawDataPaths')
@@ -105,7 +111,7 @@ if ~histodone %Just in case it's not done yet
                     end
                     if ~isempty(RawForLFP), fprintf('LFP: raw files from PreparedData.mat (not in a UnitMatch run)\n'); end
                 end
-                if isempty(RawForLFP), warning('GetHistologyOutput:NoRaw','No raw data file for LFP features'); end
+                if isempty(RawForLFP), warning('GetHistologyOutput:NoRaw','No raw data file for LFP features'); HistoWarnings{end+1} = lastwarn; end
                 for rfi = 1:numel(RawForLFP)
                     rf = RawForLFP{rfi}; if isstruct(rf), rf = fullfile(rf(1).folder,rf(1).name); end
                     try
@@ -118,13 +124,14 @@ if ~histodone %Just in case it's not done yet
                                 ExtractRunTiming(rf,DataDir,DataDir2Use,MiceOpt,midx,thisdate,thisprobe,nidq_sync_used,RunDir);
                             catch ME
                                 warning('GetHistologyOutput:RunTiming','No running speed for %s: %s',rf,ME.message)
+                                HistoWarnings{end+1} = lastwarn;
                             end
                         end
                         Run = RunningOnProbe(fullfile(RunDir,MiceOpt{midx},thisdate,thisprobe),rf);
                         L = LFPDepthFeatures(rf,struct('Run',Run));
                         fprintf('LFP %s: brain state from %s\n',rf,L.State.Source)
                         if isempty(LFP), LFP = L; elseif ~isempty(L)
-                            LFP.Shank = [LFP.Shank; L.Shank]; LFP.Depth = [LFP.Depth; L.Depth]; LFP.Values = [LFP.Values; L.Values];
+                            LFP.Shank = [LFP.Shank; L.Shank]; LFP.Depth = [LFP.Depth; L.Depth]; LFP.Values = [LFP.Values; L.Values]; LFP.Bad = [LFP.Bad; L.Bad];
                             if isempty(LFP.RippleCSD), LFP.RippleCSD = L.RippleCSD; elseif ~isempty(L.RippleCSD), LFP.RippleCSD = [LFP.RippleCSD L.RippleCSD]; end
                             for fc = {'ThetaCSD','DentateCSD','SlowCSD'} % per-shank CSD structs of each recording
                                 if isempty(LFP.(fc{1})), LFP.(fc{1}) = L.(fc{1}); elseif ~isempty(L.(fc{1})), LFP.(fc{1}) = [LFP.(fc{1}) L.(fc{1})]; end
@@ -132,6 +139,7 @@ if ~histodone %Just in case it's not done yet
                         end
                     catch ME
                         warning('GetHistologyOutput:LFP','No LFP features from %s: %s',rf,ME.message)
+                        HistoWarnings{end+1} = lastwarn;
                     end
                 end
                 % Tuning landmarks from the passive stimulation analyses of this probe/day
@@ -141,6 +149,7 @@ if ~histodone %Just in case it's not done yet
                     TuningLM = TuningLandmarks(fullfile(TuningDir,MiceOpt{midx},thisdate,thisprobe));
                 catch ME
                     warning('GetHistologyOutput:Tuning','No tuning landmarks: %s',ME.message)
+                    HistoWarnings{end+1} = lastwarn;
                     TuningLM = [];
                 end
                 % Visually evoked CSD (early sink: VIS layer 4 / superficial SC), from the mpep
@@ -151,9 +160,17 @@ if ~histodone %Just in case it's not done yet
                     if ~isempty(CSDLM), TuningLM = [TuningLM(:); CSDLM(:)]'; end
                 catch ME
                     warning('GetHistologyOutput:CSD','No visual CSD: %s',ME.message)
+                    HistoWarnings{end+1} = lastwarn;
                 end
-                [Depth2Area, AlignmentFeatures, AlignmentFit] = alignatlasdata_constrained(histinfo,trackcoordinates,sp,clusinfo,AllenCCFPath, ...
+                [Depth2Area, AlignmentFeatures, AlignmentFit, AlignmentState] = alignatlasdata_constrained(histinfo,trackcoordinates,sp,clusinfo,AllenCCFPath, ...
                     struct('LFP',LFP,'Landmarks',TuningLM,'CSD',EvokedCSD));
+                DepthIsRaw = true; % fitted on these recordings' own site depths
+                % For the joint fit of a chronic probe over days (JointChronicAlignment): this day's
+                % depth offset relative to the reference recording of its UnitMatch run (NaN if none)
+                inUM = ~isnan(clusinfo.UniqueID) & ~isnan(clusinfo.AdjustedDepth);
+                ChronicInfo = struct('DriftZ',median(clusinfo.AdjustedDepth(inUM) - clusinfo.depth(inUM)),'UMDir',{''},'SN',SN);
+                if isfield(Params,'UMDir'), ChronicInfo.UMDir = strjoin(Params.UMDir,';'); end
+                if isempty(ChronicInfo.UMDir), ChronicInfo.DriftZ = NaN; end
             end
         end
     else
@@ -183,6 +200,7 @@ end
 if histoflag && ~histodone && isempty(Depth2Area)
     warning('GetHistologyOutput:NoAlignment','%s %s %s: automatic alignment failed, nothing saved',MiceOpt{midx},thisdate,thisprobe)
     histoflag = 0;
+    HistoReason = 'automatic alignment returned no Depth2Area';
 elseif histoflag && ~histodone
     OutBase = fullfile(SaveDir,MiceOpt{midx},thisdate,thisprobe,[num2str(SN) '_HistoEphysAlignment']);
     % Keep the previous (possibly manually curated) alignment as *_beforeRedo: the new automatic one
@@ -199,11 +217,15 @@ elseif histoflag && ~histodone
     ManuallyCurated  = false;
     FlaggedForReview = false;
     if ~exist('AlignmentFit','var'), AlignmentFit = []; end
+    if ~exist('AlignmentState','var'), AlignmentState = []; end
+    if ~exist('ChronicInfo','var'), ChronicInfo = []; end
     % A tuning/LFP landmark without its areas on the track: check the track in the curation GUI
     if isstruct(AlignmentFit) && isfield(AlignmentFit,'LandmarkWarnings') && ~isempty(AlignmentFit.LandmarkWarnings)
         FlaggedForReview = true;
+        HistoWarnings{end+1} = ['flagged for review: ' strjoin(cellstr(AlignmentFit.LandmarkWarnings),' | ')];
     end
-    save([OutBase '_Auto.mat'],'Depth2Area','AlignmentFeatures','AlignmentFit','ManuallyCurated','FlaggedForReview')
+    save([OutBase '_Auto.mat'],'Depth2Area','AlignmentFeatures','AlignmentFit','ManuallyCurated','FlaggedForReview', ...
+        'AlignmentState','ChronicInfo','DepthIsRaw')
 end
 
 % Add information to clusinfo
@@ -250,6 +272,17 @@ if exist('clusinfo','var') & ~isempty(Depth2Area)
     if all(isnan(clusinfo.AdjustedDepth))
         clusinfo.AdjustedDepth(isnan(clusinfo.AdjustedDepth)) = clusinfo.depth; % Just take normal depth
     end
+    % Depth2Area fitted on this day's own recordings (DepthIsRaw; also a chronic probe since
+    % JointChronicAlignment, which keeps each day's alignment in that day's depth) is in the units'
+    % own site depth: the day's drift is in the fit, and AdjustedDepth (depth + drift relative to the
+    % reference recording of the UnitMatch run) would add it a second time. Older chronic alignments
+    % were fitted on the first day and copied to the other days: those need AdjustedDepth (correct if
+    % the first day holds the UnitMatch reference recording; acute: AdjustedDepth = depth).
+    if DepthIsRaw
+        UnitDepth = clusinfo.depth;
+    else
+        UnitDepth = clusinfo.AdjustedDepth;
+    end
     % Shank number (0-based, as clusinfo.Shank) of each Depth2Area row. Depth2Area.Shank is the position
     % of the shank among the shanks with units in the recordings the alignment was made with
     % (alignatlasdata_automated), not the shank number; newer alignments store ShankAbs. All older
@@ -265,8 +298,9 @@ if exist('clusinfo','var') & ~isempty(Depth2Area)
     if ~isempty(NoAlignment)
         warning('GetHistologyOutput:ShankWithoutAlignment','%s %s %s: no histology alignment for shank(s) %s: their units get the areas of the nearest aligned shank (see clusinfo.AreaDist)', ...
             MiceOpt{midx},thisdate,thisprobe,mat2str(NoAlignment(:)'))
+        HistoWarnings{end+1} = lastwarn;
     end
-    allDists = abs(clusinfo.AdjustedDepth - Depth2Area.Depth') + abs(clusinfo.Shank - D2AShank') * 1000;
+    allDists = abs(UnitDepth - Depth2Area.Depth') + abs(clusinfo.Shank - D2AShank') * 1000;
 
     % Set distances to gray areas to Inf
     allDists(:, grayMask) = Inf;
