@@ -42,14 +42,10 @@ sys.path.insert(0, _HERE)
 sys.path.insert(0, os.path.dirname(_HERE))
 
 import plot_auc_vs_delta_days as dvd
-import plot_auc_summary as auc_summary_mod
 import UnitMatchPy.assign_unique_id as aid
 
 BASE_OUTPUT = dvd.BASE_OUTPUT
 OUTPUT_DIR = os.path.join(BASE_OUTPUT, "auc_vs_delta_days_fixed_n_report")
-
-MIN_MATCHES_TO_INCLUDE = dvd.MIN_MATCHES_TO_INCLUDE
-MIN_MICE_PER_BIN = dvd.MIN_MICE_PER_BIN
 
 DIFF_SUMMARY_MODEL_A = "DeepUnitMatch_AssignUniqueID"
 DIFF_SUMMARY_MODEL_B = "UMPy_AssignUniqueID"
@@ -70,7 +66,7 @@ RETRACK_CACHE_PATH = os.path.join(OUTPUT_DIR, "retracking_cache_fixed_n.pickle")
 # reproduces the same figures.
 RANDOM_SEED = 0
 
-_flagged_units = {}  # dataset -> within-session duplicates, slow to read and the same for every model
+_flagged_units = {}  # dataset -> within-session duplicates, the same for every model
 
 
 def _read_match_table(dataset, model, base_output=BASE_OUTPUT):
@@ -248,6 +244,10 @@ def _get_retracked_matches(n_lookup, rng, base_output=BASE_OUTPUT):
 
 
 def main():
+    """
+    The fixed-N paper figures only (dvd.make_key_scores_figures()), see the
+    top of this file. Shares everything else with plot_auc_vs_delta_days.main().
+    """
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     session_date_lookup = dvd.get_session_date_lookup()
@@ -279,8 +279,7 @@ def main():
     print(f"{n_short}/{len(retrack_info)} session pair(s) did not reach N at the lowest threshold.")
 
     (
-        score_bins, rate_bins, count_bins, dataset_level_rows, dataset_level_auc_rows,
-        auc_long_df, dataset_bin_auc_rows, dataset_bin_rate_rows,
+        _, _, _, dataset_level_rows, dataset_level_auc_rows, _, dataset_bin_auc_rows, dataset_bin_rate_rows,
     ) = dvd.collect_binned_pairs(
         session_date_lookup,
         models_to_include=COMPARED_MODELS,
@@ -290,184 +289,16 @@ def main():
         # before picking the best N -- a second pass here could shrink a
         # model's selected set below N.
         resolve_match_conflicts=False,
+        scores_to_use=dvd.KEY_SCORES_FOR_DIFF_SUMMARY,
+        pooled=False,
     )
-
-    auc_df = dvd.summarise_auc(score_bins)
-    auc_csv = os.path.join(OUTPUT_DIR, "auc_vs_delta_days_fixed_n.csv")
-    auc_df.to_csv(auc_csv, index=False)
-    print(f"Wrote {auc_csv}")
-
-    rate_df = dvd.summarise_match_rate(rate_bins)
-    rate_csv = os.path.join(OUTPUT_DIR, "match_rate_vs_delta_days_fixed_n.csv")
-    rate_df.to_csv(rate_csv, index=False)
-    print(f"Wrote {rate_csv}")
-
-    count_df = dvd.summarise_dataset_counts(count_bins)
-    count_csv = os.path.join(OUTPUT_DIR, "dataset_counts_vs_delta_days_fixed_n.csv")
-    count_df.to_csv(count_csv, index=False)
-    print(f"Wrote {count_csv}")
-
-    models = sorted(set(auc_df["model"]) | set(rate_df["model"]) | set(count_df["model"]))
-    colour_for = dvd.build_family_colours(models)
-
-    # Model-pair statistics (overall mixed-effects test + per-bin paired
-    # t-test), restricted to DIFF_SUMMARY_MODEL_A/B -- see
-    # plot_auc_vs_delta_days.py main()'s own version of this same block.
-    # Computed once from dataset_bin_auc_rows/dataset_bin_rate_rows and
-    # reused by every plot below, pooled or mouse-averaged alike.
-    stats_available = DIFF_SUMMARY_MODEL_A in models and DIFF_SUMMARY_MODEL_B in models
-    if stats_available:
-        print(f"Computing model-comparison stats: {DIFF_SUMMARY_MODEL_A} vs {DIFF_SUMMARY_MODEL_B}")
-        rate_overall = dvd.test_overall_model_effect(dataset_bin_rate_rows, "rate", DIFF_SUMMARY_MODEL_A, DIFF_SUMMARY_MODEL_B)
-        rate_bin_pvals = dvd.test_per_bin_model_effect(dataset_bin_rate_rows, "rate", DIFF_SUMMARY_MODEL_A, DIFF_SUMMARY_MODEL_B)
-        all_scores_for_stats = sorted(auc_df["score"].unique())
-        score_overall = {
-            s: dvd.test_overall_model_effect(dataset_bin_auc_rows, "auc", DIFF_SUMMARY_MODEL_A, DIFF_SUMMARY_MODEL_B, score=s)
-            for s in all_scores_for_stats
-        }
-        score_bin_pvals = {
-            s: dvd.test_per_bin_model_effect(dataset_bin_auc_rows, "auc", DIFF_SUMMARY_MODEL_A, DIFF_SUMMARY_MODEL_B, score=s)
-            for s in all_scores_for_stats
-        }
-    else:
-        rate_overall, rate_bin_pvals = None, {}
-        score_overall, score_bin_pvals = {}, {}
-
-    for score in sorted(auc_df["score"].unique()):
-        out_path = os.path.join(OUTPUT_DIR, f"summary_{score}_fixed_n.png")
-        result = dvd.plot_score_summary(
-            score, auc_df, rate_df, count_df, colour_for, out_path, title_suffix=" (fixed N)",
-            stats_model_a=DIFF_SUMMARY_MODEL_A if stats_available else None,
-            stats_model_b=DIFF_SUMMARY_MODEL_B if stats_available else None,
-            rate_overall=rate_overall, rate_bin_pvals=rate_bin_pvals,
-            auc_overall=score_overall.get(score), auc_bin_pvals=score_bin_pvals.get(score, {}),
-        )
-        if result:
-            print(f"  Plotted {score} -> {result}")
-
-    # Compact key-scores paper figure (DIFF_SUMMARY_MODEL_A vs
-    # DIFF_SUMMARY_MODEL_B, dvd.KEY_SCORES_FOR_DIFF_SUMMARY only) -- the
-    # fixed-N counterpart to plot_auc_vs_delta_days.py main()'s own version
-    # of this same figure (dvd.plot_key_scores_diff_figure()).
-    if stats_available:
-        # Mouse-level and dataset-level versions.
-        dvd.make_key_scores_figures(
-            DIFF_SUMMARY_MODEL_A, DIFF_SUMMARY_MODEL_B, dataset_bin_auc_rows, dataset_bin_rate_rows, colour_for,
-            OUTPUT_DIR, file_tag="_fixed_n",
-        )
-    else:
-        print(
-            f"Skipping key-scores AUC-diff summary (fixed N): need both {DIFF_SUMMARY_MODEL_A} and "
-            f"{DIFF_SUMMARY_MODEL_B} present in {sorted(models)}."
-        )
-
-    auc_mouse_df = dvd.summarise_auc_mouse_averaged(dataset_bin_auc_rows)
-    auc_mouse_csv = os.path.join(OUTPUT_DIR, "auc_vs_delta_days_fixed_n_mouse_averaged.csv")
-    auc_mouse_df.to_csv(auc_mouse_csv, index=False)
-    print(f"Wrote {auc_mouse_csv}")
-
-    rate_mouse_df = dvd.summarise_match_rate_mouse_averaged(dataset_bin_rate_rows)
-    rate_mouse_csv = os.path.join(OUTPUT_DIR, "match_rate_vs_delta_days_fixed_n_mouse_averaged.csv")
-    rate_mouse_df.to_csv(rate_mouse_csv, index=False)
-    print(f"Wrote {rate_mouse_csv}")
-
-    for score in sorted(auc_mouse_df["score"].unique()):
-        out_path = os.path.join(OUTPUT_DIR, f"summary_{score}_fixed_n_mouse_averaged.png")
-        result = dvd.plot_score_summary(
-            score, auc_mouse_df, rate_mouse_df, count_df, colour_for, out_path,
-            min_count=MIN_MICE_PER_BIN, count_col="n_mice", title_suffix=" (fixed N, mouse-averaged)",
-            stats_model_a=DIFF_SUMMARY_MODEL_A if stats_available else None,
-            stats_model_b=DIFF_SUMMARY_MODEL_B if stats_available else None,
-            rate_overall=rate_overall, rate_bin_pvals=rate_bin_pvals,
-            auc_overall=score_overall.get(score), auc_bin_pvals=score_bin_pvals.get(score, {}),
-        )
-        if result:
-            print(f"  Plotted {score} (mouse-averaged) -> {result}")
-
-    if any(model in models for model in dvd.CIRCULAR_SCORES):
-        print(
-            f"Note: excluding {sorted(dvd.SCORES_EXCLUDED_FROM_QUALITY_AVERAGE)} from every model's pooled/mouse-"
-            f"balanced quality average (circular for at least one included model -- see dvd.CIRCULAR_SCORES)."
-        )
-
-    # ── quality vs quantity, same as plot_auc_vs_delta_days.py, on the fixed-N bins ──
-
-    summary_df = dvd.compute_quality_quantity_summary(auc_df, rate_df)
-    summary_csv = os.path.join(OUTPUT_DIR, "quality_vs_quantity_fixed_n.csv")
-    summary_df.to_csv(summary_csv, index=False)
-    print(f"Wrote {summary_csv}")
-    print(summary_df.sort_values("quality", ascending=False).to_string(index=False))
-
-    pooled_png = os.path.join(OUTPUT_DIR, "quality_vs_quantity_fixed_n_pooled.png")
-    result = dvd.plot_quality_vs_quantity(
-        summary_df, colour_for, pooled_png,
-        title="Quality vs quantity, fixed N (pooled across datasets/ΔDay, N = smaller UID match count)",
+    dvd.write_long_by_dataset(
+        dataset_level_rows, dataset_level_auc_rows, os.path.join(OUTPUT_DIR, "quality_quantity_fixed_n_long_by_dataset.csv"),
     )
-    if result:
-        print(f"  Plotted pooled quality-vs-quantity -> {result}")
-
-    trajectories_png = os.path.join(OUTPUT_DIR, "quality_vs_quantity_fixed_n_by_bin.png")
-    result = dvd.plot_quality_vs_quantity_trajectories(auc_df, rate_df, colour_for, trajectories_png)
-    if result:
-        print(f"  Plotted quality-vs-quantity by ΔDay bin -> {result}")
-
-    per_score_png = os.path.join(OUTPUT_DIR, "quality_vs_quantity_fixed_n_per_score.png")
-    result = dvd.plot_quality_vs_quantity_per_score(auc_df, rate_df, colour_for, per_score_png)
-    if result:
-        print(f"  Plotted quality-vs-quantity per score -> {result}")
-
-    # auc_long_df (straight from each model's own AUC_summary.json) is only
-    # used here to decide dataset inclusion -- that threshold is about
-    # whether a dataset had enough raw trackable matches to trust at all, a
-    # property of the pipeline's own original match counts regardless of any
-    # N-fixing choice made afterwards, and is the same threshold
-    # collect_binned_pairs() already applied internally to build score_bins/
-    # rate_bins/count_bins above. It must NOT be used as the AUC ("quality")
-    # source below -- those values were never touched by matches_transform,
-    # so mixing them with the (transformed) P_track values in dataset_level_rows
-    # would silently compare quantity computed one way against quality
-    # computed another. dataset_level_auc_rows is the fixed-N-consistent
-    # per-score AUC source instead (see its docstring in collect_binned_pairs()).
-    passing_datasets = auc_summary_mod.get_passing_datasets(auc_long_df, min_matches=MIN_MATCHES_TO_INCLUDE)
-    ptrack_df = pd.DataFrame(dataset_level_rows)
-    functional_auc_df = pd.DataFrame(dataset_level_auc_rows)
-    combined_df_long = pd.concat([functional_auc_df, ptrack_df], ignore_index=True)
-    combined_df_long = combined_df_long[
-        combined_df_long["model"].isin(models) & combined_df_long["dataset"].isin(passing_datasets)
-    ]
-    combined_csv = os.path.join(OUTPUT_DIR, "quality_quantity_fixed_n_long_by_dataset.csv")
-    combined_df_long.to_csv(combined_csv, index=False)
-    print(f"Wrote {combined_csv}")
-
-    mouse_summary_df = dvd.mouse_balanced_quality_quantity(combined_df_long)
-    mouse_summary_csv = os.path.join(OUTPUT_DIR, "quality_vs_quantity_fixed_n_mouse_balanced.csv")
-    mouse_summary_df.to_csv(mouse_summary_csv, index=False)
-    print(f"Wrote {mouse_summary_csv}")
-    print(mouse_summary_df.sort_values("quality", ascending=False).to_string(index=False))
-
-    mouse_png = os.path.join(OUTPUT_DIR, "quality_vs_quantity_fixed_n_mouse_balanced.png")
-    result = dvd.plot_quality_vs_quantity(
-        mouse_summary_df, colour_for, mouse_png,
-        title="Quality vs quantity, fixed N (mouse-balanced: average of per-mouse averages)",
+    dvd.make_key_scores_figures(
+        DIFF_SUMMARY_MODEL_A, DIFF_SUMMARY_MODEL_B, dataset_bin_auc_rows, dataset_bin_rate_rows,
+        dvd.build_family_colours([DIFF_SUMMARY_MODEL_A, DIFF_SUMMARY_MODEL_B]), OUTPUT_DIR, file_tag="_fixed_n",
     )
-    if result:
-        print(f"  Plotted mouse-balanced quality-vs-quantity -> {result}")
-
-    png_path, stats_path = dvd.test_ptrack_mouse_balanced(combined_df_long, OUTPUT_DIR)
-    if png_path:
-        print(f"  Plotted P_track (mouse-aware) -> {png_path}")
-    print(f"Wrote P_track mixed-model summary to {stats_path}")
-
-    # Proper dataset-level mixed-model + Holm-Bonferroni stats for every
-    # functional score at fixed N -- there's no equivalent to
-    # auc_summary_report/mixed_model_summaries.txt for this data otherwise,
-    # since those were computed on the pipeline's own untransformed matches.
-    score_png_paths, score_stats_path = dvd.test_functional_scores_mouse_balanced(
-        combined_df_long, OUTPUT_DIR, filename="functional_score_mixed_model_summaries_fixed_n.txt",
-    )
-    for p in score_png_paths:
-        print(f"  Plotted {os.path.basename(p)} (fixed N, dataset-level) -> {p}")
-    print(f"Wrote fixed-N functional-score mixed-model summary to {score_stats_path}")
 
 
 if __name__ == "__main__":
