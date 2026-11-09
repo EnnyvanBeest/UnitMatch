@@ -20,6 +20,7 @@
 # Output: BASE_OUTPUT/tracking_vs_delta_days_report.
 
 import os
+import pickle
 import sys
 
 import numpy as np
@@ -70,6 +71,29 @@ def read_match_table(dataset, model, dates, flagged_units):
     return df
 
 
+def n_per_session_pair(df, resolved):
+    """{(RecSes 1, RecSes 2) with RecSes 1 < RecSes 2: N}: conflict-resolved UID matches, as fixed_n._build_n_lookup()."""
+    forward = (df["RecSes 1"] < df["RecSes 2"]).to_numpy() & (resolved == 1)
+    counts = df[forward].groupby(["RecSes 1", "RecSes 2"]).size()
+    return {(int(r1), int(r2)): int(n) for (r1, r2), n in counts.items()}
+
+
+def load_retracking(date_lookup, rng):
+    """
+    UMPy's retracked match rows per dataset and the threshold info, from
+    fixed_n's cache. Only without a valid cache is N built from a separate pass
+    over the DeepUnitMatch tables and the retracking rerun (slow).
+    """
+    settings = {"thresholds": fixed_n.RETRACK_THRESHOLDS, "seed": fixed_n.RANDOM_SEED}
+    if os.path.isfile(fixed_n.RETRACK_CACHE_PATH):
+        with open(fixed_n.RETRACK_CACHE_PATH, "rb") as f:
+            cache = pickle.load(f)
+        if cache["settings"] == settings:
+            print(f"Loading cached retracking from {fixed_n.RETRACK_CACHE_PATH}")
+            return cache["rows"], cache["info"]
+    return fixed_n._get_retracked_matches(fixed_n._build_n_lookup(date_lookup), rng)
+
+
 def session_pair_rows(df, matches, mouse, dataset, model, rng):
     """(P(track) rows, AUC rows), one per ordered session pair (and score), in the format of make_key_scores_figures()."""
     matches = np.asarray(matches).astype(bool)
@@ -113,10 +137,9 @@ def main():
     datasets = sorted(d for d, dates in date_lookup.items() if dates)
     flagged = dvd._build_within_session_duplicate_lookup(dvd.BASE_OUTPUT, datasets)
 
-    # Fixed N: N per session pair from DeepUnitMatch, UMPy's retracked matches (cached).
-    n_lookup = fixed_n._build_n_lookup(date_lookup)
+    # Fixed N: UMPy's matches retracked to DeepUnitMatch's N (cached).
     selection_rng = np.random.default_rng(fixed_n.RANDOM_SEED)
-    retracked_rows, retrack_info = fixed_n._get_retracked_matches(n_lookup, selection_rng)
+    retracked_rows, retrack_info = load_retracking(date_lookup, selection_rng)
     retrack_info.to_csv(os.path.join(OUTPUT_DIR, "retracking_thresholds_fixed_n.csv"), index=False)
     n_short = int((retrack_info["n_matches"] < retrack_info["N"]).sum())
     print(f"Fixed N: {MODEL_B} short of N in {n_short}/{len(retrack_info)} session pairs.")
@@ -129,11 +152,12 @@ def main():
             df = read_match_table(dataset, model, date_lookup[dataset], flagged.get(dataset, set()))
             if df is None or df.empty:
                 continue
+            resolved = dvd._resolve_match_conflicts(df)
             if model == MODEL_A:
-                fixed = fixed_n._best_n_uid_matches(df, n_lookup.get(dataset, {}), selection_rng)
+                fixed = fixed_n._best_n_uid_matches(df, n_per_session_pair(df, resolved), selection_rng)
             else:
                 fixed = np.isin(df.index.to_numpy(), retracked_rows.get(dataset, []))
-            for name, matches in (("free_n", dvd._resolve_match_conflicts(df)), ("fixed_n", fixed)):
+            for name, matches in (("free_n", resolved), ("fixed_n", fixed)):
                 rate_rows, auc_rows = session_pair_rows(df, matches, mouse, dataset, model, auc_rng)
                 rows[name][0].extend(rate_rows)
                 rows[name][1].extend(auc_rows)
