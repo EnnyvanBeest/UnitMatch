@@ -2466,6 +2466,13 @@ def plot_key_scores_figure(
             if i == 0:
                 ax.set_ylabel("AUC")
 
+        # Same y-axis for every AUC panel (union of their autoscaled limits, incl. star headroom).
+        auc_axes = axes[1:1 + len(scores)]
+        if len(auc_axes):
+            lims = np.array([ax.get_ylim() for ax in auc_axes])
+            for ax in auc_axes:
+                ax.set_ylim(lims[:, 0].min(), lims[:, 1].max())
+
         for ax in axes:
             ax.set_xticks(range(len(bins_present)))
             ax.set_xticklabels(bins_present, rotation=90, fontsize=paper_style.FONT_SIZE - 2)

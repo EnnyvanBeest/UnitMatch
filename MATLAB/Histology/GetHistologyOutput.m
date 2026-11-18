@@ -70,7 +70,7 @@ if ~histodone %Just in case it's not done yet
                 % alignment with petersen probe output
                 histoflag = 1;
                 histinfo =load(fullfile(histofile(1).folder,histofile(1).name));
-                fullfile(fullfile(histofile(1).folder,histofile(1).name))
+                fullfile(fullfile(histofile(1).folder,histofile(1).name));
 
                 % Align ephys data with probe
                  [Depth2Area, AlignmentFeatures]  = alignatlasdata_automated(histinfo,AllenCCFPath,sp,clusinfo,1,1,2);
@@ -323,7 +323,7 @@ if exist('clusinfo','var') & ~isempty(Depth2Area)
     [areaopt, id1] = unique(Area,'stable');
     atlastable = readtable('structure_tree_safe_2017.csv');
     if ~isfield(clusinfo,'AreaFN')
-        clusinfo.AreaFN = cellfun(@(X) atlastable.name(find(ismember(lower(atlastable.acronym),X))),clusinfo.Area,'Uni',0)
+        clusinfo.AreaFN = cellfun(@(X) atlastable.name(find(ismember(lower(atlastable.acronym),X))),clusinfo.Area,'Uni',0);
     end
     areaoptFN = clusinfo.AreaFN(id1);
     uniquearean = length(areaopt);
