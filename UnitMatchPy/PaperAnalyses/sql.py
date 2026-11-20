@@ -85,7 +85,11 @@ def merge_match_tables(df_1, df_2, sub1, sub2):
 
 
 def import_csv_to_sqlite(mt_paths, models, m, p, l, db_file=DATABASE_PATH):
+    """Write the merged match tables of one location into its own table.
 
+    Returns True only if the table was written completely, False otherwise
+    (the error is printed; the caller reports all failed locations at the end).
+    """
 
     # Define the table name in SQLite
     table_name = f"{m}_{p}_{l}"  # Change this
@@ -144,6 +148,14 @@ def import_csv_to_sqlite(mt_paths, models, m, p, l, db_file=DATABASE_PATH):
         conn.commit()
         print("Changes committed.")
 
+        # A failed write can leave an empty or partial table behind, so check
+        # the row count instead of trusting that no exception was raised.
+        n_written = cursor.execute(f'SELECT COUNT(*) FROM "{table_name}"').fetchone()[0]
+        if n_written != len(df_merged):
+            print(f"ERROR: table '{table_name}' has {n_written} rows, expected {len(df_merged)}.")
+            return False
+        return True
+
     except sqlite3.Error as e:
         print(f"SQLite error: {e}")
         if conn:
@@ -153,7 +165,7 @@ def import_csv_to_sqlite(mt_paths, models, m, p, l, db_file=DATABASE_PATH):
             f"Error: CSV file '{mt_paths[0]}' or '{mt_paths[1]}' or another one is empty or not found."
         )
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        print(f"An unexpected error occurred: {e!r}")
         if conn:
             conn.rollback()
     finally:
@@ -161,6 +173,7 @@ def import_csv_to_sqlite(mt_paths, models, m, p, l, db_file=DATABASE_PATH):
         if conn:
             conn.close()
             print("Database connection closed.")
+    return False
 
 
 if __name__ == "__main__":
@@ -175,11 +188,22 @@ if __name__ == "__main__":
                         help="override the group's model folder names")
     parser.add_argument("--db", default=None, help="override the group's database path")
     parser.add_argument("--data-root", default=PROJECT_ROOT, help="analysis output root holding the model folders")
+    parser.add_argument("--locations", nargs="+", default=None,
+                        help="only (re)write these locations, as mouse/probe/location, "
+                             "e.g. AV009/Probe1/IMRO_10; the other tables are left untouched")
     args = parser.parse_args()
     data_root = args.data_root
     models = args.models or cfg.MODEL_GROUPS[args.group]
     args.db = args.db or cfg.database_path(args.group)
     print(f"group {args.group}: {models} -> {args.db}")
+    only = None
+    if args.locations:
+        only = {tuple(loc.replace("\\", "/").strip("/").split("/")) for loc in args.locations}
+        bad = [loc for loc in only if len(loc) != 3]
+        if bad:
+            parser.error(f"--locations must be mouse/probe/location, got {['/'.join(b) for b in bad]}")
+    failed = []
+    written = []
 
     for mouse in os.listdir(data_root):
         if os.path.isdir(os.path.join(data_root, mouse)):
@@ -190,6 +214,8 @@ if __name__ == "__main__":
                 print(f"  Processing probe: {probe}")
                 for loc in os.listdir(os.path.join(data_root, mouse, probe)):
                     if not os.path.isdir(os.path.join(data_root, mouse, probe, loc)):
+                        continue
+                    if only is not None and (mouse, probe, loc) not in only:
                         continue
 
                     print(f"    Processing location: {loc}")
@@ -205,7 +231,24 @@ if __name__ == "__main__":
                             mt_paths.append(mt_path)
                             models_found.append(model)
 
+                    name = f"{mouse}/{probe}/{loc}"
                     if len(mt_paths) > 0:
-                        import_csv_to_sqlite(mt_paths, models_found, mouse, probe, loc, db_file=args.db)
+                        try:
+                            ok = import_csv_to_sqlite(mt_paths, models_found, mouse, probe, loc, db_file=args.db)
+                        except Exception as e:  # e.g. MemoryError while reading/merging the CSVs
+                            print(f"      ERROR reading/merging the match tables: {e!r}")
+                            ok = False
+                        (written if ok else failed).append(name)
                     else:
                         print('No valid MatchTable.csv found.')
+
+    print(f"\n{len(written)} location(s) written to {args.db}")
+    if only is not None:
+        not_found = sorted("/".join(loc) for loc in only if "/".join(loc) not in written + failed)
+        if not_found:
+            print(f"WARNING: requested location(s) not found under {data_root}: {not_found}")
+            failed += not_found
+    if failed:
+        print(f"FAILED ({len(failed)}) - these tables are missing, empty or incomplete; rerun with\n"
+              f"  python sql.py --group {args.group} --locations {' '.join(failed)}")
+        raise SystemExit(1)
