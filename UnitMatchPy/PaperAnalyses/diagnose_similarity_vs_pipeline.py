@@ -183,7 +183,7 @@ def plot(per_mouse, models, out_dir):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--group", default="models", choices=sorted(cfg.MODEL_GROUPS))
+    p.add_argument("--group", default="training_conditions", choices=sorted(cfg.MODEL_GROUPS))
     p.add_argument("--models", nargs="+", default=DEFAULT_MODELS)
     p.add_argument("--mice", nargs="+", default=None, help="restrict to these mice")
     p.add_argument("--ref-model", default="DeepUnitMatch", help="model whose free-N count sets N")

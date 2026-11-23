@@ -75,10 +75,12 @@ MODEL_GROUPS = {
     # main comparison (run_deepunitmatch_batch_onMerged.py, EMD, DANT)
     "algo": ["DeepUnitMatch", "UMPy", "DUM_legacy", "EMD",
              "DANT", "DANT_no_functional", "DANT_fixed", "DANT_no_functional_fixed"],
-    # paper models (train_paper_models.py --jobs paper; DUM_paper = DeepUnitMatch)
-    "models": ["DeepUnitMatch", *[f"DUM_W_ij={w}" for w in (1, 5, 15, 20)],
-               *[f"DUM_n_output={n}" for n in (8, 32, 128)],
-               "DUM_untrained", "DUM_AE_only", "DUM_finetuned_only"],
+    # paper models (train_paper_models.py --jobs paper; DUM_paper = DeepUnitMatch),
+    # in small groups: a group's widest location (AV009/Probe1/IMRO_10, 44 M
+    # rows) has to fit in memory in sql.py; the former 11-model group did not
+    "training_conditions": ["DeepUnitMatch", "DUM_untrained", "DUM_AE_only", "DUM_finetuned_only"],
+    "n_output": ["DeepUnitMatch", *[f"DUM_n_output={n}" for n in (8, 32, 128)]],  # 256 = DeepUnitMatch
+    "W_ij": ["DeepUnitMatch", *[f"DUM_W_ij={w}" for w in (1, 5, 15, 20)]],          # 10 = DeepUnitMatch
     # pipeline conditions
     "nodrift": ["DeepUnitMatch", "UMPy", "DUM_nodrift", "UMPy_nodrift"],
     "spatial_only": ["DeepUnitMatch", "UMPy", "UMPy_spatialonly"],
@@ -91,8 +93,8 @@ MODEL_GROUPS = {
                   "UMPy_pairCandidates", "UMPy_pairBayes", "UMPy_pairCandidates_pairBayes", "UMPy_weights1to1"],
     "pipelines_UMPy2": ["DeepUnitMatch","UMPy_pairCandidates_pairBayes_pairPrior", "UMPy_pairCandidates_pairBayes_pairPrior_bothDirections"],
     # max_dist 100 um is the default: DeepUnitMatch / UMPy are its results
-    "maxdist": ["DeepUnitMatch", "UMPy",
-                *[f"{m}_maxdist={d}" for d in ("20", "50", "inf") for m in ("DUM", "UMPy")]],
+    "maxdist_DUM": ["DeepUnitMatch", *[f"DUM_maxdist={d}" for d in ("20", "50", "inf")]],
+    "maxdist_UMPy": ["DeepUnitMatch", "UMPy", *[f"UMPy_maxdist={d}" for d in ("20", "50", "inf")]],
     # mouse-count cross-validation (the 18-mouse point is DeepUnitMatch)
     "xval_1": ["DeepUnitMatch", *[f"xval_m1_{r}" for r in (1, 2, 3)]],
     "xval_3-6": ["DeepUnitMatch", *[f"xval_m{k}_{r}" for k in (3, 6) for r in (1, 2, 3)]],

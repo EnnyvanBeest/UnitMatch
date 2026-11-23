@@ -139,7 +139,10 @@ def import_csv_to_sqlite(mt_paths, models, m, p, l, db_file=DATABASE_PATH):
         # if_exists='replace': Drops the table first and recreates it. Useful for initial load.
         # if_exists='append': Adds data to the existing table. Use if running multiple times.
         # if_exists='fail': Raises an error if the table already exists.
-        df_merged.to_sql(table_name, conn, if_exists="replace", index=False)
+        # chunksize: without it pandas converts the whole table to Python rows
+        # at once, which for the largest locations (44 M rows) ran out of
+        # memory and killed the process without any error message
+        df_merged.to_sql(table_name, conn, if_exists="replace", index=False, chunksize=500_000)
         # index=False prevents pandas index from being written as a column
 
         print("Data imported successfully.")
@@ -252,3 +255,5 @@ if __name__ == "__main__":
         print(f"FAILED ({len(failed)}) - these tables are missing, empty or incomplete; rerun with\n"
               f"  python sql.py --group {args.group} --locations {' '.join(failed)}")
         raise SystemExit(1)
+    # a run that ends without this line (and without FAILED) was killed
+    print(f"ALL OK: {len(written)} location(s) written to {args.db}")
