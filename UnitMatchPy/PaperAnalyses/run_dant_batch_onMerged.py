@@ -301,6 +301,43 @@ _original_auto_curation = _dant_runner.autoCuration
 _auto_curation_empty_ok = _auto_curation_allowing_empty()
 
 
+def _pad_ragged(arrays):
+    """Stack per-shank motion arrays, NaN-padded to the longest (see below)."""
+    arrays = [np.asarray(a, dtype=float).ravel() for a in arrays]
+    n = max((a.size for a in arrays), default=0)
+    return np.array([np.pad(a, (0, n - a.size), constant_values=np.nan) for a in arrays])
+
+
+def _merge_allowing_ragged_motion():
+    """
+    pyDANT's merge_multishank_outputs with one fix: it stacks the per-shank
+    motion arrays (one value per session) with np.asarray, which fails on
+    numpy >= 1.24 when a shank has no units in the last session(s), so its
+    arrays are shorter. That would make the whole location look like a DANT
+    failure. The arrays are only saved for reference (motion_*.npy in the
+    root output folder, not used here), so they are NaN-padded instead;
+    everything else is pyDANT's own code, unchanged. None if this pyDANT has
+    no multi-shank merge.
+    """
+    import inspect
+    merge = getattr(_dant_runner, "merge_multishank_outputs", None)
+    if merge is None:
+        return None
+    src = inspect.getsource(merge)
+    names = ("motion_linear_scale", "motion_linear", "motion_constant")
+    for name in names:
+        if src.count(f"np.asarray({name}))") != 1:
+            raise DantIntegrationError("pyDANT's merge_multishank_outputs changed: review the ragged-motion patch")
+        src = src.replace(f"np.asarray({name}))", f"_pad_ragged({name}))")
+    namespace = dict(_dant_runner.__dict__, _pad_ragged=_pad_ragged)
+    exec(compile(src, _dant_runner.__file__, "exec"), namespace)
+    return namespace["merge_multishank_outputs"]
+
+
+_original_merge = getattr(_dant_runner, "merge_multishank_outputs", None)
+_merge_ragged_ok = _merge_allowing_ragged_motion()
+
+
 # ── path helpers ─────────────────────────────────────────────────────────────
 
 
@@ -548,12 +585,16 @@ def score_and_save_variant(merged_dir, variant, sess, n_units):
     if spec.get("drift_fallback"):
         _dant_motion.computeMotion = _compute_motion_with_fallback
         _dant_runner.autoCuration = _auto_curation_empty_ok
+    if runner is not runDANT:
+        _dant_runner.merge_multishank_outputs = _merge_ragged_ok
     try:
         try:
             runner(dant_settings)
         finally:
             _dant_motion.computeMotion = _original_compute_motion
             _dant_runner.autoCuration = _original_auto_curation
+            if _original_merge is not None:
+                _dant_runner.merge_multishank_outputs = _original_merge
 
         # runDANTMultiShank merges the per-shank results into the root output
         # folder; if that doesn't give one matrix over all units, our reading
