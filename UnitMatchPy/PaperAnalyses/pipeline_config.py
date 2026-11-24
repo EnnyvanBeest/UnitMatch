@@ -81,6 +81,8 @@ MODEL_GROUPS = {
     "training_conditions": ["DeepUnitMatch", "DUM_untrained", "DUM_AE_only", "DUM_finetuned_only"],
     "n_output": ["DeepUnitMatch", *[f"DUM_n_output={n}" for n in (8, 32, 128)]],  # 256 = DeepUnitMatch
     "W_ij": ["DeepUnitMatch", *[f"DUM_W_ij={w}" for w in (1, 5, 15, 20)]],          # 10 = DeepUnitMatch
+    # DANT with pyDANT's multi-shank mode (run_dant_batch_onMerged.py _multishank variants)
+    "dant_multishank": ["DeepUnitMatch", "DANT_multishank", "DANT_no_functional_multishank"],
     # pipeline conditions
     "nodrift": ["DeepUnitMatch", "UMPy", "DUM_nodrift", "UMPy_nodrift"],
     "spatial_only": ["DeepUnitMatch", "UMPy", "UMPy_spatialonly"],

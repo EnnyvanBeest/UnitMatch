@@ -56,11 +56,13 @@
 # directly usable as our final_matches, no translation needed (unlike EMD,
 # which required mapping MATLAB positions back to cluster IDs).
 #
-# channel_shanks.npy (optional; only required for pyDANT's separate
-# runDANTMultiShank entry point) is intentionally omitted here -- we run the
-# single-shank runDANT(), treating the whole probe as one shank. This is a
-# scope simplification, not a pyDANT requirement; runDANTMultiShank could be
-# wired in later for genuinely multi-shank probes if needed.
+# channel_shanks.npy (n_channel,) shank ID per channel, required by pyDANT's
+# runDANTMultiShank entry point. The original variants (DANT,
+# DANT_no_functional and their _fixed versions) ran the single-shank
+# runDANT(), treating the whole probe as one shank (one drift estimate for the
+# whole probe). pyDANT's documentation says to use the multi-shank entry point
+# for multi-shank probes, so the "_multishank" variants (used in the paper)
+# do that on multi-shank probes -- see MULTISHANK_SUFFIX below.
 #
 # peth.npy (optional; only used if "PETH" is listed in motionEstimation/
 # clustering features) is also omitted -- we don't have trial-aligned PETH
@@ -138,6 +140,14 @@ LOG_STAGE = "dant"  # pipeline_log stage (one event per location and variant)
 
 from pyDANT import runDANT
 
+try:  # multi-shank entry point (pyDANT >= 1.1.0, May 2026)
+    from pyDANT import runDANTMultiShank
+except ImportError:
+    try:
+        from pyDANT.Runner import runDANTMultiShank
+    except ImportError:
+        runDANTMultiShank = None
+
 FS = 30000.0  # Neuropixels sample rate -- same convention used throughout test.py
 
 # n_jobs for pyDANT's own internal joblib parallelism (locations/autocorr/ISI
@@ -194,6 +204,32 @@ FIXED_SUFFIX = "_fixed"
 for _base in list(DANT_VARIANTS):
     DANT_VARIANTS[_base + FIXED_SUFFIX] = dict(DANT_VARIANTS[_base], drift_fallback=True, base=_base)
 
+# "_multishank" variants (the ones for the paper): pyDANT's documented setup
+# for multi-shank probes ("For multi-shank data, run mainDANT_MultiShank.py"),
+# runDANTMultiShank with channel_shanks.npy, which processes each shank
+# separately (drift per shank; units on different shanks are never matched)
+# and merges the results. Same features and settings as the base variants,
+# always with the two robustness fixes of the _fixed variants. Locations on a
+# single-shank probe would run exactly the _fixed variant, so its results are
+# copied (pyDANT is not deterministic: a rerun would differ slightly).
+MULTISHANK_SUFFIX = "_multishank"
+for _base in [v for v in DANT_VARIANTS if not v.endswith(FIXED_SUFFIX)]:
+    DANT_VARIANTS[_base + MULTISHANK_SUFFIX] = dict(
+        DANT_VARIANTS[_base], drift_fallback=True, multishank=True, single_shank_copy=_base + FIXED_SUFFIX,
+    )
+
+# Shanks are told apart by their x-positions: a gap of more than 50 um between
+# neighbouring channel x-positions starts a new shank (as in
+# run_deepunitmatch_batch_onMerged._prepare_session; NP 2.0 shanks are 250 um
+# apart, columns within a shank 32 um).
+SHANK_GAP_UM = 50
+
+
+class DantIntegrationError(RuntimeError):
+    """Our code and pyDANT don't fit together (unexpected output or input layout).
+    Not a result of the method: never recorded as zero matches, the location
+    gets no output and is retried on the next run."""
+
 import pyDANT.MotionEstimation as _dant_motion
 from pyDANT.utils import Motion as _DantMotion
 
@@ -215,7 +251,15 @@ def _n_drift_pairs(user_settings):
 
 
 def _compute_motion_with_fallback(user_settings):
-    if _n_drift_pairs(user_settings) > 0:
+    try:
+        n_pairs = _n_drift_pairs(user_settings)
+    except Exception as e:
+        # e.g. a per-shank run of runDANTMultiShank whose data/output folders
+        # don't hold matching arrays: an integration problem, not a DANT result
+        raise DantIntegrationError(
+            f"drift fallback could not read pyDANT's files in {user_settings.get('output_folder')}: {e!r}"
+        ) from e
+    if n_pairs > 0:
         return _original_compute_motion(user_settings)
     out = user_settings["output_folder"]
     if os.path.isfile(os.path.join(out, "motion_constant.npy")):
@@ -346,6 +390,7 @@ def build_dant_input(sess, input_dir):
         os.path.join(input_dir, "channel_locations.npy"),
         channel_locations.astype(np.float64),
     )
+    write_channel_shanks(input_dir)
 
     # spike_times/Unit{k}.npy: k = 0-indexed row in waveform_all/session_index
     # (= global position in np.concatenate(good_units)), in MILLISECONDS.
@@ -367,6 +412,30 @@ def build_dant_input(sess, input_dir):
         np.save(os.path.join(spike_times_dir, f"Unit{k}.npy"), unit_times_ms)
 
     return n_units
+
+
+def channel_shank_ids(channel_locations):
+    """Shank ID (0, 1, ...) of every channel, from the gaps between channel x-positions."""
+    x = np.asarray(channel_locations)[:, 0]
+    unique_x = np.unique(x)
+    shank_of_x = np.concatenate([[0], np.cumsum(np.diff(unique_x) > SHANK_GAP_UM)])
+    return shank_of_x[np.searchsorted(unique_x, x)].astype(np.int64)
+
+
+def write_channel_shanks(input_dir):
+    """channel_shanks.npy (n_channel,) next to channel_locations.npy, as pyDANT's
+    multi-shank entry point requires. Returns the number of shanks."""
+    shanks = channel_shank_ids(np.load(os.path.join(input_dir, "channel_locations.npy")))
+    np.save(os.path.join(input_dir, "channel_shanks.npy"), shanks)
+    return int(len(np.unique(shanks)))
+
+
+def pydant_version():
+    try:
+        from importlib.metadata import version
+        return version("pyDANT")
+    except Exception:
+        return "unknown"
 
 
 def make_dant_settings(input_dir, output_dir, variant):
@@ -420,7 +489,29 @@ def score_and_save_variant(merged_dir, variant, sess, n_units):
     os.makedirs(dant_dir, exist_ok=True)
 
     spec = DANT_VARIANTS[variant]
-    if spec.get("drift_fallback"):
+    runner, mode = runDANT, "single-shank (runDANT)"
+    if spec.get("multishank"):
+        n_shanks = write_channel_shanks(get_dant_shared_input_dir(merged_dir))
+        if n_shanks == 1:
+            # single-shank probe: runDANTMultiShank would do exactly what the
+            # _fixed variant did, so reuse its results when they exist
+            copy_from = spec["single_shank_copy"]
+            if dant_results_exist(merged_dir, copy_from):
+                shutil.copytree(get_dant_dir(merged_dir, copy_from), dant_dir, dirs_exist_ok=True)
+                with open(os.path.join(dant_dir, "SAME_AS_BASE.txt"), "w") as f:
+                    f.write(f"copy of {copy_from}: single-shank probe, so the multi-shank mode does not apply\n")
+                plog.log_event(LOG_STAGE, group_key(merged_dir), variant, "done", f"same as {copy_from} (1 shank)")
+                print(f"  [{variant}] single-shank probe: copied {copy_from}")
+                return
+        else:
+            if runDANTMultiShank is None:
+                raise DantIntegrationError(
+                    f"this pyDANT ({pydant_version()}) has no runDANTMultiShank: update pyDANT to >= 1.1.0"
+                )
+            runner, mode = runDANTMultiShank, f"multi-shank (runDANTMultiShank, {n_shanks} shanks)"
+        if os.path.isdir(output_dir):
+            shutil.rmtree(output_dir)  # no stale files from an earlier attempt
+    elif spec.get("drift_fallback"):
         base_dir = get_dant_dir(merged_dir, spec["base"])
         if not dant_results_exist(merged_dir, spec["base"]):
             raise RuntimeError(f"{spec['base']} has no results yet: run it before {variant}")
@@ -437,7 +528,10 @@ def score_and_save_variant(merged_dir, variant, sess, n_units):
 
     input_dir = get_dant_shared_input_dir(merged_dir)
     dant_settings = make_dant_settings(input_dir, output_dir, variant)
-    print(f"  [{variant}] Running pyDANT (features: clustering={dant_settings['clustering']['features']}) ...")
+    print(f"  [{variant}] Running pyDANT {pydant_version()}, {mode} "
+          f"(features: clustering={dant_settings['clustering']['features']}) ...")
+    with open(os.path.join(dant_dir, "DANT_RUN_INFO.txt"), "w") as f:
+        f.write(f"pyDANT {pydant_version()}\n{mode}\n")
 
     # We keep pyDANT's own defaults untouched (e.g. clustering.max_distance),
     # so it can legitimately fail on some datasets -- e.g. zero cross-session
@@ -456,22 +550,30 @@ def score_and_save_variant(merged_dir, variant, sess, n_units):
         _dant_runner.autoCuration = _auto_curation_empty_ok
     try:
         try:
-            runDANT(dant_settings)
+            runner(dant_settings)
         finally:
             _dant_motion.computeMotion = _original_compute_motion
             _dant_runner.autoCuration = _original_auto_curation
 
+        # runDANTMultiShank merges the per-shank results into the root output
+        # folder; if that doesn't give one matrix over all units, our reading
+        # of its output is wrong -- stop rather than record zero matches
+        output_error = DantIntegrationError if runner is not runDANT else RuntimeError
         cluster_matrix_path = os.path.join(output_dir, "ClusterMatrix.npy")
         if not os.path.isfile(cluster_matrix_path):
-            raise RuntimeError(f"pyDANT did not produce {cluster_matrix_path}")
+            raise output_error(
+                f"pyDANT did not produce {cluster_matrix_path} "
+                f"(output folder has: {sorted(os.listdir(output_dir)) if os.path.isdir(output_dir) else 'nothing'})"
+            )
         final_matches = np.load(cluster_matrix_path).astype(bool)
         if final_matches.shape != (n_units, n_units):
-            raise RuntimeError(
+            raise output_error(
                 f"ClusterMatrix.npy shape {final_matches.shape} != expected ({n_units}, {n_units})"
             )
-    except MemoryError:
-        # the machine ran out of memory: not a result of the method, so no
-        # output (and no sentinel) -- the location is retried on the next run
+    except (MemoryError, DantIntegrationError):
+        # the machine ran out of memory, or our code and pyDANT don't fit
+        # together: not a result of the method, so no output (and no
+        # sentinel) -- the location is retried on the next run
         raise
     except Exception as e:
         print(f"  [{variant}] pyDANT failed ({e}); recording as zero matches for a fair comparison.")
@@ -659,9 +761,32 @@ def run_group(merged_dir, pending_variants):
                            f"{type(e).__name__}: {e}", traceback.format_exc())
 
 
+def parse_args():
+    import argparse
+    parser = argparse.ArgumentParser(description="Run pyDANT on every merged-data group (see module docstring).")
+    parser.add_argument("--variants", nargs="+", choices=list(DANT_VARIANTS), default=list(DANT_VARIANTS),
+                        help="only these variants (default: all), e.g. DANT_multishank DANT_no_functional_multishank")
+    parser.add_argument("--locations", nargs="+", default=None,
+                        help="only these locations, as mouse/probe/location (e.g. AV009/Probe1/IMRO_10)")
+    args = parser.parse_args()
+    if args.locations:
+        args.locations = {loc.replace("\\", "/").strip("/") for loc in args.locations}
+    return args
+
+
 def main():
+    args = parse_args()
+    variants = [v for v in DANT_VARIANTS if v in args.variants]
+    print(f"pyDANT {pydant_version()}; variants: {variants}")
+    if any(DANT_VARIANTS[v].get("multishank") for v in variants) and runDANTMultiShank is None:
+        raise SystemExit(f"This pyDANT ({pydant_version()}) has no runDANTMultiShank: update pyDANT to >= 1.1.0")
     print(f"Scanning for merged-data groups under:\n  {BASE_INPUT}\n")
     groups = find_merged_groups()
+    if args.locations:
+        groups = [g for g in groups if group_key(g) in args.locations]
+        missing = args.locations - {group_key(g) for g in groups}
+        if missing:
+            print(f"WARNING: location(s) not found: {sorted(missing)}")
     if not groups:
         print("No merged-data groups found.")
         return
@@ -670,7 +795,7 @@ def main():
     for i, merged_dir in enumerate(groups):
         print(f"\n[{i + 1}/{len(groups)}] {merged_dir}")
 
-        pending = [v for v in DANT_VARIANTS if not dant_results_exist(merged_dir, v)]
+        pending = [v for v in variants if not dant_results_exist(merged_dir, v)]
         if not pending:
             print("  Skipping (all variants exist and are fresh).")
             continue
@@ -683,7 +808,7 @@ def main():
 
             # re-check now that we hold the lock: another machine may have
             # finished some/all pending variants while we were waiting
-            pending = [v for v in DANT_VARIANTS if not dant_results_exist(merged_dir, v)]
+            pending = [v for v in variants if not dant_results_exist(merged_dir, v)]
             if not pending:
                 print("  Skipping (completed by another run).")
                 continue
