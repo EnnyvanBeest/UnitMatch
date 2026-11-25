@@ -100,10 +100,7 @@ def sort_good_channels(goodChannelMap, goodpos, n_xchannelpos=2):
     x_gaps = np.diff(unique_x_values)
     n_shanks = int(np.sum(x_gaps > 50)) + 1
     if n_unique_x != n_xchannelpos * n_shanks:
-        print(
-            f"Found {n_unique_x} unique x-axis positions across {n_shanks} shank(s); "
-            f"expected a multiple of {n_xchannelpos} ({n_xchannelpos * n_shanks})."
-        )
+        # reported once for all units by get_snippets (_column_layout_message)
         return [-1], [-1]
 
     # Group channels by x-column and sort each group by depth (z)
@@ -133,6 +130,27 @@ def sort_good_channels(goodChannelMap, goodpos, n_xchannelpos=2):
                 pos += 1
 
     return sorted_goodChannelMap, sorted_goodpos
+
+
+def _column_layout_message(ChannelPos, n_xchannelpos, n_failed, n_units):
+    """Explain why units were rejected by sort_good_channels' column check."""
+    unique_x = np.unique(ChannelPos[:, 0])
+    n_shanks = int(np.sum(np.diff(unique_x) > 50)) + 1
+    per_shank = len(unique_x) / n_shanks
+    per_shank = int(per_shank) if per_shank == int(per_shank) else round(per_shank, 1)
+    return (
+        f"{n_failed} of {n_units} units could not be preprocessed: the probe has "
+        f"{len(unique_x)} electrode column position(s) across {n_shanks} shank(s) "
+        f"({per_shank} per shank), but param['n_xchannelpos'] = {n_xchannelpos} "
+        f"columns per shank are expected around each unit.\n"
+        f"The bundled DeepUnitMatch model was trained on Neuropixels 2.0 recordings "
+        f"with both columns of each shank recorded (n_xchannelpos = 2). For other "
+        f"layouts (e.g. recording from only one column per shank) we recommend "
+        f"UnitMatch (UMPy). Alternatively, set param['n_xchannelpos'] = {per_shank}: "
+        f"preprocessing will then run, but the bundled model has not been validated "
+        f"on this layout, so check the matches carefully, or train a model on your "
+        f"own data with the same setting."
+    )
 
 
 def extract_Rwaveforms(waveform, ChannelPos, ChannelMap, param):
@@ -335,6 +353,7 @@ def get_snippets(
 
     expected_n_time = params["nTime"]
     expected_n_channels = params["nChannels"]
+    n_column_failed = 0
     for i, unit in enumerate(waveforms):
         n_time, n_channels, n_repeats = unit.shape
         if (
@@ -388,6 +407,10 @@ def get_snippets(
                 ChannelValid,
             ) = extract_Rwaveforms(unit, ChannelPos, ChannelMap, params)
 
+        if Rwaveform.shape == (1, 1, 1):
+            # rejected by sort_good_channels: wrong number of electrode columns
+            n_column_failed += 1
+            continue
         if Rwaveform.shape != (params["RnTime"], params["RnChannels"], 2):
             print(f"Incorrect shape for {i}th unit: {Rwaveform.shape}")
             continue
@@ -406,6 +429,14 @@ def get_snippets(
         processed_waveforms.append(Rwaveform)
         positions.append(MaxSitepos)
         kept_indices.append(i)
+
+    if n_column_failed:
+        message = _column_layout_message(
+            ChannelPos, params["n_xchannelpos"], n_column_failed, len(waveforms)
+        )
+        if not kept_indices:
+            raise ValueError(message)
+        print(f"Warning: {message}")
 
     return (
         np.array(processed_waveforms),
